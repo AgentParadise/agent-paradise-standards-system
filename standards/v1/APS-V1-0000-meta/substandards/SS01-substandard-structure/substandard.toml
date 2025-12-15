@@ -1,0 +1,13 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0000.SS01"
+name = "Substandard Structure"
+slug = "substandard-structure"
+version = "1.0.0"
+parent_id = "APS-V1-0000"
+parent_major = "1"
+
+[ownership]
+maintainers = ["AgentParadise"]
+

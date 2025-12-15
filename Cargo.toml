@@ -4,6 +4,7 @@ members = [
     "crates/aps-core",
     "crates/aps-cli",
     "standards/v1/APS-V1-0000-meta",
+    "standards/v1/APS-V1-0000-meta/substandards/SS01-substandard-structure",
 ]
 exclude = [
     "lib/agentic-primitives",
