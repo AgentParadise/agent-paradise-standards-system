@@ -1,0 +1,15 @@
+# Template metadata for substandard scaffolding
+[template]
+name = "substandard"
+description = "Scaffold a new APS V1 substandard (profile)"
+version = "1.0.0"
+
+[variables]
+id = { required = true, description = "Substandard ID (e.g., APS-V1-0002.GH01)" }
+name = { required = true, description = "Human-readable name" }
+slug = { required = true, description = "Filesystem-safe slug (kebab-case)" }
+version = { default = "1.0.0", description = "Initial SemVer version" }
+parent_id = { required = true, description = "Parent standard ID (e.g., APS-V1-0002)" }
+parent_major = { default = "1", description = "Required parent major version" }
+maintainers = { default = ["AgentParadise"], description = "List of maintainers" }
+

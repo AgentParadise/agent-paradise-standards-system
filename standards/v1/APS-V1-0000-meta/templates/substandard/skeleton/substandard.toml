@@ -1,0 +1,15 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "{{id}}"
+name = "{{name}}"
+slug = "{{slug}}"
+version = "{{version}}"
+
+[parent]
+standard_id = "{{parent_id}}"
+major_version_required = "{{parent_major}}"
+
+[ownership]
+maintainers = [{{#each maintainers}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
+
