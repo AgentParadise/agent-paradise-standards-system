@@ -99,9 +99,9 @@ pub struct ExperimentFields {
 pub struct ApsFields {
     /// APS major version (e.g., "v1").
     pub aps_major: String,
-    /// Whether backward compatibility is required.
-    #[serde(default)]
-    pub backwards_compatible_major_required: bool,
+    /// Whether backward compatibility is required within the major version.
+    /// Standards with this set to `true` must not introduce breaking changes within V1.
+    pub backwards_compatible_major_required: Option<bool>,
 }
 
 /// Ownership information.
