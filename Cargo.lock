@@ -170,6 +170,7 @@ dependencies = [
  "aps-core",
  "code-topology-3d",
  "code-topology-mermaid",
+ "code-topology-rust-adapter",
  "serde",
  "serde_json",
  "tempfile",
@@ -193,6 +194,22 @@ dependencies = [
  "code-topology",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "code-topology-rust-adapter"
+version = "0.1.0"
+dependencies = [
+ "code-topology",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "walkdir",
 ]
 
 [[package]]

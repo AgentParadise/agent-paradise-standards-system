@@ -1,0 +1,27 @@
+[package]
+name = "code-topology-rust-adapter"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Rust language adapter for Code Topology — analyzes Rust code and generates .topology/ artifacts"
+
+[dependencies]
+code-topology = { path = "../.." }
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+walkdir.workspace = true
+
+# Rust parsing
+syn = { version = "2", features = ["full", "parsing", "visit", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+
+# Error handling
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3.14"
+
