@@ -31,6 +31,22 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+  aps-validation:
+    name: APS Standards Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build CLI
+        run: cargo build -p aps-cli --release
+      - name: Validate all V1 standards
+        run: cargo run -p aps-cli --release -- v1 validate repo
+      - name: Run self-validation tests
+        run: cargo test -p aps-cli --release -- self_validation
+      - name: Run backwards compatibility tests
+        run: cargo test -p aps-cli --release -- backwards_compat
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest

@@ -169,6 +169,91 @@ ci: format lint typecheck test build-release
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# APS - AGENT PARADISE STANDARDS OPERATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Validate all V1 standards in the repository
+[group('aps')]
+aps-validate:
+    @echo '{{ YELLOW }}Validating all V1 standards...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 validate repo
+    @echo '{{ GREEN }}✓ All standards valid{{ NORMAL }}'
+
+# Validate a specific standard (e.g., just aps-validate-pkg APS-V1-0000)
+[group('aps')]
+aps-validate-pkg id:
+    @echo '{{ YELLOW }}Validating {{ id }}...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 validate package {{ id }}
+
+# List all discovered V1 standards
+[group('aps')]
+aps-list:
+    @echo '{{ YELLOW }}Discovered V1 packages:{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 list
+
+# Create a new V1 standard
+[group('aps')]
+aps-new-standard id name slug:
+    @echo '{{ YELLOW }}Creating standard {{ id }}...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 create standard {{ id }} --name "{{ name }}" --slug "{{ slug }}"
+    @echo '{{ GREEN }}✓ Standard {{ id }} created{{ NORMAL }}'
+
+# Create a new experimental standard
+[group('aps')]
+aps-new-experiment id name slug:
+    @echo '{{ YELLOW }}Creating experiment {{ id }}...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 create experiment {{ id }} --name "{{ name }}" --slug "{{ slug }}"
+    @echo '{{ GREEN }}✓ Experiment {{ id }} created{{ NORMAL }}'
+
+# Promote an experiment to official standard
+[group('aps')]
+aps-promote exp_id new_id:
+    @echo '{{ YELLOW }}Promoting {{ exp_id }} to {{ new_id }}...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 promote {{ exp_id }} --new-id {{ new_id }}
+    @echo '{{ GREEN }}✓ Promotion complete{{ NORMAL }}'
+
+# Bump version of a standard (part: major|minor|patch)
+[group('aps')]
+aps-version-bump id part:
+    @echo '{{ YELLOW }}Bumping {{ part }} version for {{ id }}...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 version bump {{ id }} {{ part }}
+
+# Show version of a standard
+[group('aps')]
+aps-version-show id:
+    @echo '{{ YELLOW }}Version of {{ id }}:{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 version show {{ id }}
+
+# Generate derived views (registry.json, INDEX.md)
+[group('aps')]
+aps-generate:
+    @echo '{{ YELLOW }}Generating derived views...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 generate views
+    @echo '{{ GREEN }}✓ Views generated{{ NORMAL }}'
+
+# Run APS-specific tests (self-validation, template output, backwards compat)
+[group('aps')]
+aps-test:
+    @echo '{{ YELLOW }}Running APS validation tests...{{ NORMAL }}'
+    cargo test -p aps-cli -- --test-threads=1 self_validation
+    cargo test -p aps-cli -- --test-threads=1 backwards_compat
+    cargo test -p aps-cli -- --test-threads=1 template_test
+    cargo test -p aps-cli -- --test-threads=1 workflow_test
+    @echo '{{ GREEN }}✓ APS tests passed{{ NORMAL }}'
+
+# Full APS validation suite (validates repo + runs all APS tests)
+[group('aps')]
+aps-full:
+    @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
+    @echo '{{ GREEN }} APS Full Validation Suite{{ NORMAL }}'
+    @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
+    just aps-validate
+    just aps-test
+    @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
+    @echo '{{ GREEN }}✓ APS Full Suite Passed!{{ NORMAL }}'
+    @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # SUBPROJECTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
