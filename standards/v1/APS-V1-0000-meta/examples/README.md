@@ -1,26 +1,64 @@
-# APS-V1-0000 Examples
+# APS-V1-0000 Meta-Standard Examples
 
-This directory contains examples demonstrating valid APS package structures.
+Examples demonstrating valid APS package structures and workflows.
 
 ## Available Examples
 
 | Example | Description |
 |---------|-------------|
-| `minimal/` | Minimal valid standard package (TODO: M6) |
+| `minimal-standard/` | Minimal valid standard structure (reference) |
 
-## Purpose
+## Using Examples
 
-Examples serve two purposes:
+Each example can be used as a reference when creating new standards:
 
-1. **Documentation** — Show authors what valid packages look like
-2. **Validation targets** — Tests in `tests/` validate these examples
+```bash
+# The meta-standard itself is the canonical example
+ls standards/v1/APS-V1-0000-meta/
 
-## Adding Examples
+# Or create a new standard using the template
+aps v1 create standard my-standard
+```
 
-When adding a new example:
+## Example: Minimal Valid Standard
 
-1. Create a directory with a descriptive name
-2. Include all required files per the meta-standard spec
-3. Add a test in `tests/` that validates the example
-4. Update this README with the example description
+A minimal valid standard package requires:
 
+```
+APS-V1-XXXX-slug/
+├── standard.toml       # Package metadata
+├── Cargo.toml          # Rust crate manifest
+├── src/
+│   └── lib.rs          # Standard trait implementation
+├── docs/
+│   └── 01_spec.md      # Normative specification
+├── examples/
+│   └── README.md       # Examples index
+├── tests/
+│   └── README.md       # Test documentation
+└── agents/
+    └── skills/
+        └── README.md   # Agent skill instructions
+```
+
+## CLI Workflow Example
+
+```bash
+# 1. Create a new experiment
+aps v1 create experiment my-idea
+
+# 2. Develop and iterate
+# ... make changes ...
+
+# 3. Validate
+aps v1 validate experiment EXP-V1-0001
+
+# 4. Promote to official standard
+aps v1 promote EXP-V1-0001
+
+# 5. Version management
+aps v1 version bump APS-V1-0001 minor
+
+# 6. Generate registry
+aps v1 generate views
+```
