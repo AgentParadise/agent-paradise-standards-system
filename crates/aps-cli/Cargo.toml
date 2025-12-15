@@ -1,0 +1,23 @@
+[package]
+name = "aps-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "CLI for APS validation and scaffolding"
+
+[[bin]]
+name = "aps"
+path = "src/main.rs"
+
+[dependencies]
+aps-core.workspace = true
+aps-v1-0000-meta = { path = "../../standards/v1/APS-V1-0000-meta" }
+clap.workspace = true
+
+[dev-dependencies]
+tempfile = "3.14"
+toml = "0.8"
+regex = "1.11"
+

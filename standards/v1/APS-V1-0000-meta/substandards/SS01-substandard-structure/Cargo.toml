@@ -1,0 +1,10 @@
+[package]
+name = "aps-v1-0000-ss01-substandard-structure"
+version = "1.0.0"
+edition = "2024"
+description = "Defines structural requirements for all APS substandards"
+
+[dependencies]
+aps-core = { path = "../../../../../crates/aps-core" }
+regex = "1.11"
+
