@@ -1,70 +1,79 @@
 {
-  "schema_version": "0.1.0",
-  "level": "module",
-  "nodes": [
-    {
-      "id": "auth",
-      "type": "module",
-      "languages": ["rust"]
-    },
-    {
-      "id": "crypto",
-      "type": "module",
-      "languages": ["rust"]
-    },
-    {
-      "id": "api",
-      "type": "module",
-      "languages": ["typescript"]
-    },
-    {
-      "id": "db",
-      "type": "module",
-      "languages": ["rust"]
-    },
-    {
-      "id": "utils",
-      "type": "module",
-      "languages": ["rust"]
-    }
-  ],
-  "edges": [
-    {
-      "from": "auth",
-      "to": "crypto",
-      "type": "imports",
-      "weight": 2
-    },
-    {
-      "from": "auth",
-      "to": "utils",
-      "type": "imports",
-      "weight": 1
-    },
-    {
-      "from": "api",
-      "to": "auth",
-      "type": "imports",
-      "weight": 3
-    },
-    {
-      "from": "api",
-      "to": "db",
-      "type": "imports",
-      "weight": 2
-    },
-    {
-      "from": "api",
-      "to": "utils",
-      "type": "imports",
-      "weight": 1
-    },
-    {
-      "from": "db",
-      "to": "utils",
-      "type": "imports",
-      "weight": 1
-    }
-  ]
+    "schema_version": "0.1.0",
+    "level": "module",
+    "nodes": [
+        {
+            "id": "auth",
+            "type": "module",
+            "languages": [
+                "rust"
+            ]
+        },
+        {
+            "id": "crypto",
+            "type": "module",
+            "languages": [
+                "rust"
+            ]
+        },
+        {
+            "id": "api",
+            "type": "module",
+            "languages": [
+                "typescript"
+            ]
+        },
+        {
+            "id": "db",
+            "type": "module",
+            "languages": [
+                "rust"
+            ]
+        },
+        {
+            "id": "utils",
+            "type": "module",
+            "languages": [
+                "rust"
+            ]
+        }
+    ],
+    "edges": [
+        {
+            "from": "auth",
+            "to": "crypto",
+            "type": "imports",
+            "weight": 2
+        },
+        {
+            "from": "auth",
+            "to": "utils",
+            "type": "imports",
+            "weight": 1
+        },
+        {
+            "from": "api",
+            "to": "auth",
+            "type": "imports",
+            "weight": 3
+        },
+        {
+            "from": "api",
+            "to": "db",
+            "type": "imports",
+            "weight": 2
+        },
+        {
+            "from": "api",
+            "to": "utils",
+            "type": "imports",
+            "weight": 1
+        },
+        {
+            "from": "db",
+            "to": "utils",
+            "type": "imports",
+            "weight": 1
+        }
+    ]
 }
-

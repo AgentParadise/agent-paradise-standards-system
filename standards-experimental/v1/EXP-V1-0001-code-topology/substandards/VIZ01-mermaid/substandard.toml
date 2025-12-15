@@ -1,0 +1,16 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "EXP-V1-0001.VIZ01"
+name = "Mermaid Diagram Projector"
+slug = "mermaid"
+version = "0.1.0"
+profile = "VIZ"  # Visualization projector
+
+[parent]
+standard_id = "EXP-V1-0001"
+relationship = "projector"
+
+[ownership]
+maintainers = ["AgentParadise"]
+

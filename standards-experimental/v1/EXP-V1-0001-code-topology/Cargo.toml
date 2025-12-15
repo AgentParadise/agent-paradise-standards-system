@@ -15,8 +15,17 @@ serde_json.workspace = true
 [dev-dependencies]
 tempfile = "3.14"
 code-topology-3d = { path = "substandards/3D01-force-directed" }
+code-topology-mermaid = { path = "substandards/VIZ01-mermaid" }
 
 [[example]]
 name = "render_sample"
 path = "examples/render_sample.rs"
+
+[[example]]
+name = "render_aps"
+path = "examples/render_aps.rs"
+
+[[example]]
+name = "render_mermaid"
+path = "examples/render_mermaid.rs"
 

@@ -637,6 +637,8 @@ pub enum OutputFormat {
     Png,
     /// Mermaid diagram syntax (text)
     Mermaid,
+    /// Markdown with embedded diagrams
+    Markdown,
     /// JSON data (for custom rendering)
     Json,
     /// WebGL/Three.js scene description (JSON)

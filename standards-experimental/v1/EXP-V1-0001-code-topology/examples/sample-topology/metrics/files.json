@@ -1,96 +1,95 @@
 {
-  "schema_version": "0.1.0",
-  "files": [
-    {
-      "id": "src/auth/validator.rs",
-      "path": "src/auth/validator.rs",
-      "module": "auth",
-      "language": "rust",
-      "metrics": {
-        "function_count": 2,
-        "total_cyclomatic": 11,
-        "avg_cyclomatic": 5.5,
-        "max_cyclomatic": 8,
-        "total_cognitive": 16,
-        "avg_cognitive": 8.0,
-        "max_cognitive": 12,
-        "lines_of_code": 51,
-        "comment_lines": 11,
-        "maintainability_index": 68.5
-      }
-    },
-    {
-      "id": "src/crypto/hmac.rs",
-      "path": "src/crypto/hmac.rs",
-      "module": "crypto",
-      "language": "rust",
-      "metrics": {
-        "function_count": 2,
-        "total_cyclomatic": 6,
-        "avg_cyclomatic": 3.0,
-        "max_cyclomatic": 4,
-        "total_cognitive": 7,
-        "avg_cognitive": 3.5,
-        "max_cognitive": 5,
-        "lines_of_code": 46,
-        "comment_lines": 12,
-        "maintainability_index": 78.2
-      }
-    },
-    {
-      "id": "src/api/handlers.ts",
-      "path": "src/api/handlers.ts",
-      "module": "api",
-      "language": "typescript",
-      "metrics": {
-        "function_count": 2,
-        "total_cyclomatic": 18,
-        "avg_cyclomatic": 9.0,
-        "max_cyclomatic": 12,
-        "total_cognitive": 26,
-        "avg_cognitive": 13.0,
-        "max_cognitive": 18,
-        "lines_of_code": 103,
-        "comment_lines": 26,
-        "maintainability_index": 55.8
-      }
-    },
-    {
-      "id": "src/db/connection.rs",
-      "path": "src/db/connection.rs",
-      "module": "db",
-      "language": "rust",
-      "metrics": {
-        "function_count": 1,
-        "total_cyclomatic": 5,
-        "avg_cyclomatic": 5.0,
-        "max_cyclomatic": 5,
-        "total_cognitive": 7,
-        "avg_cognitive": 7.0,
-        "max_cognitive": 7,
-        "lines_of_code": 35,
-        "comment_lines": 7,
-        "maintainability_index": 72.1
-      }
-    },
-    {
-      "id": "src/utils/helpers.rs",
-      "path": "src/utils/helpers.rs",
-      "module": "utils",
-      "language": "rust",
-      "metrics": {
-        "function_count": 1,
-        "total_cyclomatic": 1,
-        "avg_cyclomatic": 1.0,
-        "max_cyclomatic": 1,
-        "total_cognitive": 0,
-        "avg_cognitive": 0.0,
-        "max_cognitive": 0,
-        "lines_of_code": 10,
-        "comment_lines": 2,
-        "maintainability_index": 92.3
-      }
-    }
-  ]
+    "schema_version": "0.1.0",
+    "files": [
+        {
+            "id": "src/auth/validator.rs",
+            "path": "src/auth/validator.rs",
+            "module": "auth",
+            "language": "rust",
+            "metrics": {
+                "function_count": 2,
+                "total_cyclomatic": 11,
+                "avg_cyclomatic": 5.5,
+                "max_cyclomatic": 8,
+                "total_cognitive": 16,
+                "avg_cognitive": 8.0,
+                "max_cognitive": 12,
+                "lines_of_code": 51,
+                "comment_lines": 11,
+                "maintainability_index": 68.5
+            }
+        },
+        {
+            "id": "src/crypto/hmac.rs",
+            "path": "src/crypto/hmac.rs",
+            "module": "crypto",
+            "language": "rust",
+            "metrics": {
+                "function_count": 2,
+                "total_cyclomatic": 6,
+                "avg_cyclomatic": 3.0,
+                "max_cyclomatic": 4,
+                "total_cognitive": 7,
+                "avg_cognitive": 3.5,
+                "max_cognitive": 5,
+                "lines_of_code": 46,
+                "comment_lines": 12,
+                "maintainability_index": 78.2
+            }
+        },
+        {
+            "id": "src/api/handlers.ts",
+            "path": "src/api/handlers.ts",
+            "module": "api",
+            "language": "typescript",
+            "metrics": {
+                "function_count": 2,
+                "total_cyclomatic": 18,
+                "avg_cyclomatic": 9.0,
+                "max_cyclomatic": 12,
+                "total_cognitive": 26,
+                "avg_cognitive": 13.0,
+                "max_cognitive": 18,
+                "lines_of_code": 103,
+                "comment_lines": 26,
+                "maintainability_index": 55.8
+            }
+        },
+        {
+            "id": "src/db/connection.rs",
+            "path": "src/db/connection.rs",
+            "module": "db",
+            "language": "rust",
+            "metrics": {
+                "function_count": 1,
+                "total_cyclomatic": 5,
+                "avg_cyclomatic": 5.0,
+                "max_cyclomatic": 5,
+                "total_cognitive": 7,
+                "avg_cognitive": 7.0,
+                "max_cognitive": 7,
+                "lines_of_code": 35,
+                "comment_lines": 7,
+                "maintainability_index": 72.1
+            }
+        },
+        {
+            "id": "src/utils/helpers.rs",
+            "path": "src/utils/helpers.rs",
+            "module": "utils",
+            "language": "rust",
+            "metrics": {
+                "function_count": 1,
+                "total_cyclomatic": 1,
+                "avg_cyclomatic": 1.0,
+                "max_cyclomatic": 1,
+                "total_cognitive": 0,
+                "avg_cognitive": 0.0,
+                "max_cognitive": 0,
+                "lines_of_code": 10,
+                "comment_lines": 2,
+                "maintainability_index": 92.3
+            }
+        }
+    ]
 }
-

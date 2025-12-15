@@ -169,6 +169,7 @@ version = "0.1.0"
 dependencies = [
  "aps-core",
  "code-topology-3d",
+ "code-topology-mermaid",
  "serde",
  "serde_json",
  "tempfile",
@@ -183,6 +184,15 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "code-topology-mermaid"
+version = "0.1.0"
+dependencies = [
+ "code-topology",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -211,12 +211,42 @@ impl ForceDirectedProjector {
         Self { config }
     }
 
-    /// Calculate node color based on instability.
+    /// Calculate node color based on health score.
+    /// 
+    /// Color scheme (intuitive):
+    /// - 🔴 Red = needs attention (Zone of Pain, high coupling to stable concrete modules)
+    /// - 🟡 Yellow = moderate concern
+    /// - 🟢 Green = healthy
+    /// 
+    /// Health is based on distance from main sequence:
+    /// - D near 0 = on the main sequence = healthy (green)
+    /// - D near 1 = Zone of Pain or Zone of Uselessness = needs attention (red)
+    fn health_color(distance_from_main_sequence: f64) -> String {
+        // Green (healthy, D≈0) to Red (needs attention, D≈1)
+        let health = 1.0 - distance_from_main_sequence.clamp(0.0, 1.0);
+        
+        if health > 0.7 {
+            // Healthy: green
+            format!("#{:02x}cc{:02x}", ((1.0 - health) * 100.0) as u8, (health * 200.0) as u8)
+        } else if health > 0.4 {
+            // Moderate: yellow/orange  
+            let yellow = ((health - 0.4) / 0.3 * 255.0) as u8;
+            format!("#ff{yellow:02x}40")
+        } else {
+            // Needs attention: red
+            format!("#ff{:02x}40", (health * 150.0) as u8)
+        }
+    }
+
+    /// Legacy: Calculate color based on instability (for backwards compat).
+    #[allow(dead_code)]
     fn instability_color(instability: f64) -> String {
-        // Red (unstable) to Blue (stable)
-        let r = (instability * 255.0) as u8;
-        let b = ((1.0 - instability) * 255.0) as u8;
-        format!("#{r:02x}40{b:02x}")
+        // Map instability to distance approximation for color
+        // Stable (I≈0) modules that are concrete are in Zone of Pain
+        // Unstable (I≈1) modules that are abstract are in Zone of Uselessness
+        // Middle is healthy
+        let distance = (instability - 0.5).abs() * 2.0; // 0.5 = healthy, 0 or 1 = edges
+        Self::health_color(distance * 0.5) // Scale down for less dramatic colors
     }
 
     /// Calculate edge color based on coupling strength.
@@ -366,17 +396,24 @@ impl ForceDirectedProjector {
                 let cyclomatic = metrics.map(|m| m.total_cyclomatic).unwrap_or(0);
                 let cognitive = metrics.map(|m| m.total_cognitive).unwrap_or(0);
                 let instability = metrics.map(|m| m.martin.instability).unwrap_or(0.5);
+                let distance = metrics
+                    .map(|m| m.martin.distance_from_main_sequence)
+                    .unwrap_or(0.5);
                 let function_count = metrics.map(|m| m.function_count).unwrap_or(0);
 
                 // Size based on function count, scaled
                 let size = (function_count as f64 / 5.0 + 0.5).min(2.5) * cfg.node_scale;
+
+                // Color based on health (distance from main sequence)
+                // Red = needs attention (high distance), Green = healthy (low distance)
+                let color = Self::health_color(distance);
 
                 nodes.push(SceneNode {
                     id: module_id.clone(),
                     label: module_id.clone(),
                     position: pos,
                     size,
-                    color: Self::instability_color(instability),
+                    color,
                     metrics: NodeMetrics {
                         cyclomatic,
                         cognitive,
@@ -520,10 +557,14 @@ impl ForceDirectedProjector {
         <p><em>Drag to rotate • Scroll to zoom • Hover for details</em></p>
     </div>
     <div id="legend">
-        <h4>Coupling Strength</h4>
-        <div class="legend-item"><div class="legend-color" style="background: #ffcccc;"></div>Strong (≥0.7)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #aaaaaa;"></div>Medium (0.3-0.7)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #666666;"></div>Weak (&lt;0.3)</div>
+        <h4>Module Health</h4>
+        <div class="legend-item"><div class="legend-color" style="background: #00cc88;"></div>🟢 Healthy (on main sequence)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #ffaa40;"></div>🟡 Moderate concern</div>
+        <div class="legend-item"><div class="legend-color" style="background: #ff4040;"></div>🔴 Needs attention (Zone of Pain)</div>
+        <h4 style="margin-top: 12px;">Coupling Strength</h4>
+        <div class="legend-item"><div class="legend-color" style="background: #ffffff; border: 1px solid #666;"></div>Strong (≥0.7)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #888888;"></div>Medium (0.3-0.7)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #444444;"></div>Weak (&lt;0.3)</div>
     </div>
     <div id="tooltip"></div>
     <script type="importmap">
