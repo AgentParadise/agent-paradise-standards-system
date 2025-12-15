@@ -1,0 +1,20 @@
+schema = "aps.experiment/v1"
+
+[experiment]
+id = "EXP-V1-0001"
+name = "Code Topology and Coupling Analysis"
+slug = "code-topology"
+version = "0.1.0"
+category = "technical"
+
+[aps]
+aps_major = "v1"
+
+[ownership]
+maintainers = ["AgentParadise"]
+
+# Promotion metadata (added after promotion, do not edit manually)
+# [promotion]
+# promoted_to = "APS-V1-XXXX"
+# promoted_at = "YYYY-MM-DD"
+
