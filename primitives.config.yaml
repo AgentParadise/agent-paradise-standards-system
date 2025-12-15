@@ -39,7 +39,7 @@ providers:
 
   claude:
     output_dir: ".claude"
-    default_model: "claude/sonnet"
+    default_model: "claude/opus"
     hook_timeout: 60
 
 # Build settings
