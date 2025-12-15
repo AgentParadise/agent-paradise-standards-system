@@ -1,7 +1,7 @@
 # EXP-V1-0001 — Code Topology and Coupling Analysis
 
-**Version**: 0.1.0  
-**Status**: Experimental  
+**Version**: 0.1.0
+**Status**: Experimental
 **Category**: Technical
 
 ⚠️ **EXPERIMENTAL**: This standard is in incubation and may change significantly before promotion.
@@ -975,68 +975,345 @@ New language adapters MUST pass validation tests:
 
 ## 9. Projector Interface
 
-*[To be completed in Milestone 3]*
-
 ### 9.1 Overview
 
-Projectors consume topology artifacts and render visualizations.
+**Projectors** consume topology artifacts and render them as visualizations. Each projector is implemented as a **substandard** of this specification, allowing independent iteration while maintaining compatibility with the core artifact format.
+
+Key design principles:
+
+1. **Artifact-first** — Projectors read committed artifacts, not live code
+2. **Format flexibility** — Multiple output formats from same data
+3. **Configuration isolation** — Projector-specific options don't pollute core schema
+4. **Composability** — Multiple projectors can process the same artifacts
 
 ### 9.2 Projector Trait
 
+Projector implementations MUST implement the `Projector` trait:
+
 ```rust
+use std::path::Path;
+
 /// Output format for projector rendering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
-    /// Graphviz DOT format
+    /// Graphviz DOT format (text)
     Dot,
-    /// SVG image
+    /// SVG image (text/XML)
     Svg,
-    /// PNG image
+    /// PNG image (binary)
     Png,
-    /// Mermaid diagram syntax
+    /// Mermaid diagram syntax (text)
     Mermaid,
-    /// JSON data (for custom rendering)
+    /// JSON data for custom rendering (text)
     Json,
-    /// WebGL/Three.js scene description
+    /// WebGL/Three.js scene description (JSON)
     WebGL,
+    /// HTML interactive visualization
+    Html,
+    /// GLTF 3D model (binary)
+    Gltf,
+}
+
+/// Error type for projector operations.
+#[derive(Debug)]
+pub struct ProjectorError {
+    pub code: &'static str,
+    pub message: String,
+    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
 /// A projector renders topology data as visualizations.
 pub trait Projector: Send + Sync {
-    /// Projector identifier (e.g., "graphviz", "3d-force")
+    /// Projector identifier (e.g., "graphviz", "3d-force").
+    /// MUST match the substandard profile code (e.g., "3D01" → "3d-force").
     fn id(&self) -> &'static str;
     
-    /// Human-readable name
+    /// Human-readable name.
     fn name(&self) -> &'static str;
     
-    /// Load topology artifacts from a directory
+    /// Description of what this projector visualizes.
+    fn description(&self) -> &'static str;
+    
+    /// Load topology artifacts from a `.topology/` directory.
+    /// 
+    /// Implementations MUST:
+    /// - Read `manifest.toml` to verify schema version
+    /// - Load required files based on visualization type
+    /// - Return error if required files are missing
     fn load(&self, topology_dir: &Path) -> Result<Topology, ProjectorError>;
     
-    /// Render the topology to the specified format
-    fn render(&self, topology: &Topology, format: OutputFormat) 
-        -> Result<Vec<u8>, ProjectorError>;
+    /// Render the topology to the specified format.
+    /// 
+    /// Returns raw bytes — caller is responsible for writing to file.
+    fn render(
+        &self, 
+        topology: &Topology, 
+        format: OutputFormat,
+        config: Option<&ProjectorConfig>,
+    ) -> Result<Vec<u8>, ProjectorError>;
     
-    /// Supported output formats
-    fn supported_formats(&self) -> Vec<OutputFormat>;
+    /// List of supported output formats.
+    fn supported_formats(&self) -> &[OutputFormat];
     
-    /// Configuration schema (JSON Schema for projector-specific options)
+    /// JSON Schema for projector-specific configuration.
+    /// Returns `None` if no configuration is needed.
     fn config_schema(&self) -> Option<serde_json::Value> {
         None
     }
+    
+    /// Validate projector-specific configuration.
+    fn validate_config(&self, config: &serde_json::Value) -> Result<(), ProjectorError> {
+        let _ = config;
+        Ok(())
+    }
 }
+
+/// Projector-specific configuration.
+#[derive(Debug, Clone, Default)]
+pub struct ProjectorConfig {
+    /// Raw JSON configuration
+    pub raw: serde_json::Value,
+}
+```
+
+### 9.3 Standard Projector Error Codes
+
+| Code | Description |
+|------|-------------|
+| `TOPOLOGY_NOT_FOUND` | `.topology/` directory does not exist |
+| `MANIFEST_MISSING` | `manifest.toml` not found |
+| `MANIFEST_INVALID` | `manifest.toml` failed to parse |
+| `SCHEMA_MISMATCH` | Artifact schema version incompatible |
+| `REQUIRED_FILE_MISSING` | A file required by this projector is missing |
+| `UNSUPPORTED_FORMAT` | Requested output format not supported |
+| `RENDER_FAILED` | Rendering failed (see message for details) |
+| `CONFIG_INVALID` | Projector configuration is invalid |
+
+### 9.4 Artifact Requirements by Visualization Type
+
+Different projectors require different artifacts:
+
+| Projector Type | Required Artifacts |
+|----------------|-------------------|
+| **Call Graph** | `graphs/call-graph.json` |
+| **Dependency Graph** | `graphs/dependency-graph.json` |
+| **Coupling Visualization** | `graphs/coupling-matrix.json`, `metrics/modules.json` |
+| **Metrics Dashboard** | `metrics/functions.json`, `metrics/files.json`, `metrics/modules.json` |
+| **Hotspot Analysis** | `metrics/functions.json`, `snapshots/` (optional) |
+
+### 9.5 Output Format Specifications
+
+#### 9.5.1 DOT (Graphviz)
+
+```dot
+digraph topology {
+    rankdir=LR;
+    node [shape=box, fontname="Helvetica"];
+    
+    // Modules
+    "auth" [label="auth\nCC=56 Cog=72"];
+    "crypto" [label="crypto\nCC=24 Cog=30"];
+    
+    // Dependencies
+    "auth" -> "crypto" [label="5 imports"];
+}
+```
+
+#### 9.5.2 Mermaid
+
+```mermaid
+graph LR
+    auth[auth<br/>CC=56 Cog=72]
+    crypto[crypto<br/>CC=24 Cog=30]
+    auth -->|5 imports| crypto
+```
+
+#### 9.5.3 WebGL Scene Description
+
+```json
+{
+  "format": "topology-webgl/v1",
+  "camera": {
+    "position": [0, 5, 10],
+    "target": [0, 0, 0]
+  },
+  "nodes": [
+    {
+      "id": "auth",
+      "position": [1.2, 3.4, 0.5],
+      "size": 1.5,
+      "color": "#ff6b6b",
+      "label": "auth",
+      "metrics": {
+        "cyclomatic": 56,
+        "cognitive": 72,
+        "instability": 0.625
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "auth",
+      "to": "crypto",
+      "strength": 0.85,
+      "color": "#4ecdc4"
+    }
+  ]
+}
+```
+
+### 9.6 Projector Registration
+
+Implementations SHOULD provide a registry for discovering available projectors:
+
+```rust
+/// Registry of available projectors.
+pub struct ProjectorRegistry {
+    projectors: HashMap<String, Box<dyn Projector>>,
+}
+
+impl ProjectorRegistry {
+    pub fn new() -> Self { /* ... */ }
+    
+    /// Register a projector.
+    pub fn register(&mut self, projector: Box<dyn Projector>) { /* ... */ }
+    
+    /// Get projector by ID.
+    pub fn get(&self, id: &str) -> Option<&dyn Projector> { /* ... */ }
+    
+    /// List all registered projectors.
+    pub fn list(&self) -> Vec<&dyn Projector> { /* ... */ }
+    
+    /// Find projectors that support a given format.
+    pub fn find_by_format(&self, format: OutputFormat) -> Vec<&dyn Projector> { /* ... */ }
+}
+```
+
+### 9.7 CLI Integration (Informative)
+
+Projectors SHOULD be invocable via CLI:
+
+```bash
+# List available projectors
+topology project --list
+
+# Render with specific projector
+topology project --projector graphviz --format svg --output graph.svg
+
+# Render 3D visualization
+topology project --projector 3d-force --format webgl --output scene.json
+
+# With projector-specific config
+topology project --projector 3d-force --config '{"nodeScale": 2.0}'
 ```
 
 ---
 
-## 8. Open Questions
+## 10. Substandard Structure (Projectors)
+
+### 10.1 Overview
+
+Each projector is implemented as a **substandard** of `EXP-V1-0001`. This allows:
+
+1. **Independent versioning** — Projectors evolve separately from core spec
+2. **Modular installation** — Users install only needed projectors
+3. **Community contributions** — Third parties can create projectors
+4. **Focused testing** — Each projector has isolated test cases
+
+### 10.2 Projector Substandard ID Format
+
+Projector substandards use profile codes indicating visualization type:
+
+| Profile | Description | Example |
+|---------|-------------|---------|
+| `3D##` | 3D visualizations | `EXP-V1-0001.3D01` |
+| `GV##` | Graphviz-based | `EXP-V1-0001.GV01` |
+| `MM##` | Mermaid diagrams | `EXP-V1-0001.MM01` |
+| `WB##` | Web-based interactive | `EXP-V1-0001.WB01` |
+| `TX##` | Text/ASCII art | `EXP-V1-0001.TX01` |
+
+### 10.3 Substandard Package Layout
+
+```
+standards-experimental/v1/EXP-V1-0001-code-topology/
+└── substandards/
+    └── 3D01-force-directed/
+        ├── substandard.toml      # REQUIRED: Metadata
+        ├── Cargo.toml            # REQUIRED: Rust crate
+        ├── src/
+        │   └── lib.rs            # REQUIRED: Projector implementation
+        ├── docs/
+        │   ├── 00_overview.md    # RECOMMENDED
+        │   └── 01_spec.md        # REQUIRED: Projector specification
+        ├── examples/
+        │   ├── README.md         # REQUIRED
+        │   └── sample-output/    # Example renderings
+        ├── tests/
+        │   └── README.md         # REQUIRED
+        └── agents/
+            └── skills/
+                └── README.md     # REQUIRED
+```
+
+### 10.4 Substandard Metadata Schema
+
+```toml
+# substandard.toml
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "EXP-V1-0001.3D01"
+name = "3D Force-Directed Coupling Visualization"
+slug = "force-directed"
+version = "0.1.0"
+parent_id = "EXP-V1-0001"
+parent_major = "0"
+
+[projector]
+# Projector-specific metadata
+type = "3d"
+formats = ["webgl", "gltf", "html"]
+requires = ["graphs/coupling-matrix.json", "metrics/modules.json"]
+
+[ownership]
+maintainers = ["AgentParadise"]
+```
+
+### 10.5 Planned Substandards
+
+| ID | Name | Description | Priority |
+|----|------|-------------|----------|
+| `EXP-V1-0001.3D01` | Force-Directed 3D | Coupling matrix → 3D node layout | High |
+| `EXP-V1-0001.GV01` | Graphviz Projector | Graphs → DOT/SVG output | High |
+| `EXP-V1-0001.MM01` | Mermaid Projector | Graphs → Mermaid diagrams | Medium |
+| `EXP-V1-0001.WB01` | Web Dashboard | Interactive metrics explorer | Medium |
+| `EXP-V1-0001.TX01` | ASCII Projector | Text-based tree visualization | Low |
+
+### 10.6 Substandard Conformance
+
+A projector substandard is conformant if:
+
+1. **Structure** — Follows package layout (Section 10.3)
+2. **Metadata** — Valid `substandard.toml` (Section 10.4)
+3. **Implementation** — Implements `Projector` trait (Section 9.2)
+4. **Documentation** — Spec documents supported formats and required artifacts
+5. **Testing** — Includes test cases with sample inputs/outputs
+6. **Examples** — Provides at least one example rendering
+
+---
+
+## 11. Open Questions
 
 - [ ] Should protobuf schemas be defined for wire-format efficiency?
 - [ ] How to handle cross-language FFI/WASM coupling?
 - [ ] What thresholds should trigger CI failures?
 - [ ] Should watch mode use file-based or WebSocket streaming?
+- [ ] Should projectors support streaming output for large topologies?
+- [ ] How to handle projector plugins from third parties?
 
 ---
 
-## 9. Promotion Criteria
+## 12. Promotion Criteria
 
 This experiment can be promoted to an official standard when:
 

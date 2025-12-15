@@ -336,22 +336,45 @@ pub struct TypeInfo {
 // ============================================================================
 
 /// The complete topology of a codebase.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Topology {
     /// Schema version
+    #[serde(default = "default_schema_version")]
     pub schema_version: String,
     /// Languages analyzed
+    #[serde(default)]
     pub languages: Vec<String>,
     /// All functions with their metrics
+    #[serde(default)]
     pub functions: Vec<FunctionWithMetrics>,
     /// Module-level metrics (including Martin's)
+    #[serde(default)]
     pub modules: Vec<ModuleMetrics>,
     /// Call graph edges
+    #[serde(default)]
     pub call_graph: Vec<CallInfo>,
     /// Dependency graph edges
+    #[serde(default)]
     pub dependency_graph: Vec<ImportInfo>,
-    /// Coupling matrix between modules
-    pub coupling_matrix: CouplingMatrix,
+    /// Coupling matrix between modules (optional for partial loads)
+    #[serde(default)]
+    pub coupling_matrix: Option<CouplingMatrixData>,
+}
+
+fn default_schema_version() -> String {
+    "0.1.0".to_string()
+}
+
+/// Coupling matrix data with internal values (for projector consumption).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CouplingMatrixData {
+    /// Module names (column/row headers)
+    pub modules: Vec<String>,
+    /// NxN matrix of coupling values [0, 1]
+    pub values: Vec<Vec<f64>>,
+    /// Optional: saved layout positions for visualization
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub positions: Option<HashMap<String, [f64; 3]>>,
 }
 
 /// A function combined with its metrics.
@@ -603,30 +626,43 @@ pub trait LanguageAdapter: Send + Sync {
 // ============================================================================
 
 /// Output format for projector rendering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
-    /// Graphviz DOT format
+    /// Graphviz DOT format (text)
     Dot,
-    /// SVG image
+    /// SVG image (text/XML)
     Svg,
-    /// PNG image
+    /// PNG image (binary)
     Png,
-    /// Mermaid diagram syntax
+    /// Mermaid diagram syntax (text)
     Mermaid,
     /// JSON data (for custom rendering)
     Json,
-    /// WebGL/Three.js scene description
+    /// WebGL/Three.js scene description (JSON)
     WebGL,
+    /// HTML interactive visualization
+    Html,
+    /// GLTF 3D model (binary)
+    Gltf,
+}
+
+/// Projector-specific configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProjectorConfig {
+    /// Raw JSON configuration
+    pub raw: serde_json::Value,
 }
 
 /// Error from a projector.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct ProjectorError {
     /// Error code
-    pub code: String,
+    pub code: &'static str,
     /// Error message
     pub message: String,
+    /// Source error (if any)
+    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
 impl std::fmt::Display for ProjectorError {
@@ -635,7 +671,13 @@ impl std::fmt::Display for ProjectorError {
     }
 }
 
-impl std::error::Error for ProjectorError {}
+impl std::error::Error for ProjectorError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.source
+            .as_ref()
+            .map(|e| e.as_ref() as &(dyn std::error::Error + 'static))
+    }
+}
 
 /// A projector renders topology data as visualizations.
 ///
@@ -647,18 +689,31 @@ pub trait Projector: Send + Sync {
     /// Human-readable name
     fn name(&self) -> &'static str;
 
-    /// Load topology artifacts from a directory
+    /// Description of what this projector visualizes
+    fn description(&self) -> &'static str;
+
+    /// Load topology artifacts from a `.topology/` directory
     fn load(&self, topology_dir: &std::path::Path) -> Result<Topology, ProjectorError>;
 
     /// Render the topology to the specified format
-    fn render(&self, topology: &Topology, format: OutputFormat) -> Result<Vec<u8>, ProjectorError>;
+    fn render(
+        &self,
+        topology: &Topology,
+        format: OutputFormat,
+        config: Option<&ProjectorConfig>,
+    ) -> Result<Vec<u8>, ProjectorError>;
 
     /// Supported output formats
-    fn supported_formats(&self) -> Vec<OutputFormat>;
+    fn supported_formats(&self) -> &[OutputFormat];
 
     /// Configuration schema (JSON Schema for projector-specific options)
     fn config_schema(&self) -> Option<serde_json::Value> {
         None
+    }
+
+    /// Validate projector-specific configuration
+    fn validate_config(&self, _config: &serde_json::Value) -> Result<(), ProjectorError> {
+        Ok(())
     }
 }
 
