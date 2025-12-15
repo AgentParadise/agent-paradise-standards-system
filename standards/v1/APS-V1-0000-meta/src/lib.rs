@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn test_meta_standard_creation() {
         let meta = MetaStandard::new();
-        let default_meta = MetaStandard::default();
+        let default_meta = MetaStandard;
 
         // Both should work
         let _ = meta;
