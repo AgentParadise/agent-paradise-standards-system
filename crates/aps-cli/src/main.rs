@@ -203,7 +203,7 @@ fn main() -> ExitCode {
                             println!("Validating standard: {} at {}", id, pkg.path.display());
                             meta.validate_package(&pkg.path)
                         } else {
-                            eprintln!("Error: Standard '{}' not found", id);
+                            eprintln!("Error: Standard '{id}' not found");
                             return ExitCode::FAILURE;
                         }
                     }
@@ -212,7 +212,7 @@ fn main() -> ExitCode {
                             println!("Validating substandard: {} at {}", id, pkg.path.display());
                             meta.validate_package(&pkg.path)
                         } else {
-                            eprintln!("Error: Substandard '{}' not found", id);
+                            eprintln!("Error: Substandard '{id}' not found");
                             return ExitCode::FAILURE;
                         }
                     }
@@ -221,7 +221,7 @@ fn main() -> ExitCode {
                             println!("Validating experiment: {} at {}", id, pkg.path.display());
                             meta.validate_package(&pkg.path)
                         } else {
-                            eprintln!("Error: Experiment '{}' not found", id);
+                            eprintln!("Error: Experiment '{id}' not found");
                             return ExitCode::FAILURE;
                         }
                     }
@@ -233,7 +233,7 @@ fn main() -> ExitCode {
                         if diagnostics.is_empty() {
                             println!("\n✓ Validation passed with no issues");
                         } else {
-                            println!("\n{}", diagnostics);
+                            println!("\n{diagnostics}");
                         }
                     }
                     OutputFormat::Json => {
@@ -241,7 +241,7 @@ fn main() -> ExitCode {
                             "{}",
                             diagnostics
                                 .to_json()
-                                .unwrap_or_else(|e| format!("{{\"error\": \"{}\"}}", e))
+                                .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
                         );
                     }
                 }
@@ -257,11 +257,11 @@ fn main() -> ExitCode {
                     let id = allocate_next_standard_id(&repo_root);
 
                     println!("Creating new standard:");
-                    println!("  ID:   {}", id);
-                    println!("  Name: {}", name);
-                    println!("  Slug: {}", slug);
+                    println!("  ID:   {id}");
+                    println!("  Name: {name}");
+                    println!("  Slug: {slug}");
 
-                    let output_dir = repo_root.join(format!("standards/v1/{}-{}", id, slug));
+                    let output_dir = repo_root.join(format!("standards/v1/{id}-{slug}"));
 
                     if output_dir.exists() {
                         eprintln!("Error: Directory already exists: {}", output_dir.display());
@@ -289,7 +289,7 @@ fn main() -> ExitCode {
                             ExitCode::SUCCESS
                         }
                         Err(e) => {
-                            eprintln!("Error creating standard: {}", e);
+                            eprintln!("Error creating standard: {e}");
                             ExitCode::FAILURE
                         }
                     }
@@ -298,13 +298,13 @@ fn main() -> ExitCode {
                     // Find the parent standard
                     let parent = find_package_by_id(&repo_root, &parent_id);
                     if parent.is_none() {
-                        eprintln!("Error: Parent standard '{}' not found", parent_id);
+                        eprintln!("Error: Parent standard '{parent_id}' not found");
                         return ExitCode::FAILURE;
                     }
                     let parent = parent.unwrap();
 
-                    let id = format!("{}.{}", parent_id, profile);
-                    let name = format!("{} Profile", profile);
+                    let id = format!("{parent_id}.{profile}");
+                    let name = format!("{profile} Profile");
                     let slug = format!(
                         "{}-{}",
                         parent_id.to_lowercase().replace('-', "_"),
@@ -312,9 +312,9 @@ fn main() -> ExitCode {
                     );
 
                     println!("Creating new substandard:");
-                    println!("  ID:     {}", id);
-                    println!("  Name:   {}", name);
-                    println!("  Parent: {}", parent_id);
+                    println!("  ID:     {id}");
+                    println!("  Name:   {name}");
+                    println!("  Parent: {parent_id}");
 
                     let output_dir = parent.path.join("substandards").join(&slug);
 
@@ -343,7 +343,7 @@ fn main() -> ExitCode {
                             ExitCode::SUCCESS
                         }
                         Err(e) => {
-                            eprintln!("Error creating substandard: {}", e);
+                            eprintln!("Error creating substandard: {e}");
                             ExitCode::FAILURE
                         }
                     }
@@ -353,12 +353,12 @@ fn main() -> ExitCode {
                     let id = allocate_next_experiment_id(&repo_root);
 
                     println!("Creating new experiment:");
-                    println!("  ID:   {}", id);
-                    println!("  Name: {}", name);
-                    println!("  Slug: {}", slug);
+                    println!("  ID:   {id}");
+                    println!("  Name: {name}");
+                    println!("  Slug: {slug}");
 
                     let output_dir =
-                        repo_root.join(format!("standards-experimental/v1/{}-{}", id, slug));
+                        repo_root.join(format!("standards-experimental/v1/{id}-{slug}"));
 
                     if output_dir.exists() {
                         eprintln!("Error: Directory already exists: {}", output_dir.display());
@@ -385,7 +385,7 @@ fn main() -> ExitCode {
                             ExitCode::SUCCESS
                         }
                         Err(e) => {
-                            eprintln!("Error creating experiment: {}", e);
+                            eprintln!("Error creating experiment: {e}");
                             ExitCode::FAILURE
                         }
                     }
@@ -395,7 +395,7 @@ fn main() -> ExitCode {
                 experiment_id,
                 target_id,
             } => {
-                println!("Promoting experiment: {}", experiment_id);
+                println!("Promoting experiment: {experiment_id}");
 
                 match promote_experiment(&repo_root, &experiment_id, target_id.as_deref()) {
                     Ok(result) => {
@@ -411,7 +411,7 @@ fn main() -> ExitCode {
                         ExitCode::SUCCESS
                     }
                     Err(e) => {
-                        eprintln!("Error promoting experiment: {}", e);
+                        eprintln!("Error promoting experiment: {e}");
                         ExitCode::FAILURE
                     }
                 }
@@ -434,7 +434,7 @@ fn main() -> ExitCode {
                             ExitCode::SUCCESS
                         }
                         Err(e) => {
-                            eprintln!("Error generating views: {}", e);
+                            eprintln!("Error generating views: {e}");
                             ExitCode::FAILURE
                         }
                     }
@@ -443,11 +443,11 @@ fn main() -> ExitCode {
             V1Commands::Version { action } => match action {
                 VersionAction::Show { id } => match get_version(&repo_root, &id) {
                     Ok(version) => {
-                        println!("{}: {}", id, version);
+                        println!("{id}: {version}");
                         ExitCode::SUCCESS
                     }
                     Err(e) => {
-                        eprintln!("Error: {}", e);
+                        eprintln!("Error: {e}");
                         ExitCode::FAILURE
                     }
                 },
@@ -466,7 +466,7 @@ fn main() -> ExitCode {
                             ExitCode::SUCCESS
                         }
                         Err(e) => {
-                            eprintln!("Error bumping version: {}", e);
+                            eprintln!("Error bumping version: {e}");
                             ExitCode::FAILURE
                         }
                     }
@@ -477,9 +477,9 @@ fn main() -> ExitCode {
                 let (standards, substandards, experiments) = count_packages(&repo_root);
 
                 println!("V1 Packages ({} total):", packages.len());
-                println!("  Standards:    {}", standards);
-                println!("  Substandards: {}", substandards);
-                println!("  Experiments:  {}", experiments);
+                println!("  Standards:    {standards}");
+                println!("  Substandards: {substandards}");
+                println!("  Experiments:  {experiments}");
                 println!();
 
                 if !packages.is_empty() {
@@ -495,7 +495,7 @@ fn main() -> ExitCode {
                             .file_name()
                             .and_then(|n| n.to_str())
                             .unwrap_or("unknown");
-                        println!("  [{:^11}] {}", type_label, name);
+                        println!("  [{type_label:^11}] {name}");
                     }
                 }
 

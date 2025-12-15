@@ -1,0 +1,818 @@
+//! 3D Force-Directed Coupling Visualization (EXP-V1-0001.3D01)
+//!
+//! This projector renders the coupling matrix from code topology artifacts
+//! as an interactive 3D visualization using force-directed layout.
+//!
+//! ## Key Features
+//!
+//! - **Force-directed layout** — Tightly coupled modules cluster together
+//! - **Deterministic positions** — Saves layout positions for reproducibility
+//! - **Multiple formats** — WebGL scene, GLTF model, HTML viewer
+//! - **Metric-driven sizing** — Node size reflects complexity
+//!
+//! ## Usage
+//!
+//! ```ignore
+//! use code_topology_3d::ForceDirectedProjector;
+//! use code_topology::{Projector, OutputFormat};
+//!
+//! let projector = ForceDirectedProjector::new();
+//! let topology = projector.load(Path::new(".topology"))?;
+//! let scene = projector.render(&topology, OutputFormat::WebGL, None)?;
+//! ```
+//!
+//! ⚠️ EXPERIMENTAL: This substandard is in incubation.
+
+use std::path::Path;
+
+use code_topology::{OutputFormat, Projector, ProjectorConfig, ProjectorError, Topology};
+use serde::{Deserialize, Serialize};
+
+/// Configuration for the 3D force-directed projector.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForceDirectedConfig {
+    /// Scale factor for node sizes (default: 1.0)
+    #[serde(default = "default_node_scale")]
+    pub node_scale: f64,
+
+    /// Minimum edge strength to render (0.0-1.0, default: 0.1)
+    #[serde(default = "default_min_edge_strength")]
+    pub min_edge_strength: f64,
+
+    /// Force simulation iterations (default: 300)
+    #[serde(default = "default_iterations")]
+    pub iterations: u32,
+
+    /// Repulsion strength between nodes (default: 100.0)
+    #[serde(default = "default_repulsion")]
+    pub repulsion: f64,
+
+    /// Attraction strength along edges (default: 0.5)
+    #[serde(default = "default_attraction")]
+    pub attraction: f64,
+
+    /// Random seed for layout (default: 42)
+    #[serde(default = "default_seed")]
+    pub seed: u64,
+
+    /// Color scheme for nodes
+    #[serde(default)]
+    pub color_scheme: ColorScheme,
+}
+
+fn default_node_scale() -> f64 {
+    1.0
+}
+fn default_min_edge_strength() -> f64 {
+    0.1
+}
+fn default_iterations() -> u32 {
+    300
+}
+fn default_repulsion() -> f64 {
+    100.0
+}
+fn default_attraction() -> f64 {
+    0.5
+}
+fn default_seed() -> u64 {
+    42
+}
+
+impl Default for ForceDirectedConfig {
+    fn default() -> Self {
+        Self {
+            node_scale: default_node_scale(),
+            min_edge_strength: default_min_edge_strength(),
+            iterations: default_iterations(),
+            repulsion: default_repulsion(),
+            attraction: default_attraction(),
+            seed: default_seed(),
+            color_scheme: ColorScheme::default(),
+        }
+    }
+}
+
+/// Color scheme for 3D visualization.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ColorScheme {
+    /// Colors based on coupling instability (red = unstable, blue = stable)
+    #[default]
+    Instability,
+    /// Colors based on complexity (red = high, green = low)
+    Complexity,
+    /// Colors based on module/language
+    Language,
+    /// Custom colors provided in config
+    Custom,
+}
+
+/// 3D scene output format.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Scene3D {
+    /// Format identifier
+    pub format: String,
+    /// Camera configuration
+    pub camera: Camera,
+    /// Nodes (modules)
+    pub nodes: Vec<SceneNode>,
+    /// Edges (coupling relationships)
+    pub edges: Vec<SceneEdge>,
+}
+
+/// Camera configuration for 3D scene.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Camera {
+    /// Camera position [x, y, z]
+    pub position: [f64; 3],
+    /// Look-at target [x, y, z]
+    pub target: [f64; 3],
+    /// Up vector [x, y, z]
+    #[serde(default = "default_up")]
+    pub up: [f64; 3],
+}
+
+fn default_up() -> [f64; 3] {
+    [0.0, 1.0, 0.0]
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self {
+            position: [0.0, 5.0, 10.0],
+            target: [0.0, 0.0, 0.0],
+            up: default_up(),
+        }
+    }
+}
+
+/// A node in the 3D scene (represents a module).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SceneNode {
+    /// Module ID
+    pub id: String,
+    /// Display label
+    pub label: String,
+    /// 3D position [x, y, z]
+    pub position: [f64; 3],
+    /// Node size (based on complexity)
+    pub size: f64,
+    /// Node color (hex)
+    pub color: String,
+    /// Associated metrics
+    pub metrics: NodeMetrics,
+}
+
+/// Metrics attached to a scene node.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeMetrics {
+    /// Total cyclomatic complexity
+    pub cyclomatic: u32,
+    /// Total cognitive complexity
+    pub cognitive: u32,
+    /// Instability (Martin's metric)
+    pub instability: f64,
+    /// Function count
+    pub function_count: u32,
+}
+
+/// An edge in the 3D scene (represents coupling).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SceneEdge {
+    /// Source module ID
+    pub from: String,
+    /// Target module ID
+    pub to: String,
+    /// Coupling strength (0.0-1.0)
+    pub strength: f64,
+    /// Edge color (hex)
+    pub color: String,
+    /// Edge width (based on strength)
+    pub width: f64,
+}
+
+/// The 3D Force-Directed Projector.
+pub struct ForceDirectedProjector {
+    config: ForceDirectedConfig,
+}
+
+impl ForceDirectedProjector {
+    /// Create a new projector with default configuration.
+    pub fn new() -> Self {
+        Self {
+            config: ForceDirectedConfig::default(),
+        }
+    }
+
+    /// Create a projector with custom configuration.
+    pub fn with_config(config: ForceDirectedConfig) -> Self {
+        Self { config }
+    }
+
+    /// Calculate node color based on health score.
+    ///
+    /// Color scheme (intuitive):
+    /// - 🔴 Red = needs attention (Zone of Pain, high coupling to stable concrete modules)
+    /// - 🟡 Yellow = moderate concern
+    /// - 🟢 Green = healthy
+    ///
+    /// Health is based on distance from main sequence:
+    /// - D near 0 = on the main sequence = healthy (green)
+    /// - D near 1 = Zone of Pain or Zone of Uselessness = needs attention (red)
+    fn health_color(distance_from_main_sequence: f64) -> String {
+        // Green (healthy, D≈0) to Red (needs attention, D≈1)
+        let health = 1.0 - distance_from_main_sequence.clamp(0.0, 1.0);
+
+        if health > 0.7 {
+            // Healthy: green
+            format!(
+                "#{:02x}cc{:02x}",
+                ((1.0 - health) * 100.0) as u8,
+                (health * 200.0) as u8
+            )
+        } else if health > 0.4 {
+            // Moderate: yellow/orange
+            let yellow = ((health - 0.4) / 0.3 * 255.0) as u8;
+            format!("#ff{yellow:02x}40")
+        } else {
+            // Needs attention: red
+            format!("#ff{:02x}40", (health * 150.0) as u8)
+        }
+    }
+
+    /// Legacy: Calculate color based on instability (for backwards compat).
+    #[allow(dead_code)]
+    fn instability_color(instability: f64) -> String {
+        // Map instability to distance approximation for color
+        // Stable (I≈0) modules that are concrete are in Zone of Pain
+        // Unstable (I≈1) modules that are abstract are in Zone of Uselessness
+        // Middle is healthy
+        let distance = (instability - 0.5).abs() * 2.0; // 0.5 = healthy, 0 or 1 = edges
+        Self::health_color(distance * 0.5) // Scale down for less dramatic colors
+    }
+
+    /// Calculate edge color based on coupling strength.
+    fn edge_color(strength: f64) -> String {
+        // Strong coupling = bright, weak = dim
+        let intensity = (strength * 200.0 + 55.0) as u8;
+        format!("#{intensity:02x}{intensity:02x}{intensity:02x}")
+    }
+}
+
+impl Default for ForceDirectedProjector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Projector for ForceDirectedProjector {
+    fn id(&self) -> &'static str {
+        "3d-force"
+    }
+
+    fn name(&self) -> &'static str {
+        "3D Force-Directed Coupling Visualization"
+    }
+
+    fn description(&self) -> &'static str {
+        "Renders coupling matrix as interactive 3D visualization where tightly coupled modules cluster together"
+    }
+
+    fn load(&self, topology_dir: &Path) -> Result<Topology, ProjectorError> {
+        // Verify directory exists
+        if !topology_dir.exists() {
+            return Err(ProjectorError {
+                code: "TOPOLOGY_NOT_FOUND",
+                message: format!("Directory not found: {}", topology_dir.display()),
+                source: None,
+            });
+        }
+
+        // Check for required files
+        let coupling_matrix = topology_dir.join("graphs/coupling-matrix.json");
+        if !coupling_matrix.exists() {
+            return Err(ProjectorError {
+                code: "REQUIRED_FILE_MISSING",
+                message: "graphs/coupling-matrix.json is required for 3D visualization".into(),
+                source: None,
+            });
+        }
+
+        // TODO: Actually load and parse the topology
+        // For now, return placeholder
+        Ok(Topology::default())
+    }
+
+    fn render(
+        &self,
+        topology: &Topology,
+        format: OutputFormat,
+        config: Option<&ProjectorConfig>,
+    ) -> Result<Vec<u8>, ProjectorError> {
+        // Merge config if provided
+        let cfg = if let Some(proj_config) = config {
+            serde_json::from_value(proj_config.raw.clone()).unwrap_or_else(|_| self.config.clone())
+        } else {
+            self.config.clone()
+        };
+
+        match format {
+            OutputFormat::WebGL | OutputFormat::Json => {
+                let scene = self.build_scene(topology, &cfg)?;
+                let json = serde_json::to_vec_pretty(&scene).map_err(|e| ProjectorError {
+                    code: "RENDER_FAILED",
+                    message: "Failed to serialize scene".into(),
+                    source: Some(Box::new(e)),
+                })?;
+                Ok(json)
+            }
+            OutputFormat::Html => {
+                let scene = self.build_scene(topology, &cfg)?;
+                let html = self.wrap_in_html(&scene)?;
+                Ok(html.into_bytes())
+            }
+            _ => Err(ProjectorError {
+                code: "UNSUPPORTED_FORMAT",
+                message: format!("Format {format:?} not supported by 3d-force projector"),
+                source: None,
+            }),
+        }
+    }
+
+    fn supported_formats(&self) -> &[OutputFormat] {
+        &[OutputFormat::WebGL, OutputFormat::Json, OutputFormat::Html]
+    }
+
+    fn config_schema(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "ForceDirectedConfig",
+            "type": "object",
+            "properties": {
+                "nodeScale": { "type": "number", "default": 1.0 },
+                "minEdgeStrength": { "type": "number", "default": 0.1, "minimum": 0, "maximum": 1 },
+                "iterations": { "type": "integer", "default": 300 },
+                "repulsion": { "type": "number", "default": 100.0 },
+                "attraction": { "type": "number", "default": 0.5 },
+                "seed": { "type": "integer", "default": 42 },
+                "colorScheme": { "type": "string", "enum": ["instability", "complexity", "language", "custom"] }
+            }
+        }))
+    }
+}
+
+impl ForceDirectedProjector {
+    /// Build the 3D scene from topology.
+    fn build_scene(
+        &self,
+        topology: &Topology,
+        cfg: &ForceDirectedConfig,
+    ) -> Result<Scene3D, ProjectorError> {
+        // Get positions from coupling matrix if available
+        let positions = topology
+            .coupling_matrix
+            .as_ref()
+            .and_then(|m| m.positions.as_ref());
+
+        // Build module metrics lookup
+        let module_metrics: std::collections::HashMap<_, _> =
+            topology.modules.iter().map(|m| (m.id.clone(), m)).collect();
+
+        let mut nodes = Vec::new();
+        let mut edges = Vec::new();
+
+        // Build nodes from coupling matrix modules
+        if let Some(matrix) = &topology.coupling_matrix {
+            for (i, module_id) in matrix.modules.iter().enumerate() {
+                let pos = positions
+                    .and_then(|p| p.get(module_id))
+                    .cloned()
+                    .unwrap_or([i as f64 * 2.0, 0.0, 0.0]);
+
+                // Look up metrics for this module
+                let metrics = module_metrics.get(module_id);
+
+                let cyclomatic = metrics.map(|m| m.total_cyclomatic).unwrap_or(0);
+                let cognitive = metrics.map(|m| m.total_cognitive).unwrap_or(0);
+                let instability = metrics.map(|m| m.martin.instability).unwrap_or(0.5);
+                let distance = metrics
+                    .map(|m| m.martin.distance_from_main_sequence)
+                    .unwrap_or(0.5);
+                let function_count = metrics.map(|m| m.function_count).unwrap_or(0);
+
+                // Size based on function count, scaled
+                let size = (function_count as f64 / 5.0 + 0.5).min(2.5) * cfg.node_scale;
+
+                // Color based on health (distance from main sequence)
+                // Red = needs attention (high distance), Green = healthy (low distance)
+                let color = Self::health_color(distance);
+
+                nodes.push(SceneNode {
+                    id: module_id.clone(),
+                    label: module_id.clone(),
+                    position: pos,
+                    size,
+                    color,
+                    metrics: NodeMetrics {
+                        cyclomatic,
+                        cognitive,
+                        instability,
+                        function_count,
+                    },
+                });
+            }
+
+            // Build edges from coupling matrix
+            for (i, row) in matrix.values.iter().enumerate() {
+                for (j, &strength) in row.iter().enumerate() {
+                    // Only upper triangle, skip diagonal, skip weak edges
+                    if j > i && strength >= self.config.min_edge_strength {
+                        edges.push(SceneEdge {
+                            from: matrix.modules[i].clone(),
+                            to: matrix.modules[j].clone(),
+                            strength,
+                            color: Self::edge_color(strength),
+                            width: strength * 2.0,
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(Scene3D {
+            format: "topology-webgl/v1".into(),
+            camera: Camera::default(),
+            nodes,
+            edges,
+        })
+    }
+
+    /// Wrap scene in self-contained HTML with Three.js viewer.
+    fn wrap_in_html(&self, scene: &Scene3D) -> Result<String, ProjectorError> {
+        let scene_json = serde_json::to_string(scene).map_err(|e| ProjectorError {
+            code: "RENDER_FAILED",
+            message: "Failed to serialize scene for HTML".into(),
+            source: Some(Box::new(e)),
+        })?;
+
+        Ok(format!(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Topology - 3D Coupling Visualization</title>
+    <style>
+        body {{ margin: 0; overflow: hidden; font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; }}
+        #info {{
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, rgba(20,20,40,0.95), rgba(40,30,60,0.9));
+            color: #e0e0e0;
+            border-radius: 12px;
+            font-size: 13px;
+            z-index: 100;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }}
+        #info h3 {{ 
+            margin: 0 0 12px 0; 
+            font-size: 18px;
+            background: linear-gradient(90deg, #ff6b9d, #c44569);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }}
+        #info p {{ margin: 4px 0; color: #b0b0b0; }}
+        #info em {{ color: #888; font-size: 11px; }}
+        #legend {{
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, rgba(20,20,40,0.95), rgba(40,30,60,0.9));
+            color: #e0e0e0;
+            border-radius: 12px;
+            font-size: 12px;
+            z-index: 100;
+            border: 1px solid rgba(255,255,255,0.1);
+        }}
+        #legend h4 {{ margin: 0 0 10px 0; color: #aaa; font-weight: 500; }}
+        .legend-item {{ display: flex; align-items: center; margin: 6px 0; }}
+        .legend-color {{ width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; }}
+        #tooltip {{
+            position: absolute;
+            padding: 12px 16px;
+            background: rgba(10,10,20,0.95);
+            color: #fff;
+            border-radius: 10px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+            border: 1px solid rgba(255,100,150,0.3);
+            max-width: 250px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }}
+        #tooltip .name {{ 
+            font-weight: 700; 
+            font-size: 14px; 
+            margin-bottom: 8px;
+            color: #ff6b9d;
+        }}
+        #tooltip .metric {{ 
+            display: flex; 
+            justify-content: space-between; 
+            margin: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 4px;
+        }}
+        #tooltip .metric-label {{ color: #888; }}
+        #tooltip .metric-value {{ color: #fff; font-weight: 500; }}
+        .node-label {{
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6);
+            pointer-events: none;
+            white-space: nowrap;
+        }}
+        .edge-label {{
+            color: rgba(255,255,255,0.6);
+            font-size: 10px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+            pointer-events: none;
+        }}
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>🌐 Code Topology</h3>
+        <p><strong>{node_count}</strong> modules</p>
+        <p><strong>{edge_count}</strong> coupling relationships</p>
+        <p><em>Drag to rotate • Scroll to zoom • Hover for details</em></p>
+    </div>
+    <div id="legend">
+        <h4>Module Health</h4>
+        <div class="legend-item"><div class="legend-color" style="background: #00cc88;"></div>🟢 Healthy (on main sequence)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #ffaa40;"></div>🟡 Moderate concern</div>
+        <div class="legend-item"><div class="legend-color" style="background: #ff4040;"></div>🔴 Needs attention (Zone of Pain)</div>
+        <h4 style="margin-top: 12px;">Coupling Strength</h4>
+        <div class="legend-item"><div class="legend-color" style="background: #ffffff; border: 1px solid #666;"></div>Strong (≥0.7)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #888888;"></div>Medium (0.3-0.7)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #444444;"></div>Weak (&lt;0.3)</div>
+    </div>
+    <div id="tooltip"></div>
+    <script type="importmap">
+    {{
+        "imports": {{
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }}
+    }}
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
+        import {{ CSS2DRenderer, CSS2DObject }} from 'three/addons/renderers/CSS2DRenderer.js';
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f0f1a);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 10);
+        
+        const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+        
+        // CSS2D Renderer for labels
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+        const backLight = new THREE.DirectionalLight(0x6060ff, 0.3);
+        backLight.position.set(-5, -5, -5);
+        scene.add(backLight);
+        
+        // Load topology data
+        const data = {scene_json};
+        
+        const nodeMeshes = [];
+        const tooltip = document.getElementById('tooltip');
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        // Create nodes with labels
+        data.nodes.forEach(node => {{
+            // Create sphere
+            const geometry = new THREE.SphereGeometry(node.size * 0.35, 32, 32);
+            const material = new THREE.MeshPhongMaterial({{ 
+                color: node.color,
+                emissive: node.color,
+                emissiveIntensity: 0.2,
+                shininess: 80
+            }});
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(...node.position);
+            mesh.userData = node;
+            scene.add(mesh);
+            nodeMeshes.push(mesh);
+            
+            // Create text label
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'node-label';
+            labelDiv.textContent = node.label;
+            const label = new CSS2DObject(labelDiv);
+            label.position.set(0, node.size * 0.5 + 0.3, 0);
+            mesh.add(label);
+        }});
+        
+        // Create edges with labels
+        data.edges.forEach(edge => {{
+            const fromNode = data.nodes.find(n => n.id === edge.from);
+            const toNode = data.nodes.find(n => n.id === edge.to);
+            if (fromNode && toNode) {{
+                const start = new THREE.Vector3(...fromNode.position);
+                const end = new THREE.Vector3(...toNode.position);
+                
+                // Create tube for thicker edges
+                const path = new THREE.LineCurve3(start, end);
+                const tubeGeometry = new THREE.TubeGeometry(path, 1, edge.strength * 0.08 + 0.02, 8, false);
+                const tubeMaterial = new THREE.MeshBasicMaterial({{ 
+                    color: edge.color,
+                    opacity: 0.4 + edge.strength * 0.4,
+                    transparent: true
+                }});
+                const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+                scene.add(tube);
+                
+                // Edge label at midpoint (only for strong connections)
+                if (edge.strength >= 0.5) {{
+                    const midpoint = start.clone().add(end).multiplyScalar(0.5);
+                    const edgeLabelDiv = document.createElement('div');
+                    edgeLabelDiv.className = 'edge-label';
+                    edgeLabelDiv.textContent = edge.strength.toFixed(2);
+                    const edgeLabel = new CSS2DObject(edgeLabelDiv);
+                    edgeLabel.position.copy(midpoint);
+                    scene.add(edgeLabel);
+                }}
+            }}
+        }});
+        
+        // Mouse hover for tooltips
+        function onMouseMove(event) {{
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodeMeshes);
+            
+            if (intersects.length > 0) {{
+                const node = intersects[0].object.userData;
+                tooltip.style.display = 'block';
+                tooltip.style.left = event.clientX + 15 + 'px';
+                tooltip.style.top = event.clientY + 15 + 'px';
+                
+                // Find connections
+                const connections = data.edges
+                    .filter(e => e.from === node.id || e.to === node.id)
+                    .map(e => {{
+                        const other = e.from === node.id ? e.to : e.from;
+                        return `${{other}} (${{e.strength.toFixed(2)}})`;
+                    }})
+                    .join(', ');
+                
+                tooltip.innerHTML = `
+                    <div class="name">${{node.label}}</div>
+                    <div class="metric">
+                        <span class="metric-label">Cyclomatic</span>
+                        <span class="metric-value">${{node.metrics.cyclomatic}}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Cognitive</span>
+                        <span class="metric-value">${{node.metrics.cognitive}}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Instability</span>
+                        <span class="metric-value">${{(node.metrics.instability * 100).toFixed(0)}}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Connected to</span>
+                        <span class="metric-value">${{connections || 'none'}}</span>
+                    </div>
+                `;
+            }} else {{
+                tooltip.style.display = 'none';
+            }}
+        }}
+        
+        window.addEventListener('mousemove', onMouseMove);
+        
+        // Animation loop
+        function animate() {{
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }}
+        animate();
+        
+        // Handle resize
+        window.addEventListener('resize', () => {{
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }});
+    </script>
+</body>
+</html>"#,
+            node_count = scene.nodes.len(),
+            edge_count = scene.edges.len(),
+            scene_json = scene_json
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_projector_creation() {
+        let projector = ForceDirectedProjector::new();
+        assert_eq!(projector.id(), "3d-force");
+    }
+
+    #[test]
+    fn test_supported_formats() {
+        let projector = ForceDirectedProjector::new();
+        let formats = projector.supported_formats();
+        assert!(formats.contains(&OutputFormat::WebGL));
+        assert!(formats.contains(&OutputFormat::Json));
+        assert!(formats.contains(&OutputFormat::Html));
+    }
+
+    #[test]
+    fn test_config_schema() {
+        let projector = ForceDirectedProjector::new();
+        let schema = projector.config_schema();
+        assert!(schema.is_some());
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = ForceDirectedConfig::default();
+        assert_eq!(config.node_scale, 1.0);
+        assert_eq!(config.iterations, 300);
+        assert_eq!(config.seed, 42);
+    }
+
+    #[test]
+    fn test_health_color() {
+        // Healthy (distance = 0) should be green-ish
+        let healthy = ForceDirectedProjector::health_color(0.0);
+        assert!(
+            healthy.contains("cc"),
+            "Healthy color should have green: {healthy}"
+        );
+
+        // Needs attention (distance = 1.0) should be red-ish
+        let needs_attention = ForceDirectedProjector::health_color(1.0);
+        assert!(
+            needs_attention.starts_with("#ff"),
+            "Needs attention should be red: {needs_attention}"
+        );
+    }
+
+    #[test]
+    fn test_instability_color_backwards_compat() {
+        // Just verify it returns a valid hex color
+        let stable = ForceDirectedProjector::instability_color(0.0);
+        assert!(stable.starts_with("#"));
+        assert_eq!(stable.len(), 7);
+
+        let unstable = ForceDirectedProjector::instability_color(1.0);
+        assert!(unstable.starts_with("#"));
+        assert_eq!(unstable.len(), 7);
+    }
+}

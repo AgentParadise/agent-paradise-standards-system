@@ -127,8 +127,8 @@ pub fn bump_version(
     // Update the metadata file
     let content = fs::read_to_string(&metadata_file)?;
     let updated = content.replace(
-        &format!("version = \"{}\"", old_version),
-        &format!("version = \"{}\"", new_version),
+        &format!("version = \"{old_version}\""),
+        &format!("version = \"{new_version}\""),
     );
     fs::write(&metadata_file, updated)?;
 
@@ -137,8 +137,8 @@ pub fn bump_version(
     if cargo_toml.exists() {
         let content = fs::read_to_string(&cargo_toml)?;
         let updated = content.replace(
-            &format!("version = \"{}\"", old_version),
-            &format!("version = \"{}\"", new_version),
+            &format!("version = \"{old_version}\""),
+            &format!("version = \"{new_version}\""),
         );
         fs::write(&cargo_toml, updated)?;
     }
@@ -178,7 +178,7 @@ fn bump_semver(version: &str, part: BumpPart) -> Result<String, VersionError> {
         BumpPart::Patch => (major, minor, patch + 1),
     };
 
-    Ok(format!("{}.{}.{}", new_major, new_minor, new_patch))
+    Ok(format!("{new_major}.{new_minor}.{new_patch}"))
 }
 
 #[cfg(test)]

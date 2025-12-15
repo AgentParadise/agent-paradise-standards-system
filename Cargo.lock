@@ -164,6 +164,55 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 
 [[package]]
+name = "code-topology"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "code-topology-3d",
+ "code-topology-mermaid",
+ "code-topology-rust-adapter",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "code-topology-3d"
+version = "0.1.0"
+dependencies = [
+ "code-topology",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "code-topology-mermaid"
+version = "0.1.0"
+dependencies = [
+ "code-topology",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "code-topology-rust-adapter"
+version = "0.1.0"
+dependencies = [
+ "code-topology",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -22,7 +22,7 @@ fn test_all_v1_standards_have_backwards_compat_field() {
         }
 
         let metadata = parse_standard_metadata(&standard_toml)
-            .unwrap_or_else(|_| panic!("Failed to parse {:?}", standard_toml));
+            .unwrap_or_else(|_| panic!("Failed to parse {standard_toml:?}"));
 
         // All V1 standards should have this field set
         assert!(

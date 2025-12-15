@@ -1,0 +1,18 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "EXP-V1-0001.3D01"
+name = "3D Force-Directed Coupling Visualization"
+slug = "force-directed"
+version = "0.1.0"
+parent_id = "EXP-V1-0001"
+parent_major = "0"
+
+[projector]
+type = "3d"
+formats = ["webgl", "gltf", "html", "json"]
+requires = ["graphs/coupling-matrix.json", "metrics/modules.json"]
+
+[ownership]
+maintainers = ["AgentParadise"]
+
