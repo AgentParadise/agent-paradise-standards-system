@@ -5,6 +5,9 @@ members = [
     "crates/aps-cli",
     "standards/v1/APS-V1-0000-meta",
 ]
+exclude = [
+    "lib/agentic-primitives",
+]
 
 [workspace.package]
 version = "0.1.0"
