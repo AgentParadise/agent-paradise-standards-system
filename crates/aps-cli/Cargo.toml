@@ -13,5 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 aps-core.workspace = true
+aps-v1-0000-meta = { path = "../../standards/v1/APS-V1-0000-meta" }
 clap.workspace = true
 
