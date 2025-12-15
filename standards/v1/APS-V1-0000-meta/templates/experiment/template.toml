@@ -1,0 +1,14 @@
+# Template metadata for experiment scaffolding
+[template]
+name = "experiment"
+description = "Scaffold a new APS V1 experimental standard"
+version = "1.0.0"
+
+[variables]
+id = { required = true, description = "Experiment ID (e.g., EXP-V1-0001)" }
+name = { required = true, description = "Human-readable name" }
+slug = { required = true, description = "Filesystem-safe slug (kebab-case)" }
+version = { default = "0.1.0", description = "Initial SemVer version (experiments start at 0.x)" }
+category = { default = "technical", description = "Category: governance|technical|design|process|security" }
+maintainers = { default = ["AgentParadise"], description = "List of maintainers" }
+

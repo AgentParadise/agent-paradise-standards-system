@@ -4,11 +4,10 @@ This directory contains scaffolding templates for creating new APS packages.
 
 ## Available Templates
 
-| Template | Description |
-|----------|-------------|
-| `standard/` | Scaffold a new official standard (TODO: M6) |
-| `substandard/` | Scaffold a new substandard under a parent (TODO: M6) |
-| `experiment/` | Scaffold a new experimental standard (TODO: M6) |
+| Template | Description | Output Location |
+|----------|-------------|-----------------|
+| `standard/` | New official standard | `standards/v1/APS-V1-XXXX-<slug>/` |
+| `experiment/` | New experimental standard | `standards-experimental/v1/EXP-V1-XXXX-<slug>/` |
 
 ## Template Structure
 
@@ -16,8 +15,8 @@ Each template contains:
 
 ```
 <template>/
-├── template.toml     # Template metadata and variables
-└── skeleton/         # Files to copy/render
+├── template.toml     # Template metadata and variable definitions
+└── skeleton/         # Files to scaffold (with Handlebars placeholders)
 ```
 
 ## Usage
@@ -25,28 +24,52 @@ Each template contains:
 Templates are used by the CLI:
 
 ```bash
-# Create a new standard using the standard template
+# Create a new standard
 aps v1 create standard my-new-standard
 
-# Create a substandard using the substandard template
-aps v1 create substandard APS-V1-0002 GH01
-
-# Create an experiment using the experiment template
+# Create a new experiment
 aps v1 create experiment my-experiment
 ```
 
 ## Template Variables
 
-Templates support variable substitution:
+### Standard Template
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `{{id}}` | Package ID | `APS-V1-0005` |
-| `{{name}}` | Human-readable name | `My New Standard` |
-| `{{slug}}` | Filesystem-safe slug | `my-new-standard` |
-| `{{version}}` | Initial version | `1.0.0` |
-| `{{category}}` | Standard category | `technical` |
-| `{{maintainers}}` | Maintainer list | `["AgentParadise"]` |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `id` | ✅ | - | Standard ID (e.g., APS-V1-0001) |
+| `name` | ✅ | - | Human-readable name |
+| `slug` | ✅ | - | Filesystem-safe slug (kebab-case) |
+| `version` | ❌ | `1.0.0` | Initial SemVer version |
+| `category` | ❌ | `governance` | Category |
+| `maintainers` | ❌ | `["AgentParadise"]` | Maintainer list |
+
+### Experiment Template
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `id` | ✅ | - | Experiment ID (e.g., EXP-V1-0001) |
+| `name` | ✅ | - | Human-readable name |
+| `slug` | ✅ | - | Filesystem-safe slug (kebab-case) |
+| `version` | ❌ | `0.1.0` | Initial version (0.x for experiments) |
+| `category` | ❌ | `technical` | Category |
+| `maintainers` | ❌ | `["AgentParadise"]` | Maintainer list |
+
+## Handlebars Syntax
+
+Templates use [Handlebars](https://handlebarsjs.com/) for variable substitution:
+
+```handlebars
+# {{name}}
+
+Version: {{version}}
+Category: {{category}}
+
+Maintainers:
+{{#each maintainers}}
+- {{this}}
+{{/each}}
+```
 
 ## Requirements
 
@@ -55,4 +78,3 @@ Per the meta-standard spec (§13):
 - Templates MUST be deterministic
 - Templates MUST produce packages that pass validation immediately
 - Templates MUST be co-located with the standard they belong to
-
