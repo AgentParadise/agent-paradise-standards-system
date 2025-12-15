@@ -14,4 +14,9 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tempfile = "3.14"
+code-topology-3d = { path = "substandards/3D01-force-directed" }
+
+[[example]]
+name = "render_sample"
+path = "examples/render_sample.rs"
 
