@@ -1,0 +1,32 @@
+{
+  "schema_version": "0.1.0",
+  "timestamp": "2025-12-15T10:30:00Z",
+  "commit_hash": "abc123def456789",
+  "summary": {
+    "total_files": 12,
+    "total_functions": 48,
+    "total_cyclomatic": 156,
+    "avg_cyclomatic": 3.25,
+    "total_cognitive": 198,
+    "avg_cognitive": 4.125,
+    "coupling_density": 0.45
+  },
+  "hotspots": [
+    {
+      "id": "typescript:api/handlers::processRequest",
+      "cyclomatic": 12,
+      "cognitive": 18
+    },
+    {
+      "id": "rust:auth::validator::validate_token",
+      "cyclomatic": 8,
+      "cognitive": 12
+    },
+    {
+      "id": "typescript:api/handlers::validateInput",
+      "cyclomatic": 6,
+      "cognitive": 8
+    }
+  ]
+}
+

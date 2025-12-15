@@ -718,6 +718,174 @@ pub trait Projector: Send + Sync {
 }
 
 // ============================================================================
+// Artifact File Types (for parsing .topology/ files)
+// ============================================================================
+
+/// Container for functions.json artifact.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FunctionsFile {
+    /// Schema version
+    pub schema_version: String,
+    /// All analyzed functions
+    pub functions: Vec<FunctionRecord>,
+}
+
+/// A function record in the functions.json artifact.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FunctionRecord {
+    /// Fully qualified identifier
+    pub id: String,
+    /// Simple function name
+    pub name: String,
+    /// File path relative to analysis root
+    pub file: String,
+    /// Module this function belongs to
+    pub module: String,
+    /// Source language
+    pub language: String,
+    /// Source location
+    pub location: LocationRange,
+    /// Computed metrics
+    pub metrics: FunctionMetricsRecord,
+}
+
+/// Location range in source file.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LocationRange {
+    /// Start line (1-indexed)
+    pub start_line: u32,
+    /// End line (1-indexed)
+    pub end_line: u32,
+}
+
+/// Metrics in the JSON artifact format.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FunctionMetricsRecord {
+    /// Cyclomatic complexity
+    pub cyclomatic_complexity: u32,
+    /// Cognitive complexity
+    pub cognitive_complexity: u32,
+    /// Halstead metrics
+    pub halstead: HalsteadRecord,
+    /// Lines of code
+    pub lines_of_code: u32,
+    /// Logical lines
+    pub logical_lines: u32,
+    /// Comment lines
+    pub comment_lines: u32,
+    /// Parameter count
+    pub parameter_count: u32,
+}
+
+/// Halstead metrics in JSON artifact format.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HalsteadRecord {
+    /// Vocabulary
+    pub vocabulary: u32,
+    /// Length
+    pub length: u32,
+    /// Volume
+    pub volume: f64,
+    /// Difficulty
+    pub difficulty: f64,
+    /// Effort
+    pub effort: f64,
+    /// Time to implement
+    pub time_to_implement: f64,
+    /// Estimated bugs
+    pub estimated_bugs: f64,
+}
+
+/// Container for modules.json artifact.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModulesFile {
+    /// Schema version
+    pub schema_version: String,
+    /// All analyzed modules
+    pub modules: Vec<ModuleRecord>,
+}
+
+/// A module record in the modules.json artifact.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModuleRecord {
+    /// Module identifier
+    pub id: String,
+    /// Module name
+    pub name: String,
+    /// Path to the module
+    pub path: String,
+    /// Languages in this module
+    pub languages: Vec<String>,
+    /// Aggregated metrics
+    pub metrics: ModuleMetricsRecord,
+}
+
+/// Module metrics in the JSON artifact format.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModuleMetricsRecord {
+    /// File count
+    pub file_count: u32,
+    /// Function count
+    pub function_count: u32,
+    /// Total cyclomatic complexity
+    pub total_cyclomatic: u32,
+    /// Average cyclomatic complexity
+    pub avg_cyclomatic: f64,
+    /// Total cognitive complexity
+    pub total_cognitive: u32,
+    /// Average cognitive complexity
+    pub avg_cognitive: f64,
+    /// Lines of code
+    pub lines_of_code: u32,
+    /// Martin's metrics
+    pub martin: MartinRecord,
+}
+
+/// Martin's metrics in JSON artifact format.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MartinRecord {
+    /// Afferent coupling
+    pub ca: u32,
+    /// Efferent coupling
+    pub ce: u32,
+    /// Instability
+    pub instability: f64,
+    /// Abstractness
+    pub abstractness: f64,
+    /// Distance from main sequence
+    pub distance_from_main_sequence: f64,
+}
+
+/// Container for coupling-matrix.json artifact.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CouplingMatrixFile {
+    /// Schema version
+    pub schema_version: String,
+    /// Metric name
+    pub metric: String,
+    /// Description
+    pub description: String,
+    /// Module names
+    pub modules: Vec<String>,
+    /// NxN coupling matrix
+    pub matrix: Vec<Vec<f64>>,
+    /// Optional layout info
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout: Option<LayoutInfoRecord>,
+}
+
+/// Layout info in JSON artifact format.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LayoutInfoRecord {
+    /// Algorithm used
+    pub algorithm: String,
+    /// Random seed
+    pub seed: u64,
+    /// Positions (module_id -> [x, y, z])
+    pub positions: HashMap<String, [f64; 3]>,
+}
+
+// ============================================================================
 // Standard Implementation
 // ============================================================================
 

@@ -1,0 +1,92 @@
+{
+  "schema_version": "0.1.0",
+  "nodes": [
+    {
+      "id": "rust:auth::validator::validate_token",
+      "type": "function",
+      "module": "auth",
+      "language": "rust"
+    },
+    {
+      "id": "rust:auth::validator::check_expiry",
+      "type": "function",
+      "module": "auth",
+      "language": "rust"
+    },
+    {
+      "id": "rust:crypto::hmac::sign",
+      "type": "function",
+      "module": "crypto",
+      "language": "rust"
+    },
+    {
+      "id": "rust:crypto::hmac::verify",
+      "type": "function",
+      "module": "crypto",
+      "language": "rust"
+    },
+    {
+      "id": "typescript:api/handlers::processRequest",
+      "type": "function",
+      "module": "api",
+      "language": "typescript"
+    },
+    {
+      "id": "typescript:api/handlers::validateInput",
+      "type": "function",
+      "module": "api",
+      "language": "typescript"
+    },
+    {
+      "id": "rust:db::connection::connect",
+      "type": "function",
+      "module": "db",
+      "language": "rust"
+    },
+    {
+      "id": "rust:utils::helpers::format_error",
+      "type": "function",
+      "module": "utils",
+      "language": "rust"
+    }
+  ],
+  "edges": [
+    {
+      "from": "rust:auth::validator::validate_token",
+      "to": "rust:crypto::hmac::verify",
+      "type": "calls",
+      "count": 1
+    },
+    {
+      "from": "rust:auth::validator::validate_token",
+      "to": "rust:auth::validator::check_expiry",
+      "type": "calls",
+      "count": 1
+    },
+    {
+      "from": "rust:auth::validator::validate_token",
+      "to": "rust:utils::helpers::format_error",
+      "type": "calls",
+      "count": 2
+    },
+    {
+      "from": "rust:crypto::hmac::verify",
+      "to": "rust:crypto::hmac::sign",
+      "type": "calls",
+      "count": 1
+    },
+    {
+      "from": "typescript:api/handlers::processRequest",
+      "to": "typescript:api/handlers::validateInput",
+      "type": "calls",
+      "count": 1
+    },
+    {
+      "from": "rust:db::connection::connect",
+      "to": "rust:utils::helpers::format_error",
+      "type": "calls",
+      "count": 1
+    }
+  ]
+}
+
