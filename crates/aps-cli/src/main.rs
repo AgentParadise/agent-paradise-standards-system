@@ -19,7 +19,7 @@
 //! ```
 
 use aps_core::discovery::{PackageType, count_packages, discover_v1_packages, find_package_by_id};
-use aps_core::{StandardContext, TemplateEngine, promote_experiment};
+use aps_core::{StandardContext, TemplateEngine, generate_all_views, promote_experiment};
 use aps_v1_0000_meta::{MetaStandard, Standard};
 use clap::Parser;
 use std::env;
@@ -79,8 +79,19 @@ enum V1Commands {
         #[arg(long)]
         target_id: Option<String>,
     },
+    /// Generate derived views (registry.json, INDEX.md)
+    Generate {
+        #[command(subcommand)]
+        target: GenerateTarget,
+    },
     /// List all V1 packages
     List,
+}
+
+#[derive(clap::Subcommand)]
+enum GenerateTarget {
+    /// Generate all derived views
+    Views,
 }
 
 #[derive(clap::Subcommand)]
@@ -318,6 +329,30 @@ fn main() -> ExitCode {
                     }
                 }
             }
+            V1Commands::Generate { target } => match target {
+                GenerateTarget::Views => {
+                    println!("Generating derived views...");
+
+                    match generate_all_views(&repo_root) {
+                        Ok(files) => {
+                            println!("\n✓ Generated {} files:", files.len());
+                            for file in &files {
+                                if let Ok(rel) = file.strip_prefix(&repo_root) {
+                                    println!("  {}", rel.display());
+                                }
+                            }
+                            println!(
+                                "\nNote: These files are derived views, not authoritative.\nThe filesystem is the source of truth."
+                            );
+                            ExitCode::SUCCESS
+                        }
+                        Err(e) => {
+                            eprintln!("Error generating views: {}", e);
+                            ExitCode::FAILURE
+                        }
+                    }
+                }
+            },
             V1Commands::List => {
                 let packages = discover_v1_packages(&repo_root);
                 let (standards, substandards, experiments) = count_packages(&repo_root);
