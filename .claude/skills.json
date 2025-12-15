@@ -1,0 +1,26 @@
+{
+  "note": "This is a manifest file only. Skills are injected into system prompts by the orchestrator.",
+  "skills": [
+    {
+      "id": "centralized-configuration",
+      "domain": "cross-cutting",
+      "category": "devops",
+      "summary": "Type-safe, self-documenting environment configuration with idempotent sync",
+      "version": 1
+    },
+    {
+      "id": "fuma",
+      "domain": "documentation",
+      "category": "docs",
+      "summary": "Fumadocs styling patterns: Three.js headers, Lucide icons, gradient buttons, and theme-aware components",
+      "version": 1
+    },
+    {
+      "id": "prioritize",
+      "domain": "code-review",
+      "category": "review",
+      "summary": "Prioritize review comments by severity: security > logic > style",
+      "version": 1
+    }
+  ]
+}
