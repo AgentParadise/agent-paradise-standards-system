@@ -134,11 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Module complexity
     println!("\n📊 Module Complexity:");
     let mut modules_sorted: Vec<_> = modules_file.modules.iter().collect();
-    modules_sorted.sort_by(|a, b| {
-        b.metrics
-            .total_cyclomatic
-            .cmp(&a.metrics.total_cyclomatic)
-    });
+    modules_sorted.sort_by(|a, b| b.metrics.total_cyclomatic.cmp(&a.metrics.total_cyclomatic));
     for m in modules_sorted.iter().take(5) {
         println!(
             "   {} — CC:{} Cog:{} LOC:{}",
@@ -166,4 +162,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

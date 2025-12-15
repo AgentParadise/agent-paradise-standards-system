@@ -116,11 +116,8 @@ impl MermaidProjector {
         }
 
         // Build module metrics lookup for styling
-        let module_metrics: std::collections::HashMap<_, _> = topology
-            .modules
-            .iter()
-            .map(|m| (m.id.clone(), m))
-            .collect();
+        let module_metrics: std::collections::HashMap<_, _> =
+            topology.modules.iter().map(|m| (m.id.clone(), m)).collect();
 
         if let Some(matrix) = &topology.coupling_matrix {
             // Add nodes with styling based on health
@@ -143,7 +140,7 @@ impl MermaidProjector {
                     ":::success" // Green - healthy
                 };
 
-                lines.push(format!("    {}[\"📦 {}\"]{}",safe_id, display_name, style));
+                lines.push(format!("    {safe_id}[\"📦 {display_name}\"]{style}"));
             }
 
             // Add edges for coupling relationships
@@ -156,14 +153,14 @@ impl MermaidProjector {
                         let edge = if cfg.show_strength {
                             let pct = (strength * 100.0) as u32;
                             if strength >= 0.7 {
-                                format!("    {} ==>|{}%| {}", from, pct, to)
+                                format!("    {from} ==>|{pct}%| {to}")
                             } else {
-                                format!("    {} -->|{}%| {}", from, pct, to)
+                                format!("    {from} -->|{pct}%| {to}")
                             }
                         } else if strength >= 0.7 {
-                            format!("    {} ==> {}", from, to)
+                            format!("    {from} ==> {to}")
                         } else {
-                            format!("    {} --> {}", from, to)
+                            format!("    {from} --> {to}")
                         };
                         lines.push(edge);
                     }
@@ -188,12 +185,17 @@ impl MermaidProjector {
         ];
 
         // Group modules by prefix (e.g., "aps-core::" becomes a system)
-        let mut systems: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        let mut systems: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
 
         if let Some(matrix) = &topology.coupling_matrix {
             for module_id in &matrix.modules {
                 let system = if module_id.contains("::") {
-                    module_id.split("::").next().unwrap_or(module_id).to_string()
+                    module_id
+                        .split("::")
+                        .next()
+                        .unwrap_or(module_id)
+                        .to_string()
                 } else {
                     module_id.clone()
                 };
@@ -205,21 +207,25 @@ impl MermaidProjector {
         for (system, modules) in &systems {
             let safe_id = Self::sanitize_id(system);
             let desc = format!("{} modules", modules.len());
-            lines.push(format!(
-                "    System({}, \"{}\", \"{}\")",
-                safe_id, system, desc
-            ));
+            lines.push(format!("    System({safe_id}, \"{system}\", \"{desc}\")"));
         }
 
         // Render relationships between systems
         if let Some(matrix) = &topology.coupling_matrix {
-            let mut system_rels: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+            let mut system_rels: std::collections::HashSet<(String, String)> =
+                std::collections::HashSet::new();
 
             for (i, row) in matrix.values.iter().enumerate() {
                 for (j, &strength) in row.iter().enumerate() {
                     if j > i && strength >= 0.3 {
-                        let sys_i = matrix.modules[i].split("::").next().unwrap_or(&matrix.modules[i]);
-                        let sys_j = matrix.modules[j].split("::").next().unwrap_or(&matrix.modules[j]);
+                        let sys_i = matrix.modules[i]
+                            .split("::")
+                            .next()
+                            .unwrap_or(&matrix.modules[i]);
+                        let sys_j = matrix.modules[j]
+                            .split("::")
+                            .next()
+                            .unwrap_or(&matrix.modules[j]);
                         if sys_i != sys_j {
                             let key = if sys_i < sys_j {
                                 (sys_i.to_string(), sys_j.to_string())
@@ -252,11 +258,8 @@ impl MermaidProjector {
         ];
 
         // Build module metrics lookup
-        let module_metrics: std::collections::HashMap<_, _> = topology
-            .modules
-            .iter()
-            .map(|m| (m.id.clone(), m))
-            .collect();
+        let module_metrics: std::collections::HashMap<_, _> =
+            topology.modules.iter().map(|m| (m.id.clone(), m)).collect();
 
         if let Some(matrix) = &topology.coupling_matrix {
             // Each module is a container
@@ -265,7 +268,12 @@ impl MermaidProjector {
                 let metrics = module_metrics.get(module_id);
 
                 let tech = metrics
-                    .map(|m| m.languages.first().cloned().unwrap_or_else(|| "rust".into()))
+                    .map(|m| {
+                        m.languages
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| "rust".into())
+                    })
                     .unwrap_or_else(|| "rust".into());
 
                 let desc = metrics
@@ -288,7 +296,7 @@ impl MermaidProjector {
                         let from = Self::sanitize_id(&matrix.modules[i]);
                         let to = Self::sanitize_id(&matrix.modules[j]);
                         let pct = (strength * 100.0) as u32;
-                        lines.push(format!("    Rel({}, {}, \"{}% coupled\")", from, to, pct));
+                        lines.push(format!("    Rel({from}, {to}, \"{pct}% coupled\")"));
                     }
                 }
             }
@@ -299,10 +307,7 @@ impl MermaidProjector {
 
     /// Sanitize module ID for Mermaid (remove special chars).
     fn sanitize_id(id: &str) -> String {
-        id.replace("::", "_")
-            .replace('-', "_")
-            .replace('.', "_")
-            .replace('/', "_")
+        id.replace("::", "_").replace(['-', '.', '/'], "_")
     }
 }
 
@@ -362,14 +367,14 @@ impl Projector for MermaidProjector {
                     DiagramStyle::C4Container => self.render_c4_container(topology, &cfg),
                     DiagramStyle::ClassDiagram => self.render_flowchart(topology, &cfg),
                 };
-                format!("```mermaid\n{}\n```", inner)
+                format!("```mermaid\n{inner}\n```")
             }
             _ => {
                 return Err(ProjectorError {
                     code: "UNSUPPORTED_FORMAT",
                     message: format!("Format {format:?} not supported by mermaid projector"),
                     source: None,
-                })
+                });
             }
         };
 
@@ -412,7 +417,10 @@ mod tests {
 
     #[test]
     fn test_sanitize_id() {
-        assert_eq!(MermaidProjector::sanitize_id("aps-core::discovery"), "aps_core_discovery");
+        assert_eq!(
+            MermaidProjector::sanitize_id("aps-core::discovery"),
+            "aps_core_discovery"
+        );
         assert_eq!(MermaidProjector::sanitize_id("my.module"), "my_module");
     }
 
@@ -424,4 +432,3 @@ mod tests {
         assert!(formats.contains(&OutputFormat::Markdown));
     }
 }
-

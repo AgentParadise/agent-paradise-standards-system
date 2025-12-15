@@ -53,7 +53,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Print complexity stats
     if !result.functions.is_empty() {
         let total_cc: u32 = result.functions.iter().map(|f| f.cyclomatic).sum();
-        let max_cc = result.functions.iter().map(|f| f.cyclomatic).max().unwrap_or(0);
+        let max_cc = result
+            .functions
+            .iter()
+            .map(|f| f.cyclomatic)
+            .max()
+            .unwrap_or(0);
         let avg_cc = total_cc as f64 / result.functions.len() as f64;
 
         println!("\n📈 Complexity Metrics:");
@@ -120,4 +125,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

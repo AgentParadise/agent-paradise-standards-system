@@ -42,7 +42,7 @@ edition = "2021"
 
 /// Create a minimal valid standard package.
 pub fn create_valid_standard(dir: &Path, id: &str, name: &str, slug: &str) -> PathBuf {
-    let pkg_dir = dir.join(format!("standards/v1/{}-{}", id, slug));
+    let pkg_dir = dir.join(format!("standards/v1/{id}-{slug}"));
     fs::create_dir_all(&pkg_dir).unwrap();
 
     // Required directories
@@ -88,10 +88,7 @@ edition = "2021"
     fs::write(pkg_dir.join("src/lib.rs"), "// Minimal lib\n").unwrap();
 
     // docs/01_spec.md
-    let spec = format!(
-        "# {} — {} (Canonical Specification)\n\n**Version**: 1.0.0\n",
-        id, name
-    );
+    let spec = format!("# {id} — {name} (Canonical Specification)\n\n**Version**: 1.0.0\n");
     fs::write(pkg_dir.join("docs/01_spec.md"), spec).unwrap();
 
     // READMEs
@@ -104,7 +101,7 @@ edition = "2021"
 
 /// Create a minimal valid experiment package.
 pub fn create_valid_experiment(dir: &Path, id: &str, name: &str, slug: &str) -> PathBuf {
-    let pkg_dir = dir.join(format!("standards-experimental/v1/{}-{}", id, slug));
+    let pkg_dir = dir.join(format!("standards-experimental/v1/{id}-{slug}"));
     fs::create_dir_all(&pkg_dir).unwrap();
 
     // Required directories
@@ -148,10 +145,7 @@ edition = "2021"
     fs::write(pkg_dir.join("src/lib.rs"), "// Minimal lib\n").unwrap();
 
     // docs/01_spec.md
-    let spec = format!(
-        "# {} — {} (Experimental Specification)\n\n**Version**: 0.1.0\n",
-        id, name
-    );
+    let spec = format!("# {id} — {name} (Experimental Specification)\n\n**Version**: 0.1.0\n");
     fs::write(pkg_dir.join("docs/01_spec.md"), spec).unwrap();
 
     // READMEs
@@ -171,10 +165,9 @@ pub fn create_valid_substandard(
     name: &str,
     slug: &str,
 ) -> PathBuf {
-    let substandard_id = format!("{}.{}", parent_id, profile);
+    let substandard_id = format!("{parent_id}.{profile}");
     let pkg_dir = dir.join(format!(
-        "standards/v1/{}-{}/substandards/{}-{}",
-        parent_id, parent_slug, profile, slug
+        "standards/v1/{parent_id}-{parent_slug}/substandards/{profile}-{slug}"
     ));
     fs::create_dir_all(&pkg_dir).unwrap();
 
@@ -217,10 +210,8 @@ edition = "2021"
     fs::write(pkg_dir.join("src/lib.rs"), "// Minimal substandard lib\n").unwrap();
 
     // docs/01_spec.md
-    let spec = format!(
-        "# {} — {} (Canonical Specification)\n\n**Version**: 1.0.0\n",
-        substandard_id, name
-    );
+    let spec =
+        format!("# {substandard_id} — {name} (Canonical Specification)\n\n**Version**: 1.0.0\n");
     fs::write(pkg_dir.join("docs/01_spec.md"), spec).unwrap();
 
     // READMEs

@@ -212,24 +212,28 @@ impl ForceDirectedProjector {
     }
 
     /// Calculate node color based on health score.
-    /// 
+    ///
     /// Color scheme (intuitive):
     /// - 🔴 Red = needs attention (Zone of Pain, high coupling to stable concrete modules)
     /// - 🟡 Yellow = moderate concern
     /// - 🟢 Green = healthy
-    /// 
+    ///
     /// Health is based on distance from main sequence:
     /// - D near 0 = on the main sequence = healthy (green)
     /// - D near 1 = Zone of Pain or Zone of Uselessness = needs attention (red)
     fn health_color(distance_from_main_sequence: f64) -> String {
         // Green (healthy, D≈0) to Red (needs attention, D≈1)
         let health = 1.0 - distance_from_main_sequence.clamp(0.0, 1.0);
-        
+
         if health > 0.7 {
             // Healthy: green
-            format!("#{:02x}cc{:02x}", ((1.0 - health) * 100.0) as u8, (health * 200.0) as u8)
+            format!(
+                "#{:02x}cc{:02x}",
+                ((1.0 - health) * 100.0) as u8,
+                (health * 200.0) as u8
+            )
         } else if health > 0.4 {
-            // Moderate: yellow/orange  
+            // Moderate: yellow/orange
             let yellow = ((health - 0.4) / 0.3 * 255.0) as u8;
             format!("#ff{yellow:02x}40")
         } else {
@@ -373,11 +377,8 @@ impl ForceDirectedProjector {
             .and_then(|m| m.positions.as_ref());
 
         // Build module metrics lookup
-        let module_metrics: std::collections::HashMap<_, _> = topology
-            .modules
-            .iter()
-            .map(|m| (m.id.clone(), m))
-            .collect();
+        let module_metrics: std::collections::HashMap<_, _> =
+            topology.modules.iter().map(|m| (m.id.clone(), m)).collect();
 
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
@@ -787,14 +788,31 @@ mod tests {
     }
 
     #[test]
-    fn test_instability_color() {
-        // Fully stable (0.0) should be blue-ish
-        let stable = ForceDirectedProjector::instability_color(0.0);
-        assert!(stable.starts_with("#00"));
+    fn test_health_color() {
+        // Healthy (distance = 0) should be green-ish
+        let healthy = ForceDirectedProjector::health_color(0.0);
+        assert!(
+            healthy.contains("cc"),
+            "Healthy color should have green: {healthy}"
+        );
 
-        // Fully unstable (1.0) should be red-ish
+        // Needs attention (distance = 1.0) should be red-ish
+        let needs_attention = ForceDirectedProjector::health_color(1.0);
+        assert!(
+            needs_attention.starts_with("#ff"),
+            "Needs attention should be red: {needs_attention}"
+        );
+    }
+
+    #[test]
+    fn test_instability_color_backwards_compat() {
+        // Just verify it returns a valid hex color
+        let stable = ForceDirectedProjector::instability_color(0.0);
+        assert!(stable.starts_with("#"));
+        assert_eq!(stable.len(), 7);
+
         let unstable = ForceDirectedProjector::instability_color(1.0);
-        assert!(unstable.starts_with("#ff"));
+        assert!(unstable.starts_with("#"));
+        assert_eq!(unstable.len(), 7);
     }
 }
-

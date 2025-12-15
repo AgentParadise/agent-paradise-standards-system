@@ -129,8 +129,7 @@ impl HalsteadMetrics {
         };
 
         let difficulty = if distinct_operands > 0 {
-            (distinct_operators as f64 / 2.0)
-                * (total_operands as f64 / distinct_operands as f64)
+            (distinct_operators as f64 / 2.0) * (total_operands as f64 / distinct_operands as f64)
         } else {
             0.0
         };
@@ -246,25 +245,19 @@ impl Default for MartinMetrics {
 // ============================================================================
 
 /// Visibility of a function or type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
     /// Accessible from anywhere
     Public,
     /// Accessible within the module/file
+    #[default]
     Private,
     /// Accessible within the crate/package
     Internal,
     /// Protected (subclass access)
     Protected,
 }
-
-impl Default for Visibility {
-    fn default() -> Self {
-        Self::Private
-    }
-}
-
 /// Information about a function/method extracted from source.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionInfo {

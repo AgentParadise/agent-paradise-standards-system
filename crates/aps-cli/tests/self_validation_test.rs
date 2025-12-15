@@ -63,9 +63,7 @@ fn test_repo_validation_via_cli() {
 
     assert!(
         output.status.success(),
-        "aps v1 validate repo should succeed.\nstdout: {}\nstderr: {}",
-        stdout,
-        stderr
+        "aps v1 validate repo should succeed.\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
 

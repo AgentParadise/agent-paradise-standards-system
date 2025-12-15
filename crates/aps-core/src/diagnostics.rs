@@ -169,9 +169,9 @@ impl fmt::Display for Diagnostic {
         if let Some(path) = &self.location.path {
             write!(f, "\n  {} --> {}", colors::DIM, path.display())?;
             if let Some(line) = self.location.line {
-                write!(f, ":{}", line)?;
+                write!(f, ":{line}")?;
                 if let Some(col) = self.location.column {
-                    write!(f, ":{}", col)?;
+                    write!(f, ":{col}")?;
                 }
             }
             write!(f, "{}", colors::RESET)?;
@@ -195,7 +195,7 @@ impl fmt::Display for Diagnostics {
             if i > 0 {
                 writeln!(f)?;
             }
-            write!(f, "{}", diag)?;
+            write!(f, "{diag}")?;
         }
 
         // Summary
@@ -388,7 +388,7 @@ mod tests {
             .with_path("standards/v1/APS-V1-0000-meta")
             .with_hint("Create the directory");
 
-        let output = format!("{}", diag);
+        let output = format!("{diag}");
         assert!(output.contains("error"));
         assert!(output.contains("MISSING_REQUIRED_DIR"));
         assert!(output.contains("Missing directory"));

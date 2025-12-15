@@ -283,7 +283,7 @@ impl RustAdapter {
         for entry in WalkDir::new(&src_path)
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "rs"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "rs"))
         {
             let file_path = entry.path();
 
@@ -380,7 +380,11 @@ impl RustAdapter {
             let loc = content.lines().count() as u32;
             result.modules.push(ModuleAnalysis {
                 id: module_path.clone(),
-                name: module_path.split("::").last().unwrap_or(&module_path).into(),
+                name: module_path
+                    .split("::")
+                    .last()
+                    .unwrap_or(&module_path)
+                    .into(),
                 path: file_path.to_path_buf(),
                 function_count: 0,
                 loc,
@@ -406,11 +410,7 @@ impl RustAdapter {
         if relative_str == "lib" || relative_str == "main" {
             crate_name.to_string()
         } else if relative_str.ends_with("::mod") {
-            format!(
-                "{}::{}",
-                crate_name,
-                relative_str.trim_end_matches("::mod")
-            )
+            format!("{}::{}", crate_name, relative_str.trim_end_matches("::mod"))
         } else {
             format!("{crate_name}::{relative_str}")
         }
@@ -508,11 +508,11 @@ impl RustAdapter {
     /// Extract paths from a use tree.
     fn extract_use_paths(&self, tree: &syn::UseTree) -> Vec<String> {
         let mut paths = Vec::new();
-        self.collect_use_paths(tree, String::new(), &mut paths);
+        Self::collect_use_paths(tree, String::new(), &mut paths);
         paths
     }
 
-    fn collect_use_paths(&self, tree: &syn::UseTree, prefix: String, paths: &mut Vec<String>) {
+    fn collect_use_paths(tree: &syn::UseTree, prefix: String, paths: &mut Vec<String>) {
         match tree {
             syn::UseTree::Path(path) => {
                 let new_prefix = if prefix.is_empty() {
@@ -520,7 +520,7 @@ impl RustAdapter {
                 } else {
                     format!("{}::{}", prefix, path.ident)
                 };
-                self.collect_use_paths(&path.tree, new_prefix, paths);
+                Self::collect_use_paths(&path.tree, new_prefix, paths);
             }
             syn::UseTree::Name(name) => {
                 let full = if prefix.is_empty() {
@@ -543,7 +543,7 @@ impl RustAdapter {
             }
             syn::UseTree::Group(group) => {
                 for item in &group.items {
-                    self.collect_use_paths(item, prefix.clone(), paths);
+                    Self::collect_use_paths(item, prefix.clone(), paths);
                 }
             }
         }
@@ -670,15 +670,13 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
                 // Cognitive: +0 (linear flow in Rust idiom)
             }
             // Binary operators
-            Expr::Binary(bin) => {
-                match bin.op {
-                    syn::BinOp::And(_) | syn::BinOp::Or(_) => {
-                        self.cyclomatic += 1;
-                        self.cognitive += 1;
-                    }
-                    _ => {}
+            Expr::Binary(bin) => match bin.op {
+                syn::BinOp::And(_) | syn::BinOp::Or(_) => {
+                    self.cyclomatic += 1;
+                    self.cognitive += 1;
                 }
-            }
+                _ => {}
+            },
             // Closures add cognitive complexity (context switch)
             Expr::Closure(_) => {
                 self.cognitive += 1;
@@ -963,8 +961,10 @@ exclude_paths = ["target", ".git"]
             .modules
             .iter()
             .map(|m| {
-                let (func_count, total_cc, total_cog, total_loc) =
-                    module_aggregates.get(&m.id).cloned().unwrap_or((0, 0, 0, 0));
+                let (func_count, total_cc, total_cog, total_loc) = module_aggregates
+                    .get(&m.id)
+                    .cloned()
+                    .unwrap_or((0, 0, 0, 0));
 
                 let avg_cc = if func_count > 0 {
                     total_cc as f64 / func_count as f64
@@ -1120,4 +1120,3 @@ mod tests {
         }
     }
 }
-
