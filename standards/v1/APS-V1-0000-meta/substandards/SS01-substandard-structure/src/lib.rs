@@ -80,7 +80,7 @@ pub fn validate_substandard_metadata(
                 ),
             )
             .with_path(path)
-            .with_hint(format!("Set parent_id = \"{}\"", expected_parent)),
+            .with_hint(format!("Set parent_id = \"{expected_parent}\"")),
         );
     }
 }

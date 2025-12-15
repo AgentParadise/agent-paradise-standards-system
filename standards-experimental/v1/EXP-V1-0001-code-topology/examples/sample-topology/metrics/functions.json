@@ -1,0 +1,229 @@
+{
+    "schema_version": "0.1.0",
+    "functions": [
+        {
+            "id": "rust:auth::validator::validate_token",
+            "name": "validate_token",
+            "file": "src/auth/validator.rs",
+            "module": "auth",
+            "language": "rust",
+            "location": {
+                "start_line": 42,
+                "end_line": 78
+            },
+            "metrics": {
+                "cyclomatic_complexity": 8,
+                "cognitive_complexity": 12,
+                "halstead": {
+                    "vocabulary": 45,
+                    "length": 120,
+                    "volume": 658.2,
+                    "difficulty": 15.3,
+                    "effort": 10070.5,
+                    "time_to_implement": 559.5,
+                    "estimated_bugs": 0.22
+                },
+                "lines_of_code": 36,
+                "logical_lines": 28,
+                "comment_lines": 8,
+                "parameter_count": 3
+            }
+        },
+        {
+            "id": "rust:auth::validator::check_expiry",
+            "name": "check_expiry",
+            "file": "src/auth/validator.rs",
+            "module": "auth",
+            "language": "rust",
+            "location": {
+                "start_line": 80,
+                "end_line": 95
+            },
+            "metrics": {
+                "cyclomatic_complexity": 3,
+                "cognitive_complexity": 4,
+                "halstead": {
+                    "vocabulary": 20,
+                    "length": 45,
+                    "volume": 194.5,
+                    "difficulty": 8.2,
+                    "effort": 1595.1,
+                    "time_to_implement": 88.6,
+                    "estimated_bugs": 0.06
+                },
+                "lines_of_code": 15,
+                "logical_lines": 12,
+                "comment_lines": 3,
+                "parameter_count": 1
+            }
+        },
+        {
+            "id": "rust:crypto::hmac::sign",
+            "name": "sign",
+            "file": "src/crypto/hmac.rs",
+            "module": "crypto",
+            "language": "rust",
+            "location": {
+                "start_line": 10,
+                "end_line": 35
+            },
+            "metrics": {
+                "cyclomatic_complexity": 2,
+                "cognitive_complexity": 2,
+                "halstead": {
+                    "vocabulary": 30,
+                    "length": 60,
+                    "volume": 294.2,
+                    "difficulty": 10.0,
+                    "effort": 2942.0,
+                    "time_to_implement": 163.4,
+                    "estimated_bugs": 0.10
+                },
+                "lines_of_code": 25,
+                "logical_lines": 18,
+                "comment_lines": 7,
+                "parameter_count": 2
+            }
+        },
+        {
+            "id": "rust:crypto::hmac::verify",
+            "name": "verify",
+            "file": "src/crypto/hmac.rs",
+            "module": "crypto",
+            "language": "rust",
+            "location": {
+                "start_line": 37,
+                "end_line": 58
+            },
+            "metrics": {
+                "cyclomatic_complexity": 4,
+                "cognitive_complexity": 5,
+                "halstead": {
+                    "vocabulary": 28,
+                    "length": 55,
+                    "volume": 264.3,
+                    "difficulty": 9.5,
+                    "effort": 2510.8,
+                    "time_to_implement": 139.5,
+                    "estimated_bugs": 0.09
+                },
+                "lines_of_code": 21,
+                "logical_lines": 16,
+                "comment_lines": 5,
+                "parameter_count": 3
+            }
+        },
+        {
+            "id": "typescript:api/handlers::processRequest",
+            "name": "processRequest",
+            "file": "src/api/handlers.ts",
+            "module": "api",
+            "language": "typescript",
+            "location": {
+                "start_line": 15,
+                "end_line": 85
+            },
+            "metrics": {
+                "cyclomatic_complexity": 12,
+                "cognitive_complexity": 18,
+                "halstead": {
+                    "vocabulary": 65,
+                    "length": 180,
+                    "volume": 1082.4,
+                    "difficulty": 22.5,
+                    "effort": 24354.0,
+                    "time_to_implement": 1353.0,
+                    "estimated_bugs": 0.36
+                },
+                "lines_of_code": 70,
+                "logical_lines": 52,
+                "comment_lines": 18,
+                "parameter_count": 2
+            }
+        },
+        {
+            "id": "typescript:api/handlers::validateInput",
+            "name": "validateInput",
+            "file": "src/api/handlers.ts",
+            "module": "api",
+            "language": "typescript",
+            "location": {
+                "start_line": 87,
+                "end_line": 120
+            },
+            "metrics": {
+                "cyclomatic_complexity": 6,
+                "cognitive_complexity": 8,
+                "halstead": {
+                    "vocabulary": 35,
+                    "length": 80,
+                    "volume": 410.2,
+                    "difficulty": 12.0,
+                    "effort": 4922.4,
+                    "time_to_implement": 273.5,
+                    "estimated_bugs": 0.14
+                },
+                "lines_of_code": 33,
+                "logical_lines": 25,
+                "comment_lines": 8,
+                "parameter_count": 1
+            }
+        },
+        {
+            "id": "rust:db::connection::connect",
+            "name": "connect",
+            "file": "src/db/connection.rs",
+            "module": "db",
+            "language": "rust",
+            "location": {
+                "start_line": 20,
+                "end_line": 55
+            },
+            "metrics": {
+                "cyclomatic_complexity": 5,
+                "cognitive_complexity": 7,
+                "halstead": {
+                    "vocabulary": 40,
+                    "length": 95,
+                    "volume": 505.8,
+                    "difficulty": 14.0,
+                    "effort": 7081.2,
+                    "time_to_implement": 393.4,
+                    "estimated_bugs": 0.17
+                },
+                "lines_of_code": 35,
+                "logical_lines": 28,
+                "comment_lines": 7,
+                "parameter_count": 3
+            }
+        },
+        {
+            "id": "rust:utils::helpers::format_error",
+            "name": "format_error",
+            "file": "src/utils/helpers.rs",
+            "module": "utils",
+            "language": "rust",
+            "location": {
+                "start_line": 5,
+                "end_line": 15
+            },
+            "metrics": {
+                "cyclomatic_complexity": 1,
+                "cognitive_complexity": 0,
+                "halstead": {
+                    "vocabulary": 12,
+                    "length": 20,
+                    "volume": 71.7,
+                    "difficulty": 4.0,
+                    "effort": 286.8,
+                    "time_to_implement": 15.9,
+                    "estimated_bugs": 0.02
+                },
+                "lines_of_code": 10,
+                "logical_lines": 8,
+                "comment_lines": 2,
+                "parameter_count": 1
+            }
+        }
+    ]
+}

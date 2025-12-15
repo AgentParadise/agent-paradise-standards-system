@@ -1,0 +1,181 @@
+# Code Topology CI Check
+#
+# This workflow analyzes code topology on PRs and blocks merges
+# that worsen architectural quality beyond configured thresholds.
+#
+# Setup:
+# 1. Copy this file to .github/workflows/topology-check.yml
+# 2. Create .topology/config.toml with your thresholds
+# 3. Ensure you have the topology analyzer installed
+#
+# See: https://github.com/AgentParadise/agent-paradise-standards-system
+# Standard: EXP-V1-0001.CI01
+
+name: Topology Check
+
+on:
+  pull_request:
+    paths:
+      - '**.rs'
+      - '**.ts'
+      - '**.tsx'
+      - '**.py'
+      - '**.cpp'
+      - '**.hpp'
+      - '**.c'
+      - '**.h'
+
+# Cancel in-progress runs for the same PR
+concurrency:
+  group: topology-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  topology:
+    name: Architecture Quality Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for base comparison
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        # Only needed if using Rust adapter
+
+      - name: Install Topology Tools
+        run: |
+          # Install from crates.io when published
+          # cargo install aps-cli
+          
+          # Or build from source
+          cargo install --git https://github.com/AgentParadise/agent-paradise-standards-system aps-cli
+
+      - name: Analyze PR Branch
+        id: analyze_pr
+        run: |
+          echo "🔍 Analyzing PR branch..."
+          aps topology analyze --output .topology-pr/
+          echo "pr_functions=$(jq '.functions | length' .topology-pr/metrics/functions.json)" >> $GITHUB_OUTPUT
+          echo "pr_cc=$(jq '[.functions[].metrics.cyclomatic] | add' .topology-pr/metrics/functions.json)" >> $GITHUB_OUTPUT
+
+      - name: Checkout Base Branch
+        run: |
+          git checkout ${{ github.base_ref }}
+
+      - name: Analyze Base Branch
+        id: analyze_base
+        run: |
+          echo "🔍 Analyzing base branch..."
+          aps topology analyze --output .topology-base/
+          echo "base_functions=$(jq '.functions | length' .topology-base/metrics/functions.json)" >> $GITHUB_OUTPUT
+          echo "base_cc=$(jq '[.functions[].metrics.cyclomatic] | add' .topology-base/metrics/functions.json)" >> $GITHUB_OUTPUT
+
+      - name: Checkout PR (restore)
+        run: |
+          git checkout ${{ github.head_ref }}
+
+      - name: Compare Topology
+        id: diff
+        run: |
+          echo "📊 Comparing topology..."
+          aps topology diff .topology-base/ .topology-pr/ --format json > diff.json
+          
+          # Extract status
+          STATUS=$(jq -r '.status' diff.json)
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          
+          # Set exit code based on status
+          if [ "$STATUS" = "failure" ]; then
+            echo "❌ Topology check failed"
+            echo "failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "failed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check Thresholds
+        id: check
+        run: |
+          echo "⚖️ Checking against thresholds..."
+          
+          # Use project config if exists, otherwise use defaults
+          if [ -f ".topology/config.toml" ]; then
+            aps topology check diff.json --config .topology/config.toml
+          else
+            aps topology check diff.json
+          fi
+
+      - name: Generate Comment
+        id: comment
+        if: always()
+        run: |
+          echo "📝 Generating PR comment..."
+          
+          # Generate markdown comment
+          aps topology comment diff.json > comment.md
+          
+          # Read into output (escape for GitHub)
+          COMMENT=$(cat comment.md)
+          echo "comment<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post PR Comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `${{ steps.comment.outputs.comment }}`;
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(c => 
+              c.user.type === 'Bot' && 
+              c.body.includes('🔍 Topology Analysis')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🔍 Topology Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Base | PR | Δ |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|----|----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Functions | ${{ steps.analyze_base.outputs.base_functions }} | ${{ steps.analyze_pr.outputs.pr_functions }} | — |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total CC | ${{ steps.analyze_base.outputs.base_cc }} | ${{ steps.analyze_pr.outputs.pr_cc }} | — |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if Threshold Exceeded
+        if: steps.diff.outputs.failed == 'true'
+        run: |
+          echo "❌ Architecture quality gate failed!"
+          echo "See PR comment for details and suggestions."
+          exit 1
+

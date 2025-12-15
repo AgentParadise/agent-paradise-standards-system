@@ -242,7 +242,7 @@ impl MetaStandard {
                                 ),
                             )
                             .with_path(&metadata_path)
-                            .with_hint(format!("Set parent_id = \"{}\"", expected_parent)),
+                            .with_hint(format!("Set parent_id = \"{expected_parent}\"")),
                         );
                     }
                 }

@@ -77,7 +77,7 @@ pub fn promote_experiment(
     // Parse experiment metadata
     let exp_metadata = parse_experiment_metadata(&experiment.path.join("experiment.toml"))
         .map_err(|e| {
-            PromotionError::Metadata(format!("failed to parse experiment metadata: {}", e))
+            PromotionError::Metadata(format!("failed to parse experiment metadata: {e}"))
         })?;
 
     // Determine the target standard ID
@@ -101,7 +101,7 @@ pub fn promote_experiment(
 
     // Create the new standard directory
     let slug = &exp_metadata.experiment.slug;
-    let new_dir_name = format!("{}-{}", standard_id, slug);
+    let new_dir_name = format!("{standard_id}-{slug}");
     let new_path = repo_root.join("standards/v1").join(&new_dir_name);
 
     // Copy the experiment directory
@@ -139,7 +139,7 @@ pub fn promote_experiment(
             .lines()
             .map(|line| {
                 if line.starts_with("name = ") {
-                    format!("name = \"{}\"", new_crate_name)
+                    format!("name = \"{new_crate_name}\"")
                 } else if line.contains("(Experimental)") {
                     line.replace("(Experimental)", "")
                 } else {
@@ -217,7 +217,7 @@ fn generate_standard_toml(
 ) -> String {
     let maintainers_str = maintainers
         .iter()
-        .map(|m| format!("\"{}\"", m))
+        .map(|m| format!("\"{m}\""))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -288,7 +288,7 @@ pub fn chrono_lite_date() -> String {
 
     let day = remaining_days + 1;
 
-    format!("{:04}-{:02}-{:02}", year, month, day)
+    format!("{year:04}-{month:02}-{day:02}")
 }
 
 fn is_leap_year(year: u32) -> bool {

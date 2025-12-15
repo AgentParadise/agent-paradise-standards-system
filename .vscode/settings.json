@@ -36,7 +36,10 @@
         "button.hoverBackground": "#ffd33d",
         "focusBorder": "#d4a017",
         "input.background": "#0d1117",
-        "input.border": "#d4a017"
+        "input.border": "#d4a017",
+        "activityBar.background": "#06342D",
+        "titleBar.activeBackground": "#08493F",
+        "titleBar.activeForeground": "#EFFDFB"
     },
     // File associations
     "files.associations": {
