@@ -1,0 +1,17 @@
+[package]
+name = "aps-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "CLI for APS validation and scaffolding"
+
+[[bin]]
+name = "aps"
+path = "src/main.rs"
+
+[dependencies]
+aps-core.workspace = true
+clap.workspace = true
+
