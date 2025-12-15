@@ -19,7 +19,11 @@
 //! ```
 
 use aps_core::discovery::{PackageType, count_packages, discover_v1_packages, find_package_by_id};
-use aps_core::{StandardContext, TemplateEngine, generate_all_views, promote_experiment};
+use aps_core::versioning::BumpPart;
+use aps_core::{
+    StandardContext, TemplateEngine, bump_version, generate_all_views, get_version,
+    promote_experiment,
+};
 use aps_v1_0000_meta::{MetaStandard, Standard};
 use clap::Parser;
 use std::env;
@@ -30,6 +34,7 @@ use std::process::ExitCode;
 #[command(name = "aps")]
 #[command(version, about = "Agent Paradise Standards System CLI")]
 #[command(propagate_version = true)]
+#[command(after_help = "Use 'aps v1 --help' for V1 standards operations")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -41,6 +46,10 @@ struct Cli {
     /// Enable/disable colors (auto-detected by default)
     #[arg(long, global = true)]
     color: Option<bool>,
+
+    /// Enable verbose output for debugging
+    #[arg(short, long, global = true)]
+    verbose: bool,
 }
 
 #[derive(Clone, Copy, Default, clap::ValueEnum)]
@@ -84,6 +93,11 @@ enum V1Commands {
         #[command(subcommand)]
         target: GenerateTarget,
     },
+    /// Bump version of a standard, substandard, or experiment
+    Version {
+        #[command(subcommand)]
+        action: VersionAction,
+    },
     /// List all V1 packages
     List,
 }
@@ -92,6 +106,30 @@ enum V1Commands {
 enum GenerateTarget {
     /// Generate all derived views
     Views,
+}
+
+#[derive(clap::Subcommand)]
+enum VersionAction {
+    /// Bump version (major, minor, or patch)
+    Bump {
+        /// Package ID to version
+        id: String,
+        /// Version part to bump: major, minor, or patch
+        #[arg(value_enum)]
+        part: VersionPart,
+    },
+    /// Show current version of a package
+    Show {
+        /// Package ID
+        id: String,
+    },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum VersionPart {
+    Major,
+    Minor,
+    Patch,
 }
 
 #[derive(clap::Subcommand)]
@@ -257,9 +295,58 @@ fn main() -> ExitCode {
                     }
                 }
                 CreateTarget::Substandard { parent_id, profile } => {
-                    println!("Creating new substandard: {}.{}", parent_id, profile);
-                    eprintln!("⚠️  Substandard creation not yet implemented");
-                    ExitCode::FAILURE
+                    // Find the parent standard
+                    let parent = find_package_by_id(&repo_root, &parent_id);
+                    if parent.is_none() {
+                        eprintln!("Error: Parent standard '{}' not found", parent_id);
+                        return ExitCode::FAILURE;
+                    }
+                    let parent = parent.unwrap();
+
+                    let id = format!("{}.{}", parent_id, profile);
+                    let name = format!("{} Profile", profile);
+                    let slug = format!(
+                        "{}-{}",
+                        parent_id.to_lowercase().replace('-', "_"),
+                        profile.to_lowercase()
+                    );
+
+                    println!("Creating new substandard:");
+                    println!("  ID:     {}", id);
+                    println!("  Name:   {}", name);
+                    println!("  Parent: {}", parent_id);
+
+                    let output_dir = parent.path.join("substandards").join(&slug);
+
+                    if output_dir.exists() {
+                        eprintln!("Error: Directory already exists: {}", output_dir.display());
+                        return ExitCode::FAILURE;
+                    }
+
+                    let engine = TemplateEngine::new();
+                    let context = aps_core::SubstandardContext::new(&id, &name, &slug, &parent_id);
+
+                    let skeleton_dir = repo_root
+                        .join("standards/v1/APS-V1-0000-meta/templates/substandard/skeleton");
+
+                    match engine.render_skeleton(&skeleton_dir, &output_dir, &context) {
+                        Ok(files) => {
+                            println!("\n✓ Created {} files:", files.len());
+                            for file in &files {
+                                if let Ok(rel) = file.strip_prefix(&repo_root) {
+                                    println!("  {}", rel.display());
+                                }
+                            }
+                            println!(
+                                "\nNext steps:\n  1. Add to Cargo.toml workspace members\n  2. Implement the profile-specific logic\n  3. Run: aps v1 validate substandard {id}"
+                            );
+                            ExitCode::SUCCESS
+                        }
+                        Err(e) => {
+                            eprintln!("Error creating substandard: {}", e);
+                            ExitCode::FAILURE
+                        }
+                    }
                 }
                 CreateTarget::Experiment { slug, name } => {
                     let name = name.unwrap_or_else(|| slug_to_name(&slug));
@@ -348,6 +435,38 @@ fn main() -> ExitCode {
                         }
                         Err(e) => {
                             eprintln!("Error generating views: {}", e);
+                            ExitCode::FAILURE
+                        }
+                    }
+                }
+            },
+            V1Commands::Version { action } => match action {
+                VersionAction::Show { id } => match get_version(&repo_root, &id) {
+                    Ok(version) => {
+                        println!("{}: {}", id, version);
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        ExitCode::FAILURE
+                    }
+                },
+                VersionAction::Bump { id, part } => {
+                    let bump_part = match part {
+                        VersionPart::Major => BumpPart::Major,
+                        VersionPart::Minor => BumpPart::Minor,
+                        VersionPart::Patch => BumpPart::Patch,
+                    };
+
+                    match bump_version(&repo_root, &id, bump_part) {
+                        Ok(result) => {
+                            println!("✓ Version bumped:");
+                            println!("  Package: {}", result.id);
+                            println!("  {} → {}", result.old_version, result.new_version);
+                            ExitCode::SUCCESS
+                        }
+                        Err(e) => {
+                            eprintln!("Error bumping version: {}", e);
                             ExitCode::FAILURE
                         }
                     }
