@@ -1,0 +1,16 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "EXP-V1-0001.CI01"
+name = "GitHub Actions CI Integration"
+slug = "github-actions"
+version = "0.1.0"
+profile = "CI"  # Continuous integration
+
+[parent]
+standard_id = "EXP-V1-0001"
+relationship = "integration"
+
+[ownership]
+maintainers = ["AgentParadise"]
+
