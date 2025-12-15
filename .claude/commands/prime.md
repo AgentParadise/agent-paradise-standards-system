@@ -2,7 +2,7 @@
 description: Prime context for Agent Paradise Standards System
 argument-hint: "[optional: focus area like 'cli', 'core', 'templates', 'meta-standard']"
 model: sonnet
-allowed-tools: Read, Glob, Grep
+allowed-tools: read, glob, grep
 ---
 
 # Prime
@@ -48,6 +48,13 @@ agent-paradise-standards-system/
 │           └── experiment/skeleton/
 │
 ├── standards-experimental/v1/    # Experimental standards (incubation)
+│   └── EXP-V1-0001-code-topology/  # Example experimental standard
+│       ├── experiment.toml          # Experiment metadata
+│       ├── docs/01_spec.md          # Experiment specification
+│       ├── src/lib.rs               # Standard trait implementation
+│       ├── proto/                   # Protobuf definitions (artifact schemas)
+│       └── substandards/            # Projector implementations
+│           └── 3D01-force-directed/ # 3D visualization projector
 │
 ├── justfile                      # Task runner (just check, just aps-validate)
 ├── Cargo.toml                    # Workspace manifest

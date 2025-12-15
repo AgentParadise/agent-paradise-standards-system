@@ -513,20 +513,21 @@ impl CouplingMatrix {
                     ));
                 }
 
-                if (value - self.matrix[j][i]).abs() > f64::EPSILON {
+                // Use a tolerance for floating-point comparison (more lenient than EPSILON)
+                const SYMMETRY_TOLERANCE: f64 = 1e-10;
+                if (value - self.matrix[j][i]).abs() > SYMMETRY_TOLERANCE {
+                    let other = self.matrix[j][i];
                     return Err(format!(
-                        "Matrix is not symmetric: [{},{}]={} != [{},{}]={}",
-                        i, j, value, j, i, self.matrix[j][i]
+                        "Matrix is not symmetric: [{i},{j}]={value} != [{j},{i}]={other}"
                     ));
                 }
             }
 
-            // Check diagonal is 1.0
-            if (self.matrix[i][i] - 1.0).abs() > f64::EPSILON {
-                return Err(format!(
-                    "Diagonal [{},{}] = {} should be 1.0",
-                    i, i, self.matrix[i][i]
-                ));
+            // Check diagonal is 1.0 (with tolerance)
+            const DIAGONAL_TOLERANCE: f64 = 1e-10;
+            if (self.matrix[i][i] - 1.0).abs() > DIAGONAL_TOLERANCE {
+                let val = self.matrix[i][i];
+                return Err(format!("Diagonal [{i},{i}] = {val} should be 1.0"));
             }
         }
 
@@ -921,12 +922,13 @@ mod tests {
 
     #[test]
     fn test_error_codes_defined() {
-        assert!(!error_codes::MISSING_TOPOLOGY_DIR.is_empty());
-        assert!(!error_codes::INVALID_MANIFEST.is_empty());
-        assert!(!error_codes::MISSING_METRICS.is_empty());
-        assert!(!error_codes::MISSING_GRAPHS.is_empty());
-        assert!(!error_codes::INVALID_COUPLING_MATRIX.is_empty());
-        assert!(!error_codes::ADAPTER_ERROR.is_empty());
+        // Just verify the codes have the expected format (SCREAMING_SNAKE_CASE)
+        assert!(error_codes::MISSING_TOPOLOGY_DIR.contains('_'));
+        assert!(error_codes::INVALID_MANIFEST.contains('_'));
+        assert!(error_codes::MISSING_METRICS.contains('_'));
+        assert!(error_codes::MISSING_GRAPHS.contains('_'));
+        assert!(error_codes::INVALID_COUPLING_MATRIX.contains('_'));
+        assert!(error_codes::ADAPTER_ERROR.contains('_'));
     }
 
     #[test]
@@ -1034,5 +1036,59 @@ mod tests {
         let vis = Visibility::Public;
         let json = serde_json::to_string(&vis).unwrap();
         assert_eq!(json, "\"public\"");
+    }
+
+    // --- Edge case tests (from Copilot review) ---
+
+    #[test]
+    fn test_halstead_zero_operands_nonzero_operators() {
+        // Edge case: operators present but no operands
+        let metrics = HalsteadMetrics::calculate(5, 0, 10, 0);
+
+        assert_eq!(metrics.vocabulary, 5);
+        assert_eq!(metrics.length, 10);
+        // Difficulty should be 0 when distinct_operands is 0 (avoid division by zero)
+        assert_eq!(metrics.difficulty, 0.0);
+        assert_eq!(metrics.effort, 0.0);
+    }
+
+    #[test]
+    fn test_martin_metrics_zero_types_nonzero_abstract() {
+        // Edge case: abstract_types > 0 but total_types = 0 (invalid data)
+        // This shouldn't happen in practice, but we should handle it gracefully
+        let metrics = MartinMetrics::calculate(5, 5, 3, 0);
+
+        // With total_types = 0, abstractness should be 0.0 (not NaN or panic)
+        assert!(!metrics.abstractness.is_nan());
+        assert_eq!(metrics.abstractness, 0.0);
+    }
+
+    #[test]
+    fn test_coupling_matrix_validation_mismatched_row_lengths() {
+        let modules = vec!["a".to_string(), "b".to_string()];
+        let mut matrix = CouplingMatrix::new(modules);
+
+        // Create a malformed matrix with different row lengths
+        matrix.matrix = vec![
+            vec![1.0, 0.5], // Correct: 2 columns
+            vec![0.5],      // Wrong: only 1 column
+        ];
+
+        let result = matrix.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("columns"));
+    }
+
+    #[test]
+    fn test_coupling_matrix_validation_wrong_row_count() {
+        let modules = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let mut matrix = CouplingMatrix::new(modules);
+
+        // Set matrix to wrong size (2 rows instead of 3)
+        matrix.matrix = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+
+        let result = matrix.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("row count"));
     }
 }

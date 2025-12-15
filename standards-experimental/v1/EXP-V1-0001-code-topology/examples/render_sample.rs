@@ -42,8 +42,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Build topology for projector
-    let mut topology = Topology::default();
-    topology.languages = vec!["rust".to_string(), "typescript".to_string()];
+    let mut topology = Topology {
+        languages: vec!["rust".to_string(), "typescript".to_string()],
+        ..Default::default()
+    };
 
     // Convert coupling matrix to internal format
     let positions: Option<HashMap<String, [f64; 3]>> = matrix_file.layout.map(|l| l.positions);
@@ -88,9 +90,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_path = "coupling-3d.html";
     fs::write(output_path, &html)?;
 
-    println!("   ✅ Generated: {}", output_path);
+    println!("   ✅ Generated: {output_path}");
     println!("\n🌐 Open in browser:");
-    println!("   open {}", output_path);
+    println!("   open {output_path}");
     println!("\n📈 Module coupling visualization:");
     println!("   - Drag to rotate");
     println!("   - Scroll to zoom");
@@ -107,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|(j, v)| (matrix_file.modules[j].clone(), *v));
 
         if let Some((other, strength)) = max_coupling {
-            println!("   {} ↔ {} : {:.2}", module, other, strength);
+            println!("   {module} ↔ {other} : {strength:.2}");
         }
     }
 

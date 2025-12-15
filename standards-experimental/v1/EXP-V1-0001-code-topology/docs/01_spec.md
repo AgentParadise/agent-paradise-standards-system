@@ -508,6 +508,11 @@ raw_coupling(A, B) =
 coupling(A, B) = raw_coupling(A, B) / max(all_raw_couplings)
 ```
 
+> **Note:** The actual computation of raw coupling values from calls, imports, and shared 
+> types is left to language adapter implementations. This specification provides the 
+> normative formula, but does not mandate a specific implementation. Adapters SHOULD 
+> ensure that their calculation is consistent with this formula.
+
 The matrix MUST be:
 - **Symmetric:** `coupling[i][j] == coupling[j][i]`
 - **Normalized:** Values in range [0, 1]
@@ -1342,4 +1347,4 @@ See `examples/` directory for complete example artifacts.
 2. SonarSource. "Cognitive Complexity". https://www.sonarsource.com/docs/CognitiveComplexity.pdf
 3. Halstead, M.H. (1977). "Elements of Software Science". Elsevier.
 4. Martin, R.C. (2003). "Agile Software Development, Principles, Patterns, and Practices". Pearson.
-5. Mozilla. "rust-code-analysis". https://github.com/aspect-build/rules_rust/tree/main/crate_universe/rust-code-analysis
+5. Mozilla. "rust-code-analysis". https://github.com/mozilla/rust-code-analysis

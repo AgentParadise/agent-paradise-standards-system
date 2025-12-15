@@ -46,8 +46,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let modules_file: ModulesFileLocal = serde_json::from_str(&modules_content)?;
 
     // Build topology
-    let mut topology = Topology::default();
-    topology.languages = vec!["rust".to_string()];
+    let mut topology = Topology {
+        languages: vec!["rust".to_string()],
+        ..Default::default()
+    };
 
     let positions: Option<HashMap<String, [f64; 3]>> = matrix_file.layout.map(|l| l.positions);
     topology.coupling_matrix = Some(code_topology::CouplingMatrixData {
@@ -135,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     content.push_str("\n```\n");
 
     fs::write(output_path, &content)?;
-    println!("\n✅ Saved to: {}", output_path);
+    println!("\n✅ Saved to: {output_path}");
 
     Ok(())
 }

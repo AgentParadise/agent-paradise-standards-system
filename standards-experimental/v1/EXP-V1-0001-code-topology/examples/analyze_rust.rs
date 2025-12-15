@@ -62,9 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let avg_cc = total_cc as f64 / result.functions.len() as f64;
 
         println!("\n📈 Complexity Metrics:");
-        println!("   Total CC: {}", total_cc);
-        println!("   Avg CC: {:.2}", avg_cc);
-        println!("   Max CC: {}", max_cc);
+        println!("   Total CC: {total_cc}");
+        println!("   Avg CC: {avg_cc:.2}");
+        println!("   Max CC: {max_cc}");
 
         // Find hotspots
         let mut hotspots: Vec<_> = result

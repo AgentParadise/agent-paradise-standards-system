@@ -57,8 +57,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Build topology for projector
-    let mut topology = Topology::default();
-    topology.languages = vec!["rust".to_string()];
+    let mut topology = Topology {
+        languages: vec!["rust".to_string()],
+        ..Default::default()
+    };
 
     // Convert coupling matrix to internal format
     let positions: Option<HashMap<String, [f64; 3]>> = matrix_file.layout.map(|l| l.positions);
@@ -103,9 +105,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output_path = "aps-topology-3d.html";
     fs::write(output_path, &html)?;
 
-    println!("   ✅ Generated: {}", output_path);
+    println!("   ✅ Generated: {output_path}");
     println!("\n🌐 Open in browser:");
-    println!("   open {}", output_path);
+    println!("   open {output_path}");
 
     // Print architecture insights
     println!("\n📈 APS Architecture Insights:");
