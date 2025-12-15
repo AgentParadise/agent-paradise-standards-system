@@ -1,0 +1,17 @@
+schema = "aps.standard/v1"
+
+[standard]
+id = "{{id}}"
+name = "{{name}}"
+slug = "{{slug}}"
+version = "{{version}}"
+category = "{{category}}"
+status = "active"
+
+[aps]
+aps_major = "v1"
+backwards_compatible_major_required = true
+
+[ownership]
+maintainers = [{{#each maintainers}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
+
