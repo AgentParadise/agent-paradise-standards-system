@@ -249,7 +249,7 @@ promoted_at = "{date}"
 }
 
 /// Get current date in YYYY-MM-DD format (without external deps).
-fn chrono_lite_date() -> String {
+pub fn chrono_lite_date() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let secs = SystemTime::now()
