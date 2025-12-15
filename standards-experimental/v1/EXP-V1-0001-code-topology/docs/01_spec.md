@@ -98,6 +98,8 @@ A **projector** is a visualization component that reads topology artifacts and r
 
 ## 3. Artifact Format Specification
 
+> **📋 Schema Source of Truth**: The canonical schemas for all artifacts are defined in the `proto/` directory using Protocol Buffers (proto3). The examples below are illustrative; see `proto/*.proto` for normative definitions. See ADR-0005 for rationale.
+
 ### 3.1 Directory Structure
 
 Topology artifacts MUST be stored in a `.topology/` directory with the following structure:

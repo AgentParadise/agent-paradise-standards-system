@@ -1,0 +1,284 @@
+// Code Topology and Coupling Analysis - Graph Schema
+// EXP-V1-0001 | Version: 0.1.0
+//
+// This file defines the structure of graph artifacts:
+// - .topology/graphs/call-graph.json
+// - .topology/graphs/dependency-graph.json
+// - .topology/graphs/coupling-matrix.json
+
+syntax = "proto3";
+
+package code_topology.v1;
+
+option java_package = "dev.agentparadise.topology.v1";
+option go_package = "github.com/AgentParadise/topology/v1;topologyv1";
+
+// ============================================================================
+// Call Graph (.topology/graphs/call-graph.json)
+// ============================================================================
+
+// Function call graph for the codebase.
+// Nodes are functions, edges are call relationships.
+// Stored at: .topology/graphs/call-graph.json
+message CallGraphFile {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // All function nodes
+  repeated CallGraphNode nodes = 2;
+
+  // All call edges
+  repeated CallGraphEdge edges = 3;
+}
+
+// A node in the call graph (represents a function).
+message CallGraphNode {
+  // Fully qualified function ID (e.g., "rust:auth::validator::validate_token")
+  string id = 1;
+
+  // Node type
+  CallGraphNodeType type = 2;
+
+  // Module containing this function
+  string module = 3;
+
+  // Source language
+  string language = 4;
+}
+
+// Type of call graph node
+enum CallGraphNodeType {
+  CALL_GRAPH_NODE_TYPE_UNSPECIFIED = 0;
+  // Regular function
+  CALL_GRAPH_NODE_TYPE_FUNCTION = 1;
+  // Class method
+  CALL_GRAPH_NODE_TYPE_METHOD = 2;
+  // Lambda/closure
+  CALL_GRAPH_NODE_TYPE_CLOSURE = 3;
+  // External (library) function
+  CALL_GRAPH_NODE_TYPE_EXTERNAL = 4;
+}
+
+// An edge in the call graph (represents a function call).
+message CallGraphEdge {
+  // Caller function ID
+  string from = 1;
+
+  // Callee function ID
+  string to = 2;
+
+  // Edge type
+  CallEdgeType type = 3;
+
+  // Number of call sites (how many times `from` calls `to`)
+  uint32 count = 4;
+}
+
+// Type of call edge
+enum CallEdgeType {
+  CALL_EDGE_TYPE_UNSPECIFIED = 0;
+  // Direct function call
+  CALL_EDGE_TYPE_CALLS = 1;
+  // Virtual/dynamic dispatch
+  CALL_EDGE_TYPE_VIRTUAL = 2;
+  // Async/callback invocation
+  CALL_EDGE_TYPE_ASYNC = 3;
+}
+
+// ============================================================================
+// Dependency Graph (.topology/graphs/dependency-graph.json)
+// ============================================================================
+
+// Module/file dependency graph.
+// Nodes are modules or files, edges are import relationships.
+// Stored at: .topology/graphs/dependency-graph.json
+message DependencyGraphFile {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // Granularity level of this graph
+  DependencyLevel level = 2;
+
+  // All nodes (modules or files)
+  repeated DependencyNode nodes = 3;
+
+  // All dependency edges
+  repeated DependencyEdge edges = 4;
+}
+
+// Granularity level for dependency graph
+enum DependencyLevel {
+  DEPENDENCY_LEVEL_UNSPECIFIED = 0;
+  // File-level dependencies
+  DEPENDENCY_LEVEL_FILE = 1;
+  // Module/package-level dependencies
+  DEPENDENCY_LEVEL_MODULE = 2;
+}
+
+// A node in the dependency graph.
+message DependencyNode {
+  // Node identifier (module name or file path)
+  string id = 1;
+
+  // Node type
+  DependencyNodeType type = 2;
+
+  // Languages in this node (for modules with multiple files)
+  repeated string languages = 3;
+}
+
+// Type of dependency node
+enum DependencyNodeType {
+  DEPENDENCY_NODE_TYPE_UNSPECIFIED = 0;
+  // Internal module
+  DEPENDENCY_NODE_TYPE_MODULE = 1;
+  // Source file
+  DEPENDENCY_NODE_TYPE_FILE = 2;
+  // External package/crate
+  DEPENDENCY_NODE_TYPE_EXTERNAL = 3;
+}
+
+// An edge in the dependency graph.
+message DependencyEdge {
+  // Source (importing) node
+  string from = 1;
+
+  // Target (imported) node
+  string to = 2;
+
+  // Edge type
+  DependencyEdgeType type = 3;
+
+  // Weight: number of import statements or symbols imported
+  uint32 weight = 4;
+}
+
+// Type of dependency edge
+enum DependencyEdgeType {
+  DEPENDENCY_EDGE_TYPE_UNSPECIFIED = 0;
+  // Import/use statement
+  DEPENDENCY_EDGE_TYPE_IMPORTS = 1;
+  // Re-export
+  DEPENDENCY_EDGE_TYPE_REEXPORTS = 2;
+  // Include (C/C++)
+  DEPENDENCY_EDGE_TYPE_INCLUDES = 3;
+}
+
+// ============================================================================
+// Coupling Matrix (.topology/graphs/coupling-matrix.json)
+// ============================================================================
+
+// Module coupling matrix for architecture visualization.
+// Symmetric NxN matrix where matrix[i][j] represents coupling strength.
+// Primary input for 3D visualization projectors.
+// Stored at: .topology/graphs/coupling-matrix.json
+message CouplingMatrixFile {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // Metric used for coupling calculation
+  string metric = 2;
+
+  // Human-readable description of the metric
+  string description = 3;
+
+  // Module names (column/row headers)
+  // Order matches matrix indices
+  repeated string modules = 4;
+
+  // NxN coupling matrix
+  // matrix[i][j] = coupling strength between modules[i] and modules[j]
+  // Values MUST be in range [0, 1]
+  // Matrix MUST be symmetric: matrix[i][j] == matrix[j][i]
+  // Diagonal MUST be 1.0: matrix[i][i] == 1.0
+  repeated MatrixRow matrix = 5;
+
+  // Optional: saved layout positions for deterministic visualization
+  LayoutInfo layout = 6;
+}
+
+// A row in the coupling matrix
+message MatrixRow {
+  // Coupling values for this row
+  repeated double values = 1;
+}
+
+// Saved layout positions for 3D visualization.
+message LayoutInfo {
+  // Layout algorithm used (e.g., "force-directed", "umap", "hierarchical")
+  string algorithm = 1;
+
+  // Random seed for reproducibility
+  uint64 seed = 2;
+
+  // Module positions: map of module_id -> [x, y, z]
+  map<string, Position3D> positions = 3;
+}
+
+// 3D position coordinates
+message Position3D {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+// ============================================================================
+// Snapshot (.topology/snapshots/YYYY-MM-DD.json)
+// ============================================================================
+
+// Historical snapshot for trend analysis.
+// Stored at: .topology/snapshots/YYYY-MM-DD.json
+message SnapshotFile {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // ISO 8601 timestamp
+  string timestamp = 2;
+
+  // Git commit hash (if available)
+  optional string commit_hash = 3 [json_name = "commit_hash"];
+
+  // Summary metrics
+  SnapshotSummary summary = 4;
+
+  // Complexity hotspots (highest complexity functions)
+  repeated Hotspot hotspots = 5;
+}
+
+// Summary metrics for a snapshot
+message SnapshotSummary {
+  // Total files analyzed
+  uint32 total_files = 1 [json_name = "total_files"];
+
+  // Total functions analyzed
+  uint32 total_functions = 2 [json_name = "total_functions"];
+
+  // Sum of all cyclomatic complexity
+  uint32 total_cyclomatic = 3 [json_name = "total_cyclomatic"];
+
+  // Average cyclomatic complexity
+  double avg_cyclomatic = 4 [json_name = "avg_cyclomatic"];
+
+  // Sum of all cognitive complexity
+  uint32 total_cognitive = 5 [json_name = "total_cognitive"];
+
+  // Average cognitive complexity
+  double avg_cognitive = 6 [json_name = "avg_cognitive"];
+
+  // Coupling density: edges / (n * (n-1) / 2)
+  // Range [0, 1]: 0 = no coupling, 1 = fully connected
+  double coupling_density = 7 [json_name = "coupling_density"];
+}
+
+// A complexity hotspot
+message Hotspot {
+  // Function ID
+  string id = 1;
+
+  // Cyclomatic complexity
+  uint32 cyclomatic = 2;
+
+  // Cognitive complexity
+  uint32 cognitive = 3;
+}
+

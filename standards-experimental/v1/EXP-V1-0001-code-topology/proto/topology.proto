@@ -1,0 +1,163 @@
+// Code Topology and Coupling Analysis - Full Topology Schema
+// EXP-V1-0001 | Version: 0.1.0
+//
+// This file defines the aggregate Topology message that combines
+// all artifact types into a single structure for in-memory use.
+//
+// Note: This message is NOT directly serialized to disk.
+// Individual artifact files (.topology/metrics/*.json, etc.) are
+// the on-disk format. This message represents the loaded state.
+
+syntax = "proto3";
+
+package code_topology.v1;
+
+option java_package = "dev.agentparadise.topology.v1";
+option go_package = "github.com/AgentParadise/topology/v1;topologyv1";
+
+import "manifest.proto";
+import "metrics.proto";
+import "graphs.proto";
+
+// Complete topology of a codebase.
+// This is the in-memory representation combining all artifact files.
+// Projectors receive this after loading from .topology/ directory.
+message Topology {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // Manifest metadata (from manifest.toml)
+  Manifest manifest = 2;
+
+  // Languages analyzed
+  repeated string languages = 3;
+
+  // All function records (from metrics/functions.json)
+  repeated FunctionRecord functions = 4;
+
+  // All file records (from metrics/files.json)
+  repeated FileRecord files = 5;
+
+  // All module records (from metrics/modules.json)
+  repeated ModuleRecord modules = 6;
+
+  // Call graph (from graphs/call-graph.json)
+  CallGraphFile call_graph = 7 [json_name = "call_graph"];
+
+  // Dependency graph (from graphs/dependency-graph.json)
+  DependencyGraphFile dependency_graph = 8 [json_name = "dependency_graph"];
+
+  // Coupling matrix (from graphs/coupling-matrix.json)
+  CouplingMatrixFile coupling_matrix = 9 [json_name = "coupling_matrix"];
+}
+
+// ============================================================================
+// Adapter Output Types
+// ============================================================================
+
+// Output from a language adapter's analysis of a single file.
+// Used to build the full topology incrementally.
+message AdapterOutput {
+  // File path analyzed
+  string file_path = 1 [json_name = "file_path"];
+
+  // Language of the file
+  string language = 2;
+
+  // Extracted functions
+  repeated FunctionInfo functions = 3;
+
+  // Function calls found
+  repeated CallInfo calls = 4;
+
+  // Imports found
+  repeated ImportInfo imports = 5;
+
+  // Type definitions found (for abstractness)
+  repeated TypeInfo types = 6;
+}
+
+// Information about a function extracted by an adapter.
+message FunctionInfo {
+  // Fully qualified name
+  string qualified_name = 1 [json_name = "qualified_name"];
+
+  // Simple name
+  string name = 2;
+
+  // File path
+  string file_path = 3 [json_name = "file_path"];
+
+  // Module
+  string module = 4;
+
+  // Location
+  Location location = 5;
+
+  // Number of parameters
+  uint32 parameter_count = 6 [json_name = "parameter_count"];
+
+  // Is this a method (has self/this)?
+  bool is_method = 7 [json_name = "is_method"];
+
+  // Visibility
+  Visibility visibility = 8;
+
+  // Raw source body (for metric calculation)
+  string body_source = 9 [json_name = "body_source"];
+}
+
+// Function visibility
+enum Visibility {
+  VISIBILITY_UNSPECIFIED = 0;
+  VISIBILITY_PUBLIC = 1;
+  VISIBILITY_PRIVATE = 2;
+  VISIBILITY_INTERNAL = 3;
+  VISIBILITY_PROTECTED = 4;
+}
+
+// Information about a function call.
+message CallInfo {
+  // Caller function qualified name
+  string caller = 1;
+
+  // Callee function qualified name
+  string callee = 2;
+
+  // File where call occurs
+  string file_path = 3 [json_name = "file_path"];
+
+  // Line number
+  uint32 line = 4;
+
+  // Whether callee was resolved to a definition
+  bool resolved = 5;
+}
+
+// Information about an import.
+message ImportInfo {
+  // Importing module
+  string from_module = 1 [json_name = "from_module"];
+
+  // Imported module
+  string to_module = 2 [json_name = "to_module"];
+
+  // Import path as written
+  string import_path = 3 [json_name = "import_path"];
+
+  // Is this an external dependency?
+  bool is_external = 4 [json_name = "is_external"];
+}
+
+// Information about a type definition.
+message TypeInfo {
+  // Type name
+  string name = 1;
+
+  // Module containing the type
+  string module = 2;
+
+  // Is this abstract (trait, interface, abstract class)?
+  bool is_abstract = 3 [json_name = "is_abstract"];
+}
+
