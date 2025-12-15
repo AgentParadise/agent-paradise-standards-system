@@ -7,7 +7,7 @@
 //! that all V1 packages must satisfy.
 
 use aps_core::discovery::{DiscoveredPackage, discover_v1_packages};
-use aps_core::metadata::parse_standard_metadata;
+use aps_core::metadata::{parse_standard_metadata, parse_substandard_metadata};
 use aps_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
@@ -28,6 +28,11 @@ pub mod error_codes {
     pub const INVALID_STANDARD_ID: &str = "INVALID_STANDARD_ID";
     pub const INVALID_VERSION: &str = "INVALID_VERSION";
 
+    // Substandard-specific errors
+    pub const INVALID_SUBSTANDARD_ID: &str = "INVALID_SUBSTANDARD_ID";
+    pub const INVALID_PARENT_REF: &str = "INVALID_PARENT_REF";
+    pub const PARENT_NOT_FOUND: &str = "PARENT_NOT_FOUND";
+
     // Repository layout errors
     pub const MISSING_STANDARDS_DIR: &str = "MISSING_STANDARDS_DIR";
     pub const MISSING_EXPERIMENTAL_DIR: &str = "MISSING_EXPERIMENTAL_DIR";
@@ -47,6 +52,9 @@ pub const STANDARD_ID_PATTERN: &str = r"^APS-V1-\d{4}$";
 
 /// Experiment ID regex pattern.
 pub const EXPERIMENT_ID_PATTERN: &str = r"^EXP-V1-\d{4}$";
+
+/// Substandard ID regex pattern.
+pub const SUBSTANDARD_ID_PATTERN: &str = r"^APS-V1-\d{4}\.[A-Z]{2}\d{2}$";
 
 /// The Standard trait that all APS standards implement.
 ///
@@ -194,6 +202,79 @@ impl MetaStandard {
         }
     }
 
+    /// Validate the metadata content of a substandard package.
+    fn validate_substandard_metadata(&self, path: &Path, diagnostics: &mut Diagnostics) {
+        use error_codes::*;
+
+        let metadata_path = path.join("substandard.toml");
+        if !metadata_path.exists() {
+            return; // Already reported as MISSING_METADATA_FILE
+        }
+
+        match parse_substandard_metadata(&metadata_path) {
+            Ok(metadata) => {
+                // Validate ID format
+                if !is_valid_substandard_id(&metadata.substandard.id) {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            INVALID_SUBSTANDARD_ID,
+                            format!(
+                                "Invalid substandard ID '{}': must match pattern APS-V1-XXXX.YY##",
+                                metadata.substandard.id
+                            ),
+                        )
+                        .with_path(&metadata_path)
+                        .with_hint("Use format: APS-V1-0000.SS01, APS-V1-0001.GH01, etc."),
+                    );
+                }
+
+                // Validate parent_id matches the ID prefix
+                if let Some(expected_parent) =
+                    extract_parent_from_substandard_id(&metadata.substandard.id)
+                {
+                    if metadata.substandard.parent_id != expected_parent {
+                        diagnostics.push(
+                            Diagnostic::error(
+                                INVALID_PARENT_REF,
+                                format!(
+                                    "parent_id '{}' does not match substandard ID prefix '{}'",
+                                    metadata.substandard.parent_id, expected_parent
+                                ),
+                            )
+                            .with_path(&metadata_path)
+                            .with_hint(format!("Set parent_id = \"{}\"", expected_parent)),
+                        );
+                    }
+                }
+
+                // Validate version is semver-like
+                if !is_valid_semver(&metadata.substandard.version) {
+                    diagnostics.push(
+                        Diagnostic::warning(
+                            INVALID_VERSION,
+                            format!(
+                                "Version '{}' may not be valid SemVer",
+                                metadata.substandard.version
+                            ),
+                        )
+                        .with_path(&metadata_path)
+                        .with_hint("Use SemVer format: MAJOR.MINOR.PATCH (e.g., 1.0.0)"),
+                    );
+                }
+            }
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        INVALID_METADATA,
+                        format!("Failed to parse substandard metadata: {e}"),
+                    )
+                    .with_path(&metadata_path)
+                    .with_hint("Check the TOML syntax and required fields"),
+                );
+            }
+        }
+    }
+
     /// Validate a single discovered package.
     fn validate_discovered_package(
         &self,
@@ -233,10 +314,13 @@ impl Standard for MetaStandard {
         // Validate structure
         self.validate_structure(path, &mut diagnostics);
 
-        // Validate metadata if it's a standard
+        // Validate metadata based on package type
         if path.join("standard.toml").exists() {
             self.validate_standard_metadata(path, &mut diagnostics);
+        } else if path.join("substandard.toml").exists() {
+            self.validate_substandard_metadata(path, &mut diagnostics);
         }
+        // experiment.toml validation could be added here
 
         diagnostics
     }
@@ -294,6 +378,48 @@ fn is_valid_standard_id(id: &str) -> bool {
     }
     let suffix = &id[7..];
     suffix.len() == 4 && suffix.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Check if a substandard ID is valid (APS-V1-XXXX.YY##).
+pub fn is_valid_substandard_id(id: &str) -> bool {
+    // Format: APS-V1-XXXX.YY##
+    // Example: APS-V1-0000.SS01
+
+    if !id.starts_with("APS-V1-") {
+        return false;
+    }
+
+    // Find the dot separator
+    let Some(dot_pos) = id.find('.') else {
+        return false;
+    };
+
+    // Check the standard ID part (before the dot)
+    let standard_part = &id[..dot_pos];
+    if !is_valid_standard_id(standard_part) {
+        return false;
+    }
+
+    // Check the suffix part (after the dot)
+    let suffix = &id[dot_pos + 1..];
+    if suffix.len() != 4 {
+        return false;
+    }
+
+    // First two chars should be uppercase letters
+    let profile_code = &suffix[..2];
+    if !profile_code.chars().all(|c| c.is_ascii_uppercase()) {
+        return false;
+    }
+
+    // Last two chars should be digits
+    let sequence = &suffix[2..];
+    sequence.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Extract the parent standard ID from a substandard ID.
+pub fn extract_parent_from_substandard_id(id: &str) -> Option<String> {
+    id.find('.').map(|dot_pos| id[..dot_pos].to_string())
 }
 
 /// Check if a string looks like valid SemVer (basic check).
@@ -424,5 +550,169 @@ maintainers = ["Test"]
         assert!(MISSING_METADATA_FILE.contains("METADATA"));
         assert!(MISSING_STANDARDS_DIR.contains("STANDARDS"));
         assert!(INVALID_STANDARD_ID.contains("STANDARD"));
+        assert!(INVALID_SUBSTANDARD_ID.contains("SUBSTANDARD"));
+        assert!(INVALID_PARENT_REF.contains("PARENT"));
+    }
+
+    #[test]
+    fn test_valid_substandard_id() {
+        assert!(is_valid_substandard_id("APS-V1-0000.SS01"));
+        assert!(is_valid_substandard_id("APS-V1-0001.GH01"));
+        assert!(is_valid_substandard_id("APS-V1-9999.PY99"));
+        assert!(is_valid_substandard_id("APS-V1-0002.TS02"));
+
+        // Invalid formats
+        assert!(!is_valid_substandard_id("APS-V1-0000")); // No suffix
+        assert!(!is_valid_substandard_id("APS-V1-0000.ss01")); // Lowercase
+        assert!(!is_valid_substandard_id("APS-V1-0000.S01")); // Only one letter
+        assert!(!is_valid_substandard_id("APS-V1-0000.SSS1")); // Three letters
+        assert!(!is_valid_substandard_id("EXP-V1-0000.SS01")); // Wrong prefix
+        assert!(!is_valid_substandard_id("APS-V1-0000.SS1")); // Only one digit
+    }
+
+    #[test]
+    fn test_extract_parent_from_substandard_id() {
+        assert_eq!(
+            extract_parent_from_substandard_id("APS-V1-0000.SS01"),
+            Some("APS-V1-0000".to_string())
+        );
+        assert_eq!(
+            extract_parent_from_substandard_id("APS-V1-0001.GH01"),
+            Some("APS-V1-0001".to_string())
+        );
+        assert_eq!(extract_parent_from_substandard_id("APS-V1-0000"), None);
+    }
+
+    #[test]
+    fn test_validate_substandard_package() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // Create minimal valid substandard structure
+        let pkg_dir = temp_dir
+            .path()
+            .join("standards/v1/APS-V1-0001-test/substandards/GH01-github");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+
+        let substandard_toml = r#"
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0001.GH01"
+name = "GitHub Profile"
+slug = "github"
+version = "1.0.0"
+parent_id = "APS-V1-0001"
+parent_major = "1"
+
+[ownership]
+maintainers = ["Test"]
+"#;
+        fs::write(pkg_dir.join("substandard.toml"), substandard_toml).unwrap();
+
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+
+        // Should have no errors
+        assert!(
+            !diagnostics.has_errors(),
+            "Unexpected errors: {:?}",
+            diagnostics.errors().map(|d| &d.message).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_validate_substandard_with_invalid_id() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let pkg_dir = temp_dir.path().join("substandard");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+
+        // Invalid substandard ID
+        let substandard_toml = r#"
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "INVALID-ID"
+name = "Test"
+slug = "test"
+version = "1.0.0"
+parent_id = "APS-V1-0001"
+parent_major = "1"
+
+[ownership]
+maintainers = ["Test"]
+"#;
+        fs::write(pkg_dir.join("substandard.toml"), substandard_toml).unwrap();
+
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+
+        // Should have INVALID_SUBSTANDARD_ID error
+        assert!(diagnostics.has_errors());
+        assert!(
+            diagnostics
+                .errors()
+                .any(|d| d.code == error_codes::INVALID_SUBSTANDARD_ID)
+        );
+    }
+
+    #[test]
+    fn test_validate_substandard_with_mismatched_parent() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let pkg_dir = temp_dir.path().join("substandard");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+
+        // Valid ID but mismatched parent_id
+        let substandard_toml = r#"
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0001.GH01"
+name = "Test"
+slug = "test"
+version = "1.0.0"
+parent_id = "APS-V1-0002"
+parent_major = "1"
+
+[ownership]
+maintainers = ["Test"]
+"#;
+        fs::write(pkg_dir.join("substandard.toml"), substandard_toml).unwrap();
+
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+
+        // Should have INVALID_PARENT_REF error
+        assert!(diagnostics.has_errors());
+        assert!(
+            diagnostics
+                .errors()
+                .any(|d| d.code == error_codes::INVALID_PARENT_REF)
+        );
     }
 }
