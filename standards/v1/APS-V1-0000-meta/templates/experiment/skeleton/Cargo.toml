@@ -1,0 +1,15 @@
+[package]
+name = "{{slug}}"
+version = "{{version}}"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "{{name}} (Experimental)"
+
+[dependencies]
+aps-core.workspace = true
+
+[dev-dependencies]
+tempfile = "3.14"
+

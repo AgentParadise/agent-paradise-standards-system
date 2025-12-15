@@ -1,0 +1,69 @@
+{
+    // Agentic Primitives - Custom Color Scheme
+    "workbench.colorTheme": "Dark+",
+    // Aggressive color customizations for agentic/AI theme
+    "workbench.colorCustomizations": {
+        "activityBar.border": "#d4a017",
+        "sideBar.background": "#161b22",
+        "sideBar.foreground": "#c9d1d9",
+        "sideBarTitle.foreground": "#ffd33d",
+        "sideBarSectionHeader.background": "#d4a01722",
+        "sideBarSectionHeader.foreground": "#ffd33d",
+        "editor.background": "#0d1117",
+        "editor.foreground": "#c9d1d9",
+        "editorLineNumber.foreground": "#484f58",
+        "editorLineNumber.activeForeground": "#ffd33d",
+        "editor.selectionBackground": "#d4a01744",
+        "editor.inactiveSelectionBackground": "#d4a01722",
+        "editorGroupHeader.tabsBackground": "#010409",
+        "tab.activeBackground": "#0d1117",
+        "tab.activeForeground": "#ffd33d",
+        "tab.inactiveBackground": "#161b22",
+        "tab.inactiveForeground": "#8b949e",
+        "tab.border": "#d4a017",
+        "statusBar.noFolderBackground": "#d4a017",
+        "panel.background": "#0d1117",
+        "panelTitle.activeBorder": "#d4a017",
+        "panelTitle.activeForeground": "#ffd33d",
+        "terminal.background": "#0d1117",
+        "terminal.foreground": "#c9d1d9",
+        "terminal.ansiBlue": "#58a6ff",
+        "terminal.ansiCyan": "#39c5cf",
+        "terminal.ansiGreen": "#ffd33d",
+        "terminal.ansiMagenta": "#bc8cff",
+        "button.background": "#d4a017",
+        "button.foreground": "#ffffff",
+        "button.hoverBackground": "#ffd33d",
+        "focusBorder": "#d4a017",
+        "input.background": "#0d1117",
+        "input.border": "#d4a017"
+    },
+    // File associations
+    "files.associations": {
+        "*.hook.yaml": "yaml",
+        "*.prompt.yaml": "yaml",
+        "*.tool.yaml": "yaml",
+        "*.schema.json": "jsonc"
+    },
+    // Editor enhancements
+    "editor.semanticHighlighting.enabled": true,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+        80,
+        100
+    ],
+    // Language-specific
+    "[yaml]": {
+        "editor.tabSize": 2
+    },
+    "[rust]": {
+        "editor.tabSize": 4
+    },
+    "[python]": {
+        "editor.tabSize": 4
+    },
+    // File explorer
+    "explorer.compactFolders": false
+}

@@ -1,0 +1,3 @@
+[submodule "lib/agentic-primitives"]
+	path = lib/agentic-primitives
+	url = https://github.com/AgentParadise/agentic-primitives

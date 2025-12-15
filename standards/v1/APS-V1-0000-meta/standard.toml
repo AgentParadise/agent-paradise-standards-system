@@ -1,0 +1,17 @@
+schema = "aps.standard/v1"
+
+[standard]
+id = "APS-V1-0000"
+name = "APS Meta-Standard"
+slug = "meta"
+version = "1.0.0"
+category = "governance"
+status = "active"
+
+[aps]
+aps_major = "v1"
+backwards_compatible_major_required = true
+
+[ownership]
+maintainers = ["AgentParadise"]
+
