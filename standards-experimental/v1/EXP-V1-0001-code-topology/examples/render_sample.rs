@@ -7,11 +7,14 @@
 //! open coupling-3d.html
 //! ```
 
-use code_topology::{CouplingMatrixFile, ModulesFile, OutputFormat, Projector, Topology};
+use code_topology::{
+    CouplingMatrixFile, MartinMetrics, ModuleMetrics, ModulesFile, OutputFormat, Projector,
+    Topology,
+};
 use code_topology_3d::ForceDirectedProjector;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sample_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/sample-topology");
@@ -23,14 +26,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matrix_content = fs::read_to_string(&matrix_path)?;
     let matrix_file: CouplingMatrixFile = serde_json::from_str(&matrix_content)?;
 
-    println!("   ✅ Loaded coupling matrix: {} modules", matrix_file.modules.len());
+    println!(
+        "   ✅ Loaded coupling matrix: {} modules",
+        matrix_file.modules.len()
+    );
 
     // Load modules for metrics
     let modules_path = sample_dir.join("metrics/modules.json");
     let modules_content = fs::read_to_string(&modules_path)?;
     let modules_file: ModulesFile = serde_json::from_str(&modules_content)?;
 
-    println!("   ✅ Loaded module metrics: {} modules", modules_file.modules.len());
+    println!(
+        "   ✅ Loaded module metrics: {} modules",
+        modules_file.modules.len()
+    );
 
     // Build topology for projector
     let mut topology = Topology::default();
@@ -44,6 +53,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         values: matrix_file.matrix.clone(),
         positions,
     });
+
+    // Convert module metrics to internal format
+    for record in &modules_file.modules {
+        topology.modules.push(ModuleMetrics {
+            id: record.id.clone(),
+            name: record.name.clone(),
+            path: PathBuf::from(&record.path),
+            languages: record.languages.clone(),
+            file_count: record.metrics.file_count,
+            function_count: record.metrics.function_count,
+            total_cyclomatic: record.metrics.total_cyclomatic,
+            avg_cyclomatic: record.metrics.avg_cyclomatic,
+            total_cognitive: record.metrics.total_cognitive,
+            avg_cognitive: record.metrics.avg_cognitive,
+            lines_of_code: record.metrics.lines_of_code,
+            martin: MartinMetrics {
+                ca: record.metrics.martin.ca,
+                ce: record.metrics.martin.ce,
+                instability: record.metrics.martin.instability,
+                abstractness: record.metrics.martin.abstractness,
+                distance_from_main_sequence: record.metrics.martin.distance_from_main_sequence,
+            },
+        });
+    }
 
     println!("\n🎨 Rendering 3D visualization...");
 

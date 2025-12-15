@@ -334,13 +334,20 @@ impl ForceDirectedProjector {
     fn build_scene(
         &self,
         topology: &Topology,
-        _cfg: &ForceDirectedConfig,
+        cfg: &ForceDirectedConfig,
     ) -> Result<Scene3D, ProjectorError> {
         // Get positions from coupling matrix if available
         let positions = topology
             .coupling_matrix
             .as_ref()
             .and_then(|m| m.positions.as_ref());
+
+        // Build module metrics lookup
+        let module_metrics: std::collections::HashMap<_, _> = topology
+            .modules
+            .iter()
+            .map(|m| (m.id.clone(), m))
+            .collect();
 
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
@@ -353,17 +360,28 @@ impl ForceDirectedProjector {
                     .cloned()
                     .unwrap_or([i as f64 * 2.0, 0.0, 0.0]);
 
+                // Look up metrics for this module
+                let metrics = module_metrics.get(module_id);
+
+                let cyclomatic = metrics.map(|m| m.total_cyclomatic).unwrap_or(0);
+                let cognitive = metrics.map(|m| m.total_cognitive).unwrap_or(0);
+                let instability = metrics.map(|m| m.martin.instability).unwrap_or(0.5);
+                let function_count = metrics.map(|m| m.function_count).unwrap_or(0);
+
+                // Size based on function count, scaled
+                let size = (function_count as f64 / 5.0 + 0.5).min(2.5) * cfg.node_scale;
+
                 nodes.push(SceneNode {
                     id: module_id.clone(),
                     label: module_id.clone(),
                     position: pos,
-                    size: 1.0, // TODO: Calculate from metrics
-                    color: Self::instability_color(0.5), // TODO: Get from metrics
+                    size,
+                    color: Self::instability_color(instability),
                     metrics: NodeMetrics {
-                        cyclomatic: 0,
-                        cognitive: 0,
-                        instability: 0.5,
-                        function_count: 0,
+                        cyclomatic,
+                        cognitive,
+                        instability,
+                        function_count,
                     },
                 });
             }
@@ -409,28 +427,105 @@ impl ForceDirectedProjector {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Topology - 3D Coupling Visualization</title>
     <style>
-        body {{ margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }}
+        body {{ margin: 0; overflow: hidden; font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; }}
         #info {{
             position: absolute;
             top: 10px;
             left: 10px;
-            padding: 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            border-radius: 8px;
-            font-size: 14px;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, rgba(20,20,40,0.95), rgba(40,30,60,0.9));
+            color: #e0e0e0;
+            border-radius: 12px;
+            font-size: 13px;
             z-index: 100;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
         }}
-        #info h3 {{ margin: 0 0 8px 0; }}
+        #info h3 {{ 
+            margin: 0 0 12px 0; 
+            font-size: 18px;
+            background: linear-gradient(90deg, #ff6b9d, #c44569);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }}
+        #info p {{ margin: 4px 0; color: #b0b0b0; }}
+        #info em {{ color: #888; font-size: 11px; }}
+        #legend {{
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, rgba(20,20,40,0.95), rgba(40,30,60,0.9));
+            color: #e0e0e0;
+            border-radius: 12px;
+            font-size: 12px;
+            z-index: 100;
+            border: 1px solid rgba(255,255,255,0.1);
+        }}
+        #legend h4 {{ margin: 0 0 10px 0; color: #aaa; font-weight: 500; }}
+        .legend-item {{ display: flex; align-items: center; margin: 6px 0; }}
+        .legend-color {{ width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; }}
+        #tooltip {{
+            position: absolute;
+            padding: 12px 16px;
+            background: rgba(10,10,20,0.95);
+            color: #fff;
+            border-radius: 10px;
+            font-size: 12px;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+            border: 1px solid rgba(255,100,150,0.3);
+            max-width: 250px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }}
+        #tooltip .name {{ 
+            font-weight: 700; 
+            font-size: 14px; 
+            margin-bottom: 8px;
+            color: #ff6b9d;
+        }}
+        #tooltip .metric {{ 
+            display: flex; 
+            justify-content: space-between; 
+            margin: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 4px;
+        }}
+        #tooltip .metric-label {{ color: #888; }}
+        #tooltip .metric-value {{ color: #fff; font-weight: 500; }}
+        .node-label {{
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6);
+            pointer-events: none;
+            white-space: nowrap;
+        }}
+        .edge-label {{
+            color: rgba(255,255,255,0.6);
+            font-size: 10px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+            pointer-events: none;
+        }}
     </style>
 </head>
 <body>
     <div id="info">
-        <h3>Code Topology</h3>
-        <p>Nodes: {node_count} modules</p>
-        <p>Edges: {edge_count} coupling relationships</p>
-        <p><em>Drag to rotate, scroll to zoom</em></p>
+        <h3>🌐 Code Topology</h3>
+        <p><strong>{node_count}</strong> modules</p>
+        <p><strong>{edge_count}</strong> coupling relationships</p>
+        <p><em>Drag to rotate • Scroll to zoom • Hover for details</em></p>
     </div>
+    <div id="legend">
+        <h4>Coupling Strength</h4>
+        <div class="legend-item"><div class="legend-color" style="background: #ffcccc;"></div>Strong (≥0.7)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #aaaaaa;"></div>Medium (0.3-0.7)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #666666;"></div>Weak (&lt;0.3)</div>
+    </div>
+    <div id="tooltip"></div>
     <script type="importmap">
     {{
         "imports": {{
@@ -442,66 +537,160 @@ impl ForceDirectedProjector {
     <script type="module">
         import * as THREE from 'three';
         import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
+        import {{ CSS2DRenderer, CSS2DObject }} from 'three/addons/renderers/CSS2DRenderer.js';
         
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a2e);
+        scene.background = new THREE.Color(0x0f0f1a);
         
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 5, 10);
         
         const renderer = new THREE.WebGLRenderer({{ antialias: true }});
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
+        
+        // CSS2D Renderer for labels
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
         
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
         
-        // Add ambient light
-        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(5, 10, 7);
         scene.add(dirLight);
+        const backLight = new THREE.DirectionalLight(0x6060ff, 0.3);
+        backLight.position.set(-5, -5, -5);
+        scene.add(backLight);
         
         // Load topology data
         const data = {scene_json};
         
-        // Create nodes
+        const nodeMeshes = [];
+        const tooltip = document.getElementById('tooltip');
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        // Create nodes with labels
         data.nodes.forEach(node => {{
-            const geometry = new THREE.SphereGeometry(node.size * 0.3, 32, 32);
-            const material = new THREE.MeshPhongMaterial({{ color: node.color }});
+            // Create sphere
+            const geometry = new THREE.SphereGeometry(node.size * 0.35, 32, 32);
+            const material = new THREE.MeshPhongMaterial({{ 
+                color: node.color,
+                emissive: node.color,
+                emissiveIntensity: 0.2,
+                shininess: 80
+            }});
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(...node.position);
             mesh.userData = node;
             scene.add(mesh);
+            nodeMeshes.push(mesh);
             
-            // TODO: Add labels
+            // Create text label
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'node-label';
+            labelDiv.textContent = node.label;
+            const label = new CSS2DObject(labelDiv);
+            label.position.set(0, node.size * 0.5 + 0.3, 0);
+            mesh.add(label);
         }});
         
-        // Create edges
+        // Create edges with labels
         data.edges.forEach(edge => {{
             const fromNode = data.nodes.find(n => n.id === edge.from);
             const toNode = data.nodes.find(n => n.id === edge.to);
             if (fromNode && toNode) {{
-                const points = [
-                    new THREE.Vector3(...fromNode.position),
-                    new THREE.Vector3(...toNode.position)
-                ];
-                const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                const material = new THREE.LineBasicMaterial({{ 
+                const start = new THREE.Vector3(...fromNode.position);
+                const end = new THREE.Vector3(...toNode.position);
+                
+                // Create tube for thicker edges
+                const path = new THREE.LineCurve3(start, end);
+                const tubeGeometry = new THREE.TubeGeometry(path, 1, edge.strength * 0.08 + 0.02, 8, false);
+                const tubeMaterial = new THREE.MeshBasicMaterial({{ 
                     color: edge.color,
-                    linewidth: edge.width,
-                    opacity: edge.strength,
+                    opacity: 0.4 + edge.strength * 0.4,
                     transparent: true
                 }});
-                scene.add(new THREE.Line(geometry, material));
+                const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+                scene.add(tube);
+                
+                // Edge label at midpoint (only for strong connections)
+                if (edge.strength >= 0.5) {{
+                    const midpoint = start.clone().add(end).multiplyScalar(0.5);
+                    const edgeLabelDiv = document.createElement('div');
+                    edgeLabelDiv.className = 'edge-label';
+                    edgeLabelDiv.textContent = edge.strength.toFixed(2);
+                    const edgeLabel = new CSS2DObject(edgeLabelDiv);
+                    edgeLabel.position.copy(midpoint);
+                    scene.add(edgeLabel);
+                }}
             }}
         }});
+        
+        // Mouse hover for tooltips
+        function onMouseMove(event) {{
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodeMeshes);
+            
+            if (intersects.length > 0) {{
+                const node = intersects[0].object.userData;
+                tooltip.style.display = 'block';
+                tooltip.style.left = event.clientX + 15 + 'px';
+                tooltip.style.top = event.clientY + 15 + 'px';
+                
+                // Find connections
+                const connections = data.edges
+                    .filter(e => e.from === node.id || e.to === node.id)
+                    .map(e => {{
+                        const other = e.from === node.id ? e.to : e.from;
+                        return `${{other}} (${{e.strength.toFixed(2)}})`;
+                    }})
+                    .join(', ');
+                
+                tooltip.innerHTML = `
+                    <div class="name">${{node.label}}</div>
+                    <div class="metric">
+                        <span class="metric-label">Cyclomatic</span>
+                        <span class="metric-value">${{node.metrics.cyclomatic}}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Cognitive</span>
+                        <span class="metric-value">${{node.metrics.cognitive}}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Instability</span>
+                        <span class="metric-value">${{(node.metrics.instability * 100).toFixed(0)}}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Connected to</span>
+                        <span class="metric-value">${{connections || 'none'}}</span>
+                    </div>
+                `;
+            }} else {{
+                tooltip.style.display = 'none';
+            }}
+        }}
+        
+        window.addEventListener('mousemove', onMouseMove);
         
         // Animation loop
         function animate() {{
             requestAnimationFrame(animate);
             controls.update();
             renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
         }}
         animate();
         
@@ -510,6 +699,7 @@ impl ForceDirectedProjector {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
         }});
     </script>
 </body>
