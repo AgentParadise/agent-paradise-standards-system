@@ -19,7 +19,7 @@
 //! ```
 
 use aps_core::discovery::{PackageType, count_packages, discover_v1_packages, find_package_by_id};
-use aps_core::{StandardContext, TemplateEngine};
+use aps_core::{StandardContext, TemplateEngine, promote_experiment};
 use aps_v1_0000_meta::{MetaStandard, Standard};
 use clap::Parser;
 use std::env;
@@ -70,6 +70,14 @@ enum V1Commands {
     Create {
         #[command(subcommand)]
         target: CreateTarget,
+    },
+    /// Promote an experiment to an official standard
+    Promote {
+        /// Experiment ID to promote (e.g., EXP-V1-0001)
+        experiment_id: String,
+        /// Optional target standard ID (otherwise auto-allocated)
+        #[arg(long)]
+        target_id: Option<String>,
     },
     /// List all V1 packages
     List,
@@ -285,6 +293,31 @@ fn main() -> ExitCode {
                     }
                 }
             },
+            V1Commands::Promote {
+                experiment_id,
+                target_id,
+            } => {
+                println!("Promoting experiment: {}", experiment_id);
+
+                match promote_experiment(&repo_root, &experiment_id, target_id.as_deref()) {
+                    Ok(result) => {
+                        println!("\n✓ Promotion successful!");
+                        println!("  From: {}", result.experiment_id);
+                        println!("  To:   {}", result.standard_id);
+                        println!("  Path: {}", result.new_path.display());
+                        println!("\n  Migrated {} files", result.migrated_files.len());
+                        println!("\nNext steps:");
+                        println!("  1. Add to Cargo.toml workspace members");
+                        println!("  2. Remove the old experiment from workspace");
+                        println!("  3. Run: aps v1 validate standard {}", result.standard_id);
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("Error promoting experiment: {}", e);
+                        ExitCode::FAILURE
+                    }
+                }
+            }
             V1Commands::List => {
                 let packages = discover_v1_packages(&repo_root);
                 let (standards, substandards, experiments) = count_packages(&repo_root);
