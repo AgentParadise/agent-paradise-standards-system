@@ -32,6 +32,73 @@ agent-paradise-standards-system/
 └── lib/agentic-primitives/ # Agentic primitives submodule
 ```
 
+## Quick Start
+
+```bash
+# Build the CLI
+cargo build --release
+
+# Install locally (optional)
+cargo install --path crates/aps-cli
+
+# Or run via cargo
+cargo run --bin aps -- v1 --help
+```
+
+## CLI Commands
+
+### Validation
+
+```bash
+# Validate the entire V1 repo structure
+aps v1 validate repo
+
+# Validate a specific standard
+aps v1 validate standard APS-V1-0000
+
+# Validate an experiment
+aps v1 validate experiment EXP-V1-0001
+
+# JSON output for CI
+aps v1 validate repo --format json
+```
+
+### Creating Packages
+
+```bash
+# Create a new official standard
+aps v1 create standard my-new-standard
+
+# Create an experimental standard
+aps v1 create experiment my-experiment
+
+# Create a substandard (profile)
+aps v1 create substandard APS-V1-0001 GH01
+```
+
+### Lifecycle Management
+
+```bash
+# Promote an experiment to official standard
+aps v1 promote EXP-V1-0001
+
+# Show package version
+aps v1 version show APS-V1-0000
+
+# Bump version (major, minor, or patch)
+aps v1 version bump APS-V1-0000 patch
+```
+
+### Views & Registry
+
+```bash
+# Generate derived views (registry.json, INDEX.md)
+aps v1 generate views
+
+# List all packages
+aps v1 list
+```
+
 ## Key Principles
 
 | Principle | Description |
@@ -41,26 +108,35 @@ agent-paradise-standards-system/
 | **Code is the standard** | Rust crates + protos ARE the standard, not docs |
 | **Self-validating** | Each standard can validate itself and consumers |
 
-## Quick Start
+## Package Types
+
+| Type | ID Format | Location | Description |
+|------|-----------|----------|-------------|
+| Standard | `APS-V1-XXXX` | `standards/v1/` | Official, stable standards |
+| Substandard | `APS-V1-XXXX.YY00` | `<parent>/substandards/` | Specialized profiles |
+| Experiment | `EXP-V1-XXXX` | `standards-experimental/v1/` | Incubating standards |
+
+## Development
 
 ```bash
-# Validate the entire V1 repo structure
-cargo run --bin aps -- v1 validate repo
+# Run all checks (format, lint, test)
+just check
 
-# Validate a specific standard
-cargo run --bin aps -- v1 validate standard APS-V1-0000
+# Fix formatting and run checks
+just check-fix
 
-# Create a new standard
-cargo run --bin aps -- v1 create standard my-new-standard
+# Run only tests
+cargo test --workspace
 
-# Create a new experiment
-cargo run --bin aps -- v1 create experiment my-experiment
+# Build release
+cargo build --release
 ```
 
 ## Documentation
 
 - [APS-V1-0000 Meta-Standard](standards/v1/APS-V1-0000-meta/docs/01_spec.md) — Canonical specification
 - [Experimental Standards](standards-experimental/v1/README.md) — Incubation rules and promotion
+- [Templates](standards/v1/APS-V1-0000-meta/templates/README.md) — Package scaffolding templates
 
 ## License
 

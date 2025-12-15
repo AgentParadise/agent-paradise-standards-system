@@ -7,6 +7,7 @@ This directory contains scaffolding templates for creating new APS packages.
 | Template | Description | Output Location |
 |----------|-------------|-----------------|
 | `standard/` | New official standard | `standards/v1/APS-V1-XXXX-<slug>/` |
+| `substandard/` | New substandard (profile) | `standards/v1/<parent>/substandards/<slug>/` |
 | `experiment/` | New experimental standard | `standards-experimental/v1/EXP-V1-XXXX-<slug>/` |
 
 ## Template Structure
@@ -42,6 +43,18 @@ aps v1 create experiment my-experiment
 | `slug` | ✅ | - | Filesystem-safe slug (kebab-case) |
 | `version` | ❌ | `1.0.0` | Initial SemVer version |
 | `category` | ❌ | `governance` | Category |
+| `maintainers` | ❌ | `["AgentParadise"]` | Maintainer list |
+
+### Substandard Template
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `id` | ✅ | - | Substandard ID (e.g., APS-V1-0002.GH01) |
+| `name` | ✅ | - | Human-readable name |
+| `slug` | ✅ | - | Filesystem-safe slug (kebab-case) |
+| `version` | ❌ | `1.0.0` | Initial SemVer version |
+| `parent_id` | ✅ | - | Parent standard ID |
+| `parent_major` | ❌ | `1` | Required parent major version |
 | `maintainers` | ❌ | `["AgentParadise"]` | Maintainer list |
 
 ### Experiment Template
