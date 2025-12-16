@@ -45,8 +45,15 @@ an individual is officially representing the community in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement.
+reported by opening a **confidential issue** or contacting the maintainers
+directly via GitHub.
+
+To report a violation:
+- Open a [new issue](https://github.com/AgentParadise/agent-paradise-standards-system/issues/new) with `[CoC]` in the title
+- Or contact [@AgentParadise](https://github.com/AgentParadise) directly
+
 All complaints will be reviewed and investigated promptly and fairly.
+All reporters will be protected from retaliation.
 
 ## Attribution
 
