@@ -43,6 +43,22 @@ Generate `.topology/` artifacts from a codebase by running complexity analysis a
 9. **Run force-directed layout** to compute 3D positions
 10. **Write artifacts** to `.topology/` directory
 
+## CLI Commands
+
+```bash
+# Analyze the current directory
+aps run topology analyze .
+
+# Analyze with custom output location
+aps run topology analyze . --output .topology/
+
+# Validate existing artifacts
+aps run topology validate .topology/
+
+# Generate a report
+aps run topology report .topology/
+```
+
 ## Example Usage
 
 ```
