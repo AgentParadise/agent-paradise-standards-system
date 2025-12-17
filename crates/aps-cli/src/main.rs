@@ -4,6 +4,27 @@
 //!
 //! # Usage
 //!
+//! ## Consumer Commands (adopt standards)
+//!
+//! ```bash
+//! # Initialize .aps/ in current directory
+//! aps init --name my-project
+//!
+//! # Add a standard to the manifest
+//! aps add code-topology@0.1.0
+//!
+//! # List adopted standards
+//! aps list
+//!
+//! # Sync artifacts from adopted standards
+//! aps sync
+//!
+//! # Check compliance
+//! aps check
+//! ```
+//!
+//! ## Author Commands (create standards)
+//!
 //! ```bash
 //! # Validate the entire V1 repo structure
 //! aps v1 validate repo
@@ -14,15 +35,15 @@
 //! # Create a new standard
 //! aps v1 create standard my-new-standard
 //!
-//! # List all packages
+//! # List all V1 packages
 //! aps v1 list
 //! ```
 
 use aps_core::discovery::{PackageType, count_packages, discover_v1_packages, find_package_by_id};
 use aps_core::versioning::BumpPart;
 use aps_core::{
-    StandardContext, TemplateEngine, bump_version, generate_all_views, get_version,
-    promote_experiment,
+    StandardContext, TemplateEngine, bump_version, generate_all_views, generate_index, get_version,
+    init_manifest, load_manifest, promote_experiment, write_index,
 };
 use aps_v1_0000_meta::{MetaStandard, Standard};
 use clap::Parser;
@@ -61,7 +82,50 @@ enum OutputFormat {
 
 #[derive(clap::Subcommand)]
 enum Commands {
-    /// V1 standards operations
+    // ========================================================================
+    // Consumer Commands (for adopting standards in downstream projects)
+    // ========================================================================
+    /// Initialize .aps/ manifest in current directory
+    Init {
+        /// Project name (defaults to directory name)
+        #[arg(long)]
+        name: Option<String>,
+    },
+
+    /// Add a standard to the manifest
+    Add {
+        /// Standard slug with optional version (e.g., code-topology@0.1.0)
+        standard: String,
+        /// Source URI override
+        #[arg(long)]
+        source: Option<String>,
+    },
+
+    /// List adopted standards (consumer context)
+    #[command(name = "list")]
+    ConsumerList,
+
+    /// Sync artifacts from adopted standards
+    Sync {
+        /// Force regeneration even if up to date
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Check compliance with adopted standards
+    Check,
+
+    /// Check for available standard updates
+    Update {
+        /// Show what would be updated without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    // ========================================================================
+    // Author Commands (for creating/maintaining standards)
+    // ========================================================================
+    /// V1 standards operations (authoring)
     V1 {
         #[command(subcommand)]
         command: V1Commands,
@@ -190,6 +254,295 @@ fn main() -> ExitCode {
     });
 
     match cli.command {
+        // ====================================================================
+        // Consumer Commands
+        // ====================================================================
+        Commands::Init { name } => {
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let project_name = name.unwrap_or_else(|| {
+                cwd.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("my-project")
+                    .to_string()
+            });
+
+            match init_manifest(&cwd, &project_name) {
+                Ok(manifest_path) => {
+                    println!("✅ Created {}", manifest_path.display());
+                    println!("✅ Created .aps/index.json");
+                    println!();
+                    println!("Next steps:");
+                    println!("  aps add code-topology@0.1.0");
+                    println!("  aps sync");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Error initializing manifest: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+
+        Commands::Add { standard, source } => {
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+            // Parse standard@version format
+            let (slug, version) = if let Some((s, v)) = standard.split_once('@') {
+                (s.to_string(), v.to_string())
+            } else {
+                (standard.clone(), "0.1.0".to_string())
+            };
+
+            // Load existing manifest
+            let manifest = match load_manifest(&cwd) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            // Check if already added
+            if manifest.standards.contains_key(&slug) {
+                eprintln!("Standard '{slug}' is already in the manifest.");
+                eprintln!("To update, edit .aps/manifest.toml directly.");
+                return ExitCode::FAILURE;
+            }
+
+            // Determine standard ID from slug (simplified mapping)
+            let id = match slug.as_str() {
+                "code-topology" => "EXP-V1-0001",
+                "consumer-sdk" => "EXP-V1-0002",
+                _ => {
+                    eprintln!("Unknown standard slug: {slug}");
+                    eprintln!("Available standards: code-topology, consumer-sdk");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            let source_uri = source.unwrap_or_else(|| {
+                "github:AgentParadise/agent-paradise-standards-system".to_string()
+            });
+
+            // Read and update manifest file
+            let manifest_path = cwd.join(".aps/manifest.toml");
+            let mut content = std::fs::read_to_string(&manifest_path).unwrap_or_default();
+
+            // Append the new standard
+            let addition = format!(
+                r#"
+[standards.{slug}]
+id = "{id}"
+version = "{version}"
+source = "{source_uri}"
+"#
+            );
+            content.push_str(&addition);
+
+            if let Err(e) = std::fs::write(&manifest_path, content) {
+                eprintln!("Error writing manifest: {e}");
+                return ExitCode::FAILURE;
+            }
+
+            println!("✅ Added {slug}@{version} to .aps/manifest.toml");
+            println!();
+            println!("Run 'aps sync' to generate artifacts.");
+            ExitCode::SUCCESS
+        }
+
+        Commands::ConsumerList => {
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+            let manifest = match load_manifest(&cwd) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            if manifest.standards.is_empty() {
+                println!("No standards adopted yet.");
+                println!();
+                println!("Add a standard with: aps add code-topology@0.1.0");
+                return ExitCode::SUCCESS;
+            }
+
+            println!("Adopted Standards:");
+            for (slug, standard_ref) in &manifest.standards {
+                let artifacts = if standard_ref.artifacts.is_empty() {
+                    String::new()
+                } else {
+                    format!(" → {}", standard_ref.artifacts.join(", "))
+                };
+                println!(
+                    "  {:<16} {:12} {:8}{}",
+                    slug, standard_ref.id, standard_ref.version, artifacts
+                );
+            }
+
+            if !manifest.substandards.is_empty() {
+                println!();
+                println!("Enabled Substandards:");
+                for (key, config) in &manifest.substandards {
+                    if config.enabled {
+                        println!("  {key}");
+                    }
+                }
+            }
+
+            ExitCode::SUCCESS
+        }
+
+        Commands::Sync { force: _ } => {
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+            let manifest = match load_manifest(&cwd) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            if manifest.standards.is_empty() {
+                println!("No standards to sync.");
+                println!("Add a standard first: aps add code-topology@0.1.0");
+                return ExitCode::SUCCESS;
+            }
+
+            // Generate index
+            match generate_index(&cwd, &manifest) {
+                Ok(index) => match write_index(&cwd, &index) {
+                    Ok(path) => {
+                        println!("✅ Generated {}", path.display());
+                    }
+                    Err(e) => {
+                        eprintln!("Error writing index: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Error generating index: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+
+            // TODO: Invoke standard-specific sync hooks
+            for (slug, standard_ref) in &manifest.standards {
+                println!(
+                    "Syncing {slug}@{}... (artifact generation not yet implemented)",
+                    standard_ref.version
+                );
+            }
+
+            println!();
+            println!("✅ Sync complete");
+            ExitCode::SUCCESS
+        }
+
+        Commands::Check => {
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+            let manifest = match load_manifest(&cwd) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            if manifest.standards.is_empty() {
+                println!("No standards to check.");
+                return ExitCode::SUCCESS;
+            }
+
+            println!("Checking compliance...");
+            println!();
+
+            let mut warnings = 0;
+            let errors = 0;
+
+            for (slug, standard_ref) in &manifest.standards {
+                println!("{slug}@{}:", standard_ref.version);
+
+                // Check artifacts exist
+                for artifact in &standard_ref.artifacts {
+                    let path = cwd.join(artifact);
+                    if path.exists() {
+                        println!("  ✅ {artifact} exists");
+                    } else {
+                        println!("  ⚠️  {artifact} missing");
+                        warnings += 1;
+                    }
+                }
+
+                if standard_ref.artifacts.is_empty() {
+                    println!("  (no artifacts to check)");
+                }
+            }
+
+            // Check index exists
+            let index_path = cwd.join(".aps/index.json");
+            if index_path.exists() {
+                println!();
+                println!("✅ .aps/index.json exists");
+            } else {
+                println!();
+                println!("⚠️  .aps/index.json missing (run 'aps sync')");
+                warnings += 1;
+            }
+
+            println!();
+            if errors > 0 {
+                println!("{warnings} warning(s), {errors} error(s)");
+                ExitCode::FAILURE
+            } else if warnings > 0 {
+                println!("{warnings} warning(s), 0 errors");
+                ExitCode::SUCCESS
+            } else {
+                println!("✅ All checks passed");
+                ExitCode::SUCCESS
+            }
+        }
+
+        Commands::Update { dry_run } => {
+            let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+            let manifest = match load_manifest(&cwd) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            if manifest.standards.is_empty() {
+                println!("No standards to update.");
+                return ExitCode::SUCCESS;
+            }
+
+            println!("Checking for updates...");
+            if dry_run {
+                println!("(dry run - no changes will be made)");
+            }
+            println!();
+
+            // TODO: Actually check for updates from sources
+            for (slug, standard_ref) in &manifest.standards {
+                // Placeholder: just report current version
+                println!("  {slug}  {} (up to date)", standard_ref.version);
+            }
+
+            println!();
+            println!("Update checking not yet implemented.");
+            println!("Edit .aps/manifest.toml manually to update versions.");
+            ExitCode::SUCCESS
+        }
+
+        // ====================================================================
+        // Author Commands (V1)
+        // ====================================================================
         Commands::V1 { command } => match command {
             V1Commands::Validate { target } => {
                 let meta = MetaStandard::new();
