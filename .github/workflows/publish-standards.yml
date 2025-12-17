@@ -17,14 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Package standards
         run: |
           mkdir -p dist
-          
+
           # Package official standards
           for dir in standards/v1/*/; do
             if [ -d "$dir" ]; then
@@ -44,7 +44,7 @@ jobs:
               (cd dist && sha256sum "$tarball" > "${tarball}.sha256")
             fi
           done
-          
+
           # Package experimental standards
           for dir in standards-experimental/v1/*/; do
             if [ -d "$dir" ]; then
@@ -64,9 +64,9 @@ jobs:
               (cd dist && sha256sum "$tarball" > "${tarball}.sha256")
             fi
           done
-          
+
           ls -la dist/
-      
+
       - name: Generate registry
         run: |
           cat > dist/registry.json << 'SCRIPT'
@@ -76,22 +76,22 @@ jobs:
             "standards": []
           }
           SCRIPT
-          
+
           # Build registry entries for each package
           python3 << 'EOF'
           import json
           import os
           import glob
           from datetime import datetime
-          
+
           registry = {
               "schema_version": "aps.registry/v1",
               "published_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
               "standards": []
           }
-          
+
           seen_slugs = {}
-          
+
           for tarball in glob.glob("dist/*.tar.gz"):
               if tarball.endswith(".sha256"):
                   continue
@@ -133,17 +133,17 @@ jobs:
                   # Update latest if newer
                   if version > seen_slugs[slug]["latest"]:
                       seen_slugs[slug]["latest"] = version
-          
+
           registry["standards"] = list(seen_slugs.values())
-          
+
           with open("dist/registry.json", "w") as f:
               json.dump(registry, f, indent=2)
-          
+
           print(f"Generated registry with {len(registry['standards'])} standards")
           EOF
-          
+
           cat dist/registry.json
-      
+
       - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
