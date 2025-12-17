@@ -70,6 +70,7 @@ dependencies = [
  "clap",
  "code-topology-rust-adapter",
  "regex",
+ "serde",
  "serde_json",
  "tempfile",
  "toml",
