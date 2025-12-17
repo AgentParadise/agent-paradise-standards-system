@@ -18,6 +18,7 @@ option go_package = "github.com/AgentParadise/topology/v1;topologyv1";
 import "manifest.proto";
 import "metrics.proto";
 import "graphs.proto";
+import "diff.proto";
 
 // Complete topology of a codebase.
 // This is the in-memory representation combining all artifact files.

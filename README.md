@@ -47,7 +47,25 @@ cargo run --bin aps -- v1 --help
 
 ## CLI Commands
 
-### Validation
+### Running Standard Commands
+
+The `aps run` command dispatches to standard-specific CLIs:
+
+```bash
+# List available standards
+aps run --list
+
+# Run topology commands
+aps run topology analyze .                    # Analyze codebase
+aps run topology validate .topology/          # Validate artifacts
+aps run topology report .topology/            # Generate report
+aps run topology diff base/ pr/              # Compare snapshots
+
+# Get help for a standard
+aps run topology help
+```
+
+### Validation (Authoring)
 
 ```bash
 # Validate the entire V1 repo structure
