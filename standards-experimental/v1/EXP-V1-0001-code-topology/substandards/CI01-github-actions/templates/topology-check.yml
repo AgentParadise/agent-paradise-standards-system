@@ -60,7 +60,7 @@ jobs:
         id: analyze_pr
         run: |
           echo "🔍 Analyzing PR branch..."
-          aps topology analyze --output .topology-pr/
+          aps run topology analyze . --output .topology-pr/
           echo "pr_functions=$(jq '.functions | length' .topology-pr/metrics/functions.json)" >> $GITHUB_OUTPUT
           echo "pr_cc=$(jq '[.functions[].metrics.cyclomatic] | add' .topology-pr/metrics/functions.json)" >> $GITHUB_OUTPUT
 
@@ -72,7 +72,7 @@ jobs:
         id: analyze_base
         run: |
           echo "🔍 Analyzing base branch..."
-          aps topology analyze --output .topology-base/
+          aps run topology analyze . --output .topology-base/
           echo "base_functions=$(jq '.functions | length' .topology-base/metrics/functions.json)" >> $GITHUB_OUTPUT
           echo "base_cc=$(jq '[.functions[].metrics.cyclomatic] | add' .topology-base/metrics/functions.json)" >> $GITHUB_OUTPUT
 
@@ -84,7 +84,7 @@ jobs:
         id: diff
         run: |
           echo "📊 Comparing topology..."
-          aps topology diff .topology-base/ .topology-pr/ --format json > diff.json
+          aps run topology diff .topology-base/ .topology-pr/ --format json > diff.json
           
           # Extract status
           STATUS=$(jq -r '.status' diff.json)
@@ -105,9 +105,9 @@ jobs:
           
           # Use project config if exists, otherwise use defaults
           if [ -f ".topology/config.toml" ]; then
-            aps topology check diff.json --config .topology/config.toml
+            aps run topology check diff.json --config .topology/config.toml
           else
-            aps topology check diff.json
+            aps run topology check diff.json
           fi
 
       - name: Generate Comment
@@ -117,7 +117,7 @@ jobs:
           echo "📝 Generating PR comment..."
           
           # Generate markdown comment
-          aps topology comment diff.json > comment.md
+          aps run topology comment diff.json > comment.md
           
           # Read into output (escape for GitHub)
           COMMENT=$(cat comment.md)
