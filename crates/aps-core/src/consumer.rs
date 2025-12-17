@@ -188,6 +188,58 @@ pub fn github_release_url(org: &str, repo: &str, slug: &str, version: &str) -> S
     )
 }
 
+// ============================================================================
+// Checksum Verification
+// ============================================================================
+
+use sha2::{Digest, Sha256};
+
+/// Compute SHA-256 checksum of a file.
+///
+/// Returns the checksum as a hex string prefixed with "sha256:".
+pub fn compute_checksum(path: &Path) -> ConsumerResult<String> {
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher)?;
+    let hash = hasher.finalize();
+    Ok(format!("sha256:{hash:x}"))
+}
+
+/// Compute SHA-256 checksum of bytes.
+///
+/// Returns the checksum as a hex string prefixed with "sha256:".
+pub fn compute_checksum_bytes(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let hash = hasher.finalize();
+    format!("sha256:{hash:x}")
+}
+
+/// Verify a file's checksum against an expected value.
+///
+/// Returns Ok(()) if checksums match, Err if they don't.
+pub fn verify_checksum(path: &Path, expected: &str, slug: &str) -> ConsumerResult<()> {
+    let actual = compute_checksum(path)?;
+    if actual != expected {
+        return Err(ConsumerError::ChecksumMismatch {
+            package: slug.to_string(),
+            expected: expected.to_string(),
+            actual,
+        });
+    }
+    Ok(())
+}
+
+/// Parse a checksum sidecar file (format: "checksum  filename").
+pub fn parse_checksum_file(content: &str) -> Option<String> {
+    // Format: "abc123def456  filename.tar.gz"
+    content
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().next())
+        .map(|hex| format!("sha256:{hex}"))
+}
+
 /// Load a consumer manifest from `.aps/manifest.toml`.
 ///
 /// # Arguments
@@ -645,5 +697,65 @@ mod tests {
         let path = package_cache_path("code-topology", "0.1.0");
         assert!(path.to_string_lossy().contains("code-topology"));
         assert!(path.to_string_lossy().contains("0.1.0"));
+    }
+
+    #[test]
+    fn test_compute_checksum_bytes() {
+        let data = b"hello world";
+        let checksum = compute_checksum_bytes(data);
+        // SHA-256 of "hello world"
+        assert_eq!(
+            checksum,
+            "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
+    }
+
+    #[test]
+    fn test_compute_checksum_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        std::fs::write(&file_path, "hello world").unwrap();
+
+        let checksum = compute_checksum(&file_path).unwrap();
+        assert_eq!(
+            checksum,
+            "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
+    }
+
+    #[test]
+    fn test_verify_checksum_success() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        std::fs::write(&file_path, "hello world").unwrap();
+
+        let expected = "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+        let result = verify_checksum(&file_path, expected, "test-pkg");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_verify_checksum_mismatch() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        std::fs::write(&file_path, "hello world").unwrap();
+
+        let wrong = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+        let result = verify_checksum(&file_path, wrong, "test-pkg");
+        assert!(matches!(
+            result,
+            Err(ConsumerError::ChecksumMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn test_parse_checksum_file() {
+        let content =
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9  test.tar.gz\n";
+        let checksum = parse_checksum_file(content).unwrap();
+        assert_eq!(
+            checksum,
+            "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
     }
 }

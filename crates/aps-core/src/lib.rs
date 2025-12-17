@@ -25,9 +25,10 @@ pub mod versioning;
 pub mod views;
 
 pub use consumer::{
-    ConsumerError, ConsumerResult, ResolvedSource, cache_dir, generate_index, github_release_url,
-    init_manifest, is_package_cached, load_lock, load_manifest, load_or_create_lock, lock_package,
-    package_cache_path, resolve_source, write_index, write_lock,
+    ConsumerError, ConsumerResult, ResolvedSource, cache_dir, compute_checksum,
+    compute_checksum_bytes, generate_index, github_release_url, init_manifest, is_package_cached,
+    load_lock, load_manifest, load_or_create_lock, lock_package, package_cache_path,
+    parse_checksum_file, resolve_source, verify_checksum, write_index, write_lock,
 };
 pub use diagnostics::{Diagnostic, Diagnostics, Severity};
 pub use manifest::{
