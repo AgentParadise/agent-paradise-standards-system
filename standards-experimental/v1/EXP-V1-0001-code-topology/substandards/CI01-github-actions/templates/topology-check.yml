@@ -16,14 +16,14 @@ name: Topology Check
 on:
   pull_request:
     paths:
-      - '**.rs'
-      - '**.ts'
-      - '**.tsx'
-      - '**.py'
-      - '**.cpp'
-      - '**.hpp'
-      - '**.c'
-      - '**.h'
+      - "**.rs"
+      - "**.ts"
+      - "**.tsx"
+      - "**.py"
+      - "**.cpp"
+      - "**.hpp"
+      - "**.c"
+      - "**.h"
 
 # Cancel in-progress runs for the same PR
 concurrency:
@@ -37,12 +37,12 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    
+
     steps:
       - name: Checkout PR
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for base comparison
+          fetch-depth: 0 # Full history for base comparison
 
       - name: Setup Rust
         uses: dtolnay/rust-action@stable
@@ -52,7 +52,7 @@ jobs:
         run: |
           # Install from crates.io when published
           # cargo install aps-cli
-          
+
           # Or build from source
           cargo install --git https://github.com/AgentParadise/agent-paradise-standards-system aps-cli
 
@@ -85,11 +85,11 @@ jobs:
         run: |
           echo "📊 Comparing topology..."
           aps run topology diff .topology-base/ .topology-pr/ --format json > diff.json
-          
+
           # Extract status
           STATUS=$(jq -r '.status' diff.json)
           echo "status=$STATUS" >> $GITHUB_OUTPUT
-          
+
           # Set exit code based on status
           if [ "$STATUS" = "failure" ]; then
             echo "❌ Topology check failed"
@@ -102,7 +102,7 @@ jobs:
         id: check
         run: |
           echo "⚖️ Checking against thresholds..."
-          
+
           # Use project config if exists, otherwise use defaults
           if [ -f ".topology/config.toml" ]; then
             aps run topology check diff.json --config .topology/config.toml
@@ -115,10 +115,10 @@ jobs:
         if: always()
         run: |
           echo "📝 Generating PR comment..."
-          
+
           # Generate markdown comment
           aps run topology comment diff.json > comment.md
-          
+
           # Read into output (escape for GitHub)
           COMMENT=$(cat comment.md)
           echo "comment<<EOF" >> $GITHUB_OUTPUT
@@ -131,19 +131,19 @@ jobs:
         with:
           script: |
             const comment = `${{ steps.comment.outputs.comment }}`;
-            
+
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
+
             const botComment = comments.find(c => 
               c.user.type === 'Bot' && 
               c.body.includes('🔍 Topology Analysis')
             );
-            
+
             if (botComment) {
               // Update existing comment
               await github.rest.issues.updateComment({
@@ -178,4 +178,3 @@ jobs:
           echo "❌ Architecture quality gate failed!"
           echo "See PR comment for details and suggestions."
           exit 1
-
