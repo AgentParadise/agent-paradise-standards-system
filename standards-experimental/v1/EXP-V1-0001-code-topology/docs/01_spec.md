@@ -115,8 +115,10 @@ Topology artifacts MUST be stored in a `.topology/` directory with the following
 │   ├── call-graph.json        # Function call relationships
 │   ├── dependency-graph.json  # Module/file dependencies
 │   └── coupling-matrix.json   # Module coupling coefficients
-└── snapshots/                 # OPTIONAL: Historical snapshots
-    └── YYYY-MM-DD.json        # Dated full snapshot
+├── snapshots/                 # OPTIONAL: Historical snapshots
+│   └── YYYY-MM-DD.json        # Dated full snapshot
+└── diffs/                     # OPTIONAL: Comparison artifacts
+    └── <name>.json            # Diff between two snapshots
 ```
 
 ### 3.2 Manifest Schema (`manifest.toml`)
@@ -383,6 +385,79 @@ Historical snapshots enable trend analysis:
   ]
 }
 ```
+
+### 3.6 Diff Schema (`diffs/<name>.json`)
+
+Diff artifacts compare two topology snapshots for CI integration. The diff schema provides a standardized format for detecting regressions and generating PR comments.
+
+**Storage:** `.topology/diffs/<name>.json` or stdout from `aps run topology diff`
+
+```json
+{
+  "schema_version": "1.0.0",
+  "status": "warning",
+  "timestamp": "2025-12-17T12:00:00Z",
+  "base": {
+    "git_ref": "main",
+    "commit": "abc1234",
+    "path": ".topology-base/"
+  },
+  "target": {
+    "git_ref": "feat/new-feature",
+    "commit": "def5678",
+    "path": ".topology-pr/"
+  },
+  "summary": {
+    "functions_added": 3,
+    "functions_removed": 1,
+    "functions_modified": 5,
+    "modules_added": 0,
+    "modules_removed": 0,
+    "modules_modified": 2
+  },
+  "metrics": {
+    "total_cyclomatic": { "base": 142, "target": 156, "delta": 14, "percent_change": 9.86 },
+    "avg_cyclomatic": { "base": 4.2, "target": 4.8, "delta": 0.6, "percent_change": 14.29 },
+    "total_cognitive": { "base": 98, "target": 112, "delta": 14, "percent_change": 14.29 },
+    "coupling_density": { "base": 0.42, "target": 0.44, "delta": 0.02, "percent_change": 4.76 }
+  },
+  "hotspots": [
+    {
+      "id": "rust:auth::validator::validate_token",
+      "type": "INCREASED_COMPLEXITY",
+      "reason": "Cyclomatic complexity increased from 8 to 12 (+50%)",
+      "severity": 2,
+      "suggestion": "Consider extracting validation sub-functions"
+    }
+  ],
+  "violations": [
+    {
+      "threshold": "avg_cognitive_delta",
+      "value": 0.5,
+      "limit": 0.3,
+      "severity": "WARNING",
+      "message": "Average cognitive complexity increased by 17%"
+    }
+  ]
+}
+```
+
+#### 3.6.1 Status Values
+
+| Status | Exit Code | CI Action |
+|--------|-----------|-----------|
+| `success` | 0 | Merge allowed |
+| `warning` | 2 | Merge allowed with review |
+| `error` | 1 | Merge blocked |
+
+#### 3.6.2 Hotspot Types
+
+| Type | Description |
+|------|-------------|
+| `NEW_COMPLEX` | New function with high complexity |
+| `INCREASED_COMPLEXITY` | Existing function became more complex |
+| `COUPLING_INCREASE` | Module coupling increased |
+| `ZONE_OF_PAIN` | Module moved toward Zone of Pain |
 
 ---
 
