@@ -23,5 +23,8 @@ pub mod views;
 pub use diagnostics::{Diagnostic, Diagnostics, Severity};
 pub use promotion::{PromotionError, PromotionResult, promote_experiment};
 pub use templates::{ExperimentContext, StandardContext, SubstandardContext, TemplateEngine};
-pub use versioning::{BumpPart, VersionBumpResult, VersionError, bump_version, get_version};
+pub use versioning::{
+    BumpPart, VersionBumpResult, VersionError, VersionValidation, bump_version, get_version,
+    is_valid_semver, parse_semver, validate_backwards_compat, validate_version,
+};
 pub use views::{Registry, ViewsError, generate_all_views, generate_registry};

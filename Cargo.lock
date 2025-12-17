@@ -68,7 +68,10 @@ dependencies = [
  "aps-core",
  "aps-v1-0000-meta",
  "clap",
+ "code-topology-rust-adapter",
  "regex",
+ "serde",
+ "serde_json",
  "tempfile",
  "toml",
 ]
@@ -84,6 +87,15 @@ dependencies = [
  "thiserror",
  "toml",
  "walkdir",
+]
+
+[[package]]
+name = "aps-v1-0000-cli01-cli-contract"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
