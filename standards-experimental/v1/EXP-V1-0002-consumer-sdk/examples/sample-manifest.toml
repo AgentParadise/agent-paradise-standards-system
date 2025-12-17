@@ -1,0 +1,45 @@
+# Example Consumer Manifest
+# Place this at .aps/manifest.toml in your project
+
+schema = "aps.manifest/v1"
+
+[project]
+name = "example-project"
+aps_version = "v1"
+
+# Adopted Standards
+# -----------------
+# Each standard is keyed by its slug (kebab-case identifier)
+
+[standards.code-topology]
+id = "EXP-V1-0001"
+version = "0.1.0"
+source = "github:AgentParadise/agent-paradise-standards-system"
+artifacts = [".topology/"]
+
+# Substandards
+# ------------
+# Enable specific profiles for adopted standards
+
+[substandards]
+"code-topology.rust-adapter" = { enabled = true }
+"code-topology.3d-force" = { enabled = true }
+"code-topology.mermaid" = { enabled = true }
+
+# Source Overrides (Optional)
+# ---------------------------
+# For local development or when using git submodules
+
+# Uncomment to use a local submodule:
+# [sources.overrides]
+# "github:AgentParadise/agent-paradise-standards-system" = { 
+#   type = "submodule",
+#   path = "lib/aps"
+# }
+
+# Uncomment to use a local filesystem path:
+# [sources.overrides]
+# "github:AgentParadise/agent-paradise-standards-system" = { 
+#   type = "local",
+#   path = "/path/to/agent-paradise-standards-system"
+# }

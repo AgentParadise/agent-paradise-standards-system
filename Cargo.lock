@@ -330,6 +330,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "exp-v1-0002-consumer-sdk"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "tempfile",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
