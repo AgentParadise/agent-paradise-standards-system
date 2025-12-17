@@ -1,0 +1,153 @@
+# Publish individual standards as package tarballs on release
+#
+# When a release is published, this workflow:
+# 1. Packages each standard into a tarball (aps-<slug>-<version>.tar.gz)
+# 2. Generates SHA-256 checksums for each package
+# 3. Creates a registry.json listing all available standards
+# 4. Uploads all artifacts to the GitHub release
+
+name: Publish Standards
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Package standards
+        run: |
+          mkdir -p dist
+          
+          # Package official standards
+          for dir in standards/v1/*/; do
+            if [ -d "$dir" ]; then
+              dirname=$(basename "$dir")
+              # Extract slug from directory name (e.g., APS-V1-0000-meta -> meta)
+              slug=$(echo "$dirname" | sed 's/^APS-V[0-9]*-[0-9]*-//')
+              
+              # Get version from standard.toml
+              version=$(grep -m1 'version' "$dir/standard.toml" 2>/dev/null | head -1 | cut -d'"' -f2 || echo "0.1.0")
+              
+              tarball="aps-${slug}-${version}.tar.gz"
+              echo "Packaging $dirname as $tarball"
+              
+              tar -czf "dist/$tarball" -C "$dir" .
+              
+              # Generate checksum
+              (cd dist && sha256sum "$tarball" > "${tarball}.sha256")
+            fi
+          done
+          
+          # Package experimental standards
+          for dir in standards-experimental/v1/*/; do
+            if [ -d "$dir" ]; then
+              dirname=$(basename "$dir")
+              # Extract slug from directory name (e.g., EXP-V1-0001-code-topology -> code-topology)
+              slug=$(echo "$dirname" | sed 's/^EXP-V[0-9]*-[0-9]*-//')
+              
+              # Get version from experiment.toml
+              version=$(grep -m1 'version' "$dir/experiment.toml" 2>/dev/null | head -1 | cut -d'"' -f2 || echo "0.1.0")
+              
+              tarball="aps-${slug}-${version}.tar.gz"
+              echo "Packaging $dirname as $tarball"
+              
+              tar -czf "dist/$tarball" -C "$dir" .
+              
+              # Generate checksum
+              (cd dist && sha256sum "$tarball" > "${tarball}.sha256")
+            fi
+          done
+          
+          ls -la dist/
+      
+      - name: Generate registry
+        run: |
+          cat > dist/registry.json << 'SCRIPT'
+          {
+            "schema_version": "aps.registry/v1",
+            "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "standards": []
+          }
+          SCRIPT
+          
+          # Build registry entries for each package
+          python3 << 'EOF'
+          import json
+          import os
+          import glob
+          from datetime import datetime
+          
+          registry = {
+              "schema_version": "aps.registry/v1",
+              "published_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "standards": []
+          }
+          
+          seen_slugs = {}
+          
+          for tarball in glob.glob("dist/*.tar.gz"):
+              if tarball.endswith(".sha256"):
+                  continue
+                  
+              filename = os.path.basename(tarball)
+              # Parse: aps-<slug>-<version>.tar.gz
+              parts = filename.replace("aps-", "").replace(".tar.gz", "").rsplit("-", 1)
+              if len(parts) != 2:
+                  continue
+                  
+              slug, version = parts
+              size = os.path.getsize(tarball)
+              
+              # Read checksum
+              checksum = ""
+              checksum_file = tarball + ".sha256"
+              if os.path.exists(checksum_file):
+                  with open(checksum_file) as f:
+                      checksum = "sha256:" + f.read().split()[0]
+              
+              version_entry = {
+                  "version": version,
+                  "asset": filename,
+                  "checksum": checksum,
+                  "size_bytes": size,
+                  "published_at": registry["published_at"]
+              }
+              
+              if slug not in seen_slugs:
+                  seen_slugs[slug] = {
+                      "slug": slug,
+                      "id": f"APS-V1-{slug}" if not slug.startswith("exp-") else f"EXP-V1-{slug}",
+                      "name": slug.replace("-", " ").title(),
+                      "versions": [version_entry],
+                      "latest": version
+                  }
+              else:
+                  seen_slugs[slug]["versions"].append(version_entry)
+                  # Update latest if newer
+                  if version > seen_slugs[slug]["latest"]:
+                      seen_slugs[slug]["latest"] = version
+          
+          registry["standards"] = list(seen_slugs.values())
+          
+          with open("dist/registry.json", "w") as f:
+              json.dump(registry, f, indent=2)
+          
+          print(f"Generated registry with {len(registry['standards'])} standards")
+          EOF
+          
+          cat dist/registry.json
+      
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+            dist/registry.json

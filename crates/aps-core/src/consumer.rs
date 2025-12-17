@@ -240,6 +240,83 @@ pub fn parse_checksum_file(content: &str) -> Option<String> {
         .map(|hex| format!("sha256:{hex}"))
 }
 
+// ============================================================================
+// Package Validation
+// ============================================================================
+
+/// Validate that an extracted package has the required structure.
+///
+/// A valid APS package must have:
+/// - A metadata file (standard.toml, experiment.toml, or substandard.toml)
+/// - A docs/ directory
+/// - An agents/skills/ directory (for skill discovery)
+pub fn validate_package_structure(pkg_path: &Path) -> ConsumerResult<PackageValidation> {
+    let mut validation = PackageValidation {
+        has_metadata: false,
+        has_docs: false,
+        has_skills: false,
+        metadata_type: None,
+        errors: Vec::new(),
+    };
+
+    // Check for metadata file
+    if pkg_path.join("standard.toml").exists() {
+        validation.has_metadata = true;
+        validation.metadata_type = Some("standard".to_string());
+    } else if pkg_path.join("experiment.toml").exists() {
+        validation.has_metadata = true;
+        validation.metadata_type = Some("experiment".to_string());
+    } else if pkg_path.join("substandard.toml").exists() {
+        validation.has_metadata = true;
+        validation.metadata_type = Some("substandard".to_string());
+    } else {
+        validation.errors.push(
+            "Missing metadata file (standard.toml, experiment.toml, or substandard.toml)"
+                .to_string(),
+        );
+    }
+
+    // Check for docs directory
+    let docs_dir = pkg_path.join("docs");
+    if docs_dir.exists() && docs_dir.is_dir() {
+        validation.has_docs = true;
+    } else {
+        validation
+            .errors
+            .push("Missing docs/ directory".to_string());
+    }
+
+    // Check for skills directory (optional but recommended)
+    let skills_dir = pkg_path.join("agents/skills");
+    if skills_dir.exists() && skills_dir.is_dir() {
+        validation.has_skills = true;
+    }
+
+    Ok(validation)
+}
+
+/// Result of package structure validation.
+#[derive(Debug, Clone)]
+pub struct PackageValidation {
+    /// Whether a metadata file was found.
+    pub has_metadata: bool,
+    /// Whether a docs/ directory exists.
+    pub has_docs: bool,
+    /// Whether an agents/skills/ directory exists.
+    pub has_skills: bool,
+    /// Type of metadata file found ("standard", "experiment", "substandard").
+    pub metadata_type: Option<String>,
+    /// List of validation errors.
+    pub errors: Vec<String>,
+}
+
+impl PackageValidation {
+    /// Check if the package passed basic validation.
+    pub fn is_valid(&self) -> bool {
+        self.has_metadata && self.has_docs
+    }
+}
+
 /// Load a consumer manifest from `.aps/manifest.toml`.
 ///
 /// # Arguments
@@ -757,5 +834,50 @@ mod tests {
             checksum,
             "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
         );
+    }
+
+    #[test]
+    fn test_validate_package_structure_valid() {
+        let temp_dir = TempDir::new().unwrap();
+        let pkg = temp_dir.path();
+
+        // Create required structure
+        std::fs::write(pkg.join("experiment.toml"), "# metadata").unwrap();
+        std::fs::create_dir_all(pkg.join("docs")).unwrap();
+        std::fs::create_dir_all(pkg.join("agents/skills")).unwrap();
+
+        let validation = validate_package_structure(pkg).unwrap();
+        assert!(validation.is_valid());
+        assert!(validation.has_metadata);
+        assert!(validation.has_docs);
+        assert!(validation.has_skills);
+        assert_eq!(validation.metadata_type, Some("experiment".to_string()));
+        assert!(validation.errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_package_structure_missing_metadata() {
+        let temp_dir = TempDir::new().unwrap();
+        let pkg = temp_dir.path();
+
+        std::fs::create_dir_all(pkg.join("docs")).unwrap();
+
+        let validation = validate_package_structure(pkg).unwrap();
+        assert!(!validation.is_valid());
+        assert!(!validation.has_metadata);
+        assert!(!validation.errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_package_structure_missing_docs() {
+        let temp_dir = TempDir::new().unwrap();
+        let pkg = temp_dir.path();
+
+        std::fs::write(pkg.join("standard.toml"), "# metadata").unwrap();
+
+        let validation = validate_package_structure(pkg).unwrap();
+        assert!(!validation.is_valid());
+        assert!(validation.has_metadata);
+        assert!(!validation.has_docs);
     }
 }
