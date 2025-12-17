@@ -10,6 +10,12 @@ use std::path::PathBuf;
 /// Consumer manifest schema version.
 pub const MANIFEST_SCHEMA: &str = "aps.manifest/v1";
 
+/// Lock file schema version.
+pub const LOCK_SCHEMA: &str = "aps.lock/v1";
+
+/// Registry schema version.
+pub const REGISTRY_SCHEMA: &str = "aps.registry/v1";
+
 /// Root manifest structure (`.aps/manifest.toml`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsumerManifest {
@@ -91,6 +97,150 @@ pub enum SourceOverride {
 fn default_true() -> bool {
     true
 }
+
+// ============================================================================
+// Lock File Types
+// ============================================================================
+
+/// Lock file for pinned package versions (`.aps/manifest.lock`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestLock {
+    /// Schema identifier (must be "aps.lock/v1").
+    pub schema: String,
+    /// ISO8601 timestamp of generation.
+    pub generated_at: String,
+    /// Locked packages.
+    #[serde(rename = "package", default)]
+    pub packages: Vec<LockedPackage>,
+}
+
+/// A locked package entry with pinned version and checksum.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LockedPackage {
+    /// Package slug (e.g., "code-topology").
+    pub slug: String,
+    /// Full standard ID (e.g., "EXP-V1-0001").
+    pub id: String,
+    /// Pinned version.
+    pub version: String,
+    /// Source URI.
+    pub source: String,
+    /// SHA-256 checksum of the package tarball.
+    pub checksum: String,
+    /// Resolved download URL.
+    pub resolved_url: String,
+}
+
+impl ManifestLock {
+    /// Create a new empty lock file.
+    pub fn new() -> Self {
+        Self {
+            schema: LOCK_SCHEMA.to_string(),
+            generated_at: chrono_lite_now(),
+            packages: Vec::new(),
+        }
+    }
+
+    /// Find a locked package by slug.
+    pub fn find_package(&self, slug: &str) -> Option<&LockedPackage> {
+        self.packages.iter().find(|p| p.slug == slug)
+    }
+
+    /// Add or update a package in the lock file.
+    pub fn upsert_package(&mut self, package: LockedPackage) {
+        if let Some(existing) = self.packages.iter_mut().find(|p| p.slug == package.slug) {
+            *existing = package;
+        } else {
+            self.packages.push(package);
+        }
+        self.generated_at = chrono_lite_now();
+    }
+}
+
+impl Default for ManifestLock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Registry Types (for GitHub releases)
+// ============================================================================
+
+/// Package registry published with GitHub releases.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PackageRegistry {
+    /// Schema version.
+    pub schema_version: String,
+    /// ISO8601 timestamp of publication.
+    pub published_at: String,
+    /// Available standards.
+    pub standards: Vec<RegistryStandard>,
+}
+
+/// A standard entry in the registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryStandard {
+    /// Package slug.
+    pub slug: String,
+    /// Full standard ID.
+    pub id: String,
+    /// Human-readable name.
+    pub name: String,
+    /// Available versions.
+    pub versions: Vec<RegistryVersion>,
+    /// Latest version.
+    pub latest: String,
+}
+
+/// A version entry in the registry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryVersion {
+    /// Version string.
+    pub version: String,
+    /// Asset filename.
+    pub asset: String,
+    /// SHA-256 checksum.
+    pub checksum: String,
+    /// Size in bytes.
+    pub size_bytes: u64,
+    /// ISO8601 timestamp of publication.
+    pub published_at: String,
+}
+
+impl PackageRegistry {
+    /// Create a new empty registry.
+    pub fn new() -> Self {
+        Self {
+            schema_version: REGISTRY_SCHEMA.to_string(),
+            published_at: chrono_lite_now(),
+            standards: Vec::new(),
+        }
+    }
+
+    /// Find a standard by slug.
+    pub fn find_standard(&self, slug: &str) -> Option<&RegistryStandard> {
+        self.standards.iter().find(|s| s.slug == slug)
+    }
+
+    /// Find a specific version of a standard.
+    pub fn find_version(&self, slug: &str, version: &str) -> Option<&RegistryVersion> {
+        self.find_standard(slug)?
+            .versions
+            .iter()
+            .find(|v| v.version == version)
+    }
+}
+
+impl Default for PackageRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// Agent Index Types
+// ============================================================================
 
 /// Auto-generated index for agent consumption (`.aps/index.json`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -335,5 +485,84 @@ source = "github:AgentParadise/agent-paradise-standards-system"
         assert_eq!(days_to_ymd(10957), (2000, 1, 1));
         // 2025-12-16 = 20438 days since epoch
         assert_eq!(days_to_ymd(20438), (2025, 12, 16));
+    }
+
+    #[test]
+    fn test_manifest_lock_creation() {
+        let lock = ManifestLock::new();
+        assert_eq!(lock.schema, LOCK_SCHEMA);
+        assert!(lock.packages.is_empty());
+    }
+
+    #[test]
+    fn test_manifest_lock_upsert() {
+        let mut lock = ManifestLock::new();
+
+        let pkg = LockedPackage {
+            slug: "code-topology".to_string(),
+            id: "EXP-V1-0001".to_string(),
+            version: "0.1.0".to_string(),
+            source: "github:AgentParadise/aps".to_string(),
+            checksum: "sha256:abc123".to_string(),
+            resolved_url: "https://example.com/pkg.tar.gz".to_string(),
+        };
+
+        lock.upsert_package(pkg.clone());
+        assert_eq!(lock.packages.len(), 1);
+        assert_eq!(lock.find_package("code-topology").unwrap().version, "0.1.0");
+
+        // Update version
+        let mut updated = pkg;
+        updated.version = "0.2.0".to_string();
+        lock.upsert_package(updated);
+        assert_eq!(lock.packages.len(), 1);
+        assert_eq!(lock.find_package("code-topology").unwrap().version, "0.2.0");
+    }
+
+    #[test]
+    fn test_parse_manifest_lock() {
+        let toml_str = r#"
+schema = "aps.lock/v1"
+generated_at = "2025-12-17T00:00:00Z"
+
+[[package]]
+slug = "code-topology"
+id = "EXP-V1-0001"
+version = "0.1.0"
+source = "github:AgentParadise/aps"
+checksum = "sha256:abc123def456"
+resolved_url = "https://github.com/.../aps-code-topology-0.1.0.tar.gz"
+"#;
+
+        let lock: ManifestLock = toml::from_str(toml_str).unwrap();
+        assert_eq!(lock.schema, LOCK_SCHEMA);
+        assert_eq!(lock.packages.len(), 1);
+
+        let pkg = &lock.packages[0];
+        assert_eq!(pkg.slug, "code-topology");
+        assert_eq!(pkg.checksum, "sha256:abc123def456");
+    }
+
+    #[test]
+    fn test_package_registry() {
+        let mut registry = PackageRegistry::new();
+        registry.standards.push(RegistryStandard {
+            slug: "code-topology".to_string(),
+            id: "EXP-V1-0001".to_string(),
+            name: "Code Topology".to_string(),
+            versions: vec![RegistryVersion {
+                version: "0.1.0".to_string(),
+                asset: "aps-code-topology-0.1.0.tar.gz".to_string(),
+                checksum: "sha256:abc123".to_string(),
+                size_bytes: 45678,
+                published_at: "2025-12-15T00:00:00Z".to_string(),
+            }],
+            latest: "0.1.0".to_string(),
+        });
+
+        assert!(registry.find_standard("code-topology").is_some());
+        assert!(registry.find_standard("unknown").is_none());
+        assert!(registry.find_version("code-topology", "0.1.0").is_some());
+        assert!(registry.find_version("code-topology", "0.2.0").is_none());
     }
 }

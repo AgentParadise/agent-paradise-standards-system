@@ -25,13 +25,15 @@ pub mod versioning;
 pub mod views;
 
 pub use consumer::{
-    ConsumerError, ConsumerResult, ResolvedSource, generate_index, init_manifest, load_manifest,
-    resolve_source, write_index,
+    ConsumerError, ConsumerResult, ResolvedSource, cache_dir, generate_index, github_release_url,
+    init_manifest, is_package_cached, load_lock, load_manifest, load_or_create_lock, lock_package,
+    package_cache_path, resolve_source, write_index, write_lock,
 };
 pub use diagnostics::{Diagnostic, Diagnostics, Severity};
 pub use manifest::{
-    AgentIndex, ConsumerManifest, IndexedStandard, IndexedSubstandard, MANIFEST_SCHEMA,
-    ProjectInfo, SourceConfig, SourceOverride, StandardRef, SubstandardConfig,
+    AgentIndex, ConsumerManifest, IndexedStandard, IndexedSubstandard, LOCK_SCHEMA, LockedPackage,
+    MANIFEST_SCHEMA, ManifestLock, PackageRegistry, ProjectInfo, REGISTRY_SCHEMA, RegistryStandard,
+    RegistryVersion, SourceConfig, SourceOverride, StandardRef, SubstandardConfig,
 };
 pub use promotion::{PromotionError, PromotionResult, promote_experiment};
 pub use templates::{ExperimentContext, StandardContext, SubstandardContext, TemplateEngine};
