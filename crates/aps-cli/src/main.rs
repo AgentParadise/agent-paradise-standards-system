@@ -5,6 +5,11 @@
 //! # Usage
 //!
 //! ```bash
+//! # Run a standard's CLI
+//! aps run topology analyze .
+//! aps run topology validate .topology/
+//! aps run --list
+//!
 //! # Validate the entire V1 repo structure
 //! aps v1 validate repo
 //!
@@ -61,7 +66,22 @@ enum OutputFormat {
 
 #[derive(clap::Subcommand)]
 enum Commands {
-    /// V1 standards operations
+    /// Run a standard's CLI commands
+    Run {
+        /// Standard slug or ID (e.g., "topology", "EXP-V1-0001")
+        #[arg(required_unless_present = "list")]
+        standard: Option<String>,
+
+        /// Command and arguments for the standard
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+
+        /// List available standards
+        #[arg(long)]
+        list: bool,
+    },
+
+    /// V1 standards operations (authoring)
     V1 {
         #[command(subcommand)]
         command: V1Commands,
@@ -190,6 +210,41 @@ fn main() -> ExitCode {
     });
 
     match cli.command {
+        Commands::Run {
+            standard,
+            args,
+            list,
+        } => {
+            if list {
+                // List available standards
+                println!("Available Standards:\n");
+                println!("  topology (EXP-V1-0001) v0.1.0");
+                println!("    Code Topology - architectural metrics and visualization");
+                println!("    Commands: analyze, validate, diff, report");
+                println!();
+                println!("Use 'aps run <slug> --help' for command details.");
+                return ExitCode::SUCCESS;
+            }
+
+            let slug = standard.unwrap_or_default();
+            if slug.is_empty() {
+                eprintln!(
+                    "Error: Standard slug required. Use 'aps run --list' to see available standards."
+                );
+                return ExitCode::FAILURE;
+            }
+
+            // Dispatch to standard CLI
+            match resolve_standard(&slug) {
+                Some(info) => dispatch_standard_cli(&info, &args, &repo_root, cli.verbose),
+                None => {
+                    eprintln!("Error: Unknown standard '{slug}'");
+                    eprintln!("Use 'aps run --list' to see available standards.");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+
         Commands::V1 { command } => match command {
             V1Commands::Validate { target } => {
                 let meta = MetaStandard::new();
@@ -596,4 +651,303 @@ fn allocate_next_experiment_id(repo_root: &std::path::Path) -> String {
         .unwrap_or(0);
 
     format!("EXP-V1-{:04}", max_id + 1)
+}
+
+// ============================================================================
+// Standard CLI Dispatch
+// ============================================================================
+
+/// Information about a registered standard.
+#[allow(dead_code)]
+struct StandardCliInfo {
+    id: &'static str,
+    slug: &'static str,
+    name: &'static str,
+    version: &'static str,
+}
+
+/// Resolve a slug to standard info.
+fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
+    match slug.to_lowercase().as_str() {
+        "topology" | "topo" | "code-topology" | "exp-v1-0001" => Some(StandardCliInfo {
+            id: "EXP-V1-0001",
+            slug: "topology",
+            name: "Code Topology",
+            version: "0.1.0",
+        }),
+        _ => None,
+    }
+}
+
+/// Dispatch to a standard's CLI.
+fn dispatch_standard_cli(
+    info: &StandardCliInfo,
+    args: &[String],
+    repo_root: &std::path::Path,
+    verbose: bool,
+) -> ExitCode {
+    let command = args.first().map(|s| s.as_str()).unwrap_or("--help");
+    let cmd_args = if args.len() > 1 { &args[1..] } else { &[] };
+
+    match info.slug {
+        "topology" => dispatch_topology(command, cmd_args, repo_root, verbose),
+        _ => {
+            eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Dispatch topology commands.
+fn dispatch_topology(
+    command: &str,
+    args: &[String],
+    repo_root: &std::path::Path,
+    verbose: bool,
+) -> ExitCode {
+    match command {
+        "--help" | "-h" | "help" => {
+            println!("Code Topology (EXP-V1-0001) v0.1.0");
+            println!();
+            println!("USAGE:");
+            println!("    aps run topology <COMMAND> [OPTIONS]");
+            println!();
+            println!("COMMANDS:");
+            println!("    analyze <path>     Analyze codebase and generate .topology/");
+            println!("    validate <path>    Validate existing .topology/ artifacts");
+            println!("    diff <a> <b>       Compare two topology snapshots");
+            println!("    report <path>      Generate human-readable report");
+            println!();
+            println!("OPTIONS:");
+            println!("    --output <dir>     Output directory (default: .topology)");
+            println!("    --format <fmt>     Output format: json, text (default: text)");
+            println!("    --help             Show this help message");
+            ExitCode::SUCCESS
+        }
+        "analyze" => {
+            let path = args.first().map(|s| s.as_str()).unwrap_or(".");
+            let output = args
+                .iter()
+                .position(|a| a == "--output")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| s.as_str())
+                .unwrap_or(".topology");
+
+            topology_analyze(path, output, repo_root, verbose)
+        }
+        "validate" => {
+            let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
+            topology_validate(path, verbose)
+        }
+        "diff" => {
+            if args.len() < 2 {
+                eprintln!("Error: diff requires two paths");
+                eprintln!("Usage: aps run topology diff <base> <target>");
+                return ExitCode::FAILURE;
+            }
+            topology_diff(&args[0], &args[1], verbose)
+        }
+        "report" => {
+            let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
+            topology_report(path, verbose)
+        }
+        _ => {
+            eprintln!("Error: Unknown topology command '{command}'");
+            eprintln!("Use 'aps run topology --help' for available commands.");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Analyze a codebase and generate .topology/ artifacts.
+fn topology_analyze(
+    path: &str,
+    output: &str,
+    _repo_root: &std::path::Path,
+    verbose: bool,
+) -> ExitCode {
+    use code_topology_rust_adapter::RustAdapter;
+    use std::path::Path;
+
+    let project_path = Path::new(path);
+    let output_path = Path::new(output);
+
+    if verbose {
+        println!("Analyzing: {}", project_path.display());
+        println!("Output:    {}", output_path.display());
+    }
+
+    let adapter = RustAdapter::new();
+
+    match adapter.analyze(project_path) {
+        Ok(result) => {
+            println!(
+                "✓ Analyzed {} functions in {} modules",
+                result.functions.len(),
+                result.modules.len()
+            );
+
+            match result.write_artifacts(output_path) {
+                Ok(()) => {
+                    println!("✓ Wrote artifacts to {}", output_path.display());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Error writing artifacts: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Error analyzing project: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Validate existing .topology/ artifacts.
+fn topology_validate(path: &str, _verbose: bool) -> ExitCode {
+    use std::path::Path;
+
+    let topology_path = Path::new(path);
+
+    // Check required files exist
+    let required = [
+        "manifest.toml",
+        "metrics/functions.json",
+        "metrics/modules.json",
+        "graphs/coupling-matrix.json",
+    ];
+
+    let mut errors = 0;
+    for file in required {
+        let file_path = topology_path.join(file);
+        if file_path.exists() {
+            println!("✓ {file}");
+        } else {
+            println!("✗ {file} (missing)");
+            errors += 1;
+        }
+    }
+
+    if errors > 0 {
+        println!();
+        println!("{errors} error(s) found. Run 'aps run topology analyze' to generate artifacts.");
+        ExitCode::FAILURE
+    } else {
+        println!();
+        println!("✓ All required artifacts present");
+        ExitCode::SUCCESS
+    }
+}
+
+/// Compare two topology snapshots.
+fn topology_diff(base: &str, target: &str, _verbose: bool) -> ExitCode {
+    use std::path::Path;
+
+    let base_path = Path::new(base);
+    let target_path = Path::new(target);
+
+    // Check both paths exist
+    if !base_path.exists() {
+        eprintln!("Error: Base path does not exist: {base}");
+        return ExitCode::FAILURE;
+    }
+    if !target_path.exists() {
+        eprintln!("Error: Target path does not exist: {target}");
+        return ExitCode::FAILURE;
+    }
+
+    // Load and compare function counts (simplified diff)
+    let base_funcs = base_path.join("metrics/functions.json");
+    let target_funcs = target_path.join("metrics/functions.json");
+
+    let base_count = count_functions(&base_funcs);
+    let target_count = count_functions(&target_funcs);
+
+    println!("Topology Diff: {base} → {target}");
+    println!();
+    println!(
+        "  Functions: {} → {} ({:+})",
+        base_count,
+        target_count,
+        target_count as i64 - base_count as i64
+    );
+
+    // TODO: Add detailed metric comparison
+
+    if target_count >= base_count {
+        println!();
+        println!("✓ No degradation detected");
+        ExitCode::SUCCESS
+    } else {
+        println!();
+        println!("⚠ Complexity reduced (review recommended)");
+        ExitCode::from(2) // Warning exit code
+    }
+}
+
+/// Count functions in a functions.json file.
+fn count_functions(path: &std::path::Path) -> usize {
+    if let Ok(content) = std::fs::read_to_string(path) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(funcs) = json.get("functions").and_then(|f| f.as_array()) {
+                return funcs.len();
+            }
+        }
+    }
+    0
+}
+
+/// Generate a human-readable topology report.
+fn topology_report(path: &str, _verbose: bool) -> ExitCode {
+    use std::path::Path;
+
+    let topology_path = Path::new(path);
+    let modules_path = topology_path.join("metrics/modules.json");
+
+    if !modules_path.exists() {
+        eprintln!("Error: No topology artifacts found at {path}");
+        eprintln!("Run 'aps run topology analyze' first.");
+        return ExitCode::FAILURE;
+    }
+
+    // Load modules and generate report
+    if let Ok(content) = std::fs::read_to_string(&modules_path) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(modules) = json.get("modules").and_then(|m| m.as_array()) {
+                println!("# Code Topology Report");
+                println!();
+                println!("## Modules ({})", modules.len());
+                println!();
+                println!("| Module | Functions | Avg CC | Instability |");
+                println!("|--------|-----------|--------|-------------|");
+
+                for module in modules {
+                    let id = module.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+                    let metrics = module.get("metrics");
+                    let func_count = metrics
+                        .and_then(|m| m.get("function_count"))
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    let avg_cc = metrics
+                        .and_then(|m| m.get("avg_cyclomatic"))
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
+                    let instability = metrics
+                        .and_then(|m| m.get("martin"))
+                        .and_then(|m| m.get("instability"))
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
+
+                    println!("| {id} | {func_count} | {avg_cc:.1} | {instability:.2} |");
+                }
+
+                return ExitCode::SUCCESS;
+            }
+        }
+    }
+
+    eprintln!("Error: Could not parse modules.json");
+    ExitCode::FAILURE
 }

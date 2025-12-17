@@ -68,7 +68,9 @@ dependencies = [
  "aps-core",
  "aps-v1-0000-meta",
  "clap",
+ "code-topology-rust-adapter",
  "regex",
+ "serde_json",
  "tempfile",
  "toml",
 ]
