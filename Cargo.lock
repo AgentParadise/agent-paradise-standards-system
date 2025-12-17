@@ -87,6 +87,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aps-v1-0000-cli01-cli-contract"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "aps-v1-0000-meta"
 version = "1.0.0"
 dependencies = [
