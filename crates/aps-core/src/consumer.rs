@@ -1,0 +1,883 @@
+//! Consumer-side functionality for adopting APS standards.
+//!
+//! Provides operations for loading manifests, resolving sources,
+//! generating the agent index, and managing the package cache.
+
+use crate::manifest::{
+    AgentIndex, ConsumerManifest, IndexedStandard, LOCK_SCHEMA, LockedPackage, ManifestLock,
+    SourceOverride,
+};
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+
+/// Errors that can occur during consumer operations.
+#[derive(Debug, Error)]
+pub enum ConsumerError {
+    /// IO error reading or writing files.
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// TOML parsing error.
+    #[error("TOML parse error: {0}")]
+    TomlParse(#[from] toml::de::Error),
+
+    /// TOML serialization error.
+    #[error("TOML serialize error: {0}")]
+    TomlSerialize(#[from] toml::ser::Error),
+
+    /// JSON serialization error.
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    /// Manifest not found at expected location.
+    #[error("Manifest not found at {0}. Run 'aps init' first.")]
+    ManifestNotFound(PathBuf),
+
+    /// Lock file not found.
+    #[error("Lock file not found at {0}. Run 'aps sync' first.")]
+    LockNotFound(PathBuf),
+
+    /// Invalid manifest schema.
+    #[error("Invalid manifest schema: expected '{expected}', found '{found}'")]
+    InvalidSchema { expected: String, found: String },
+
+    /// Standard not found in registry.
+    #[error("Standard '{0}' not found")]
+    StandardNotFound(String),
+
+    /// Source resolution failed.
+    #[error("Failed to resolve source '{0}': {1}")]
+    SourceResolution(String, String),
+
+    /// Checksum verification failed.
+    #[error("Checksum mismatch for {package}: expected {expected}, got {actual}")]
+    ChecksumMismatch {
+        package: String,
+        expected: String,
+        actual: String,
+    },
+
+    /// Package not in lock file.
+    #[error("Package '{0}' not found in lock file. Run 'aps sync' to update.")]
+    PackageNotLocked(String),
+}
+
+/// Result type for consumer operations.
+pub type ConsumerResult<T> = Result<T, ConsumerError>;
+
+/// Resolved source location for a standard.
+#[derive(Debug, Clone)]
+pub enum ResolvedSource {
+    /// Local filesystem path (submodule or local override).
+    Local(PathBuf),
+    /// Remote source (GitHub releases or URL).
+    Remote(Option<String>),
+}
+
+// ============================================================================
+// Cache Directory
+// ============================================================================
+
+/// Get the system cache directory for APS packages.
+///
+/// Returns `$APS_CACHE_DIR` if set, otherwise `~/.aps/cache/`.
+pub fn cache_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("APS_CACHE_DIR") {
+        PathBuf::from(dir)
+    } else if let Some(home) = home_dir() {
+        home.join(".aps/cache")
+    } else {
+        PathBuf::from(".aps/cache")
+    }
+}
+
+/// Get the user's home directory.
+fn home_dir() -> Option<PathBuf> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+        .map(PathBuf::from)
+}
+
+/// Get the cache path for a specific package version.
+pub fn package_cache_path(slug: &str, version: &str) -> PathBuf {
+    cache_dir().join(slug).join(version)
+}
+
+/// Check if a package is cached and verified.
+pub fn is_package_cached(slug: &str, version: &str) -> bool {
+    let cache_path = package_cache_path(slug, version);
+    cache_path.join("extracted").exists()
+}
+
+// ============================================================================
+// Lock File Operations
+// ============================================================================
+
+/// Load the lock file from `.aps/manifest.lock`.
+pub fn load_lock(repo_root: &Path) -> ConsumerResult<ManifestLock> {
+    let lock_path = repo_root.join(".aps/manifest.lock");
+
+    if !lock_path.exists() {
+        return Err(ConsumerError::LockNotFound(lock_path));
+    }
+
+    let content = std::fs::read_to_string(&lock_path)?;
+    let lock: ManifestLock = toml::from_str(&content)?;
+
+    // Validate schema
+    if lock.schema != LOCK_SCHEMA {
+        return Err(ConsumerError::InvalidSchema {
+            expected: LOCK_SCHEMA.to_string(),
+            found: lock.schema.clone(),
+        });
+    }
+
+    Ok(lock)
+}
+
+/// Load the lock file if it exists, otherwise return a new empty one.
+pub fn load_or_create_lock(repo_root: &Path) -> ConsumerResult<ManifestLock> {
+    match load_lock(repo_root) {
+        Ok(lock) => Ok(lock),
+        Err(ConsumerError::LockNotFound(_)) => Ok(ManifestLock::new()),
+        Err(e) => Err(e),
+    }
+}
+
+/// Write the lock file to `.aps/manifest.lock`.
+pub fn write_lock(repo_root: &Path, lock: &ManifestLock) -> ConsumerResult<PathBuf> {
+    let aps_dir = repo_root.join(".aps");
+    std::fs::create_dir_all(&aps_dir)?;
+
+    let lock_path = aps_dir.join("manifest.lock");
+    let content = toml::to_string_pretty(lock)?;
+
+    // Add header comment
+    let with_header = format!(
+        "# Auto-generated by APS. Do not edit.\n# Run 'aps sync' to regenerate.\n\n{content}"
+    );
+
+    std::fs::write(&lock_path, with_header)?;
+    Ok(lock_path)
+}
+
+/// Generate a locked package entry from a standard reference.
+pub fn lock_package(
+    slug: &str,
+    id: &str,
+    version: &str,
+    source: &str,
+    checksum: &str,
+    resolved_url: &str,
+) -> LockedPackage {
+    LockedPackage {
+        slug: slug.to_string(),
+        id: id.to_string(),
+        version: version.to_string(),
+        source: source.to_string(),
+        checksum: checksum.to_string(),
+        resolved_url: resolved_url.to_string(),
+    }
+}
+
+/// Build a GitHub release URL for a package.
+pub fn github_release_url(org: &str, repo: &str, slug: &str, version: &str) -> String {
+    format!(
+        "https://github.com/{org}/{repo}/releases/download/v{version}/aps-{slug}-{version}.tar.gz"
+    )
+}
+
+// ============================================================================
+// Checksum Verification
+// ============================================================================
+
+use sha2::{Digest, Sha256};
+
+/// Compute SHA-256 checksum of a file.
+///
+/// Returns the checksum as a hex string prefixed with "sha256:".
+pub fn compute_checksum(path: &Path) -> ConsumerResult<String> {
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher)?;
+    let hash = hasher.finalize();
+    Ok(format!("sha256:{hash:x}"))
+}
+
+/// Compute SHA-256 checksum of bytes.
+///
+/// Returns the checksum as a hex string prefixed with "sha256:".
+pub fn compute_checksum_bytes(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let hash = hasher.finalize();
+    format!("sha256:{hash:x}")
+}
+
+/// Verify a file's checksum against an expected value.
+///
+/// Returns Ok(()) if checksums match, Err if they don't.
+pub fn verify_checksum(path: &Path, expected: &str, slug: &str) -> ConsumerResult<()> {
+    let actual = compute_checksum(path)?;
+    if actual != expected {
+        return Err(ConsumerError::ChecksumMismatch {
+            package: slug.to_string(),
+            expected: expected.to_string(),
+            actual,
+        });
+    }
+    Ok(())
+}
+
+/// Parse a checksum sidecar file (format: "checksum  filename").
+pub fn parse_checksum_file(content: &str) -> Option<String> {
+    // Format: "abc123def456  filename.tar.gz"
+    content
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().next())
+        .map(|hex| format!("sha256:{hex}"))
+}
+
+// ============================================================================
+// Package Validation
+// ============================================================================
+
+/// Validate that an extracted package has the required structure.
+///
+/// A valid APS package must have:
+/// - A metadata file (standard.toml, experiment.toml, or substandard.toml)
+/// - A docs/ directory
+/// - An agents/skills/ directory (for skill discovery)
+pub fn validate_package_structure(pkg_path: &Path) -> ConsumerResult<PackageValidation> {
+    let mut validation = PackageValidation {
+        has_metadata: false,
+        has_docs: false,
+        has_skills: false,
+        metadata_type: None,
+        errors: Vec::new(),
+    };
+
+    // Check for metadata file
+    if pkg_path.join("standard.toml").exists() {
+        validation.has_metadata = true;
+        validation.metadata_type = Some("standard".to_string());
+    } else if pkg_path.join("experiment.toml").exists() {
+        validation.has_metadata = true;
+        validation.metadata_type = Some("experiment".to_string());
+    } else if pkg_path.join("substandard.toml").exists() {
+        validation.has_metadata = true;
+        validation.metadata_type = Some("substandard".to_string());
+    } else {
+        validation.errors.push(
+            "Missing metadata file (standard.toml, experiment.toml, or substandard.toml)"
+                .to_string(),
+        );
+    }
+
+    // Check for docs directory
+    let docs_dir = pkg_path.join("docs");
+    if docs_dir.exists() && docs_dir.is_dir() {
+        validation.has_docs = true;
+    } else {
+        validation
+            .errors
+            .push("Missing docs/ directory".to_string());
+    }
+
+    // Check for skills directory (optional but recommended)
+    let skills_dir = pkg_path.join("agents/skills");
+    if skills_dir.exists() && skills_dir.is_dir() {
+        validation.has_skills = true;
+    }
+
+    Ok(validation)
+}
+
+/// Result of package structure validation.
+#[derive(Debug, Clone)]
+pub struct PackageValidation {
+    /// Whether a metadata file was found.
+    pub has_metadata: bool,
+    /// Whether a docs/ directory exists.
+    pub has_docs: bool,
+    /// Whether an agents/skills/ directory exists.
+    pub has_skills: bool,
+    /// Type of metadata file found ("standard", "experiment", "substandard").
+    pub metadata_type: Option<String>,
+    /// List of validation errors.
+    pub errors: Vec<String>,
+}
+
+impl PackageValidation {
+    /// Check if the package passed basic validation.
+    pub fn is_valid(&self) -> bool {
+        self.has_metadata && self.has_docs
+    }
+}
+
+/// Load a consumer manifest from `.aps/manifest.toml`.
+///
+/// # Arguments
+///
+/// * `repo_root` - Path to the consumer repository root.
+///
+/// # Returns
+///
+/// The parsed manifest, or an error if not found or invalid.
+pub fn load_manifest(repo_root: &Path) -> ConsumerResult<ConsumerManifest> {
+    let manifest_path = repo_root.join(".aps/manifest.toml");
+
+    if !manifest_path.exists() {
+        return Err(ConsumerError::ManifestNotFound(manifest_path));
+    }
+
+    let content = std::fs::read_to_string(&manifest_path)?;
+    let manifest: ConsumerManifest = toml::from_str(&content)?;
+
+    // Validate schema
+    if manifest.schema != crate::manifest::MANIFEST_SCHEMA {
+        return Err(ConsumerError::InvalidSchema {
+            expected: crate::manifest::MANIFEST_SCHEMA.to_string(),
+            found: manifest.schema.clone(),
+        });
+    }
+
+    Ok(manifest)
+}
+
+/// Resolve where to find a standard's source files.
+///
+/// Checks for overrides first, then falls back to the source URI.
+///
+/// # Arguments
+///
+/// * `manifest` - The consumer manifest.
+/// * `source_uri` - The source URI from the standard reference.
+///
+/// # Returns
+///
+/// The resolved source location.
+pub fn resolve_source(manifest: &ConsumerManifest, source_uri: &str) -> ResolvedSource {
+    if let Some(override_) = manifest.sources.overrides.get(source_uri) {
+        match override_ {
+            SourceOverride::Submodule { path } => ResolvedSource::Local(path.clone()),
+            SourceOverride::Local { path } => ResolvedSource::Local(path.clone()),
+            SourceOverride::Release { url } => ResolvedSource::Remote(url.clone()),
+        }
+    } else {
+        // Default: use GitHub releases
+        ResolvedSource::Remote(None)
+    }
+}
+
+/// Generate the agent index from a manifest.
+///
+/// Creates `.aps/index.json` with standard and skill information.
+///
+/// # Arguments
+///
+/// * `repo_root` - Path to the consumer repository root.
+/// * `manifest` - The loaded consumer manifest.
+///
+/// # Returns
+///
+/// The generated agent index.
+pub fn generate_index(repo_root: &Path, manifest: &ConsumerManifest) -> ConsumerResult<AgentIndex> {
+    let mut index = AgentIndex::new(&manifest.project.name, &manifest.project.aps_version);
+
+    for (slug, standard_ref) in &manifest.standards {
+        let source = resolve_source(manifest, &standard_ref.source);
+
+        // Try to load standard metadata to get name and skills
+        let (name, skills, tokens) = match &source {
+            ResolvedSource::Local(path) => {
+                let standard_path = repo_root.join(path);
+                load_standard_metadata(&standard_path, &standard_ref.id)
+                    .unwrap_or_else(|_| (slug.clone(), vec![], 0))
+            }
+            ResolvedSource::Remote(_) => {
+                // For remote sources, use placeholder until fetched
+                (slug.clone(), vec![], 0)
+            }
+        };
+
+        index.standards.push(IndexedStandard {
+            id: standard_ref.id.clone(),
+            name,
+            slug: slug.clone(),
+            version: standard_ref.version.clone(),
+            artifacts: standard_ref.artifacts.clone(),
+            skills,
+            tokens,
+        });
+    }
+
+    // Calculate total tokens
+    index.total_tokens = index.standards.iter().map(|s| s.tokens).sum();
+
+    Ok(index)
+}
+
+/// Write the agent index to `.aps/index.json`.
+///
+/// # Arguments
+///
+/// * `repo_root` - Path to the consumer repository root.
+/// * `index` - The agent index to write.
+pub fn write_index(repo_root: &Path, index: &AgentIndex) -> ConsumerResult<PathBuf> {
+    let aps_dir = repo_root.join(".aps");
+    std::fs::create_dir_all(&aps_dir)?;
+
+    let index_path = aps_dir.join("index.json");
+    let json = serde_json::to_string_pretty(index)?;
+    std::fs::write(&index_path, json)?;
+
+    Ok(index_path)
+}
+
+/// Load standard metadata from a local path.
+///
+/// Returns (name, skills, token_estimate).
+fn load_standard_metadata(
+    standard_path: &Path,
+    standard_id: &str,
+) -> ConsumerResult<(String, Vec<String>, u64)> {
+    // Try to find the standard directory by ID pattern
+    let standards_dir = standard_path.join("standards-experimental/v1");
+
+    if standards_dir.exists() {
+        // Look for directory starting with the standard ID
+        for entry in std::fs::read_dir(&standards_dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+
+            if name_str.starts_with(standard_id) {
+                let pkg_path = entry.path();
+                return load_package_info(&pkg_path);
+            }
+        }
+    }
+
+    // Also check official standards
+    let official_dir = standard_path.join("standards/v1");
+    if official_dir.exists() {
+        for entry in std::fs::read_dir(&official_dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+
+            if name_str.starts_with(standard_id) {
+                let pkg_path = entry.path();
+                return load_package_info(&pkg_path);
+            }
+        }
+    }
+
+    Err(ConsumerError::StandardNotFound(standard_id.to_string()))
+}
+
+/// Load package info (name, skills, tokens) from a standard directory.
+fn load_package_info(pkg_path: &Path) -> ConsumerResult<(String, Vec<String>, u64)> {
+    // Load the metadata file (standard.toml, experiment.toml, or substandard.toml)
+    let metadata_path = if pkg_path.join("experiment.toml").exists() {
+        pkg_path.join("experiment.toml")
+    } else if pkg_path.join("standard.toml").exists() {
+        pkg_path.join("standard.toml")
+    } else {
+        pkg_path.join("substandard.toml")
+    };
+
+    let content = std::fs::read_to_string(&metadata_path)?;
+    let metadata: toml::Value = toml::from_str(&content)?;
+
+    // Extract name from metadata
+    let name = metadata
+        .get("experiment")
+        .or_else(|| metadata.get("standard"))
+        .or_else(|| metadata.get("substandard"))
+        .and_then(|v| v.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unknown")
+        .to_string();
+
+    // Find skills in agents/skills/
+    let skills_dir = pkg_path.join("agents/skills");
+    let mut skills = Vec::new();
+
+    if skills_dir.exists() {
+        for entry in std::fs::read_dir(&skills_dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+
+            if name_str.ends_with(".md") && name_str != "README.md" {
+                // Remove .md extension
+                let skill_name = name_str.trim_end_matches(".md").to_string();
+                skills.push(skill_name);
+            }
+        }
+    }
+
+    // Estimate tokens (rough: count characters in docs and skills)
+    let tokens = estimate_tokens(pkg_path);
+
+    Ok((name, skills, tokens))
+}
+
+/// Estimate context tokens for a standard.
+fn estimate_tokens(pkg_path: &Path) -> u64 {
+    let mut total_chars: u64 = 0;
+
+    // Count docs
+    let docs_dir = pkg_path.join("docs");
+    if docs_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&docs_dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_file() {
+                        total_chars += metadata.len();
+                    }
+                }
+            }
+        }
+    }
+
+    // Count skills
+    let skills_dir = pkg_path.join("agents/skills");
+    if skills_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_file() {
+                        total_chars += metadata.len();
+                    }
+                }
+            }
+        }
+    }
+
+    // Rough estimate: ~4 chars per token
+    total_chars / 4
+}
+
+/// Initialize a new consumer manifest in a repository.
+///
+/// Creates `.aps/manifest.toml` and `.aps/index.json`.
+///
+/// # Arguments
+///
+/// * `repo_root` - Path to the repository root.
+/// * `project_name` - Name of the project.
+pub fn init_manifest(repo_root: &Path, project_name: &str) -> ConsumerResult<PathBuf> {
+    let aps_dir = repo_root.join(".aps");
+    std::fs::create_dir_all(&aps_dir)?;
+
+    let manifest_content = format!(
+        r#"schema = "aps.manifest/v1"
+
+[project]
+name = "{project_name}"
+aps_version = "v1"
+
+# Add standards with: aps add <standard>@<version>
+# [standards.code-topology]
+# id = "EXP-V1-0001"
+# version = "0.1.0"
+# source = "github:AgentParadise/agent-paradise-standards-system"
+# artifacts = [".topology/"]
+
+# Enable substandards
+# [substandards]
+# "code-topology.rust-adapter" = {{ enabled = true }}
+
+# Source overrides for development
+# [sources.overrides]
+# "github:AgentParadise/agent-paradise-standards-system" = {{ 
+#   type = "submodule",
+#   path = "lib/aps"
+# }}
+"#
+    );
+
+    let manifest_path = aps_dir.join("manifest.toml");
+    std::fs::write(&manifest_path, manifest_content)?;
+
+    // Create initial empty index
+    let index = AgentIndex::new(project_name, "v1");
+    write_index(repo_root, &index)?;
+
+    Ok(manifest_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_init_manifest() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = init_manifest(temp_dir.path(), "test-project");
+        assert!(result.is_ok());
+
+        let manifest_path = temp_dir.path().join(".aps/manifest.toml");
+        assert!(manifest_path.exists());
+
+        let index_path = temp_dir.path().join(".aps/index.json");
+        assert!(index_path.exists());
+    }
+
+    #[test]
+    fn test_load_manifest() {
+        let temp_dir = TempDir::new().unwrap();
+        init_manifest(temp_dir.path(), "test-project").unwrap();
+
+        let manifest = load_manifest(temp_dir.path());
+        assert!(manifest.is_ok());
+
+        let manifest = manifest.unwrap();
+        assert_eq!(manifest.project.name, "test-project");
+        assert_eq!(manifest.project.aps_version, "v1");
+    }
+
+    #[test]
+    fn test_load_manifest_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = load_manifest(temp_dir.path());
+        assert!(matches!(result, Err(ConsumerError::ManifestNotFound(_))));
+    }
+
+    #[test]
+    fn test_resolve_source_no_override() {
+        let manifest = ConsumerManifest {
+            schema: "aps.manifest/v1".to_string(),
+            project: crate::manifest::ProjectInfo {
+                name: "test".to_string(),
+                aps_version: "v1".to_string(),
+            },
+            standards: Default::default(),
+            substandards: Default::default(),
+            sources: Default::default(),
+        };
+
+        let source = resolve_source(&manifest, "github:test/repo");
+        assert!(matches!(source, ResolvedSource::Remote(None)));
+    }
+
+    #[test]
+    fn test_resolve_source_with_submodule_override() {
+        let mut manifest = ConsumerManifest {
+            schema: "aps.manifest/v1".to_string(),
+            project: crate::manifest::ProjectInfo {
+                name: "test".to_string(),
+                aps_version: "v1".to_string(),
+            },
+            standards: Default::default(),
+            substandards: Default::default(),
+            sources: Default::default(),
+        };
+
+        manifest.sources.overrides.insert(
+            "github:test/repo".to_string(),
+            SourceOverride::Submodule {
+                path: PathBuf::from("lib/test"),
+            },
+        );
+
+        let source = resolve_source(&manifest, "github:test/repo");
+        match source {
+            ResolvedSource::Local(path) => assert_eq!(path, PathBuf::from("lib/test")),
+            _ => panic!("Expected Local source"),
+        }
+    }
+
+    #[test]
+    fn test_generate_index_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        init_manifest(temp_dir.path(), "test-project").unwrap();
+
+        let manifest = load_manifest(temp_dir.path()).unwrap();
+        let index = generate_index(temp_dir.path(), &manifest).unwrap();
+
+        assert_eq!(index.project, "test-project");
+        assert_eq!(index.aps_version, "v1");
+        assert!(index.standards.is_empty());
+        assert_eq!(index.total_tokens, 0);
+    }
+
+    #[test]
+    fn test_lock_file_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = load_lock(temp_dir.path());
+        assert!(matches!(result, Err(ConsumerError::LockNotFound(_))));
+    }
+
+    #[test]
+    fn test_load_or_create_lock_new() {
+        let temp_dir = TempDir::new().unwrap();
+        let lock = load_or_create_lock(temp_dir.path()).unwrap();
+        assert!(lock.packages.is_empty());
+    }
+
+    #[test]
+    fn test_write_and_load_lock() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create .aps directory
+        std::fs::create_dir_all(temp_dir.path().join(".aps")).unwrap();
+
+        let mut lock = ManifestLock::new();
+        lock.upsert_package(lock_package(
+            "code-topology",
+            "EXP-V1-0001",
+            "0.1.0",
+            "github:AgentParadise/aps",
+            "sha256:abc123",
+            "https://example.com/pkg.tar.gz",
+        ));
+
+        let lock_path = write_lock(temp_dir.path(), &lock).unwrap();
+        assert!(lock_path.exists());
+
+        // Verify the file has our header
+        let content = std::fs::read_to_string(&lock_path).unwrap();
+        assert!(content.contains("Auto-generated"));
+
+        // Load it back
+        let loaded = load_lock(temp_dir.path()).unwrap();
+        assert_eq!(loaded.packages.len(), 1);
+        assert_eq!(loaded.packages[0].slug, "code-topology");
+        assert_eq!(loaded.packages[0].checksum, "sha256:abc123");
+    }
+
+    #[test]
+    fn test_github_release_url() {
+        let url = github_release_url("AgentParadise", "aps", "code-topology", "0.1.0");
+        assert_eq!(
+            url,
+            "https://github.com/AgentParadise/aps/releases/download/v0.1.0/aps-code-topology-0.1.0.tar.gz"
+        );
+    }
+
+    #[test]
+    fn test_cache_dir() {
+        // Just verify it returns a path
+        let dir = cache_dir();
+        assert!(dir.to_string_lossy().contains("aps"));
+    }
+
+    #[test]
+    fn test_package_cache_path() {
+        let path = package_cache_path("code-topology", "0.1.0");
+        assert!(path.to_string_lossy().contains("code-topology"));
+        assert!(path.to_string_lossy().contains("0.1.0"));
+    }
+
+    #[test]
+    fn test_compute_checksum_bytes() {
+        let data = b"hello world";
+        let checksum = compute_checksum_bytes(data);
+        // SHA-256 of "hello world"
+        assert_eq!(
+            checksum,
+            "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
+    }
+
+    #[test]
+    fn test_compute_checksum_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        std::fs::write(&file_path, "hello world").unwrap();
+
+        let checksum = compute_checksum(&file_path).unwrap();
+        assert_eq!(
+            checksum,
+            "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
+    }
+
+    #[test]
+    fn test_verify_checksum_success() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        std::fs::write(&file_path, "hello world").unwrap();
+
+        let expected = "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+        let result = verify_checksum(&file_path, expected, "test-pkg");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_verify_checksum_mismatch() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        std::fs::write(&file_path, "hello world").unwrap();
+
+        let wrong = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+        let result = verify_checksum(&file_path, wrong, "test-pkg");
+        assert!(matches!(
+            result,
+            Err(ConsumerError::ChecksumMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn test_parse_checksum_file() {
+        let content =
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9  test.tar.gz\n";
+        let checksum = parse_checksum_file(content).unwrap();
+        assert_eq!(
+            checksum,
+            "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
+    }
+
+    #[test]
+    fn test_validate_package_structure_valid() {
+        let temp_dir = TempDir::new().unwrap();
+        let pkg = temp_dir.path();
+
+        // Create required structure
+        std::fs::write(pkg.join("experiment.toml"), "# metadata").unwrap();
+        std::fs::create_dir_all(pkg.join("docs")).unwrap();
+        std::fs::create_dir_all(pkg.join("agents/skills")).unwrap();
+
+        let validation = validate_package_structure(pkg).unwrap();
+        assert!(validation.is_valid());
+        assert!(validation.has_metadata);
+        assert!(validation.has_docs);
+        assert!(validation.has_skills);
+        assert_eq!(validation.metadata_type, Some("experiment".to_string()));
+        assert!(validation.errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_package_structure_missing_metadata() {
+        let temp_dir = TempDir::new().unwrap();
+        let pkg = temp_dir.path();
+
+        std::fs::create_dir_all(pkg.join("docs")).unwrap();
+
+        let validation = validate_package_structure(pkg).unwrap();
+        assert!(!validation.is_valid());
+        assert!(!validation.has_metadata);
+        assert!(!validation.errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_package_structure_missing_docs() {
+        let temp_dir = TempDir::new().unwrap();
+        let pkg = temp_dir.path();
+
+        std::fs::write(pkg.join("standard.toml"), "# metadata").unwrap();
+
+        let validation = validate_package_structure(pkg).unwrap();
+        assert!(!validation.is_valid());
+        assert!(validation.has_metadata);
+        assert!(!validation.has_docs);
+    }
+}
