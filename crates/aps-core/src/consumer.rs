@@ -1,0 +1,444 @@
+//! Consumer-side functionality for adopting APS standards.
+//!
+//! Provides operations for loading manifests, resolving sources,
+//! and generating the agent index.
+
+use crate::manifest::{AgentIndex, ConsumerManifest, IndexedStandard, SourceOverride};
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+
+/// Errors that can occur during consumer operations.
+#[derive(Debug, Error)]
+pub enum ConsumerError {
+    /// IO error reading or writing files.
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// TOML parsing error.
+    #[error("TOML parse error: {0}")]
+    TomlParse(#[from] toml::de::Error),
+
+    /// JSON serialization error.
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    /// Manifest not found at expected location.
+    #[error("Manifest not found at {0}. Run 'aps init' first.")]
+    ManifestNotFound(PathBuf),
+
+    /// Invalid manifest schema.
+    #[error("Invalid manifest schema: expected '{expected}', found '{found}'")]
+    InvalidSchema { expected: String, found: String },
+
+    /// Standard not found in registry.
+    #[error("Standard '{0}' not found")]
+    StandardNotFound(String),
+
+    /// Source resolution failed.
+    #[error("Failed to resolve source '{0}': {1}")]
+    SourceResolution(String, String),
+}
+
+/// Result type for consumer operations.
+pub type ConsumerResult<T> = Result<T, ConsumerError>;
+
+/// Resolved source location for a standard.
+#[derive(Debug, Clone)]
+pub enum ResolvedSource {
+    /// Local filesystem path (submodule or local override).
+    Local(PathBuf),
+    /// Remote source (GitHub releases or URL).
+    Remote(Option<String>),
+}
+
+/// Load a consumer manifest from `.aps/manifest.toml`.
+///
+/// # Arguments
+///
+/// * `repo_root` - Path to the consumer repository root.
+///
+/// # Returns
+///
+/// The parsed manifest, or an error if not found or invalid.
+pub fn load_manifest(repo_root: &Path) -> ConsumerResult<ConsumerManifest> {
+    let manifest_path = repo_root.join(".aps/manifest.toml");
+
+    if !manifest_path.exists() {
+        return Err(ConsumerError::ManifestNotFound(manifest_path));
+    }
+
+    let content = std::fs::read_to_string(&manifest_path)?;
+    let manifest: ConsumerManifest = toml::from_str(&content)?;
+
+    // Validate schema
+    if manifest.schema != crate::manifest::MANIFEST_SCHEMA {
+        return Err(ConsumerError::InvalidSchema {
+            expected: crate::manifest::MANIFEST_SCHEMA.to_string(),
+            found: manifest.schema.clone(),
+        });
+    }
+
+    Ok(manifest)
+}
+
+/// Resolve where to find a standard's source files.
+///
+/// Checks for overrides first, then falls back to the source URI.
+///
+/// # Arguments
+///
+/// * `manifest` - The consumer manifest.
+/// * `source_uri` - The source URI from the standard reference.
+///
+/// # Returns
+///
+/// The resolved source location.
+pub fn resolve_source(manifest: &ConsumerManifest, source_uri: &str) -> ResolvedSource {
+    if let Some(override_) = manifest.sources.overrides.get(source_uri) {
+        match override_ {
+            SourceOverride::Submodule { path } => ResolvedSource::Local(path.clone()),
+            SourceOverride::Local { path } => ResolvedSource::Local(path.clone()),
+            SourceOverride::Release { url } => ResolvedSource::Remote(url.clone()),
+        }
+    } else {
+        // Default: use GitHub releases
+        ResolvedSource::Remote(None)
+    }
+}
+
+/// Generate the agent index from a manifest.
+///
+/// Creates `.aps/index.json` with standard and skill information.
+///
+/// # Arguments
+///
+/// * `repo_root` - Path to the consumer repository root.
+/// * `manifest` - The loaded consumer manifest.
+///
+/// # Returns
+///
+/// The generated agent index.
+pub fn generate_index(repo_root: &Path, manifest: &ConsumerManifest) -> ConsumerResult<AgentIndex> {
+    let mut index = AgentIndex::new(&manifest.project.name, &manifest.project.aps_version);
+
+    for (slug, standard_ref) in &manifest.standards {
+        let source = resolve_source(manifest, &standard_ref.source);
+
+        // Try to load standard metadata to get name and skills
+        let (name, skills, tokens) = match &source {
+            ResolvedSource::Local(path) => {
+                let standard_path = repo_root.join(path);
+                load_standard_metadata(&standard_path, &standard_ref.id)
+                    .unwrap_or_else(|_| (slug.clone(), vec![], 0))
+            }
+            ResolvedSource::Remote(_) => {
+                // For remote sources, use placeholder until fetched
+                (slug.clone(), vec![], 0)
+            }
+        };
+
+        index.standards.push(IndexedStandard {
+            id: standard_ref.id.clone(),
+            name,
+            slug: slug.clone(),
+            version: standard_ref.version.clone(),
+            artifacts: standard_ref.artifacts.clone(),
+            skills,
+            tokens,
+        });
+    }
+
+    // Calculate total tokens
+    index.total_tokens = index.standards.iter().map(|s| s.tokens).sum();
+
+    Ok(index)
+}
+
+/// Write the agent index to `.aps/index.json`.
+///
+/// # Arguments
+///
+/// * `repo_root` - Path to the consumer repository root.
+/// * `index` - The agent index to write.
+pub fn write_index(repo_root: &Path, index: &AgentIndex) -> ConsumerResult<PathBuf> {
+    let aps_dir = repo_root.join(".aps");
+    std::fs::create_dir_all(&aps_dir)?;
+
+    let index_path = aps_dir.join("index.json");
+    let json = serde_json::to_string_pretty(index)?;
+    std::fs::write(&index_path, json)?;
+
+    Ok(index_path)
+}
+
+/// Load standard metadata from a local path.
+///
+/// Returns (name, skills, token_estimate).
+fn load_standard_metadata(
+    standard_path: &Path,
+    standard_id: &str,
+) -> ConsumerResult<(String, Vec<String>, u64)> {
+    // Try to find the standard directory by ID pattern
+    let standards_dir = standard_path.join("standards-experimental/v1");
+
+    if standards_dir.exists() {
+        // Look for directory starting with the standard ID
+        for entry in std::fs::read_dir(&standards_dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+
+            if name_str.starts_with(standard_id) {
+                let pkg_path = entry.path();
+                return load_package_info(&pkg_path);
+            }
+        }
+    }
+
+    // Also check official standards
+    let official_dir = standard_path.join("standards/v1");
+    if official_dir.exists() {
+        for entry in std::fs::read_dir(&official_dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+
+            if name_str.starts_with(standard_id) {
+                let pkg_path = entry.path();
+                return load_package_info(&pkg_path);
+            }
+        }
+    }
+
+    Err(ConsumerError::StandardNotFound(standard_id.to_string()))
+}
+
+/// Load package info (name, skills, tokens) from a standard directory.
+fn load_package_info(pkg_path: &Path) -> ConsumerResult<(String, Vec<String>, u64)> {
+    // Load the metadata file (standard.toml, experiment.toml, or substandard.toml)
+    let metadata_path = if pkg_path.join("experiment.toml").exists() {
+        pkg_path.join("experiment.toml")
+    } else if pkg_path.join("standard.toml").exists() {
+        pkg_path.join("standard.toml")
+    } else {
+        pkg_path.join("substandard.toml")
+    };
+
+    let content = std::fs::read_to_string(&metadata_path)?;
+    let metadata: toml::Value = toml::from_str(&content)?;
+
+    // Extract name from metadata
+    let name = metadata
+        .get("experiment")
+        .or_else(|| metadata.get("standard"))
+        .or_else(|| metadata.get("substandard"))
+        .and_then(|v| v.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unknown")
+        .to_string();
+
+    // Find skills in agents/skills/
+    let skills_dir = pkg_path.join("agents/skills");
+    let mut skills = Vec::new();
+
+    if skills_dir.exists() {
+        for entry in std::fs::read_dir(&skills_dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+
+            if name_str.ends_with(".md") && name_str != "README.md" {
+                // Remove .md extension
+                let skill_name = name_str.trim_end_matches(".md").to_string();
+                skills.push(skill_name);
+            }
+        }
+    }
+
+    // Estimate tokens (rough: count characters in docs and skills)
+    let tokens = estimate_tokens(pkg_path);
+
+    Ok((name, skills, tokens))
+}
+
+/// Estimate context tokens for a standard.
+fn estimate_tokens(pkg_path: &Path) -> u64 {
+    let mut total_chars: u64 = 0;
+
+    // Count docs
+    let docs_dir = pkg_path.join("docs");
+    if docs_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&docs_dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_file() {
+                        total_chars += metadata.len();
+                    }
+                }
+            }
+        }
+    }
+
+    // Count skills
+    let skills_dir = pkg_path.join("agents/skills");
+    if skills_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+            for entry in entries.flatten() {
+                if let Ok(metadata) = entry.metadata() {
+                    if metadata.is_file() {
+                        total_chars += metadata.len();
+                    }
+                }
+            }
+        }
+    }
+
+    // Rough estimate: ~4 chars per token
+    total_chars / 4
+}
+
+/// Initialize a new consumer manifest in a repository.
+///
+/// Creates `.aps/manifest.toml` and `.aps/index.json`.
+///
+/// # Arguments
+///
+/// * `repo_root` - Path to the repository root.
+/// * `project_name` - Name of the project.
+pub fn init_manifest(repo_root: &Path, project_name: &str) -> ConsumerResult<PathBuf> {
+    let aps_dir = repo_root.join(".aps");
+    std::fs::create_dir_all(&aps_dir)?;
+
+    let manifest_content = format!(
+        r#"schema = "aps.manifest/v1"
+
+[project]
+name = "{project_name}"
+aps_version = "v1"
+
+# Add standards with: aps add <standard>@<version>
+# [standards.code-topology]
+# id = "EXP-V1-0001"
+# version = "0.1.0"
+# source = "github:AgentParadise/agent-paradise-standards-system"
+# artifacts = [".topology/"]
+
+# Enable substandards
+# [substandards]
+# "code-topology.rust-adapter" = {{ enabled = true }}
+
+# Source overrides for development
+# [sources.overrides]
+# "github:AgentParadise/agent-paradise-standards-system" = {{ 
+#   type = "submodule",
+#   path = "lib/aps"
+# }}
+"#
+    );
+
+    let manifest_path = aps_dir.join("manifest.toml");
+    std::fs::write(&manifest_path, manifest_content)?;
+
+    // Create initial empty index
+    let index = AgentIndex::new(project_name, "v1");
+    write_index(repo_root, &index)?;
+
+    Ok(manifest_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_init_manifest() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = init_manifest(temp_dir.path(), "test-project");
+        assert!(result.is_ok());
+
+        let manifest_path = temp_dir.path().join(".aps/manifest.toml");
+        assert!(manifest_path.exists());
+
+        let index_path = temp_dir.path().join(".aps/index.json");
+        assert!(index_path.exists());
+    }
+
+    #[test]
+    fn test_load_manifest() {
+        let temp_dir = TempDir::new().unwrap();
+        init_manifest(temp_dir.path(), "test-project").unwrap();
+
+        let manifest = load_manifest(temp_dir.path());
+        assert!(manifest.is_ok());
+
+        let manifest = manifest.unwrap();
+        assert_eq!(manifest.project.name, "test-project");
+        assert_eq!(manifest.project.aps_version, "v1");
+    }
+
+    #[test]
+    fn test_load_manifest_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = load_manifest(temp_dir.path());
+        assert!(matches!(result, Err(ConsumerError::ManifestNotFound(_))));
+    }
+
+    #[test]
+    fn test_resolve_source_no_override() {
+        let manifest = ConsumerManifest {
+            schema: "aps.manifest/v1".to_string(),
+            project: crate::manifest::ProjectInfo {
+                name: "test".to_string(),
+                aps_version: "v1".to_string(),
+            },
+            standards: Default::default(),
+            substandards: Default::default(),
+            sources: Default::default(),
+        };
+
+        let source = resolve_source(&manifest, "github:test/repo");
+        assert!(matches!(source, ResolvedSource::Remote(None)));
+    }
+
+    #[test]
+    fn test_resolve_source_with_submodule_override() {
+        let mut manifest = ConsumerManifest {
+            schema: "aps.manifest/v1".to_string(),
+            project: crate::manifest::ProjectInfo {
+                name: "test".to_string(),
+                aps_version: "v1".to_string(),
+            },
+            standards: Default::default(),
+            substandards: Default::default(),
+            sources: Default::default(),
+        };
+
+        manifest.sources.overrides.insert(
+            "github:test/repo".to_string(),
+            SourceOverride::Submodule {
+                path: PathBuf::from("lib/test"),
+            },
+        );
+
+        let source = resolve_source(&manifest, "github:test/repo");
+        match source {
+            ResolvedSource::Local(path) => assert_eq!(path, PathBuf::from("lib/test")),
+            _ => panic!("Expected Local source"),
+        }
+    }
+
+    #[test]
+    fn test_generate_index_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        init_manifest(temp_dir.path(), "test-project").unwrap();
+
+        let manifest = load_manifest(temp_dir.path()).unwrap();
+        let index = generate_index(temp_dir.path(), &manifest).unwrap();
+
+        assert_eq!(index.project, "test-project");
+        assert_eq!(index.aps_version, "v1");
+        assert!(index.standards.is_empty());
+        assert_eq!(index.total_tokens, 0);
+    }
+}
