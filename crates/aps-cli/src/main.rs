@@ -1026,24 +1026,21 @@ fn write_topology_artifacts(
         // Find which module this import refers to
         for to_module in modules.keys() {
             // Check if the import path matches or is contained in the module
-            if import_path.contains(to_module.split("::").last().unwrap_or(to_module))
+            let matches = import_path.contains(to_module.split("::").last().unwrap_or(to_module))
                 || to_module.contains(import_path)
-                || import_path
-                    .split("::")
-                    .any(|part| to_module.contains(part))
-            {
-                if from_module != to_module {
-                    // from_module depends on to_module
-                    efferent
-                        .entry(from_module.clone())
-                        .or_default()
-                        .insert(to_module.clone());
-                    // to_module is depended upon by from_module
-                    afferent
-                        .entry(to_module.clone())
-                        .or_default()
-                        .insert(from_module.clone());
-                }
+                || import_path.split("::").any(|part| to_module.contains(part));
+
+            if matches && from_module != to_module {
+                // from_module depends on to_module
+                efferent
+                    .entry(from_module.clone())
+                    .or_default()
+                    .insert(to_module.clone());
+                // to_module is depended upon by from_module
+                afferent
+                    .entry(to_module.clone())
+                    .or_default()
+                    .insert(from_module.clone());
             }
         }
     }

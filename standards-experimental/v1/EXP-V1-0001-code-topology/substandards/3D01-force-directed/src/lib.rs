@@ -382,7 +382,11 @@ impl ForceDirectedProjector {
             .map(|i| {
                 let angle = (i as f64 / n as f64) * 2.0 * std::f64::consts::PI;
                 let radius = 5.0;
-                [angle.cos() * radius, (i as f64 * 0.5) - (n as f64 * 0.25), angle.sin() * radius]
+                [
+                    angle.cos() * radius,
+                    (i as f64 * 0.5) - (n as f64 * 0.25),
+                    angle.sin() * radius,
+                ]
             })
             .collect();
 
@@ -442,7 +446,8 @@ impl ForceDirectedProjector {
             let max_displacement = 0.5;
             for i in 0..n {
                 for d in 0..3 {
-                    let displacement = (forces[i][d] * 0.01).clamp(-max_displacement, max_displacement);
+                    let displacement =
+                        (forces[i][d] * 0.01).clamp(-max_displacement, max_displacement);
                     positions[i][d] += displacement * damping;
                 }
             }
@@ -455,8 +460,8 @@ impl ForceDirectedProjector {
             center[1] += pos[1];
             center[2] += pos[2];
         }
-        for d in 0..3 {
-            center[d] /= n as f64;
+        for c in &mut center {
+            *c /= n as f64;
         }
         for pos in &mut positions {
             pos[0] -= center[0];
