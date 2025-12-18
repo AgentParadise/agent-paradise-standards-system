@@ -220,7 +220,7 @@ fn main() -> ExitCode {
                 println!("Available Standards:\n");
                 println!("  topology (EXP-V1-0001) v0.1.0");
                 println!("    Code Topology - architectural metrics and visualization");
-                println!("    Commands: analyze, validate, diff, report");
+                println!("    Commands: analyze, validate, diff, report, viz");
                 println!();
                 println!("Use 'aps run <slug> --help' for command details.");
                 return ExitCode::SUCCESS;
@@ -789,6 +789,16 @@ fn dispatch_topology(
         "report" => {
             let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
             topology_report(path, verbose)
+        }
+        "viz" | "3d" | "visualize" => {
+            let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
+            let output = args
+                .iter()
+                .position(|a| a == "--output" || a == "-o")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| s.as_str())
+                .unwrap_or("topology-3d.html");
+            topology_viz(path, output, verbose)
         }
         _ => {
             eprintln!("Error: Unknown topology command '{command}'");
@@ -1905,4 +1915,152 @@ fn topology_report(path: &str, _verbose: bool) -> ExitCode {
 
     eprintln!("Error: Could not parse modules.json");
     ExitCode::FAILURE
+}
+
+/// Generate 3D visualization from topology artifacts.
+fn topology_viz(path: &str, output: &str, verbose: bool) -> ExitCode {
+    use code_topology::{
+        CouplingMatrixData, CouplingMatrixFile, MartinMetrics, ModuleMetrics, ModuleRecord,
+        OutputFormat, Projector, Topology,
+    };
+    use code_topology_3d::ForceDirectedProjector;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    let topology_path = Path::new(path);
+    let modules_path = topology_path.join("metrics/modules.json");
+    let coupling_path = topology_path.join("graphs/coupling-matrix.json");
+
+    // Check for required artifacts
+    if !modules_path.exists() {
+        eprintln!("Error: No modules.json found at {}", modules_path.display());
+        eprintln!("Run 'aps run topology analyze' first.");
+        return ExitCode::FAILURE;
+    }
+
+    if !coupling_path.exists() {
+        eprintln!(
+            "Error: No coupling-matrix.json found at {}",
+            coupling_path.display()
+        );
+        eprintln!("Run 'aps run topology analyze' first.");
+        return ExitCode::FAILURE;
+    }
+
+    if verbose {
+        println!("Loading topology from: {}", topology_path.display());
+    }
+
+    // Load coupling matrix
+    let coupling_content = match fs::read_to_string(&coupling_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading coupling matrix: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let matrix_file: CouplingMatrixFile = match serde_json::from_str(&coupling_content) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error parsing coupling matrix: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if verbose {
+        println!(
+            "  Loaded {} modules from coupling matrix",
+            matrix_file.modules.len()
+        );
+    }
+
+    // Load module metrics
+    let modules_content = match fs::read_to_string(&modules_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading modules: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    #[derive(serde::Deserialize)]
+    struct ModulesFile {
+        modules: Vec<ModuleRecord>,
+    }
+
+    let modules_file: ModulesFile = match serde_json::from_str(&modules_content) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error parsing modules: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if verbose {
+        println!("  Loaded {} module metrics", modules_file.modules.len());
+    }
+
+    // Build topology
+    let mut topology = Topology {
+        languages: vec!["rust".to_string()],
+        ..Default::default()
+    };
+
+    // Convert coupling matrix to internal format
+    let positions = matrix_file.layout.map(|l| l.positions);
+    topology.coupling_matrix = Some(CouplingMatrixData {
+        modules: matrix_file.modules,
+        values: matrix_file.matrix,
+        positions,
+    });
+
+    // Convert module records to ModuleMetrics
+    for record in &modules_file.modules {
+        topology.modules.push(ModuleMetrics {
+            id: record.id.clone(),
+            name: record.name.clone(),
+            path: PathBuf::from(&record.path),
+            languages: record.languages.clone(),
+            file_count: record.metrics.file_count,
+            function_count: record.metrics.function_count,
+            total_cyclomatic: record.metrics.total_cyclomatic,
+            avg_cyclomatic: record.metrics.avg_cyclomatic,
+            total_cognitive: record.metrics.total_cognitive,
+            avg_cognitive: record.metrics.avg_cognitive,
+            lines_of_code: record.metrics.lines_of_code,
+            martin: MartinMetrics {
+                ca: record.metrics.martin.ca,
+                ce: record.metrics.martin.ce,
+                instability: record.metrics.martin.instability,
+                abstractness: record.metrics.martin.abstractness,
+                distance_from_main_sequence: record.metrics.martin.distance_from_main_sequence,
+            },
+        });
+    }
+
+    // Render 3D visualization
+    let projector = ForceDirectedProjector::new();
+
+    if verbose {
+        println!("Rendering 3D visualization...");
+    }
+
+    match projector.render(&topology, OutputFormat::Html, None) {
+        Ok(html) => {
+            if let Err(e) = fs::write(output, &html) {
+                eprintln!("Error writing output: {e}");
+                return ExitCode::FAILURE;
+            }
+            println!("✓ Generated: {output}");
+            println!();
+            println!("Open in browser:");
+            println!("  open {output}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("Error rendering visualization: {}", e.message);
+            ExitCode::FAILURE
+        }
+    }
 }
