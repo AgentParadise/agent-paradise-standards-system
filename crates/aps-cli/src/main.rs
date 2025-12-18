@@ -722,9 +722,16 @@ fn dispatch_topology(
             println!();
             println!("OPTIONS:");
             println!("    --output <dir>     Output directory (default: .topology)");
+            println!(
+                "    --language <lang>  Filter by language: rust, python (default: auto-detect)"
+            );
             println!("    --format <fmt>     Output format: json, text (default: text)");
             println!("    --config <file>    Config file for thresholds");
             println!("    --help             Show this help message");
+            println!();
+            println!("SUPPORTED LANGUAGES:");
+            println!("    rust       .rs");
+            println!("    python     .py, .pyi");
             ExitCode::SUCCESS
         }
         "analyze" => {
@@ -735,8 +742,13 @@ fn dispatch_topology(
                 .and_then(|i| args.get(i + 1))
                 .map(|s| s.as_str())
                 .unwrap_or(".topology");
+            let language = args
+                .iter()
+                .position(|a| a == "--language")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| s.as_str());
 
-            topology_analyze(path, output, repo_root, verbose)
+            topology_analyze(path, output, language, repo_root, verbose)
         }
         "validate" => {
             let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
@@ -790,11 +802,17 @@ fn dispatch_topology(
 fn topology_analyze(
     path: &str,
     output: &str,
+    language_filter: Option<&str>,
     _repo_root: &std::path::Path,
     verbose: bool,
 ) -> ExitCode {
-    use code_topology_rust_adapter::RustAdapter;
+    use code_topology::LanguageAdapter;
+    use code_topology::adapter::grammars::{PythonGrammar, RustGrammar};
+    use code_topology::adapter::{GrammarRegistry, TreeSitterAdapter};
+    use std::collections::HashMap;
+    use std::fs;
     use std::path::Path;
+    use walkdir::WalkDir;
 
     let project_path = Path::new(path);
     let output_path = Path::new(output);
@@ -802,34 +820,272 @@ fn topology_analyze(
     if verbose {
         println!("Analyzing: {}", project_path.display());
         println!("Output:    {}", output_path.display());
+        if let Some(lang) = language_filter {
+            println!("Language:  {lang}");
+        }
     }
 
-    let adapter = RustAdapter::new();
+    // Create grammar registry with available grammars
+    let mut registry = GrammarRegistry::new();
+    registry.register(Box::new(RustGrammar::new()));
+    registry.register(Box::new(PythonGrammar::new()));
 
-    match adapter.analyze(project_path) {
-        Ok(result) => {
-            println!(
-                "✓ Analyzed {} functions in {} modules",
-                result.functions.len(),
-                result.modules.len()
-            );
+    let adapter = TreeSitterAdapter::new(registry);
 
-            match result.write_artifacts(output_path) {
-                Ok(()) => {
-                    println!("✓ Wrote artifacts to {}", output_path.display());
-                    ExitCode::SUCCESS
+    // Collect files to analyze
+    let mut files_by_lang: HashMap<String, Vec<std::path::PathBuf>> = HashMap::new();
+
+    for entry in WalkDir::new(project_path)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            // Allow the root entry even if it's "."
+            if e.depth() == 0 {
+                return true;
+            }
+            // Skip hidden dirs and common non-source dirs
+            !name.starts_with('.')
+                && name != "target"
+                && name != "node_modules"
+                && name != "__pycache__"
+                && name != "venv"
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let file_path = entry.path();
+
+        // Check if we have a grammar for this file
+        if let Some(grammar) = adapter.registry().get_for_path(file_path) {
+            let lang = grammar.language_id();
+
+            // Apply language filter if specified
+            if let Some(filter) = language_filter {
+                if lang != filter {
+                    continue;
+                }
+            }
+
+            files_by_lang
+                .entry(lang.to_string())
+                .or_default()
+                .push(file_path.to_path_buf());
+        }
+    }
+
+    if files_by_lang.is_empty() {
+        let msg = if let Some(lang) = language_filter {
+            format!("No {lang} files found in {}", project_path.display())
+        } else {
+            format!(
+                "No supported source files found in {}",
+                project_path.display()
+            )
+        };
+        eprintln!("Error: {msg}");
+        eprintln!("Supported: .rs (Rust), .py/.pyi (Python)");
+        return ExitCode::FAILURE;
+    }
+
+    // Print summary
+    let total_files: usize = files_by_lang.values().map(|v| v.len()).sum();
+    println!("Found {total_files} source file(s):");
+    for (lang, files) in &files_by_lang {
+        println!("  {lang}: {} files", files.len());
+    }
+
+    // Analyze all files
+    let mut all_functions = Vec::new();
+    let mut errors = 0;
+
+    for (lang, files) in &files_by_lang {
+        if verbose {
+            println!("Analyzing {lang} files...");
+        }
+
+        for file_path in files {
+            let source = match fs::read_to_string(file_path) {
+                Ok(s) => s,
+                Err(e) => {
+                    if verbose {
+                        eprintln!("  Warning: Could not read {}: {e}", file_path.display());
+                    }
+                    errors += 1;
+                    continue;
+                }
+            };
+
+            match adapter.extract_functions(&source, file_path) {
+                Ok(functions) => {
+                    for func in functions {
+                        // Compute metrics for each function
+                        match adapter.compute_metrics(&source, &func) {
+                            Ok(metrics) => {
+                                all_functions.push((func, metrics));
+                            }
+                            Err(e) => {
+                                if verbose {
+                                    eprintln!(
+                                        "  Warning: Could not compute metrics for {}: {e}",
+                                        func.name
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
-                    eprintln!("Error writing artifacts: {e}");
-                    ExitCode::FAILURE
+                    if verbose {
+                        eprintln!("  Warning: Could not parse {}: {e}", file_path.display());
+                    }
+                    errors += 1;
                 }
             }
         }
-        Err(e) => {
-            eprintln!("Error analyzing project: {e}");
-            ExitCode::FAILURE
-        }
     }
+
+    println!(
+        "✓ Analyzed {} functions ({}  warnings)",
+        all_functions.len(),
+        errors
+    );
+
+    // Write artifacts
+    if let Err(e) = write_topology_artifacts(output_path, &all_functions, &files_by_lang) {
+        eprintln!("Error writing artifacts: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    println!("✓ Wrote artifacts to {}", output_path.display());
+    ExitCode::SUCCESS
+}
+
+/// Write topology artifacts to disk.
+fn write_topology_artifacts(
+    output_path: &std::path::Path,
+    functions: &[(code_topology::FunctionInfo, code_topology::FunctionMetrics)],
+    files_by_lang: &std::collections::HashMap<String, Vec<std::path::PathBuf>>,
+) -> std::io::Result<()> {
+    use std::collections::HashMap;
+    use std::fs;
+
+    // Create directories
+    fs::create_dir_all(output_path)?;
+    fs::create_dir_all(output_path.join("metrics"))?;
+    fs::create_dir_all(output_path.join("graphs"))?;
+
+    // Group functions by module
+    let mut modules: HashMap<
+        String,
+        Vec<&(code_topology::FunctionInfo, code_topology::FunctionMetrics)>,
+    > = HashMap::new();
+    for func_with_metrics in functions {
+        modules
+            .entry(func_with_metrics.0.module.clone())
+            .or_default()
+            .push(func_with_metrics);
+    }
+
+    // Write manifest.toml
+    let languages: Vec<&str> = files_by_lang.keys().map(|s| s.as_str()).collect();
+    let total_files: usize = files_by_lang.values().map(|v| v.len()).sum();
+    let manifest = format!(
+        r#"[topology]
+version = "0.1.0"
+generated_at = "{}"
+generator = "aps-cli"
+generator_version = "0.1.0"
+
+[analysis]
+root = "."
+languages = {:?}
+total_files = {}
+total_functions = {}
+total_modules = {}
+"#,
+        chrono_lite_now(),
+        languages,
+        total_files,
+        functions.len(),
+        modules.len()
+    );
+    fs::write(output_path.join("manifest.toml"), manifest)?;
+
+    // Write functions.json
+    let functions_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "functions": functions.iter().map(|(func, metrics)| {
+            serde_json::json!({
+                "id": func.qualified_name,
+                "name": func.name,
+                "module": func.module,
+                "file": func.file_path.to_string_lossy(),
+                "line": func.start_line,
+                "metrics": {
+                    "cyclomatic": metrics.cyclomatic_complexity,
+                    "cognitive": metrics.cognitive_complexity,
+                    "halstead": {
+                        "vocabulary": metrics.halstead.vocabulary,
+                        "length": metrics.halstead.length,
+                        "volume": metrics.halstead.volume,
+                        "difficulty": metrics.halstead.difficulty,
+                        "effort": metrics.halstead.effort
+                    },
+                    "loc": metrics.total_lines
+                }
+            })
+        }).collect::<Vec<_>>()
+    });
+    fs::write(
+        output_path.join("metrics/functions.json"),
+        serde_json::to_string_pretty(&functions_json).unwrap(),
+    )?;
+
+    // Write modules.json
+    let modules_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "modules": modules.iter().map(|(module_id, funcs)| {
+            let total_cc: u32 = funcs.iter().map(|(_, m)| m.cyclomatic_complexity).sum();
+            let total_cog: u32 = funcs.iter().map(|(_, m)| m.cognitive_complexity).sum();
+            let count = funcs.len() as f64;
+            serde_json::json!({
+                "id": module_id,
+                "name": module_id.split("::").last().unwrap_or(module_id),
+                "languages": languages,
+                "metrics": {
+                    "function_count": funcs.len(),
+                    "total_cyclomatic": total_cc,
+                    "avg_cyclomatic": if count > 0.0 { total_cc as f64 / count } else { 0.0 },
+                    "total_cognitive": total_cog,
+                    "avg_cognitive": if count > 0.0 { total_cog as f64 / count } else { 0.0 },
+                }
+            })
+        }).collect::<Vec<_>>()
+    });
+    fs::write(
+        output_path.join("metrics/modules.json"),
+        serde_json::to_string_pretty(&modules_json).unwrap(),
+    )?;
+
+    // Write coupling-matrix.json (empty for now - requires dependency analysis)
+    let module_names: Vec<&str> = modules.keys().map(|s| s.as_str()).collect();
+    let n = module_names.len();
+    let mut matrix = vec![vec![0.0; n]; n];
+    for (i, row) in matrix.iter_mut().enumerate() {
+        row[i] = 1.0; // Self-coupling is 1.0
+    }
+    let coupling_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "metric": "import_coupling",
+        "modules": module_names,
+        "matrix": matrix
+    });
+    fs::write(
+        output_path.join("graphs/coupling-matrix.json"),
+        serde_json::to_string_pretty(&coupling_json).unwrap(),
+    )?;
+
+    Ok(())
 }
 
 /// Validate existing .topology/ artifacts.
