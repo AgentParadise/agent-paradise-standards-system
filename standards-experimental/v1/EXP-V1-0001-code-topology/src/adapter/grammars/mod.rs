@@ -23,6 +23,10 @@
 //! }
 //! ```
 
+pub mod rust;
+
+pub use rust::RustGrammar;
+
 use std::path::Path;
 
 use tree_sitter::Language;
