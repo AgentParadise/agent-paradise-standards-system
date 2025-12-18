@@ -16,6 +16,7 @@ thiserror.workspace = true
 # Tree-sitter framework
 tree-sitter.workspace = true
 tree-sitter-rust.workspace = true
+tree-sitter-python.workspace = true
 streaming-iterator = "0.1"
 
 [dev-dependencies]

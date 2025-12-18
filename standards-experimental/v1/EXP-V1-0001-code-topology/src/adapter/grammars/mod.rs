@@ -23,8 +23,10 @@
 //! }
 //! ```
 
+pub mod python;
 pub mod rust;
 
+pub use python::PythonGrammar;
 pub use rust::RustGrammar;
 
 use std::path::Path;
