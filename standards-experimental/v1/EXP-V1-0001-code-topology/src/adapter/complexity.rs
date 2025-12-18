@@ -90,8 +90,9 @@ impl<'g> ComplexityCalculator<'g> {
         start_line: u32,
         end_line: u32,
     ) -> Option<Node<'a>> {
-        let node_start = node.start_position().row as u32;
-        let node_end = node.end_position().row as u32;
+        // Convert 0-indexed tree-sitter positions to 1-indexed line numbers
+        let node_start = node.start_position().row as u32 + 1;
+        let node_end = node.end_position().row as u32 + 1;
 
         // Check if this node approximately matches the range
         if node_start <= start_line && node_end >= end_line {
@@ -178,7 +179,8 @@ impl<'g> ComplexityCalculator<'g> {
     }
 
     fn visit_for_cyclomatic_range(&self, node: Node, start_line: u32, end_line: u32, cc: &mut u32) {
-        let node_line = node.start_position().row as u32;
+        // Convert 0-indexed tree-sitter position to 1-indexed line number
+        let node_line = node.start_position().row as u32 + 1;
 
         // Skip nodes outside our range
         if node_line < start_line || node_line > end_line {
@@ -296,7 +298,8 @@ impl<'g> ComplexityCalculator<'g> {
         nesting_level: u32,
         cog: &mut u32,
     ) {
-        let node_line = node.start_position().row as u32;
+        // Convert 0-indexed tree-sitter position to 1-indexed line number
+        let node_line = node.start_position().row as u32 + 1;
 
         // Skip nodes outside our range
         if node_line < start_line || node_line > end_line {
@@ -377,7 +380,8 @@ impl<'g> ComplexityCalculator<'g> {
         operators: &mut HashMap<String, u32>,
         operands: &mut HashMap<String, u32>,
     ) {
-        let node_line = node.start_position().row as u32;
+        // Convert 0-indexed tree-sitter position to 1-indexed line number
+        let node_line = node.start_position().row as u32 + 1;
 
         // Skip nodes outside our range
         if node_line < start_line || node_line > end_line {
@@ -396,7 +400,7 @@ impl<'g> ComplexityCalculator<'g> {
         if self.is_operator_node(kind) {
             *operators.entry(text).or_insert(0) += 1;
         } else if self.is_operand_node(kind) {
-            *operators.entry(kind.to_string()).or_insert(0) += 1;
+            // Track operand text (identifiers, literals)
             if !text.is_empty() && text.len() < 100 {
                 // Avoid huge literals
                 *operands.entry(text).or_insert(0) += 1;
@@ -540,19 +544,28 @@ impl<'g> ComplexityCalculator<'g> {
         for line in range_lines {
             let trimmed = line.trim();
 
-            // Track block comments
-            if trimmed.starts_with("/*") || trimmed.starts_with("\"\"\"") {
+            // Detect block comment markers
+            let is_block_start = trimmed.starts_with("/*") || trimmed.starts_with("\"\"\"");
+            let is_block_end = trimmed.ends_with("*/") || trimmed.ends_with("\"\"\"");
+
+            // Enter multi-line block comment only if it doesn't end on same line
+            if is_block_start && !is_block_end {
                 in_block_comment = true;
             }
 
-            if in_block_comment || trimmed.starts_with("//") || trimmed.starts_with("#") {
+            // Count as comment if in block, single-line block, or line comment
+            if in_block_comment
+                || (is_block_start && is_block_end)
+                || trimmed.starts_with("//")
+                || trimmed.starts_with("#")
+            {
                 comments += 1;
             } else if !trimmed.is_empty() {
                 logical += 1;
             }
 
-            // End of block comment
-            if trimmed.ends_with("*/") || trimmed.ends_with("\"\"\"") {
+            // End of multi-line block comment
+            if is_block_end {
                 in_block_comment = false;
             }
         }

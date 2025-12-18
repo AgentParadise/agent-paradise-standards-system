@@ -98,8 +98,9 @@ impl Grammar for PythonGrammar {
     }
 
     fn ignored_nodes(&self) -> &'static [&'static str] {
+        // Note: with_statement is in nesting_nodes (adds nesting depth)
+        // but NOT in decision_nodes (doesn't add to CC)
         &[
-            "with_statement",  // Context managers don't add CC
             "finally_clause",  // Finally doesn't add CC
             "raise_statement", // Raise doesn't add CC
         ]
@@ -243,7 +244,8 @@ mod tests {
         let grammar = PythonGrammar::new();
         let nodes = grammar.ignored_nodes();
 
-        assert!(nodes.contains(&"with_statement"));
+        // with_statement is in nesting_nodes (adds nesting) but NOT in ignored_nodes
+        assert!(!nodes.contains(&"with_statement"));
         assert!(nodes.contains(&"finally_clause"));
         assert!(nodes.contains(&"raise_statement"));
     }

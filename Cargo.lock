@@ -69,6 +69,7 @@ dependencies = [
  "aps-v1-0000-meta",
  "clap",
  "code-topology",
+ "code-topology-3d",
  "code-topology-rust-adapter",
  "regex",
  "serde",
