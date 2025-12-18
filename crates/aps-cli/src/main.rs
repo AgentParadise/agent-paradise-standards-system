@@ -894,8 +894,9 @@ fn topology_analyze(
         println!("  {lang}: {} files", files.len());
     }
 
-    // Analyze all files
+    // Analyze all files - extract functions AND imports
     let mut all_functions = Vec::new();
+    let mut all_imports: Vec<code_topology::ImportInfo> = Vec::new();
     let mut errors = 0;
 
     for (lang, files) in &files_by_lang {
@@ -914,6 +915,11 @@ fn topology_analyze(
                     continue;
                 }
             };
+
+            // Extract imports for coupling analysis
+            if let Ok(imports) = adapter.extract_imports(&source, file_path) {
+                all_imports.extend(imports);
+            }
 
             match adapter.extract_functions(&source, file_path) {
                 Ok(functions) => {
@@ -951,7 +957,9 @@ fn topology_analyze(
     );
 
     // Write artifacts
-    if let Err(e) = write_topology_artifacts(output_path, &all_functions, &files_by_lang) {
+    if let Err(e) =
+        write_topology_artifacts(output_path, &all_functions, &all_imports, &files_by_lang)
+    {
         eprintln!("Error writing artifacts: {e}");
         return ExitCode::FAILURE;
     }
@@ -964,9 +972,10 @@ fn topology_analyze(
 fn write_topology_artifacts(
     output_path: &std::path::Path,
     functions: &[(code_topology::FunctionInfo, code_topology::FunctionMetrics)],
+    imports: &[code_topology::ImportInfo],
     files_by_lang: &std::collections::HashMap<String, Vec<std::path::PathBuf>>,
 ) -> std::io::Result<()> {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::fs;
 
     // Create directories
@@ -986,9 +995,59 @@ fn write_topology_artifacts(
             .push(func_with_metrics);
     }
 
+    // Build dependency graph from imports
+    // Map module -> set of modules it depends on (efferent coupling)
+    let mut efferent: HashMap<String, HashSet<String>> = HashMap::new();
+    // Map module -> set of modules that depend on it (afferent coupling)
+    let mut afferent: HashMap<String, HashSet<String>> = HashMap::new();
+
+    // Initialize all modules
+    for module in modules.keys() {
+        efferent.entry(module.clone()).or_default();
+        afferent.entry(module.clone()).or_default();
+    }
+
+    // Process imports to build coupling
+    for import in imports {
+        let from_module = &import.from_module;
+
+        // Skip external imports
+        if import.is_external {
+            continue;
+        }
+
+        // Try to resolve the import path to a known module
+        let import_path = &import.import_path;
+
+        // Find which module this import refers to
+        for to_module in modules.keys() {
+            // Check if the import path matches or is contained in the module
+            if import_path.contains(to_module.split("::").last().unwrap_or(to_module))
+                || to_module.contains(import_path)
+                || import_path
+                    .split("::")
+                    .any(|part| to_module.contains(part))
+            {
+                if from_module != to_module {
+                    // from_module depends on to_module
+                    efferent
+                        .entry(from_module.clone())
+                        .or_default()
+                        .insert(to_module.clone());
+                    // to_module is depended upon by from_module
+                    afferent
+                        .entry(to_module.clone())
+                        .or_default()
+                        .insert(from_module.clone());
+                }
+            }
+        }
+    }
+
     // Write manifest.toml
     let languages: Vec<&str> = files_by_lang.keys().map(|s| s.as_str()).collect();
     let total_files: usize = files_by_lang.values().map(|v| v.len()).sum();
+    let total_deps: usize = efferent.values().map(|s| s.len()).sum();
     let manifest = format!(
         r#"[topology]
 version = "0.1.0"
@@ -1002,12 +1061,14 @@ languages = {:?}
 total_files = {}
 total_functions = {}
 total_modules = {}
+total_dependencies = {}
 "#,
         chrono_lite_now(),
         languages,
         total_files,
         functions.len(),
-        modules.len()
+        modules.len(),
+        total_deps
     );
     fs::write(output_path.join("manifest.toml"), manifest)?;
 
@@ -1041,7 +1102,7 @@ total_modules = {}
         serde_json::to_string_pretty(&functions_json).unwrap(),
     )?;
 
-    // Write modules.json
+    // Write modules.json with real Martin metrics
     let modules_json = serde_json::json!({
         "schema_version": "1.0.0",
         "modules": modules.iter().map(|(module_id, funcs)| {
@@ -1049,10 +1110,23 @@ total_modules = {}
             let total_cog: u32 = funcs.iter().map(|(_, m)| m.cognitive_complexity).sum();
             let total_loc: u32 = funcs.iter().map(|(_, m)| m.total_lines).sum();
             let count = funcs.len() as f64;
-            // Estimate file_count from unique file paths
-            let unique_files: std::collections::HashSet<_> = funcs.iter()
+
+            // Unique files
+            let unique_files: HashSet<_> = funcs.iter()
                 .map(|(f, _)| f.file_path.clone())
                 .collect();
+
+            // Martin metrics
+            let ca = afferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
+            let ce = efferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
+            let instability = if ca + ce > 0 {
+                ce as f64 / (ca + ce) as f64
+            } else {
+                0.5 // Default when no coupling
+            };
+            let abstractness = 0.0; // TODO: Would need type analysis
+            let distance = (instability + abstractness - 1.0).abs();
+
             serde_json::json!({
                 "id": module_id,
                 "name": module_id.split("::").last().unwrap_or(module_id),
@@ -1067,11 +1141,11 @@ total_modules = {}
                     "avg_cognitive": if count > 0.0 { total_cog as f64 / count } else { 0.0 },
                     "lines_of_code": total_loc,
                     "martin": {
-                        "ca": 0,
-                        "ce": 0,
-                        "instability": 0.5,
-                        "abstractness": 0.0,
-                        "distance_from_main_sequence": 0.5
+                        "ca": ca,
+                        "ce": ce,
+                        "instability": instability,
+                        "abstractness": abstractness,
+                        "distance_from_main_sequence": distance
                     }
                 }
             })
@@ -1082,13 +1156,36 @@ total_modules = {}
         serde_json::to_string_pretty(&modules_json).unwrap(),
     )?;
 
-    // Write coupling-matrix.json (empty for now - requires dependency analysis)
+    // Build coupling matrix from import dependencies
     let module_names: Vec<&str> = modules.keys().map(|s| s.as_str()).collect();
     let n = module_names.len();
     let mut matrix = vec![vec![0.0; n]; n];
+
+    // Create index map
+    let module_index: HashMap<&str, usize> = module_names
+        .iter()
+        .enumerate()
+        .map(|(i, &name)| (name, i))
+        .collect();
+
+    // Fill matrix with coupling values
     for (i, row) in matrix.iter_mut().enumerate() {
         row[i] = 1.0; // Self-coupling is 1.0
     }
+
+    // Add actual coupling from dependencies
+    for (from, deps) in &efferent {
+        if let Some(&from_idx) = module_index.get(from.as_str()) {
+            for to in deps {
+                if let Some(&to_idx) = module_index.get(to.as_str()) {
+                    // Coupling strength of 0.5 for each import dependency
+                    matrix[from_idx][to_idx] = 0.5;
+                    matrix[to_idx][from_idx] = 0.5; // Symmetric
+                }
+            }
+        }
+    }
+
     let coupling_json = serde_json::json!({
         "schema_version": "1.0.0",
         "metric": "import_coupling",
