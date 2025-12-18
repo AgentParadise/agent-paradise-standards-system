@@ -1047,17 +1047,32 @@ total_modules = {}
         "modules": modules.iter().map(|(module_id, funcs)| {
             let total_cc: u32 = funcs.iter().map(|(_, m)| m.cyclomatic_complexity).sum();
             let total_cog: u32 = funcs.iter().map(|(_, m)| m.cognitive_complexity).sum();
+            let total_loc: u32 = funcs.iter().map(|(_, m)| m.total_lines).sum();
             let count = funcs.len() as f64;
+            // Estimate file_count from unique file paths
+            let unique_files: std::collections::HashSet<_> = funcs.iter()
+                .map(|(f, _)| f.file_path.clone())
+                .collect();
             serde_json::json!({
                 "id": module_id,
                 "name": module_id.split("::").last().unwrap_or(module_id),
+                "path": format!("{}/", module_id.replace("::", "/")),
                 "languages": languages,
                 "metrics": {
+                    "file_count": unique_files.len(),
                     "function_count": funcs.len(),
                     "total_cyclomatic": total_cc,
                     "avg_cyclomatic": if count > 0.0 { total_cc as f64 / count } else { 0.0 },
                     "total_cognitive": total_cog,
                     "avg_cognitive": if count > 0.0 { total_cog as f64 / count } else { 0.0 },
+                    "lines_of_code": total_loc,
+                    "martin": {
+                        "ca": 0,
+                        "ce": 0,
+                        "instability": 0.5,
+                        "abstractness": 0.0,
+                        "distance_from_main_sequence": 0.5
+                    }
                 }
             })
         }).collect::<Vec<_>>()
@@ -1077,6 +1092,7 @@ total_modules = {}
     let coupling_json = serde_json::json!({
         "schema_version": "1.0.0",
         "metric": "import_coupling",
+        "description": "Normalized coupling strength between modules (0-1)",
         "modules": module_names,
         "matrix": matrix
     });
