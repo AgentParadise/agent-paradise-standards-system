@@ -843,11 +843,15 @@ fn topology_analyze(
             if e.depth() == 0 {
                 return true;
             }
-            // Skip hidden dirs and common non-source dirs
+            // Skip hidden dirs, test dirs, and common non-source dirs
             !name.starts_with('.')
                 && name != "target"
                 && name != "node_modules"
                 && name != "__pycache__"
+                && name != "tests"
+                && !name.ends_with("_test.rs")
+                && !name.starts_with("test_")
+                && !name.ends_with("_test.py")
                 && name != "venv"
         })
         .filter_map(|e| e.ok())
