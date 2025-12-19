@@ -1319,13 +1319,16 @@ total_dependencies = {}
             let mut weighted_score = 0.0;
             for import in imports_list {
                 let base_weight = import.kind.weight();
-                // For multi-imports, multiply by symbol count
-                let symbol_multiplier = if import.symbols.is_empty() {
+                // For multi-imports, weight per symbol but cap total contribution
+                // to avoid single large imports dominating the score
+                let symbol_count = if import.symbols.is_empty() {
                     1.0
                 } else {
                     import.symbols.len() as f64
                 };
-                weighted_score += base_weight * symbol_multiplier;
+                // Cap at 3.0 to prevent outliers (e.g., `use foo::{a,b,c,d,e,f,g}`)
+                let import_score = (base_weight * symbol_count).min(3.0);
+                weighted_score += import_score;
             }
             raw_coupling.insert((from_idx, to_idx), weighted_score);
         }
@@ -1383,13 +1386,27 @@ total_dependencies = {}
         let caller_module = &call.caller;
         let callee = &call.callee;
 
-        // Try to resolve callee to a module
+        // Try to resolve callee to a module with stricter matching
         for to_module in modules.keys() {
-            // Check if the callee matches any known module
+            if caller_module == to_module {
+                continue; // Skip self-references
+            }
+
             let to_name = to_module.split("::").last().unwrap_or(to_module);
-            if (callee.contains(to_name) || to_module.contains(callee))
-                && caller_module != to_module
-            {
+
+            // Match if:
+            // 1. Qualified call: callee starts with module path (e.g., "discovery::find_packages")
+            // 2. Direct module call: callee equals module name (e.g., "discovery")
+            // 3. Function in module: callee contains "::" and first part matches module
+            let is_qualified_call =
+                callee.starts_with(to_module) || callee.starts_with(&format!("{to_name}::"));
+            let is_module_reference = callee == to_name || callee == to_module;
+            let is_namespaced_call = callee.contains("::") && {
+                let parts: Vec<&str> = callee.split("::").collect();
+                parts.first().is_some_and(|first| *first == to_name)
+            };
+
+            if is_qualified_call || is_module_reference || is_namespaced_call {
                 *call_edges
                     .entry((caller_module.clone(), to_module.clone()))
                     .or_insert(0) += 1;

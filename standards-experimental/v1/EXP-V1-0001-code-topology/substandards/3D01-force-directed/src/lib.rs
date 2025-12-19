@@ -989,12 +989,15 @@ impl ForceDirectedProjector {
                 // Glow effect on hovered node
                 const hoveredMesh = intersects[0].object;
                 if (!hoveredMesh.userData.isHovered) {{
-                    // Reset previous hovered node
+                    // Reset previous hovered node (preserve selected/active state)
                     nodeMeshes.forEach(m => {{
                         if (m.userData.isHovered && m !== hoveredMesh) {{
                             m.userData.isHovered = false;
-                            m.material.emissiveIntensity = 0.4;
-                            m.scale.setScalar(1.0);
+                            // Preserve intensity for selected or active nodes
+                            const isActive = m.userData.id === activeModule;
+                            const isSelected = m.userData.id === selectedModule;
+                            m.material.emissiveIntensity = isActive ? 0.6 : (isSelected ? 0.5 : 0.4);
+                            m.scale.setScalar(isActive || isSelected ? 1.1 : 1.0);
                         }}
                     }});
                     // Highlight current
@@ -1036,12 +1039,14 @@ impl ForceDirectedProjector {
                 tooltip.style.display = 'none';
                 document.body.style.cursor = 'default';
                 
-                // Reset any hovered node glow
+                // Reset any hovered node glow (preserve selected/active state)
                 nodeMeshes.forEach(m => {{
                     if (m.userData.isHovered) {{
                         m.userData.isHovered = false;
-                        m.material.emissiveIntensity = 0.4;
-                        m.scale.setScalar(1.0);
+                        const isActive = m.userData.id === activeModule;
+                        const isSelected = m.userData.id === selectedModule;
+                        m.material.emissiveIntensity = isActive ? 0.6 : (isSelected ? 0.5 : 0.4);
+                        m.scale.setScalar(isActive || isSelected ? 1.1 : 1.0);
                     }}
                 }});
             }}
