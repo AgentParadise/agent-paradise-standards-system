@@ -908,9 +908,10 @@ fn topology_analyze(
         println!("  {lang}: {} files", files.len());
     }
 
-    // Analyze all files - extract functions AND imports
+    // Analyze all files - extract functions, imports, AND types
     let mut all_functions = Vec::new();
     let mut all_imports: Vec<code_topology::ImportInfo> = Vec::new();
+    let mut all_types: Vec<code_topology::TypeInfo> = Vec::new();
     let mut errors = 0;
 
     for (lang, files) in &files_by_lang {
@@ -933,6 +934,11 @@ fn topology_analyze(
             // Extract imports for coupling analysis
             if let Ok(imports) = adapter.extract_imports(&source, file_path) {
                 all_imports.extend(imports);
+            }
+
+            // Extract types for abstractness calculation
+            if let Ok(types) = adapter.extract_types(&source, file_path) {
+                all_types.extend(types);
             }
 
             match adapter.extract_functions(&source, file_path) {
@@ -971,9 +977,13 @@ fn topology_analyze(
     );
 
     // Write artifacts
-    if let Err(e) =
-        write_topology_artifacts(output_path, &all_functions, &all_imports, &files_by_lang)
-    {
+    if let Err(e) = write_topology_artifacts(
+        output_path,
+        &all_functions,
+        &all_imports,
+        &all_types,
+        &files_by_lang,
+    ) {
         eprintln!("Error writing artifacts: {e}");
         return ExitCode::FAILURE;
     }
@@ -987,6 +997,7 @@ fn write_topology_artifacts(
     output_path: &std::path::Path,
     functions: &[(code_topology::FunctionInfo, code_topology::FunctionMetrics)],
     imports: &[code_topology::ImportInfo],
+    types: &[code_topology::TypeInfo],
     files_by_lang: &std::collections::HashMap<String, Vec<std::path::PathBuf>>,
 ) -> std::io::Result<()> {
     use std::collections::{HashMap, HashSet};
@@ -1009,11 +1020,26 @@ fn write_topology_artifacts(
             .push(func_with_metrics);
     }
 
+    // Group types by module for abstractness calculation
+    // Map module -> (abstract_count, total_count)
+    let mut module_types: HashMap<String, (u32, u32)> = HashMap::new();
+    for type_info in types {
+        let entry = module_types
+            .entry(type_info.module.clone())
+            .or_insert((0, 0));
+        entry.1 += 1; // total count
+        if type_info.is_abstract {
+            entry.0 += 1; // abstract count
+        }
+    }
+
     // Build dependency graph from imports
     // Map module -> set of modules it depends on (efferent coupling)
     let mut efferent: HashMap<String, HashSet<String>> = HashMap::new();
     // Map module -> set of modules that depend on it (afferent coupling)
     let mut afferent: HashMap<String, HashSet<String>> = HashMap::new();
+    // Map (from, to) -> list of imported items (for coupling strength calculation)
+    let mut import_edges: HashMap<(String, String), Vec<String>> = HashMap::new();
 
     // Initialize all modules
     for module in modules.keys() {
@@ -1051,6 +1077,11 @@ fn write_topology_artifacts(
                     .entry(to_module.clone())
                     .or_default()
                     .insert(from_module.clone());
+                // Track the specific import for coupling strength
+                import_edges
+                    .entry((from_module.clone(), to_module.clone()))
+                    .or_default()
+                    .push(import_path.clone());
             }
         }
     }
@@ -1135,7 +1166,18 @@ total_dependencies = {}
             } else {
                 0.5 // Default when no coupling
             };
-            let abstractness = 0.0; // TODO: Would need type analysis
+
+            // Calculate abstractness from type analysis
+            let (abstract_count, total_types) = module_types
+                .get(module_id)
+                .copied()
+                .unwrap_or((0, 0));
+            let abstractness = if total_types > 0 {
+                abstract_count as f64 / total_types as f64
+            } else {
+                0.0 // No types = not abstract
+            };
+
             let distance = (instability + abstractness - 1.0).abs();
 
             serde_json::json!({
@@ -1167,7 +1209,52 @@ total_dependencies = {}
         serde_json::to_string_pretty(&modules_json).unwrap(),
     )?;
 
-    // Build coupling matrix from import dependencies
+    // =========================================================================
+    // M1: Write dependencies.json (dependency graph with edges)
+    // =========================================================================
+    let dependency_nodes: Vec<serde_json::Value> = modules
+        .keys()
+        .map(|id| {
+            serde_json::json!({
+                "id": id,
+                "type": "module"
+            })
+        })
+        .collect();
+
+    let dependency_edges: Vec<serde_json::Value> = import_edges
+        .iter()
+        .map(|((from, to), imports)| {
+            serde_json::json!({
+                "from": from,
+                "to": to,
+                "imports": imports,
+                "weight": imports.len()
+            })
+        })
+        .collect();
+
+    let total_internal_edges = dependency_edges.len();
+    let total_external_imports = imports.iter().filter(|i| i.is_external).count();
+
+    let dependencies_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "nodes": dependency_nodes,
+        "edges": dependency_edges,
+        "metadata": {
+            "total_nodes": modules.len(),
+            "total_edges": total_internal_edges,
+            "external_imports": total_external_imports
+        }
+    });
+    fs::write(
+        output_path.join("graphs/dependencies.json"),
+        serde_json::to_string_pretty(&dependencies_json).unwrap(),
+    )?;
+
+    // =========================================================================
+    // M2: Build coupling matrix with REAL values (not hardcoded 0.5)
+    // =========================================================================
     let module_names: Vec<&str> = modules.keys().map(|s| s.as_str()).collect();
     let n = module_names.len();
     let mut matrix = vec![vec![0.0; n]; n];
@@ -1179,34 +1266,152 @@ total_dependencies = {}
         .map(|(i, &name)| (name, i))
         .collect();
 
-    // Fill matrix with coupling values
+    // Fill diagonal with 1.0 (self-coupling)
     for (i, row) in matrix.iter_mut().enumerate() {
-        row[i] = 1.0; // Self-coupling is 1.0
+        row[i] = 1.0;
     }
 
-    // Add actual coupling from dependencies
-    for (from, deps) in &efferent {
-        if let Some(&from_idx) = module_index.get(from.as_str()) {
-            for to in deps {
-                if let Some(&to_idx) = module_index.get(to.as_str()) {
-                    // Coupling strength of 0.5 for each import dependency
-                    matrix[from_idx][to_idx] = 0.5;
-                    matrix[to_idx][from_idx] = 0.5; // Symmetric
-                }
-            }
+    // Find max import count for normalization
+    let max_imports = import_edges
+        .values()
+        .map(|v| v.len())
+        .max()
+        .unwrap_or(1)
+        .max(1); // Ensure at least 1 to avoid division by zero
+
+    // Calculate normalized coupling strength based on import count
+    // Coupling = import_count / max_imports (normalized to 0-1)
+    for ((from, to), imports_list) in &import_edges {
+        if let (Some(&from_idx), Some(&to_idx)) = (
+            module_index.get(from.as_str()),
+            module_index.get(to.as_str()),
+        ) {
+            // Directional coupling: from -> to
+            let strength = imports_list.len() as f64 / max_imports as f64;
+            matrix[from_idx][to_idx] = strength;
+            // Note: NOT making it symmetric - coupling is directional
+            // A depending on B doesn't mean B depends on A
         }
     }
 
     let coupling_json = serde_json::json!({
         "schema_version": "1.0.0",
         "metric": "import_coupling",
-        "description": "Normalized coupling strength between modules (0-1)",
+        "description": "Normalized coupling strength between modules (0-1). Directional: matrix[i][j] = strength of module i depending on module j.",
         "modules": module_names,
-        "matrix": matrix
+        "matrix": matrix,
+        "metadata": {
+            "max_imports_between_pair": max_imports,
+            "normalization": "import_count / max_imports"
+        }
     });
     fs::write(
         output_path.join("graphs/coupling-matrix.json"),
         serde_json::to_string_pretty(&coupling_json).unwrap(),
+    )?;
+
+    // =========================================================================
+    // M4: Slice Independence Score (SIS) for Vertical Slice Architecture
+    // =========================================================================
+
+    // Detect slices from first-level module path segment
+    // e.g., "aef.core.events" -> slice "aef.core"
+    //       "crates::aps-cli::src::main" -> slice "crates::aps-cli"
+    fn get_slice_id(module_id: &str) -> String {
+        // Split by :: or . and take first two segments
+        let separator = if module_id.contains("::") { "::" } else { "." };
+        let parts: Vec<&str> = module_id.split(separator).collect();
+        if parts.len() >= 2 {
+            format!("{}{}{}", parts[0], separator, parts[1])
+        } else {
+            parts[0].to_string()
+        }
+    }
+
+    // Group modules by slice
+    let mut slices: HashMap<String, Vec<String>> = HashMap::new();
+    for module_id in modules.keys() {
+        let slice_id = get_slice_id(module_id);
+        slices.entry(slice_id).or_default().push(module_id.clone());
+    }
+
+    // Calculate SIS for each slice
+    // SIS = internal_imports / (internal_imports + external_imports)
+    let slices_json: Vec<serde_json::Value> = slices
+        .iter()
+        .map(|(slice_id, slice_modules)| {
+            let slice_module_set: HashSet<&str> =
+                slice_modules.iter().map(|s| s.as_str()).collect();
+
+            let mut internal_imports = 0u32;
+            let mut cross_slice_imports = 0u32;
+            let mut outbound_slices: HashSet<String> = HashSet::new();
+            let mut inbound_slices: HashSet<String> = HashSet::new();
+
+            // Count imports for modules in this slice
+            for module in slice_modules {
+                // Outbound: modules this slice depends on
+                if let Some(deps) = efferent.get(module) {
+                    for dep in deps {
+                        let dep_slice = get_slice_id(dep);
+                        if dep_slice == *slice_id {
+                            internal_imports += 1;
+                        } else {
+                            cross_slice_imports += 1;
+                            outbound_slices.insert(dep_slice);
+                        }
+                    }
+                }
+
+                // Inbound: modules that depend on this slice
+                if let Some(dependents) = afferent.get(module) {
+                    for dependent in dependents {
+                        if !slice_module_set.contains(dependent.as_str()) {
+                            let dependent_slice = get_slice_id(dependent);
+                            inbound_slices.insert(dependent_slice);
+                        }
+                    }
+                }
+            }
+
+            // Unique slice counts (more meaningful than edge counts)
+            let inbound_coupling = inbound_slices.len() as u32;
+            let outbound_coupling = outbound_slices.len() as u32;
+
+            let total_imports = internal_imports + cross_slice_imports;
+            let sis = if total_imports > 0 {
+                internal_imports as f64 / total_imports as f64
+            } else {
+                1.0 // No imports = fully independent
+            };
+
+            serde_json::json!({
+                "id": slice_id,
+                "modules": slice_modules,
+                "metrics": {
+                    "module_count": slice_modules.len(),
+                    "internal_imports": internal_imports,
+                    "cross_slice_imports": cross_slice_imports,
+                    "sis": sis,
+                    "inbound_coupling": inbound_coupling,
+                    "outbound_coupling": outbound_coupling
+                }
+            })
+        })
+        .collect();
+
+    let slices_output = serde_json::json!({
+        "schema_version": "1.0.0",
+        "description": "Slice Independence Score (SIS) for Vertical Slice Architecture analysis. SIS = internal_imports / total_imports. Higher = more isolated.",
+        "slices": slices_json,
+        "metadata": {
+            "total_slices": slices.len(),
+            "slice_detection": "first_two_path_segments"
+        }
+    });
+    fs::write(
+        output_path.join("metrics/slices.json"),
+        serde_json::to_string_pretty(&slices_output).unwrap(),
     )?;
 
     Ok(())
@@ -1224,6 +1429,7 @@ fn topology_validate(path: &str, _verbose: bool) -> ExitCode {
         "metrics/functions.json",
         "metrics/modules.json",
         "graphs/coupling-matrix.json",
+        "graphs/dependencies.json",
     ];
 
     let mut errors = 0;
