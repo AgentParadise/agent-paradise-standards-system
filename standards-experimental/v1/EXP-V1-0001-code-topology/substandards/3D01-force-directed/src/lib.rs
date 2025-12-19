@@ -699,6 +699,15 @@ impl ForceDirectedProjector {
         }}
         #tooltip .metric-label {{ color: #888; }}
         #tooltip .metric-value {{ color: #fff; font-weight: 500; }}
+        #tooltip .active-hint {{
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 11px;
+            color: #6bf;
+            text-align: center;
+            font-style: italic;
+        }}
         .node-label {{
             color: #fff;
             font-size: 12px;
@@ -933,7 +942,10 @@ impl ForceDirectedProjector {
             }});
         }}
         
-        // Mouse hover for tooltips
+        // Track active (clicked) module in 3D view
+        let activeModule = null;
+        
+        // Mouse hover for tooltips only (no highlighting on hover)
         function onMouseMove(event) {{
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -947,8 +959,8 @@ impl ForceDirectedProjector {
                 tooltip.style.left = event.clientX + 15 + 'px';
                 tooltip.style.top = event.clientY + 15 + 'px';
                 
-                // Highlight on 3D node hover
-                highlightModule(node.id, '3d');
+                // Show cursor as pointer
+                document.body.style.cursor = 'pointer';
 
                 // Find connections
                 const connections = data.edges
@@ -977,15 +989,42 @@ impl ForceDirectedProjector {
                         <span class="metric-label">Connected to</span>
                         <span class="metric-value">${{connections || 'none'}}</span>
                     </div>
+                    ${{activeModule === node.id ? '<div class="active-hint">Click to deactivate</div>' : '<div class="active-hint">Click to focus connections</div>'}}
                 `;
             }} else {{
                 tooltip.style.display = 'none';
-                // Only clear 3D-initiated highlights when not hovering a node
-                clearHighlight('3d');
+                document.body.style.cursor = 'default';
+            }}
+        }}
+        
+        // Click to activate/deactivate connection highlighting
+        function onClick(event) {{
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodeMeshes);
+            
+            if (intersects.length > 0) {{
+                const node = intersects[0].object.userData;
+                
+                if (activeModule === node.id) {{
+                    // Deactivate
+                    activeModule = null;
+                    clearHighlight('3d');
+                }} else {{
+                    // Activate new module
+                    activeModule = node.id;
+                    highlightModule(node.id, '3d');
+                }}
+            }} else {{
+                // Clicked on empty space - deactivate
+                if (activeModule) {{
+                    activeModule = null;
+                    clearHighlight('3d');
+                }}
             }}
         }}
 
         window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('click', onClick);
         
         // Calculate total coupling per module
         const moduleCoupling = {{}};
