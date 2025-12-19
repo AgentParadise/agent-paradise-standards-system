@@ -1014,6 +1014,8 @@ fn write_topology_artifacts(
     let mut efferent: HashMap<String, HashSet<String>> = HashMap::new();
     // Map module -> set of modules that depend on it (afferent coupling)
     let mut afferent: HashMap<String, HashSet<String>> = HashMap::new();
+    // Map (from, to) -> list of imported items (for coupling strength calculation)
+    let mut import_edges: HashMap<(String, String), Vec<String>> = HashMap::new();
 
     // Initialize all modules
     for module in modules.keys() {
@@ -1051,6 +1053,11 @@ fn write_topology_artifacts(
                     .entry(to_module.clone())
                     .or_default()
                     .insert(from_module.clone());
+                // Track the specific import for coupling strength
+                import_edges
+                    .entry((from_module.clone(), to_module.clone()))
+                    .or_default()
+                    .push(import_path.clone());
             }
         }
     }
@@ -1167,7 +1174,52 @@ total_dependencies = {}
         serde_json::to_string_pretty(&modules_json).unwrap(),
     )?;
 
-    // Build coupling matrix from import dependencies
+    // =========================================================================
+    // M1: Write dependencies.json (dependency graph with edges)
+    // =========================================================================
+    let dependency_nodes: Vec<serde_json::Value> = modules
+        .keys()
+        .map(|id| {
+            serde_json::json!({
+                "id": id,
+                "type": "module"
+            })
+        })
+        .collect();
+
+    let dependency_edges: Vec<serde_json::Value> = import_edges
+        .iter()
+        .map(|((from, to), imports)| {
+            serde_json::json!({
+                "from": from,
+                "to": to,
+                "imports": imports,
+                "weight": imports.len()
+            })
+        })
+        .collect();
+
+    let total_internal_edges = dependency_edges.len();
+    let total_external_imports = imports.iter().filter(|i| i.is_external).count();
+
+    let dependencies_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "nodes": dependency_nodes,
+        "edges": dependency_edges,
+        "metadata": {
+            "total_nodes": modules.len(),
+            "total_edges": total_internal_edges,
+            "external_imports": total_external_imports
+        }
+    });
+    fs::write(
+        output_path.join("graphs/dependencies.json"),
+        serde_json::to_string_pretty(&dependencies_json).unwrap(),
+    )?;
+
+    // =========================================================================
+    // M2: Build coupling matrix with REAL values (not hardcoded 0.5)
+    // =========================================================================
     let module_names: Vec<&str> = modules.keys().map(|s| s.as_str()).collect();
     let n = module_names.len();
     let mut matrix = vec![vec![0.0; n]; n];
@@ -1179,30 +1231,44 @@ total_dependencies = {}
         .map(|(i, &name)| (name, i))
         .collect();
 
-    // Fill matrix with coupling values
+    // Fill diagonal with 1.0 (self-coupling)
     for (i, row) in matrix.iter_mut().enumerate() {
-        row[i] = 1.0; // Self-coupling is 1.0
+        row[i] = 1.0;
     }
 
-    // Add actual coupling from dependencies
-    for (from, deps) in &efferent {
-        if let Some(&from_idx) = module_index.get(from.as_str()) {
-            for to in deps {
-                if let Some(&to_idx) = module_index.get(to.as_str()) {
-                    // Coupling strength of 0.5 for each import dependency
-                    matrix[from_idx][to_idx] = 0.5;
-                    matrix[to_idx][from_idx] = 0.5; // Symmetric
-                }
-            }
+    // Find max import count for normalization
+    let max_imports = import_edges
+        .values()
+        .map(|v| v.len())
+        .max()
+        .unwrap_or(1)
+        .max(1); // Ensure at least 1 to avoid division by zero
+
+    // Calculate normalized coupling strength based on import count
+    // Coupling = import_count / max_imports (normalized to 0-1)
+    for ((from, to), imports_list) in &import_edges {
+        if let (Some(&from_idx), Some(&to_idx)) = (
+            module_index.get(from.as_str()),
+            module_index.get(to.as_str()),
+        ) {
+            // Directional coupling: from -> to
+            let strength = imports_list.len() as f64 / max_imports as f64;
+            matrix[from_idx][to_idx] = strength;
+            // Note: NOT making it symmetric - coupling is directional
+            // A depending on B doesn't mean B depends on A
         }
     }
 
     let coupling_json = serde_json::json!({
         "schema_version": "1.0.0",
         "metric": "import_coupling",
-        "description": "Normalized coupling strength between modules (0-1)",
+        "description": "Normalized coupling strength between modules (0-1). Directional: matrix[i][j] = strength of module i depending on module j.",
         "modules": module_names,
-        "matrix": matrix
+        "matrix": matrix,
+        "metadata": {
+            "max_imports_between_pair": max_imports,
+            "normalization": "import_count / max_imports"
+        }
     });
     fs::write(
         output_path.join("graphs/coupling-matrix.json"),
@@ -1224,6 +1290,7 @@ fn topology_validate(path: &str, _verbose: bool) -> ExitCode {
         "metrics/functions.json",
         "metrics/modules.json",
         "graphs/coupling-matrix.json",
+        "graphs/dependencies.json",
     ];
 
     let mut errors = 0;
