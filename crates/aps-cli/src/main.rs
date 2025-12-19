@@ -1345,8 +1345,8 @@ total_dependencies = {}
 
             let mut internal_imports = 0u32;
             let mut cross_slice_imports = 0u32;
-            let mut inbound_coupling = 0u32;
-            let mut outbound_coupling = 0u32;
+            let mut outbound_slices: HashSet<String> = HashSet::new();
+            let mut inbound_slices: HashSet<String> = HashSet::new();
 
             // Count imports for modules in this slice
             for module in slice_modules {
@@ -1358,7 +1358,7 @@ total_dependencies = {}
                             internal_imports += 1;
                         } else {
                             cross_slice_imports += 1;
-                            outbound_coupling += 1;
+                            outbound_slices.insert(dep_slice);
                         }
                     }
                 }
@@ -1367,11 +1367,16 @@ total_dependencies = {}
                 if let Some(dependents) = afferent.get(module) {
                     for dependent in dependents {
                         if !slice_module_set.contains(dependent.as_str()) {
-                            inbound_coupling += 1;
+                            let dependent_slice = get_slice_id(dependent);
+                            inbound_slices.insert(dependent_slice);
                         }
                     }
                 }
             }
+
+            // Unique slice counts (more meaningful than edge counts)
+            let inbound_coupling = inbound_slices.len() as u32;
+            let outbound_coupling = outbound_slices.len() as u32;
 
             let total_imports = internal_imports + cross_slice_imports;
             let sis = if total_imports > 0 {

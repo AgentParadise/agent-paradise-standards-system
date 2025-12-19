@@ -284,12 +284,18 @@ pub fn extract_types(
                     let mut current = node;
                     while let Some(parent) = current.parent() {
                         if parent.kind() == "class_definition" {
-                            // Find the class name
-                            for child in parent.children(&mut parent.walk()) {
-                                if child.kind() == "identifier" {
-                                    let name = child.utf8_text(source.as_bytes()).unwrap_or("");
-                                    abstract_classes.insert(name.to_string());
-                                    break;
+                            // Use child_by_field_name for more robust class name extraction
+                            if let Some(name_node) = parent.child_by_field_name("name") {
+                                let name = name_node.utf8_text(source.as_bytes()).unwrap_or("");
+                                abstract_classes.insert(name.to_string());
+                            } else {
+                                // Fallback: scan children for an identifier
+                                for child in parent.children(&mut parent.walk()) {
+                                    if child.kind() == "identifier" {
+                                        let name = child.utf8_text(source.as_bytes()).unwrap_or("");
+                                        abstract_classes.insert(name.to_string());
+                                        break;
+                                    }
                                 }
                             }
                             break;
@@ -303,11 +309,9 @@ pub fn extract_types(
 
         if !class_name.is_empty() {
             // Track this class, will determine abstractness later
-            all_classes
-                .entry(class_name.clone())
-                .or_insert(is_abstract_match);
+            let entry = all_classes.entry(class_name.clone()).or_insert(false);
             if is_abstract_match {
-                all_classes.insert(class_name.clone(), true);
+                *entry = true;
             }
         }
     }
