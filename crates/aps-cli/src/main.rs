@@ -1060,8 +1060,8 @@ fn write_topology_artifacts(
     let mut efferent: HashMap<String, HashSet<String>> = HashMap::new();
     // Map module -> set of modules that depend on it (afferent coupling)
     let mut afferent: HashMap<String, HashSet<String>> = HashMap::new();
-    // Map (from, to) -> list of imported items (for coupling strength calculation)
-    let mut import_edges: HashMap<(String, String), Vec<String>> = HashMap::new();
+    // Map (from, to) -> list of imports with full details (for weighted coupling calculation)
+    let mut import_edges: HashMap<(String, String), Vec<code_topology::ImportInfo>> = HashMap::new();
 
     // Initialize all modules
     for module in modules.keys() {
@@ -1069,7 +1069,7 @@ fn write_topology_artifacts(
         afferent.entry(module.clone()).or_default();
     }
 
-    // Process imports to build coupling
+    // Process imports to build coupling with weighted scoring
     for import in imports {
         let from_module = &import.from_module;
 
@@ -1099,11 +1099,11 @@ fn write_topology_artifacts(
                     .entry(to_module.clone())
                     .or_default()
                     .insert(from_module.clone());
-                // Track the specific import for coupling strength
+                // Track the full import for weighted coupling calculation
                 import_edges
                     .entry((from_module.clone(), to_module.clone()))
                     .or_default()
-                    .push(import_path.clone());
+                    .push(import.clone());
             }
         }
     }
@@ -1293,38 +1293,102 @@ total_dependencies = {}
         row[i] = 1.0;
     }
 
-    // Find max import count for normalization
-    let max_imports = import_edges
-        .values()
-        .map(|v| v.len())
-        .max()
-        .unwrap_or(1)
-        .max(1); // Ensure at least 1 to avoid division by zero
-
-    // Calculate normalized coupling strength based on import count
-    // Coupling = import_count / max_imports (normalized to 0-1)
+    // =========================================================================
+    // COMPOSITE COUPLING CALCULATION (v2.0)
+    // Uses weighted import coupling with logarithmic percentile normalization
+    // =========================================================================
+    
+    // Step 1: Calculate raw weighted import coupling
+    // Weight by import kind: wildcard=0.3, multi=0.7/symbol, single=1.0, module=0.5
+    let mut raw_coupling: HashMap<(usize, usize), f64> = HashMap::new();
+    
     for ((from, to), imports_list) in &import_edges {
         if let (Some(&from_idx), Some(&to_idx)) = (
             module_index.get(from.as_str()),
             module_index.get(to.as_str()),
         ) {
-            // Directional coupling: from -> to
-            let strength = imports_list.len() as f64 / max_imports as f64;
-            matrix[from_idx][to_idx] = strength;
-            // Note: NOT making it symmetric - coupling is directional
-            // A depending on B doesn't mean B depends on A
+            let mut weighted_score = 0.0;
+            for import in imports_list {
+                let base_weight = import.kind.weight();
+                // For multi-imports, multiply by symbol count
+                let symbol_multiplier = if import.symbols.is_empty() { 
+                    1.0 
+                } else { 
+                    import.symbols.len() as f64 
+                };
+                weighted_score += base_weight * symbol_multiplier;
+            }
+            raw_coupling.insert((from_idx, to_idx), weighted_score);
         }
+    }
+    
+    // Step 2: Logarithmic percentile normalization
+    // This produces a smooth distribution instead of discrete buckets
+    fn logarithmic_percentile_normalize(values: &HashMap<(usize, usize), f64>) -> HashMap<(usize, usize), f64> {
+        if values.is_empty() {
+            return HashMap::new();
+        }
+        
+        // Apply log transform to handle outliers
+        let log_values: Vec<((usize, usize), f64)> = values
+            .iter()
+            .map(|(&k, &v)| (k, (v + 1.0).ln()))
+            .collect();
+        
+        // Sort by log value to compute percentile ranks
+        let mut sorted_values: Vec<f64> = log_values.iter().map(|(_, v)| *v).collect();
+        sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        
+        // Compute percentile rank for each value
+        let n = sorted_values.len() as f64;
+        log_values
+            .iter()
+            .map(|(k, log_v)| {
+                let rank = sorted_values.iter().filter(|&&v| v <= *log_v).count() as f64;
+                let percentile = rank / n;
+                (*k, percentile)
+            })
+            .collect()
+    }
+    
+    let normalized_coupling = logarithmic_percentile_normalize(&raw_coupling);
+    
+    // Step 3: Fill the matrix with normalized values
+    for ((from_idx, to_idx), strength) in &normalized_coupling {
+        matrix[*from_idx][*to_idx] = *strength;
+    }
+    
+    // Step 4: Also store raw import coupling for components breakdown
+    let mut import_coupling_matrix = vec![vec![0.0; n]; n];
+    for ((from_idx, to_idx), raw_score) in &raw_coupling {
+        // Normalize raw scores to 0-1 using simple max normalization for component
+        let max_raw = raw_coupling.values().cloned().fold(1.0_f64, f64::max);
+        import_coupling_matrix[*from_idx][*to_idx] = raw_score / max_raw;
     }
 
     let coupling_json = serde_json::json!({
-        "schema_version": "1.0.0",
-        "metric": "import_coupling",
-        "description": "Normalized coupling strength between modules (0-1). Directional: matrix[i][j] = strength of module i depending on module j.",
+        "schema_version": "2.0.0",
+        "metric": "composite_coupling",
+        "description": "Composite coupling strength using weighted import analysis (0-1). Directional: matrix[i][j] = strength of module i depending on module j.",
         "modules": module_names,
         "matrix": matrix,
+        "components": {
+            "import_coupling": {
+                "weight": 0.30,
+                "description": "Weighted import statement dependencies (wildcard=0.3, multi=0.7, single=1.0)",
+                "matrix": import_coupling_matrix
+            }
+        },
         "metadata": {
-            "max_imports_between_pair": max_imports,
-            "normalization": "import_count / max_imports"
+            "normalization": "logarithmic_percentile",
+            "directional": true,
+            "total_import_edges": import_edges.len(),
+            "weights": {
+                "wildcard": 0.3,
+                "multi_per_symbol": 0.7,
+                "single": 1.0,
+                "module": 0.5
+            }
         }
     });
     fs::write(

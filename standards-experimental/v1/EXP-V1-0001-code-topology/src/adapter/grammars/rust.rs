@@ -192,23 +192,39 @@ const RUST_CALL_QUERY: &str = r#"
 ///
 /// Captures:
 /// - `@import.path` - The import path identifier
+/// - `@import.wildcard` - Wildcard imports (use foo::*)
+/// - `@import.symbol` - Individual symbols in use lists
+/// - `@import.list` - The entire use list for multi-imports
 const RUST_IMPORT_QUERY: &str = r#"
-; Scoped use: use foo::bar::baz
+; Scoped use: use foo::bar::baz (single import)
 (use_declaration
   (scoped_identifier) @import.path)
 
-; Simple use: use foo
+; Simple use: use foo (module import)
 (use_declaration
   (identifier) @import.path)
+
+; Wildcard use: use foo::* 
+(use_declaration
+  (use_wildcard) @import.wildcard)
 
 ; Use with path in scoped use list: use foo::{bar, baz}
 (use_declaration
   (scoped_use_list
-    path: (identifier) @import.path))
+    path: (identifier) @import.path
+    list: (use_list) @import.list))
 
 (use_declaration
   (scoped_use_list
-    path: (scoped_identifier) @import.path))
+    path: (scoped_identifier) @import.path
+    list: (use_list) @import.list))
+
+; Capture individual symbols in use lists
+(use_list
+  (identifier) @import.symbol)
+
+(use_list
+  (scoped_identifier) @import.symbol)
 "#;
 
 // ============================================================================

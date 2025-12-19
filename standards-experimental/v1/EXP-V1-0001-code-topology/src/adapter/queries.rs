@@ -8,7 +8,7 @@ use std::path::Path;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Query, QueryCursor, Tree};
 
-use crate::{AdapterError, CallInfo, FunctionInfo, ImportInfo, TypeInfo, Visibility};
+use crate::{AdapterError, CallInfo, FunctionInfo, ImportInfo, ImportKind, TypeInfo, Visibility};
 
 use super::grammars::Grammar;
 
@@ -196,6 +196,9 @@ pub fn extract_imports(
     while let Some(m) = matches.next() {
         let mut import_path = String::new();
         let mut to_module = String::new();
+        let mut symbols: Vec<String> = Vec::new();
+        let mut is_wildcard = false;
+        let mut has_list = false;
 
         for capture in m.captures {
             let capture_name: &str = capture_names[capture.index as usize];
@@ -207,21 +210,63 @@ pub fn extract_imports(
                     import_path = text.trim_matches('"').trim_matches('\'').to_string();
                     to_module = text.to_string();
                 }
+                "import.wildcard" => {
+                    is_wildcard = true;
+                    // For wildcard, extract the path from the parent node
+                    if let Some(parent) = node.parent() {
+                        if let Some(path_node) = parent.child_by_field_name("path") {
+                            import_path = path_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                            to_module = import_path.clone();
+                        }
+                    }
+                }
+                "import.list" => {
+                    has_list = true;
+                    // Extract symbols from the use list
+                    for i in 0..node.named_child_count() {
+                        if let Some(child) = node.named_child(i) {
+                            let symbol = child.utf8_text(source.as_bytes()).unwrap_or("");
+                            if !symbol.is_empty() {
+                                symbols.push(symbol.to_string());
+                            }
+                        }
+                    }
+                }
+                "import.symbol" => {
+                    // Individual symbol capture (fallback)
+                    if !text.is_empty() && !symbols.contains(&text.to_string()) {
+                        symbols.push(text.to_string());
+                    }
+                }
                 _ => {}
             }
         }
 
-        if !import_path.is_empty() {
+        if !import_path.is_empty() || is_wildcard {
             let is_external = !import_path.starts_with('.')
                 && !import_path.starts_with("crate")
                 && !import_path.starts_with("self")
                 && !import_path.starts_with("super");
+
+            // Determine import kind
+            let kind = if is_wildcard {
+                ImportKind::Wildcard
+            } else if has_list || symbols.len() > 1 {
+                ImportKind::Multi
+            } else if symbols.len() == 1 || import_path.contains("::") {
+                ImportKind::Single
+            } else {
+                ImportKind::Module
+            };
 
             imports.push(ImportInfo {
                 from_module: module.clone(),
                 to_module,
                 import_path,
                 is_external,
+                symbols,
+                is_wildcard,
+                kind,
             });
         }
     }

@@ -575,7 +575,8 @@ impl ForceDirectedProjector {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Topology - 3D Coupling Visualization</title>
     <style>
-        body {{ margin: 0; overflow: hidden; font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; }}
+        body {{ margin: 0; overflow: hidden; font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; display: flex; background: #0f0f1a; }}
+        #main {{ flex: 1; position: relative; }}
         #info {{
             position: absolute;
             top: 10px;
@@ -615,6 +616,53 @@ impl ForceDirectedProjector {
         #legend h4 {{ margin: 0 0 10px 0; color: #aaa; font-weight: 500; }}
         .legend-item {{ display: flex; align-items: center; margin: 6px 0; }}
         .legend-color {{ width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; }}
+        #filter {{
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }}
+        #filter label {{ display: block; font-size: 11px; color: #888; margin-bottom: 6px; }}
+        #filter input[type="range"] {{ width: 100%; cursor: pointer; }}
+        #filter-value {{ float: right; color: #ff6b9d; }}
+        #sidebar {{
+            width: 280px;
+            background: linear-gradient(180deg, rgba(15,15,30,0.98), rgba(20,20,35,0.98));
+            border-left: 1px solid rgba(255,255,255,0.1);
+            overflow-y: auto;
+            padding: 15px;
+            z-index: 100;
+        }}
+        #sidebar h2 {{ 
+            font-size: 14px; 
+            color: #888; 
+            margin-bottom: 15px; 
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+        }}
+        #sidebar h2 span {{ color: #666; font-weight: normal; }}
+        .module-item {{
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }}
+        .module-item:hover {{ border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.06); }}
+        .module-item.selected {{ border-color: #ff6b9d; background: rgba(255,107,157,0.1); }}
+        .module-name {{ 
+            font-weight: 500; 
+            margin-bottom: 4px; 
+            font-size: 12px; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .module-stats {{ font-size: 10px; color: #666; display: flex; gap: 10px; }}
+        .module-coupling {{ color: #88aaff; }}
+        .module-complexity {{ color: #ffaa88; }}
         #tooltip {{
             position: absolute;
             padding: 12px 16px;
@@ -661,23 +709,33 @@ impl ForceDirectedProjector {
     </style>
 </head>
 <body>
-    <div id="info">
-        <h3>🌐 Code Topology</h3>
-        <p><strong>{node_count}</strong> modules</p>
-        <p><strong>{edge_count}</strong> coupling relationships</p>
-        <p><em>Drag to rotate • Scroll to zoom • Hover for details</em></p>
+    <div id="main">
+        <div id="info">
+            <h3>🌐 Code Topology</h3>
+            <p><strong>{node_count}</strong> modules</p>
+            <p><strong>{edge_count}</strong> coupling relationships</p>
+            <p><em>Drag to rotate • Scroll to zoom • Hover for details</em></p>
+            <div id="filter">
+                <label>Coupling Threshold <span id="filter-value">0%</span></label>
+                <input type="range" id="coupling-slider" min="0" max="100" value="0">
+            </div>
+        </div>
+        <div id="legend">
+            <h4>Module Health</h4>
+            <div class="legend-item"><div class="legend-color" style="background: #00cc88;"></div>🟢 Healthy (on main sequence)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #ffaa40;"></div>🟡 Moderate concern</div>
+            <div class="legend-item"><div class="legend-color" style="background: #ff4040;"></div>🔴 Needs attention (Zone of Pain)</div>
+            <h4 style="margin-top: 12px;">Coupling Strength</h4>
+            <div class="legend-item"><div class="legend-color" style="background: #ffffff; border: 1px solid #666;"></div>Strong (≥0.7)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #888888;"></div>Medium (0.3-0.7)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #444444;"></div>Weak (&lt;0.3)</div>
+        </div>
+        <div id="tooltip"></div>
     </div>
-    <div id="legend">
-        <h4>Module Health</h4>
-        <div class="legend-item"><div class="legend-color" style="background: #00cc88;"></div>🟢 Healthy (on main sequence)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #ffaa40;"></div>🟡 Moderate concern</div>
-        <div class="legend-item"><div class="legend-color" style="background: #ff4040;"></div>🔴 Needs attention (Zone of Pain)</div>
-        <h4 style="margin-top: 12px;">Coupling Strength</h4>
-        <div class="legend-item"><div class="legend-color" style="background: #ffffff; border: 1px solid #666;"></div>Strong (≥0.7)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #888888;"></div>Medium (0.3-0.7)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #444444;"></div>Weak (&lt;0.3)</div>
+    <div id="sidebar">
+        <h2>Modules <span id="module-count"></span></h2>
+        <div id="module-list"></div>
     </div>
-    <div id="tooltip"></div>
     <script type="importmap">
     {{
         "imports": {{
@@ -694,21 +752,24 @@ impl ForceDirectedProjector {
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x0f0f1a);
         
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const mainContainer = document.getElementById('main');
+        const mainWidth = mainContainer.clientWidth;
+        
+        const camera = new THREE.PerspectiveCamera(75, mainWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 5, 10);
         
         const renderer = new THREE.WebGLRenderer({{ antialias: true }});
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(mainWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
+        mainContainer.appendChild(renderer.domElement);
         
         // CSS2D Renderer for labels
         const labelRenderer = new CSS2DRenderer();
-        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.setSize(mainWidth, window.innerHeight);
         labelRenderer.domElement.style.position = 'absolute';
         labelRenderer.domElement.style.top = '0px';
         labelRenderer.domElement.style.pointerEvents = 'none';
-        document.body.appendChild(labelRenderer.domElement);
+        mainContainer.appendChild(labelRenderer.domElement);
         
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -837,6 +898,91 @@ impl ForceDirectedProjector {
         
         window.addEventListener('mousemove', onMouseMove);
         
+        // Calculate total coupling per module
+        const moduleCoupling = {{}};
+        data.nodes.forEach(n => moduleCoupling[n.id] = 0);
+        data.edges.forEach(e => {{
+            moduleCoupling[e.from] = (moduleCoupling[e.from] || 0) + e.strength;
+            moduleCoupling[e.to] = (moduleCoupling[e.to] || 0) + e.strength;
+        }});
+        
+        // Sort modules by coupling (descending)
+        const sortedModules = [...data.nodes].sort((a, b) => 
+            (moduleCoupling[b.id] || 0) - (moduleCoupling[a.id] || 0)
+        );
+        
+        // Populate sidebar
+        let selectedModule = null;
+        function renderSidebar() {{
+            document.getElementById('module-count').textContent = `(${{data.nodes.length}})`;
+            const list = document.getElementById('module-list');
+            list.innerHTML = sortedModules.map(m => {{
+                const coupling = moduleCoupling[m.id] || 0;
+                const shortName = m.label.split('::').pop() || m.label;
+                return `
+                    <div class="module-item ${{selectedModule === m.id ? 'selected' : ''}}" data-id="${{m.id}}">
+                        <div class="module-name" style="color:${{m.color}}">${{shortName}}</div>
+                        <div class="module-stats">
+                            <span class="module-coupling">⚡ ${{coupling.toFixed(1)}}</span>
+                            <span class="module-complexity">📊 CC:${{m.metrics.cyclomatic}}</span>
+                            <span>🔧 ${{m.metrics.function_count}}</span>
+                        </div>
+                    </div>
+                `;
+            }}).join('');
+            
+            // Add click handlers
+            list.querySelectorAll('.module-item').forEach(item => {{
+                item.addEventListener('click', () => {{
+                    const id = item.dataset.id;
+                    selectedModule = selectedModule === id ? null : id;
+                    renderSidebar();
+                    
+                    // Focus camera on selected module
+                    if (selectedModule) {{
+                        const node = data.nodes.find(n => n.id === selectedModule);
+                        if (node) {{
+                            const targetPos = new THREE.Vector3(...node.position);
+                            controls.target.copy(targetPos);
+                            camera.position.set(
+                                targetPos.x + 5,
+                                targetPos.y + 3,
+                                targetPos.z + 5
+                            );
+                        }}
+                    }}
+                    
+                    // Highlight selected node
+                    nodeMeshes.forEach(mesh => {{
+                        const isSelected = mesh.userData.id === selectedModule;
+                        mesh.material.emissiveIntensity = isSelected ? 0.6 : 0.2;
+                        mesh.scale.setScalar(isSelected ? 1.3 : 1.0);
+                    }});
+                }});
+            }});
+        }}
+        renderSidebar();
+        
+        // Coupling threshold slider
+        const edgeMeshes = [];
+        scene.children.forEach(child => {{
+            if (child.geometry && child.geometry.type === 'TubeGeometry') {{
+                edgeMeshes.push(child);
+            }}
+        }});
+        
+        document.getElementById('coupling-slider').addEventListener('input', e => {{
+            const threshold = parseInt(e.target.value) / 100;
+            document.getElementById('filter-value').textContent = `${{e.target.value}}%`;
+            
+            // Filter edges based on threshold
+            edgeMeshes.forEach((mesh, i) => {{
+                if (i < data.edges.length) {{
+                    mesh.visible = data.edges[i].strength >= threshold;
+                }}
+            }});
+        }});
+        
         // Animation loop
         function animate() {{
             requestAnimationFrame(animate);
@@ -848,11 +994,15 @@ impl ForceDirectedProjector {
         
         // Handle resize
         window.addEventListener('resize', () => {{
-            camera.aspect = window.innerWidth / window.innerHeight;
+            const mainWidth = document.getElementById('main').clientWidth;
+            camera.aspect = mainWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(mainWidth, window.innerHeight);
+            labelRenderer.setSize(mainWidth, window.innerHeight);
         }});
+        
+        // Trigger initial resize
+        window.dispatchEvent(new Event('resize'));
     </script>
 </body>
 </html>"#,
