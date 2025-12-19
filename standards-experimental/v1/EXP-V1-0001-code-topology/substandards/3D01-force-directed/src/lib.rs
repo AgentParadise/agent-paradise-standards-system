@@ -856,6 +856,77 @@ impl ForceDirectedProjector {
             }}
         }});
         
+        // Collect edge meshes for filtering/highlighting
+        const edgeMeshes = [];
+        scene.children.forEach(child => {{
+            if (child.geometry && child.geometry.type === 'TubeGeometry') {{
+                edgeMeshes.push(child);
+            }}
+        }});
+        
+        // Highlight module and its connections, fade everything else
+        let hoveredModule = null;
+        let currentThreshold = 0;
+        
+        function highlightModule(moduleId) {{
+            hoveredModule = moduleId;
+            
+            // Find connected modules
+            const connectedModules = new Set([moduleId]);
+            data.edges.forEach(edge => {{
+                if (edge.from === moduleId) connectedModules.add(edge.to);
+                if (edge.to === moduleId) connectedModules.add(edge.from);
+            }});
+            
+            // Fade out non-connected nodes
+            nodeMeshes.forEach(mesh => {{
+                const isConnected = connectedModules.has(mesh.userData.id);
+                mesh.material.opacity = isConnected ? 1.0 : 0.15;
+                mesh.material.transparent = true;
+                mesh.scale.setScalar(mesh.userData.id === moduleId ? 1.4 : (isConnected ? 1.1 : 0.8));
+            }});
+            
+            // Fade out non-connected edges
+            edgeMeshes.forEach((mesh, i) => {{
+                if (i < data.edges.length) {{
+                    const edge = data.edges[i];
+                    const isConnected = edge.from === moduleId || edge.to === moduleId;
+                    mesh.material.opacity = isConnected ? 1.0 : 0.05;
+                    mesh.material.transparent = true;
+                }}
+            }});
+            
+            // Highlight sidebar item
+            document.querySelectorAll('.module-item').forEach(el => {{
+                const isConnected = connectedModules.has(el.dataset.id);
+                el.style.opacity = isConnected ? '1' : '0.3';
+            }});
+        }}
+        
+        function clearHighlight() {{
+            if (!hoveredModule) return;
+            hoveredModule = null;
+            
+            // Restore all nodes
+            nodeMeshes.forEach(mesh => {{
+                mesh.material.opacity = 1.0;
+                mesh.scale.setScalar(1.0);
+            }});
+            
+            // Restore all edges (respecting threshold filter)
+            edgeMeshes.forEach((mesh, i) => {{
+                if (i < data.edges.length) {{
+                    mesh.material.opacity = 0.6;
+                    mesh.visible = data.edges[i].strength >= currentThreshold;
+                }}
+            }});
+            
+            // Restore sidebar
+            document.querySelectorAll('.module-item').forEach(el => {{
+                el.style.opacity = '';
+            }});
+        }}
+        
         // Mouse hover for tooltips
         function onMouseMove(event) {{
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -870,6 +941,11 @@ impl ForceDirectedProjector {
                 tooltip.style.left = event.clientX + 15 + 'px';
                 tooltip.style.top = event.clientY + 15 + 'px';
                 
+                // Highlight on 3D node hover
+                if (typeof highlightModule === 'function') {{
+                    highlightModule(node.id);
+                }}
+
                 // Find connections
                 const connections = data.edges
                     .filter(e => e.from === node.id || e.to === node.id)
@@ -900,9 +976,13 @@ impl ForceDirectedProjector {
                 `;
             }} else {{
                 tooltip.style.display = 'none';
+                // Clear highlight when not hovering a node
+                if (typeof clearHighlight === 'function') {{
+                    clearHighlight();
+                }}
             }}
         }}
-        
+
         window.addEventListener('mousemove', onMouseMove);
         
         // Calculate total coupling per module
@@ -938,7 +1018,7 @@ impl ForceDirectedProjector {
                 `;
             }}).join('');
             
-            // Add click handlers
+            // Add click and hover handlers
             list.querySelectorAll('.module-item').forEach(item => {{
                 item.addEventListener('click', () => {{
                     const id = item.dataset.id;
@@ -966,20 +1046,21 @@ impl ForceDirectedProjector {
                         mesh.scale.setScalar(isSelected ? 1.3 : 1.0);
                     }});
                 }});
+                
+                // Hover handlers for focus effect
+                item.addEventListener('mouseenter', () => {{
+                    const id = item.dataset.id;
+                    highlightModule(id);
+                }});
+                
+                item.addEventListener('mouseleave', () => {{
+                    clearHighlight();
+                }});
             }});
         }}
         renderSidebar();
         
         // Coupling threshold slider
-        const edgeMeshes = [];
-        scene.children.forEach(child => {{
-            if (child.geometry && child.geometry.type === 'TubeGeometry') {{
-                edgeMeshes.push(child);
-            }}
-        }});
-        
-        let currentThreshold = 0;
-        
         document.getElementById('coupling-slider').addEventListener('input', e => {{
             currentThreshold = parseInt(e.target.value) / 100;
             document.getElementById('filter-value').textContent = `${{e.target.value}}%`;
