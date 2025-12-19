@@ -953,8 +953,10 @@ impl ForceDirectedProjector {
         
         // Mouse hover for tooltips only (no highlighting on hover)
         function onMouseMove(event) {{
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            // Calculate mouse position relative to the canvas, not the window
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(nodeMeshes);
