@@ -719,6 +719,7 @@ fn dispatch_topology(
             println!("    check <diff.json>  Check diff against thresholds");
             println!("    comment <diff.json> Generate PR comment markdown");
             println!("    report <path>      Generate human-readable report");
+            println!("    viz <path>         Generate visualizations from .topology/");
             println!();
             println!("OPTIONS:");
             println!("    --output <dir>     Output directory (default: .topology)");
@@ -728,6 +729,17 @@ fn dispatch_topology(
             println!("    --format <fmt>     Output format: json, text (default: text)");
             println!("    --config <file>    Config file for thresholds");
             println!("    --help             Show this help message");
+            println!();
+            println!("VIZ OPTIONS:");
+            println!("    --type <type>      Visualization type:");
+            println!(
+                "                       3d       - 3D force-directed coupling graph (default)"
+            );
+            println!("                       codecity - 3D city metaphor (buildings = modules)");
+            println!("                       clusters - 2D package relationship graph");
+            println!("                       vsa      - Vertical Slice Architecture matrix");
+            println!("                       all      - Generate all visualizations");
+            println!("    --output <path>    Output file/directory");
             println!();
             println!("SUPPORTED LANGUAGES:");
             println!("    rust       .rs");
@@ -791,14 +803,24 @@ fn dispatch_topology(
             topology_report(path, verbose)
         }
         "viz" | "3d" | "visualize" => {
-            let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
+            // Get path (first non-option argument)
+            let path = args
+                .iter()
+                .find(|a| !a.starts_with('-'))
+                .map(|s| s.as_str())
+                .unwrap_or(".topology");
+            let viz_type = args
+                .iter()
+                .position(|a| a == "--type" || a == "-t")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| s.as_str())
+                .unwrap_or("3d");
             let output = args
                 .iter()
                 .position(|a| a == "--output" || a == "-o")
                 .and_then(|i| args.get(i + 1))
-                .map(|s| s.as_str())
-                .unwrap_or("topology-3d.html");
-            topology_viz(path, output, verbose)
+                .map(|s| s.as_str());
+            topology_viz(path, viz_type, output, verbose)
         }
         _ => {
             eprintln!("Error: Unknown topology command '{command}'");
@@ -2123,13 +2145,137 @@ fn topology_report(path: &str, _verbose: bool) -> ExitCode {
     ExitCode::FAILURE
 }
 
-/// Generate 3D visualization from topology artifacts.
-fn topology_viz(path: &str, output: &str, verbose: bool) -> ExitCode {
+/// Calculate health score for a module (0.0 to 1.0)
+fn calculate_health(
+    function_count: u32,
+    total_cyclomatic: u32,
+    total_cognitive: u32,
+    lines_of_code: u32,
+    ca: u32,
+    ce: u32,
+) -> f64 {
+    let mut scores = Vec::new();
+
+    let func_count = function_count.max(1) as f64;
+
+    // 1. Complexity per function (ideal: 3-8, bad: >15)
+    let avg_cc = total_cyclomatic as f64 / func_count;
+    let cc_score = if avg_cc > 5.0 {
+        (1.0 - (avg_cc - 5.0) / 15.0).max(0.0)
+    } else {
+        1.0
+    };
+    scores.push(cc_score);
+
+    // 2. Cognitive load per function (ideal: <10, bad: >30)
+    let avg_cog = total_cognitive as f64 / func_count;
+    let cog_score = (1.0 - avg_cog / 30.0).max(0.0);
+    scores.push(cog_score);
+
+    // 3. LOC per function (ideal: 10-50, bad: >100)
+    let loc_per_func = lines_of_code as f64 / func_count;
+    let loc_score = if loc_per_func > 50.0 {
+        (1.0 - (loc_per_func - 50.0) / 100.0).max(0.0)
+    } else {
+        1.0
+    };
+    scores.push(loc_score);
+
+    // 4. Coupling balance (isolated or over-coupled is bad)
+    let total_coupling = ca + ce;
+    let coupling_score = if total_coupling == 0 {
+        0.6 // Isolated
+    } else if total_coupling > 20 {
+        (1.0 - (total_coupling as f64 - 10.0) / 30.0).max(0.2)
+    } else {
+        1.0
+    };
+    scores.push(coupling_score);
+
+    // 5. Module size (ideal: 5-30 functions)
+    let size_score = if function_count < 2 {
+        0.5
+    } else if function_count > 50 {
+        (1.0 - (function_count as f64 - 30.0) / 70.0).max(0.3)
+    } else {
+        1.0
+    };
+    scores.push(size_score);
+
+    scores.iter().sum::<f64>() / scores.len() as f64
+}
+
+/// Convert health score (0.0-1.0) to hex color
+fn health_to_color(health: f64) -> &'static str {
+    match health {
+        h if h >= 0.80 => "#00ff88", // Excellent
+        h if h >= 0.65 => "#44dd77", // Good
+        h if h >= 0.50 => "#88cc55", // OK
+        h if h >= 0.35 => "#ddaa33", // Warning
+        h if h >= 0.20 => "#ff7744", // Poor
+        _ => "#ff3333",              // Critical
+    }
+}
+
+/// Get health label from score
+fn health_label(health: f64) -> &'static str {
+    match health {
+        h if h >= 0.80 => "Excellent",
+        h if h >= 0.65 => "Good",
+        h if h >= 0.50 => "OK",
+        h if h >= 0.35 => "Warning",
+        h if h >= 0.20 => "Poor",
+        _ => "Critical",
+    }
+}
+
+/// Detect architectural layer from module path
+fn detect_layer(module_path: &str) -> &'static str {
+    let path_lower = module_path.to_lowercase();
+
+    // Check patterns in order of specificity
+    let patterns: [(&str, &[&str]); 5] = [
+        (
+            "handlers",
+            &["handler", "controller", "api", "routes", "endpoint", "view"],
+        ),
+        (
+            "services",
+            &["service", "usecase", "application", "interactor"],
+        ),
+        ("models", &["model", "entity", "domain", "schema", "type"]),
+        ("data", &["repository", "repo", "data", "store", "db"]),
+        ("utils", &["util", "helper", "common", "shared", "lib"]),
+    ];
+
+    for (layer, keywords) in patterns {
+        for keyword in keywords.iter() {
+            if path_lower.contains(keyword) {
+                return layer;
+            }
+        }
+    }
+    "other"
+}
+
+/// Get slice (top-level package) from module ID
+fn get_slice_from_id(module_id: &str) -> String {
+    let parts: Vec<&str> = module_id.split('.').collect();
+    if parts.len() >= 2 {
+        format!("{}.{}", parts[0], parts[1])
+    } else {
+        parts.first().unwrap_or(&module_id).to_string()
+    }
+}
+
+/// Generate visualization from topology artifacts.
+fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool) -> ExitCode {
     use code_topology::{
         CouplingMatrixData, CouplingMatrixFile, MartinMetrics, ModuleMetrics, ModuleRecord,
         OutputFormat, Projector, Topology,
     };
     use code_topology_3d::ForceDirectedProjector;
+    use std::collections::HashMap;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -2207,22 +2353,69 @@ fn topology_viz(path: &str, output: &str, verbose: bool) -> ExitCode {
         println!("  Loaded {} module metrics", modules_file.modules.len());
     }
 
-    // Build topology
+    // Build topology for 3D viz (used by 3d type)
     let mut topology = Topology {
         languages: vec!["rust".to_string()],
         ..Default::default()
     };
 
     // Convert coupling matrix to internal format
-    let positions = matrix_file.layout.map(|l| l.positions);
+    let positions = matrix_file.layout.as_ref().map(|l| l.positions.clone());
     topology.coupling_matrix = Some(CouplingMatrixData {
-        modules: matrix_file.modules,
-        values: matrix_file.matrix,
+        modules: matrix_file.modules.clone(),
+        values: matrix_file.matrix.clone(),
         positions,
     });
 
-    // Convert module records to ModuleMetrics
+    // Build enriched module data for visualizations
+    #[derive(serde::Serialize)]
+    struct VizModule {
+        id: String,
+        name: String,
+        path: String,
+        slice: String,
+        layer: String,
+        function_count: u32,
+        total_cyclomatic: u32,
+        total_cognitive: u32,
+        lines_of_code: u32,
+        ca: u32,
+        ce: u32,
+        health: f64,
+        color: String,
+        health_label: String,
+    }
+
+    let mut viz_modules: Vec<VizModule> = Vec::new();
+
     for record in &modules_file.modules {
+        let health = calculate_health(
+            record.metrics.function_count,
+            record.metrics.total_cyclomatic,
+            record.metrics.total_cognitive,
+            record.metrics.lines_of_code,
+            record.metrics.martin.ca,
+            record.metrics.martin.ce,
+        );
+
+        viz_modules.push(VizModule {
+            id: record.id.clone(),
+            name: record.name.clone(),
+            path: record.path.clone(),
+            slice: get_slice_from_id(&record.id),
+            layer: detect_layer(&record.path).to_string(),
+            function_count: record.metrics.function_count,
+            total_cyclomatic: record.metrics.total_cyclomatic,
+            total_cognitive: record.metrics.total_cognitive,
+            lines_of_code: record.metrics.lines_of_code,
+            ca: record.metrics.martin.ca,
+            ce: record.metrics.martin.ce,
+            health,
+            color: health_to_color(health).to_string(),
+            health_label: health_label(health).to_string(),
+        });
+
+        // Also add to topology for 3D viz
         topology.modules.push(ModuleMetrics {
             id: record.id.clone(),
             name: record.name.clone(),
@@ -2245,28 +2438,922 @@ fn topology_viz(path: &str, output: &str, verbose: bool) -> ExitCode {
         });
     }
 
-    // Render 3D visualization
-    let projector = ForceDirectedProjector::new();
+    // Determine which visualizations to generate
+    let viz_types: Vec<&str> = match viz_type {
+        "all" => vec!["3d", "codecity", "clusters", "vsa"],
+        t => vec![t],
+    };
 
-    if verbose {
-        println!("Rendering 3D visualization...");
+    // Create viz output directory if generating multiple
+    let viz_dir = topology_path.join("viz");
+    if viz_type == "all" {
+        if let Err(e) = fs::create_dir_all(&viz_dir) {
+            eprintln!("Error creating viz directory: {e}");
+            return ExitCode::FAILURE;
+        }
     }
 
-    match projector.render(&topology, OutputFormat::Html, None) {
-        Ok(html) => {
-            if let Err(e) = fs::write(output, &html) {
-                eprintln!("Error writing output: {e}");
+    let mut generated_files: Vec<String> = Vec::new();
+
+    for vtype in &viz_types {
+        let (html_content, output_path): (String, PathBuf) = match *vtype {
+            "3d" => {
+                let projector = ForceDirectedProjector::new();
+                if verbose {
+                    println!("Rendering 3D force-directed visualization...");
+                }
+                match projector.render(&topology, OutputFormat::Html, None) {
+                    Ok(html_bytes) => {
+                        let html = String::from_utf8_lossy(&html_bytes).to_string();
+                        let out = if viz_type == "all" {
+                            viz_dir.join("3d.html")
+                        } else {
+                            PathBuf::from(output.unwrap_or("topology-3d.html"))
+                        };
+                        (html, out)
+                    }
+                    Err(e) => {
+                        eprintln!("Error rendering 3D visualization: {}", e.message);
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+            "codecity" => {
+                if verbose {
+                    println!("Rendering CodeCity visualization...");
+                }
+                let modules_json = serde_json::to_string_pretty(&viz_modules).unwrap_or_default();
+                let coupling_json = serde_json::to_string_pretty(&matrix_file).unwrap_or_default();
+                let html = generate_codecity_html(&modules_json, &coupling_json);
+                let out = if viz_type == "all" {
+                    viz_dir.join("codecity.html")
+                } else {
+                    PathBuf::from(output.unwrap_or("codecity.html"))
+                };
+                (html, out)
+            }
+            "clusters" => {
+                if verbose {
+                    println!("Rendering Package Clusters visualization...");
+                }
+                let modules_json = serde_json::to_string_pretty(&viz_modules).unwrap_or_default();
+                let coupling_json = serde_json::to_string_pretty(&matrix_file).unwrap_or_default();
+                let html = generate_clusters_html(&modules_json, &coupling_json);
+                let out = if viz_type == "all" {
+                    viz_dir.join("clusters.html")
+                } else {
+                    PathBuf::from(output.unwrap_or("clusters.html"))
+                };
+                (html, out)
+            }
+            "vsa" => {
+                if verbose {
+                    println!("Rendering VSA diagram...");
+                }
+                let modules_json = serde_json::to_string_pretty(&viz_modules).unwrap_or_default();
+                let html = generate_vsa_html(&modules_json);
+                let out = if viz_type == "all" {
+                    viz_dir.join("vsa.html")
+                } else {
+                    PathBuf::from(output.unwrap_or("vsa.html"))
+                };
+                (html, out)
+            }
+            unknown => {
+                eprintln!("Error: Unknown visualization type '{unknown}'");
+                eprintln!("Available types: 3d, codecity, clusters, vsa, all");
                 return ExitCode::FAILURE;
             }
-            println!("✓ Generated: {output}");
-            println!();
-            println!("Open in browser:");
-            println!("  open {output}");
-            ExitCode::SUCCESS
+        };
+
+        if let Err(e) = fs::write(&output_path, &html_content) {
+            eprintln!("Error writing {}: {e}", output_path.display());
+            return ExitCode::FAILURE;
         }
-        Err(e) => {
-            eprintln!("Error rendering visualization: {}", e.message);
-            ExitCode::FAILURE
-        }
+        generated_files.push(output_path.display().to_string());
     }
+
+    // Generate index if --all
+    if viz_type == "all" {
+        if verbose {
+            println!("Generating index...");
+        }
+
+        // Calculate summary stats
+        let total_modules = viz_modules.len();
+        let mut slices: HashMap<String, u32> = HashMap::new();
+        let mut total_health = 0.0;
+        for m in &viz_modules {
+            *slices.entry(m.slice.clone()).or_insert(0) += 1;
+            total_health += m.health;
+        }
+        let avg_health = if total_modules > 0 {
+            total_health / total_modules as f64
+        } else {
+            0.0
+        };
+
+        let index_html = generate_index_html(total_modules, slices.len(), avg_health);
+        let index_path = viz_dir.join("index.html");
+        if let Err(e) = fs::write(&index_path, &index_html) {
+            eprintln!("Error writing index: {e}");
+            return ExitCode::FAILURE;
+        }
+        generated_files.push(index_path.display().to_string());
+    }
+
+    // Print results
+    println!("✓ Generated visualizations:");
+    for file in &generated_files {
+        println!("  {file}");
+    }
+    println!();
+    println!("Open in browser:");
+    if viz_type == "all" {
+        println!("  open {}", viz_dir.join("index.html").display());
+    } else {
+        println!(
+            "  open {}",
+            generated_files.first().unwrap_or(&String::new())
+        );
+    }
+
+    ExitCode::SUCCESS
+}
+
+/// Generate CodeCity HTML (3D city metaphor)
+fn generate_codecity_html(modules_json: &str, coupling_json: &str) -> String {
+    format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCity - Topology Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; }}
+        #info {{ position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 12px; border: 1px solid #333; max-width: 300px; z-index: 100; }}
+        #info h1 {{ font-size: 18px; margin-bottom: 10px; color: #00ff88; }}
+        #info p {{ font-size: 12px; color: #888; margin-bottom: 8px; }}
+        #legend {{ margin-top: 15px; }}
+        .legend-item {{ display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 11px; }}
+        .legend-color {{ width: 16px; height: 16px; border-radius: 3px; }}
+        #tooltip {{ position: fixed; display: none; background: rgba(0,0,0,0.95); padding: 15px; border-radius: 8px; border: 1px solid #444; font-size: 12px; pointer-events: none; z-index: 200; max-width: 320px; }}
+        #tooltip h3 {{ color: #00ff88; margin-bottom: 8px; font-size: 14px; }}
+        #tooltip .metric {{ display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #222; }}
+        #tooltip .metric:last-child {{ border-bottom: none; }}
+        #tooltip .label {{ color: #888; }}
+        #tooltip .value {{ color: #fff; font-weight: 500; }}
+        #controls {{ position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px 16px; border-radius: 8px; font-size: 11px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>🏙️ CodeCity</h1>
+        <p>Buildings represent modules. Height = complexity, color = health.</p>
+        <div id="legend">
+            <div class="legend-item"><div class="legend-color" style="background:#00ff88"></div>Excellent (≥80%)</div>
+            <div class="legend-item"><div class="legend-color" style="background:#44dd77"></div>Good (≥65%)</div>
+            <div class="legend-item"><div class="legend-color" style="background:#88cc55"></div>OK (≥50%)</div>
+            <div class="legend-item"><div class="legend-color" style="background:#ddaa33"></div>Warning (≥35%)</div>
+            <div class="legend-item"><div class="legend-color" style="background:#ff7744"></div>Poor (≥20%)</div>
+            <div class="legend-item"><div class="legend-color" style="background:#ff3333"></div>Critical (&lt;20%)</div>
+        </div>
+    </div>
+    <div id="tooltip"></div>
+    <div id="controls">🖱️ Drag to rotate • Scroll to zoom • Right-click to pan</div>
+
+    <script>
+        const MODULES = {modules_json};
+        const COUPLING = {coupling_json};
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0f);
+        
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(30, 40, 50);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambient = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambient);
+        const directional = new THREE.DirectionalLight(0xffffff, 0.8);
+        directional.position.set(50, 100, 50);
+        scene.add(directional);
+
+        // Ground plane
+        const groundGeo = new THREE.PlaneGeometry(200, 200);
+        const groundMat = new THREE.MeshStandardMaterial({{ color: 0x111115, roughness: 1 }});
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.1;
+        scene.add(ground);
+
+        // Grid
+        const grid = new THREE.GridHelper(100, 50, 0x222222, 0x181818);
+        scene.add(grid);
+
+        // Group modules by slice (district)
+        const slices = {{}};
+        MODULES.forEach(m => {{
+            if (!slices[m.slice]) slices[m.slice] = [];
+            slices[m.slice].push(m);
+        }});
+
+        // Layout districts
+        const districtNames = Object.keys(slices);
+        const gridSize = Math.ceil(Math.sqrt(districtNames.length));
+        const districtSpacing = 25;
+        const buildingSpacing = 3;
+
+        const buildings = [];
+        let districtIndex = 0;
+
+        districtNames.forEach(sliceName => {{
+            const modules = slices[sliceName];
+            const districtX = (districtIndex % gridSize) * districtSpacing - (gridSize * districtSpacing) / 2;
+            const districtZ = Math.floor(districtIndex / gridSize) * districtSpacing - (gridSize * districtSpacing) / 2;
+
+            // District label
+            // TODO: Add text labels
+
+            // Layout buildings in district
+            const buildingGrid = Math.ceil(Math.sqrt(modules.length));
+            modules.forEach((m, i) => {{
+                const localX = (i % buildingGrid) * buildingSpacing - (buildingGrid * buildingSpacing) / 2;
+                const localZ = Math.floor(i / buildingGrid) * buildingSpacing - (buildingGrid * buildingSpacing) / 2;
+
+                // Building dimensions based on metrics
+                const height = Math.max(1, m.total_cyclomatic / 10);
+                const width = Math.max(0.8, Math.sqrt(m.function_count) * 0.5);
+                const depth = width;
+
+                const geometry = new THREE.BoxGeometry(width, height, depth);
+                const material = new THREE.MeshStandardMaterial({{
+                    color: new THREE.Color(m.color),
+                    roughness: 0.6,
+                    metalness: 0.2
+                }});
+                const building = new THREE.Mesh(geometry, material);
+                building.position.set(districtX + localX, height / 2, districtZ + localZ);
+                building.userData = m;
+                scene.add(building);
+                buildings.push(building);
+            }});
+
+            districtIndex++;
+        }});
+
+        // Simple orbit controls
+        let isDragging = false;
+        let isPanning = false;
+        let previousMouse = {{ x: 0, y: 0 }};
+        let spherical = {{ radius: 80, theta: Math.PI / 4, phi: Math.PI / 3 }};
+        let target = new THREE.Vector3(0, 0, 0);
+
+        function updateCamera() {{
+            camera.position.x = target.x + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+            camera.position.y = target.y + spherical.radius * Math.cos(spherical.phi);
+            camera.position.z = target.z + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+            camera.lookAt(target);
+        }}
+        updateCamera();
+
+        renderer.domElement.addEventListener('mousedown', e => {{
+            if (e.button === 0) isDragging = true;
+            if (e.button === 2) isPanning = true;
+            previousMouse = {{ x: e.clientX, y: e.clientY }};
+        }});
+
+        renderer.domElement.addEventListener('mousemove', e => {{
+            const deltaX = e.clientX - previousMouse.x;
+            const deltaY = e.clientY - previousMouse.y;
+
+            if (isDragging) {{
+                spherical.theta -= deltaX * 0.01;
+                spherical.phi -= deltaY * 0.01;
+                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+                updateCamera();
+            }}
+            if (isPanning) {{
+                const right = new THREE.Vector3();
+                const up = new THREE.Vector3(0, 1, 0);
+                camera.getWorldDirection(right);
+                right.cross(up).normalize();
+                target.add(right.multiplyScalar(-deltaX * 0.1));
+                target.y += deltaY * 0.1;
+                updateCamera();
+            }}
+            previousMouse = {{ x: e.clientX, y: e.clientY }};
+        }});
+
+        window.addEventListener('mouseup', () => {{ isDragging = false; isPanning = false; }});
+        renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+        renderer.domElement.addEventListener('wheel', e => {{
+            spherical.radius *= 1 + e.deltaY * 0.001;
+            spherical.radius = Math.max(10, Math.min(200, spherical.radius));
+            updateCamera();
+        }});
+
+        // Raycasting for tooltips
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const tooltip = document.getElementById('tooltip');
+
+        renderer.domElement.addEventListener('mousemove', e => {{
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(buildings);
+
+            if (intersects.length > 0) {{
+                const m = intersects[0].object.userData;
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+                tooltip.innerHTML = `
+                    <h3>${{m.name}}</h3>
+                    <div class="metric"><span class="label">Slice</span><span class="value">${{m.slice}}</span></div>
+                    <div class="metric"><span class="label">Layer</span><span class="value">${{m.layer}}</span></div>
+                    <div class="metric"><span class="label">Functions</span><span class="value">${{m.function_count}}</span></div>
+                    <div class="metric"><span class="label">Complexity</span><span class="value">${{m.total_cyclomatic}}</span></div>
+                    <div class="metric"><span class="label">Cognitive</span><span class="value">${{m.total_cognitive}}</span></div>
+                    <div class="metric"><span class="label">LOC</span><span class="value">${{m.lines_of_code}}</span></div>
+                    <div class="metric"><span class="label">Coupling (Ca/Ce)</span><span class="value">${{m.ca}} / ${{m.ce}}</span></div>
+                    <div class="metric"><span class="label">Health</span><span class="value" style="color:${{m.color}}">${{(m.health * 100).toFixed(0)}}% (${{m.health_label}})</span></div>
+                `;
+            }} else {{
+                tooltip.style.display = 'none';
+            }}
+        }});
+
+        // Resize handler
+        window.addEventListener('resize', () => {{
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }});
+
+        // Animation loop
+        function animate() {{
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }}
+        animate();
+    </script>
+</body>
+</html>"##,
+        modules_json = modules_json,
+        coupling_json = coupling_json
+    )
+}
+
+/// Generate Package Clusters HTML (2D force-directed)
+fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
+    format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Package Clusters - Topology Visualization</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; }}
+        canvas {{ display: block; }}
+        #info {{ position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 12px; border: 1px solid #333; max-width: 280px; z-index: 100; }}
+        #info h1 {{ font-size: 18px; margin-bottom: 10px; color: #00ff88; }}
+        #info p {{ font-size: 12px; color: #888; margin-bottom: 8px; }}
+        #tooltip {{ position: fixed; display: none; background: rgba(0,0,0,0.95); padding: 15px; border-radius: 8px; border: 1px solid #444; font-size: 12px; pointer-events: none; z-index: 200; }}
+        #tooltip h3 {{ color: #00ff88; margin-bottom: 8px; }}
+        #controls {{ position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px 16px; border-radius: 8px; font-size: 11px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>🔧 Package Clusters</h1>
+        <p>Circles = packages (slices). Lines = coupling between packages.</p>
+        <p style="margin-top: 10px; color: #666;">Circle size = module count<br>Color = average health</p>
+    </div>
+    <div id="tooltip"></div>
+    <div id="controls">🖱️ Drag to pan • Scroll to zoom</div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const MODULES = {modules_json};
+        const COUPLING = {coupling_json};
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        function resize() {{
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width * devicePixelRatio;
+            canvas.height = height * devicePixelRatio;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            ctx.scale(devicePixelRatio, devicePixelRatio);
+        }}
+        resize();
+        window.addEventListener('resize', () => {{ resize(); draw(); }});
+
+        // Group modules by slice
+        const sliceMap = {{}};
+        MODULES.forEach(m => {{
+            if (!sliceMap[m.slice]) {{
+                sliceMap[m.slice] = {{ modules: [], totalHealth: 0 }};
+            }}
+            sliceMap[m.slice].modules.push(m);
+            sliceMap[m.slice].totalHealth += m.health;
+        }});
+
+        // Build slice nodes
+        const slices = Object.entries(sliceMap).map(([name, data], i) => {{
+            const avgHealth = data.totalHealth / data.modules.length;
+            return {{
+                name,
+                modules: data.modules,
+                count: data.modules.length,
+                health: avgHealth,
+                color: healthToColor(avgHealth),
+                x: width / 2 + (Math.random() - 0.5) * 200,
+                y: height / 2 + (Math.random() - 0.5) * 200,
+                vx: 0,
+                vy: 0,
+                radius: Math.max(25, Math.sqrt(data.modules.length) * 15)
+            }};
+        }});
+
+        // Build edges from coupling matrix
+        const edges = [];
+        const moduleToSlice = {{}};
+        MODULES.forEach(m => moduleToSlice[m.id] = m.slice);
+
+        for (let i = 0; i < COUPLING.modules.length; i++) {{
+            for (let j = i + 1; j < COUPLING.modules.length; j++) {{
+                const strength = COUPLING.matrix[i][j] + COUPLING.matrix[j][i];
+                if (strength > 0) {{
+                    const sliceA = moduleToSlice[COUPLING.modules[i]];
+                    const sliceB = moduleToSlice[COUPLING.modules[j]];
+                    if (sliceA && sliceB && sliceA !== sliceB) {{
+                        // Find or create edge
+                        let edge = edges.find(e => 
+                            (e.source === sliceA && e.target === sliceB) ||
+                            (e.source === sliceB && e.target === sliceA)
+                        );
+                        if (!edge) {{
+                            edges.push({{ source: sliceA, target: sliceB, strength: strength }});
+                        }} else {{
+                            edge.strength += strength;
+                        }}
+                    }}
+                }}
+            }}
+        }}
+
+        function healthToColor(h) {{
+            if (h >= 0.80) return '#00ff88';
+            if (h >= 0.65) return '#44dd77';
+            if (h >= 0.50) return '#88cc55';
+            if (h >= 0.35) return '#ddaa33';
+            if (h >= 0.20) return '#ff7744';
+            return '#ff3333';
+        }}
+
+        // Simple force simulation
+        let transform = {{ x: 0, y: 0, scale: 1 }};
+        
+        function simulate() {{
+            const centerX = width / 2;
+            const centerY = height / 2;
+
+            // Apply forces
+            slices.forEach(node => {{
+                // Center gravity
+                node.vx += (centerX - node.x) * 0.0005;
+                node.vy += (centerY - node.y) * 0.0005;
+
+                // Repulsion from other nodes
+                slices.forEach(other => {{
+                    if (node === other) return;
+                    const dx = node.x - other.x;
+                    const dy = node.y - other.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const minDist = node.radius + other.radius + 30;
+                    if (dist < minDist) {{
+                        const force = (minDist - dist) / dist * 0.05;
+                        node.vx += dx * force;
+                        node.vy += dy * force;
+                    }}
+                }});
+            }});
+
+            // Spring forces for edges
+            edges.forEach(edge => {{
+                const source = slices.find(s => s.name === edge.source);
+                const target = slices.find(s => s.name === edge.target);
+                if (!source || !target) return;
+
+                const dx = target.x - source.x;
+                const dy = target.y - source.y;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                const idealDist = 150;
+                const force = (dist - idealDist) * 0.0001 * edge.strength;
+
+                source.vx += dx / dist * force;
+                source.vy += dy / dist * force;
+                target.vx -= dx / dist * force;
+                target.vy -= dy / dist * force;
+            }});
+
+            // Apply velocity with damping
+            slices.forEach(node => {{
+                node.vx *= 0.9;
+                node.vy *= 0.9;
+                node.x += node.vx;
+                node.y += node.vy;
+            }});
+        }}
+
+        function draw() {{
+            ctx.clearRect(0, 0, width, height);
+            ctx.save();
+            ctx.translate(transform.x, transform.y);
+            ctx.scale(transform.scale, transform.scale);
+
+            // Draw edges
+            const maxStrength = Math.max(...edges.map(e => e.strength), 1);
+            edges.forEach(edge => {{
+                const source = slices.find(s => s.name === edge.source);
+                const target = slices.find(s => s.name === edge.target);
+                if (!source || !target) return;
+
+                ctx.beginPath();
+                ctx.moveTo(source.x, source.y);
+                ctx.lineTo(target.x, target.y);
+                ctx.strokeStyle = `rgba(100, 100, 150, ${{0.1 + (edge.strength / maxStrength) * 0.5}})`;
+                ctx.lineWidth = 1 + (edge.strength / maxStrength) * 3;
+                ctx.stroke();
+            }});
+
+            // Draw nodes
+            slices.forEach(node => {{
+                // Glow
+                const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.radius * 1.5);
+                gradient.addColorStop(0, node.color + '40');
+                gradient.addColorStop(1, 'transparent');
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.radius * 1.5, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                // Circle
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+                ctx.fillStyle = node.color + '30';
+                ctx.fill();
+                ctx.strokeStyle = node.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Label
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px -apple-system, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                const label = node.name.split('.').pop() || node.name;
+                ctx.fillText(label, node.x, node.y);
+            }});
+
+            ctx.restore();
+        }}
+
+        // Animation
+        function animate() {{
+            simulate();
+            draw();
+            requestAnimationFrame(animate);
+        }}
+        animate();
+
+        // Pan and zoom
+        let isDragging = false;
+        let lastMouse = {{ x: 0, y: 0 }};
+
+        canvas.addEventListener('mousedown', e => {{
+            isDragging = true;
+            lastMouse = {{ x: e.clientX, y: e.clientY }};
+        }});
+
+        canvas.addEventListener('mousemove', e => {{
+            if (isDragging) {{
+                transform.x += e.clientX - lastMouse.x;
+                transform.y += e.clientY - lastMouse.y;
+                lastMouse = {{ x: e.clientX, y: e.clientY }};
+            }}
+
+            // Tooltip
+            const tooltip = document.getElementById('tooltip');
+            const mx = (e.clientX - transform.x) / transform.scale;
+            const my = (e.clientY - transform.y) / transform.scale;
+
+            const hovered = slices.find(s => {{
+                const dx = s.x - mx;
+                const dy = s.y - my;
+                return Math.sqrt(dx*dx + dy*dy) < s.radius;
+            }});
+
+            if (hovered) {{
+                tooltip.style.display = 'block';
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+                tooltip.innerHTML = `
+                    <h3>${{hovered.name}}</h3>
+                    <div>Modules: ${{hovered.count}}</div>
+                    <div style="color:${{hovered.color}}">Health: ${{(hovered.health * 100).toFixed(0)}}%</div>
+                    <div style="margin-top:8px;color:#666;font-size:11px">
+                        ${{hovered.modules.slice(0, 5).map(m => m.name).join(', ')}}${{hovered.modules.length > 5 ? '...' : ''}}
+                    </div>
+                `;
+            }} else {{
+                tooltip.style.display = 'none';
+            }}
+        }});
+
+        canvas.addEventListener('mouseup', () => isDragging = false);
+        canvas.addEventListener('mouseleave', () => isDragging = false);
+
+        canvas.addEventListener('wheel', e => {{
+            e.preventDefault();
+            const scale = transform.scale * (1 - e.deltaY * 0.001);
+            transform.scale = Math.max(0.2, Math.min(3, scale));
+        }});
+    </script>
+</body>
+</html>"##,
+        modules_json = modules_json,
+        coupling_json = coupling_json
+    )
+}
+
+/// Generate VSA Diagram HTML (Vertical Slice Architecture matrix)
+fn generate_vsa_html(modules_json: &str) -> String {
+    format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSA Diagram - Topology Visualization</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; padding: 20px; }}
+        h1 {{ color: #00ff88; margin-bottom: 10px; }}
+        .subtitle {{ color: #666; margin-bottom: 30px; }}
+        .matrix-container {{ overflow-x: auto; }}
+        table {{ border-collapse: collapse; min-width: 100%; }}
+        th, td {{ padding: 12px 16px; text-align: center; border: 1px solid #222; min-width: 100px; }}
+        th {{ background: #1a1a20; color: #888; font-weight: 500; position: sticky; top: 0; }}
+        th.layer-header {{ writing-mode: horizontal-tb; background: #15151a; }}
+        .layer-label {{ background: #15151a; font-weight: 500; text-align: left; color: #888; }}
+        .cell {{ position: relative; cursor: pointer; transition: transform 0.2s; }}
+        .cell:hover {{ transform: scale(1.05); z-index: 10; }}
+        .cell-inner {{ border-radius: 6px; padding: 8px; min-height: 50px; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
+        .cell-count {{ font-size: 20px; font-weight: 600; }}
+        .cell-label {{ font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 4px; }}
+        .empty {{ background: #0f0f12; color: #333; }}
+        .legend {{ margin-top: 30px; display: flex; gap: 20px; flex-wrap: wrap; }}
+        .legend-item {{ display: flex; align-items: center; gap: 8px; font-size: 12px; color: #888; }}
+        .legend-color {{ width: 20px; height: 20px; border-radius: 4px; }}
+        #tooltip {{ position: fixed; display: none; background: rgba(0,0,0,0.95); padding: 15px; border-radius: 8px; border: 1px solid #444; font-size: 12px; pointer-events: none; z-index: 200; max-width: 300px; }}
+        #tooltip h3 {{ color: #00ff88; margin-bottom: 8px; }}
+        #tooltip .module-list {{ max-height: 200px; overflow-y: auto; }}
+        #tooltip .module-item {{ padding: 4px 0; border-bottom: 1px solid #222; }}
+    </style>
+</head>
+<body>
+    <h1>🍰 Vertical Slice Architecture</h1>
+    <p class="subtitle">Columns = feature slices, Rows = architectural layers, Cells = module count</p>
+    
+    <div class="matrix-container">
+        <table id="matrix"></table>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-color" style="background:#00ff88"></div>Excellent health</div>
+        <div class="legend-item"><div class="legend-color" style="background:#88cc55"></div>OK health</div>
+        <div class="legend-item"><div class="legend-color" style="background:#ff7744"></div>Poor health</div>
+        <div class="legend-item"><div class="legend-color" style="background:#0f0f12;border:1px solid #333"></div>Empty (no modules)</div>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <script>
+        const MODULES = {modules_json};
+        const LAYERS = ['handlers', 'services', 'models', 'data', 'utils', 'other'];
+
+        // Build slice × layer matrix
+        const matrix = {{}};
+        const slices = new Set();
+
+        MODULES.forEach(m => {{
+            slices.add(m.slice);
+            const key = `${{m.slice}}|${{m.layer}}`;
+            if (!matrix[key]) {{
+                matrix[key] = {{ modules: [], totalHealth: 0 }};
+            }}
+            matrix[key].modules.push(m);
+            matrix[key].totalHealth += m.health;
+        }});
+
+        const sliceList = Array.from(slices).sort();
+
+        function healthToColor(h) {{
+            if (h >= 0.80) return '#00ff88';
+            if (h >= 0.65) return '#44dd77';
+            if (h >= 0.50) return '#88cc55';
+            if (h >= 0.35) return '#ddaa33';
+            if (h >= 0.20) return '#ff7744';
+            return '#ff3333';
+        }}
+
+        // Render table
+        const table = document.getElementById('matrix');
+        
+        // Header row
+        let headerRow = '<tr><th class="layer-header">Layer \\ Slice</th>';
+        sliceList.forEach(slice => {{
+            const label = slice.split('.').pop() || slice;
+            headerRow += `<th>${{label}}</th>`;
+        }});
+        headerRow += '</tr>';
+        table.innerHTML = headerRow;
+
+        // Data rows
+        LAYERS.forEach(layer => {{
+            let row = `<tr><td class="layer-label">${{layer}}</td>`;
+            sliceList.forEach(slice => {{
+                const key = `${{slice}}|${{layer}}`;
+                const cell = matrix[key];
+                
+                if (cell && cell.modules.length > 0) {{
+                    const avgHealth = cell.totalHealth / cell.modules.length;
+                    const color = healthToColor(avgHealth);
+                    row += `
+                        <td class="cell" data-slice="${{slice}}" data-layer="${{layer}}">
+                            <div class="cell-inner" style="background:${{color}}20;border:1px solid ${{color}}">
+                                <span class="cell-count" style="color:${{color}}">${{cell.modules.length}}</span>
+                                <span class="cell-label">${{(avgHealth * 100).toFixed(0)}}%</span>
+                            </div>
+                        </td>
+                    `;
+                }} else {{
+                    row += '<td class="cell empty"><div class="cell-inner">-</div></td>';
+                }}
+            }});
+            row += '</tr>';
+            table.innerHTML += row;
+        }});
+
+        // Tooltips
+        const tooltip = document.getElementById('tooltip');
+        document.querySelectorAll('.cell[data-slice]').forEach(cell => {{
+            cell.addEventListener('mouseenter', e => {{
+                const slice = cell.dataset.slice;
+                const layer = cell.dataset.layer;
+                const key = `${{slice}}|${{layer}}`;
+                const data = matrix[key];
+                
+                if (data) {{
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = `
+                        <h3>${{slice}} / ${{layer}}</h3>
+                        <div class="module-list">
+                            ${{data.modules.map(m => `
+                                <div class="module-item">
+                                    <span style="color:${{m.color}}">●</span> ${{m.name}}
+                                    <span style="color:#666;font-size:10px">(${{(m.health * 100).toFixed(0)}}%)</span>
+                                </div>
+                            `).join('')}}
+                        </div>
+                    `;
+                }}
+            }});
+            
+            cell.addEventListener('mousemove', e => {{
+                tooltip.style.left = (e.clientX + 15) + 'px';
+                tooltip.style.top = (e.clientY + 15) + 'px';
+            }});
+            
+            cell.addEventListener('mouseleave', () => {{
+                tooltip.style.display = 'none';
+            }});
+        }});
+    </script>
+</body>
+</html>"##,
+        modules_json = modules_json
+    )
+}
+
+/// Generate index HTML (dashboard linking all visualizations)
+fn generate_index_html(module_count: usize, slice_count: usize, avg_health: f64) -> String {
+    let health_color = health_to_color(avg_health);
+    let health_label = health_label(avg_health);
+    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+
+    format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Topology Dashboard</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; padding: 40px; min-height: 100vh; }}
+        .container {{ max-width: 1000px; margin: 0 auto; }}
+        h1 {{ font-size: 32px; margin-bottom: 8px; }}
+        .subtitle {{ color: #666; margin-bottom: 40px; }}
+        .stats {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }}
+        .stat {{ background: #15151a; padding: 24px; border-radius: 12px; border: 1px solid #222; }}
+        .stat-value {{ font-size: 36px; font-weight: 600; margin-bottom: 8px; }}
+        .stat-label {{ color: #666; font-size: 14px; }}
+        .viz-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }}
+        .viz-card {{ background: #15151a; border-radius: 12px; border: 1px solid #222; padding: 24px; text-decoration: none; color: #fff; transition: all 0.2s; }}
+        .viz-card:hover {{ border-color: #00ff88; transform: translateY(-2px); }}
+        .viz-icon {{ font-size: 40px; margin-bottom: 16px; }}
+        .viz-title {{ font-size: 18px; font-weight: 600; margin-bottom: 8px; }}
+        .viz-desc {{ color: #666; font-size: 13px; line-height: 1.5; }}
+        footer {{ margin-top: 60px; text-align: center; color: #444; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Topology Dashboard</h1>
+        <p class="subtitle">Generated: {timestamp}</p>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value">{module_count}</div>
+                <div class="stat-label">Modules</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">{slice_count}</div>
+                <div class="stat-label">Slices</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" style="color:{health_color}">{health_pct}%</div>
+                <div class="stat-label">Avg Health ({health_label})</div>
+            </div>
+        </div>
+
+        <div class="viz-grid">
+            <a href="3d.html" class="viz-card">
+                <div class="viz-icon">🌐</div>
+                <div class="viz-title">3D Coupling Graph</div>
+                <div class="viz-desc">Force-directed graph showing module coupling relationships with Martin metrics.</div>
+            </a>
+            <a href="codecity.html" class="viz-card">
+                <div class="viz-icon">🏙️</div>
+                <div class="viz-title">CodeCity</div>
+                <div class="viz-desc">3D city metaphor where buildings represent modules. Height = complexity, color = health.</div>
+            </a>
+            <a href="clusters.html" class="viz-card">
+                <div class="viz-icon">🔧</div>
+                <div class="viz-title">Package Clusters</div>
+                <div class="viz-desc">2D force-directed graph of package relationships with coupling strength.</div>
+            </a>
+            <a href="vsa.html" class="viz-card">
+                <div class="viz-icon">🍰</div>
+                <div class="viz-title">VSA Diagram</div>
+                <div class="viz-desc">Vertical Slice Architecture matrix showing feature slices vs. architectural layers.</div>
+            </a>
+        </div>
+
+        <footer>
+            Generated by Agent Paradise Standards System • EXP-V1-0001 Code Topology
+        </footer>
+    </div>
+</body>
+</html>"##,
+        timestamp = timestamp,
+        module_count = module_count,
+        slice_count = slice_count,
+        health_color = health_color,
+        health_pct = (avg_health * 100.0).round() as i32,
+        health_label = health_label
+    )
 }
