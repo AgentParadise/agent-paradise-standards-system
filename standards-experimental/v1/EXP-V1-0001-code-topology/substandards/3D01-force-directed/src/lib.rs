@@ -813,13 +813,16 @@ impl ForceDirectedProjector {
         
         // Create nodes with labels
         data.nodes.forEach(node => {{
-            // Create sphere
-            const geometry = new THREE.SphereGeometry(node.size * 0.35, 32, 32);
-            const material = new THREE.MeshPhongMaterial({{ 
+            // Create sphere - minimum size for easy clicking
+            const nodeRadius = Math.max(0.6, node.size * 0.5);
+            const geometry = new THREE.SphereGeometry(nodeRadius, 32, 32);
+            const material = new THREE.MeshPhongMaterial({{
                 color: node.color,
                 emissive: node.color,
-                emissiveIntensity: 0.2,
-                shininess: 80
+                emissiveIntensity: 0.4,
+                shininess: 100,
+                transparent: true,
+                opacity: 1.0
             }});
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(...node.position);
@@ -978,8 +981,25 @@ impl ForceDirectedProjector {
                 tooltip.style.left = left + 'px';
                 tooltip.style.top = top + 'px';
                 
-                // Show cursor as pointer
+                // Show cursor as pointer and highlight hovered node
                 document.body.style.cursor = 'pointer';
+                
+                // Glow effect on hovered node
+                const hoveredMesh = intersects[0].object;
+                if (!hoveredMesh.userData.isHovered) {{
+                    // Reset previous hovered node
+                    nodeMeshes.forEach(m => {{
+                        if (m.userData.isHovered && m !== hoveredMesh) {{
+                            m.userData.isHovered = false;
+                            m.material.emissiveIntensity = 0.4;
+                            m.scale.setScalar(1.0);
+                        }}
+                    }});
+                    // Highlight current
+                    hoveredMesh.userData.isHovered = true;
+                    hoveredMesh.material.emissiveIntensity = 0.8;
+                    hoveredMesh.scale.setScalar(1.15);
+                }}
 
                 // Find connections
                 const connections = data.edges
@@ -1013,9 +1033,18 @@ impl ForceDirectedProjector {
             }} else {{
                 tooltip.style.display = 'none';
                 document.body.style.cursor = 'default';
+                
+                // Reset any hovered node glow
+                nodeMeshes.forEach(m => {{
+                    if (m.userData.isHovered) {{
+                        m.userData.isHovered = false;
+                        m.material.emissiveIntensity = 0.4;
+                        m.scale.setScalar(1.0);
+                    }}
+                }});
             }}
         }}
-        
+
         // Click to activate/deactivate connection highlighting
         function onClick(event) {{
             raycaster.setFromCamera(mouse, camera);
