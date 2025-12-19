@@ -215,7 +215,10 @@ pub fn extract_imports(
                     // For wildcard, extract the path from the parent node
                     if let Some(parent) = node.parent() {
                         if let Some(path_node) = parent.child_by_field_name("path") {
-                            import_path = path_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                            import_path = path_node
+                                .utf8_text(source.as_bytes())
+                                .unwrap_or("")
+                                .to_string();
                             to_module = import_path.clone();
                         }
                     }
