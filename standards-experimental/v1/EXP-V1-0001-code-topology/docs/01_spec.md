@@ -1289,6 +1289,94 @@ topology project --projector 3d-force --format webgl --output scene.json
 topology project --projector 3d-force --config '{"nodeScale": 2.0}'
 ```
 
+### 9.8 Built-in Visualization Generators
+
+The CLI provides built-in visualization generators that don't require separate projector installations:
+
+```bash
+# Generate all visualizations + dashboard
+aps run topology viz .topology --type all
+
+# Generate specific visualization
+aps run topology viz .topology --type codecity
+aps run topology viz .topology --type clusters
+aps run topology viz .topology --type vsa
+aps run topology viz .topology --type 3d
+
+# Custom output
+aps run topology viz .topology --type codecity --output my-city.html
+```
+
+#### 9.8.1 Available Visualization Types
+
+| Type | Description | Technology | Best For |
+|------|-------------|------------|----------|
+| `3d` | Force-directed coupling graph | Three.js | Coupling relationships, Martin metrics |
+| `codecity` | 3D city metaphor (buildings = modules) | Three.js | Health assessment, complexity hotspots |
+| `clusters` | 2D package relationship graph | Canvas 2D | Package-level coupling |
+| `vsa` | Vertical Slice Architecture matrix | HTML/CSS | VSA compliance, layer completeness |
+| `all` | All visualizations + index dashboard | Mixed | Comprehensive overview |
+
+#### 9.8.2 Health Score Formula
+
+All visualizations use a standardized health score (0.0-1.0):
+
+```
+health = average(
+    complexity_score,    // ideal: 3-8 CC/function, bad: >15
+    cognitive_score,     // ideal: <10/function, bad: >30
+    loc_score,           // ideal: 10-50 LOC/function, bad: >100
+    coupling_score,      // ideal: 1-20 total, bad: 0 or >20
+    size_score           // ideal: 5-30 functions, bad: <2 or >50
+)
+```
+
+Color mapping:
+
+| Health | Color | Label |
+|--------|-------|-------|
+| ≥0.80 | `#00ff88` | Excellent |
+| ≥0.65 | `#44dd77` | Good |
+| ≥0.50 | `#88cc55` | OK |
+| ≥0.35 | `#ddaa33` | Warning |
+| ≥0.20 | `#ff7744` | Poor |
+| <0.20 | `#ff3333` | Critical |
+
+#### 9.8.3 CodeCity Visual Mapping
+
+| Building Property | Metric |
+|-------------------|--------|
+| Height | Total Cyclomatic Complexity |
+| Width/Depth | sqrt(Function Count) |
+| Color | Health Score |
+| District | Top-level package (slice) |
+
+#### 9.8.4 VSA Layer Detection
+
+Layers are detected from path patterns:
+
+| Layer | Keywords |
+|-------|----------|
+| handlers | handler, controller, api, routes, endpoint, view |
+| services | service, usecase, application, interactor |
+| models | model, entity, domain, schema, type |
+| data | repository, repo, data, store, db |
+| utils | util, helper, common, shared, lib |
+
+#### 9.8.5 Output Structure
+
+When using `--type all`, visualizations are generated to `.topology/viz/`:
+
+```
+.topology/
+└── viz/
+    ├── index.html      # Dashboard with summary stats
+    ├── 3d.html         # Force-directed coupling graph
+    ├── codecity.html   # 3D city metaphor
+    ├── clusters.html   # Package clusters
+    └── vsa.html        # VSA matrix
+```
+
 ---
 
 ## 10. Substandard Structure (Projectors)
