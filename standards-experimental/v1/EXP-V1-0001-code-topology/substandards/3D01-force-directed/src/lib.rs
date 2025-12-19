@@ -671,40 +671,43 @@ impl ForceDirectedProjector {
         .module-coupling {{ color: #88aaff; }}
         .module-complexity {{ color: #ffaa88; }}
         #tooltip {{
-            position: absolute;
-            padding: 12px 16px;
-            background: rgba(10,10,20,0.95);
+            position: fixed;
+            padding: 16px 20px;
+            background: rgba(20,20,35,0.98);
             color: #fff;
-            border-radius: 10px;
-            font-size: 12px;
+            border-radius: 12px;
+            font-size: 13px;
             pointer-events: none;
             display: none;
-            z-index: 1000;
-            border: 1px solid rgba(255,100,150,0.3);
-            max-width: 250px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            z-index: 10000;
+            border: 2px solid rgba(100,180,255,0.6);
+            min-width: 220px;
+            max-width: 320px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 20px rgba(100,180,255,0.3);
+            backdrop-filter: blur(10px);
         }}
-        #tooltip .name {{ 
-            font-weight: 700; 
-            font-size: 14px; 
-            margin-bottom: 8px;
-            color: #ff6b9d;
-        }}
-        #tooltip .metric {{ 
-            display: flex; 
-            justify-content: space-between; 
-            margin: 4px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 4px;
-        }}
-        #tooltip .metric-label {{ color: #888; }}
-        #tooltip .metric-value {{ color: #fff; font-weight: 500; }}
-        #tooltip .active-hint {{
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid rgba(255,255,255,0.2);
-            font-size: 11px;
+        #tooltip .name {{
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 12px;
             color: #6bf;
+            word-break: break-word;
+        }}
+        #tooltip .metric {{
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+            padding-bottom: 6px;
+        }}
+        #tooltip .metric-label {{ color: #aaa; font-size: 12px; }}
+        #tooltip .metric-value {{ color: #fff; font-weight: 600; font-size: 14px; }}
+        #tooltip .active-hint {{
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(100,180,255,0.4);
+            font-size: 12px;
+            color: #8cf;
             text-align: center;
             font-style: italic;
         }}
@@ -956,8 +959,24 @@ impl ForceDirectedProjector {
             if (intersects.length > 0) {{
                 const node = intersects[0].object.userData;
                 tooltip.style.display = 'block';
-                tooltip.style.left = event.clientX + 15 + 'px';
-                tooltip.style.top = event.clientY + 15 + 'px';
+                
+                // Position tooltip, keeping it on screen
+                const tooltipWidth = 280;
+                const tooltipHeight = 200;
+                let left = event.clientX + 20;
+                let top = event.clientY + 20;
+                
+                // Keep on right side of screen
+                if (left + tooltipWidth > window.innerWidth) {{
+                    left = event.clientX - tooltipWidth - 20;
+                }}
+                // Keep on bottom of screen
+                if (top + tooltipHeight > window.innerHeight) {{
+                    top = event.clientY - tooltipHeight - 20;
+                }}
+                
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
                 
                 // Show cursor as pointer
                 document.body.style.cursor = 'pointer';
