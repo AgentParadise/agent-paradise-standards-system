@@ -908,9 +908,10 @@ fn topology_analyze(
         println!("  {lang}: {} files", files.len());
     }
 
-    // Analyze all files - extract functions AND imports
+    // Analyze all files - extract functions, imports, AND types
     let mut all_functions = Vec::new();
     let mut all_imports: Vec<code_topology::ImportInfo> = Vec::new();
+    let mut all_types: Vec<code_topology::TypeInfo> = Vec::new();
     let mut errors = 0;
 
     for (lang, files) in &files_by_lang {
@@ -933,6 +934,11 @@ fn topology_analyze(
             // Extract imports for coupling analysis
             if let Ok(imports) = adapter.extract_imports(&source, file_path) {
                 all_imports.extend(imports);
+            }
+
+            // Extract types for abstractness calculation
+            if let Ok(types) = adapter.extract_types(&source, file_path) {
+                all_types.extend(types);
             }
 
             match adapter.extract_functions(&source, file_path) {
@@ -971,9 +977,13 @@ fn topology_analyze(
     );
 
     // Write artifacts
-    if let Err(e) =
-        write_topology_artifacts(output_path, &all_functions, &all_imports, &files_by_lang)
-    {
+    if let Err(e) = write_topology_artifacts(
+        output_path,
+        &all_functions,
+        &all_imports,
+        &all_types,
+        &files_by_lang,
+    ) {
         eprintln!("Error writing artifacts: {e}");
         return ExitCode::FAILURE;
     }
@@ -987,6 +997,7 @@ fn write_topology_artifacts(
     output_path: &std::path::Path,
     functions: &[(code_topology::FunctionInfo, code_topology::FunctionMetrics)],
     imports: &[code_topology::ImportInfo],
+    types: &[code_topology::TypeInfo],
     files_by_lang: &std::collections::HashMap<String, Vec<std::path::PathBuf>>,
 ) -> std::io::Result<()> {
     use std::collections::{HashMap, HashSet};
@@ -1007,6 +1018,19 @@ fn write_topology_artifacts(
             .entry(func_with_metrics.0.module.clone())
             .or_default()
             .push(func_with_metrics);
+    }
+
+    // Group types by module for abstractness calculation
+    // Map module -> (abstract_count, total_count)
+    let mut module_types: HashMap<String, (u32, u32)> = HashMap::new();
+    for type_info in types {
+        let entry = module_types
+            .entry(type_info.module.clone())
+            .or_insert((0, 0));
+        entry.1 += 1; // total count
+        if type_info.is_abstract {
+            entry.0 += 1; // abstract count
+        }
     }
 
     // Build dependency graph from imports
@@ -1142,7 +1166,18 @@ total_dependencies = {}
             } else {
                 0.5 // Default when no coupling
             };
-            let abstractness = 0.0; // TODO: Would need type analysis
+
+            // Calculate abstractness from type analysis
+            let (abstract_count, total_types) = module_types
+                .get(module_id)
+                .copied()
+                .unwrap_or((0, 0));
+            let abstractness = if total_types > 0 {
+                abstract_count as f64 / total_types as f64
+            } else {
+                0.0 // No types = not abstract
+            };
+
             let distance = (instability + abstractness - 1.0).abs();
 
             serde_json::json!({

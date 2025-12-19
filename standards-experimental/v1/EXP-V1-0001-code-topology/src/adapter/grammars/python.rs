@@ -69,6 +69,10 @@ impl Grammar for PythonGrammar {
         PYTHON_IMPORT_QUERY
     }
 
+    fn type_query(&self) -> &str {
+        PYTHON_TYPE_QUERY
+    }
+
     fn decision_nodes(&self) -> &'static [&'static str] {
         &[
             "if_statement",
@@ -198,6 +202,47 @@ const PYTHON_IMPORT_QUERY: &str = r#"
     (dotted_name) @import.source))
 "#;
 
+/// Tree-sitter query for extracting Python type definitions.
+///
+/// Captures:
+/// - `@class.name` - Class name identifier
+/// - `@class` - The entire class definition
+/// - `@class.abstract` - Abstract classes (inheriting from ABC/Protocol)
+/// - `@method.abstract` - Methods with @abstractmethod decorator
+const PYTHON_TYPE_QUERY: &str = r#"
+; All class definitions
+(class_definition
+  name: (identifier) @class.name) @class
+
+; Classes inheriting from ABC
+(class_definition
+  name: (identifier) @class.name
+  superclasses: (argument_list
+    (identifier) @base (#match? @base "^(ABC|ABCMeta|Protocol)$"))) @class.abstract
+
+; Classes inheriting from typing.Protocol or abc.ABC
+(class_definition
+  name: (identifier) @class.name
+  superclasses: (argument_list
+    (attribute
+      attribute: (identifier) @base (#match? @base "^(ABC|ABCMeta|Protocol)$")))) @class.abstract
+
+; Methods with @abstractmethod decorator
+(decorated_definition
+  (decorator
+    (identifier) @decorator (#eq? @decorator "abstractmethod"))
+  definition: (function_definition
+    name: (identifier) @method.abstract.name)) @method.abstract
+
+; Methods with @abc.abstractmethod decorator
+(decorated_definition
+  (decorator
+    (attribute
+      attribute: (identifier) @decorator (#eq? @decorator "abstractmethod")))
+  definition: (function_definition
+    name: (identifier) @method.abstract.name)) @method.abstract
+"#;
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -324,6 +369,19 @@ mod tests {
         assert!(
             result.is_ok(),
             "Import query failed to parse: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn test_type_query_parses() {
+        let grammar = PythonGrammar::new();
+        let lang = grammar.ts_language();
+
+        let result = tree_sitter::Query::new(&lang, grammar.type_query());
+        assert!(
+            result.is_ok(),
+            "Type query failed to parse: {:?}",
             result.err()
         );
     }
