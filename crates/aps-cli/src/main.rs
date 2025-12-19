@@ -220,7 +220,7 @@ fn main() -> ExitCode {
                 println!("Available Standards:\n");
                 println!("  topology (EXP-V1-0001) v0.1.0");
                 println!("    Code Topology - architectural metrics and visualization");
-                println!("    Commands: analyze, validate, diff, report");
+                println!("    Commands: analyze, validate, diff, report, viz");
                 println!();
                 println!("Use 'aps run <slug> --help' for command details.");
                 return ExitCode::SUCCESS;
@@ -722,9 +722,16 @@ fn dispatch_topology(
             println!();
             println!("OPTIONS:");
             println!("    --output <dir>     Output directory (default: .topology)");
+            println!(
+                "    --language <lang>  Filter by language: rust, python (default: auto-detect)"
+            );
             println!("    --format <fmt>     Output format: json, text (default: text)");
             println!("    --config <file>    Config file for thresholds");
             println!("    --help             Show this help message");
+            println!();
+            println!("SUPPORTED LANGUAGES:");
+            println!("    rust       .rs");
+            println!("    python     .py, .pyi");
             ExitCode::SUCCESS
         }
         "analyze" => {
@@ -735,8 +742,13 @@ fn dispatch_topology(
                 .and_then(|i| args.get(i + 1))
                 .map(|s| s.as_str())
                 .unwrap_or(".topology");
+            let language = args
+                .iter()
+                .position(|a| a == "--language")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| s.as_str());
 
-            topology_analyze(path, output, repo_root, verbose)
+            topology_analyze(path, output, language, repo_root, verbose)
         }
         "validate" => {
             let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
@@ -778,6 +790,16 @@ fn dispatch_topology(
             let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
             topology_report(path, verbose)
         }
+        "viz" | "3d" | "visualize" => {
+            let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
+            let output = args
+                .iter()
+                .position(|a| a == "--output" || a == "-o")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| s.as_str())
+                .unwrap_or("topology-3d.html");
+            topology_viz(path, output, verbose)
+        }
         _ => {
             eprintln!("Error: Unknown topology command '{command}'");
             eprintln!("Use 'aps run topology --help' for available commands.");
@@ -790,11 +812,17 @@ fn dispatch_topology(
 fn topology_analyze(
     path: &str,
     output: &str,
+    language_filter: Option<&str>,
     _repo_root: &std::path::Path,
     verbose: bool,
 ) -> ExitCode {
-    use code_topology_rust_adapter::RustAdapter;
+    use code_topology::LanguageAdapter;
+    use code_topology::adapter::grammars::{PythonGrammar, RustGrammar};
+    use code_topology::adapter::{GrammarRegistry, TreeSitterAdapter};
+    use std::collections::HashMap;
+    use std::fs;
     use std::path::Path;
+    use walkdir::WalkDir;
 
     let project_path = Path::new(path);
     let output_path = Path::new(output);
@@ -802,34 +830,386 @@ fn topology_analyze(
     if verbose {
         println!("Analyzing: {}", project_path.display());
         println!("Output:    {}", output_path.display());
+        if let Some(lang) = language_filter {
+            println!("Language:  {lang}");
+        }
     }
 
-    let adapter = RustAdapter::new();
+    // Create grammar registry with available grammars
+    let mut registry = GrammarRegistry::new();
+    registry.register(Box::new(RustGrammar::new()));
+    registry.register(Box::new(PythonGrammar::new()));
 
-    match adapter.analyze(project_path) {
-        Ok(result) => {
-            println!(
-                "✓ Analyzed {} functions in {} modules",
-                result.functions.len(),
-                result.modules.len()
-            );
+    let adapter = TreeSitterAdapter::new(registry);
 
-            match result.write_artifacts(output_path) {
-                Ok(()) => {
-                    println!("✓ Wrote artifacts to {}", output_path.display());
-                    ExitCode::SUCCESS
+    // Collect files to analyze
+    let mut files_by_lang: HashMap<String, Vec<std::path::PathBuf>> = HashMap::new();
+
+    for entry in WalkDir::new(project_path)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            // Allow the root entry even if it's "."
+            if e.depth() == 0 {
+                return true;
+            }
+            // Skip hidden dirs, test dirs, and common non-source dirs
+            !name.starts_with('.')
+                && name != "target"
+                && name != "node_modules"
+                && name != "__pycache__"
+                && name != "tests"
+                && !name.ends_with("_test.rs")
+                && !name.starts_with("test_")
+                && !name.ends_with("_test.py")
+                && name != "venv"
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let file_path = entry.path();
+
+        // Check if we have a grammar for this file
+        if let Some(grammar) = adapter.registry().get_for_path(file_path) {
+            let lang = grammar.language_id();
+
+            // Apply language filter if specified
+            if let Some(filter) = language_filter {
+                if lang != filter {
+                    continue;
+                }
+            }
+
+            files_by_lang
+                .entry(lang.to_string())
+                .or_default()
+                .push(file_path.to_path_buf());
+        }
+    }
+
+    if files_by_lang.is_empty() {
+        let msg = if let Some(lang) = language_filter {
+            format!("No {lang} files found in {}", project_path.display())
+        } else {
+            format!(
+                "No supported source files found in {}",
+                project_path.display()
+            )
+        };
+        eprintln!("Error: {msg}");
+        eprintln!("Supported: .rs (Rust), .py/.pyi (Python)");
+        return ExitCode::FAILURE;
+    }
+
+    // Print summary
+    let total_files: usize = files_by_lang.values().map(|v| v.len()).sum();
+    println!("Found {total_files} source file(s):");
+    for (lang, files) in &files_by_lang {
+        println!("  {lang}: {} files", files.len());
+    }
+
+    // Analyze all files - extract functions AND imports
+    let mut all_functions = Vec::new();
+    let mut all_imports: Vec<code_topology::ImportInfo> = Vec::new();
+    let mut errors = 0;
+
+    for (lang, files) in &files_by_lang {
+        if verbose {
+            println!("Analyzing {lang} files...");
+        }
+
+        for file_path in files {
+            let source = match fs::read_to_string(file_path) {
+                Ok(s) => s,
+                Err(e) => {
+                    if verbose {
+                        eprintln!("  Warning: Could not read {}: {e}", file_path.display());
+                    }
+                    errors += 1;
+                    continue;
+                }
+            };
+
+            // Extract imports for coupling analysis
+            if let Ok(imports) = adapter.extract_imports(&source, file_path) {
+                all_imports.extend(imports);
+            }
+
+            match adapter.extract_functions(&source, file_path) {
+                Ok(functions) => {
+                    for func in functions {
+                        // Compute metrics for each function
+                        match adapter.compute_metrics(&source, &func) {
+                            Ok(metrics) => {
+                                all_functions.push((func, metrics));
+                            }
+                            Err(e) => {
+                                if verbose {
+                                    eprintln!(
+                                        "  Warning: Could not compute metrics for {}: {e}",
+                                        func.name
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
                 Err(e) => {
-                    eprintln!("Error writing artifacts: {e}");
-                    ExitCode::FAILURE
+                    if verbose {
+                        eprintln!("  Warning: Could not parse {}: {e}", file_path.display());
+                    }
+                    errors += 1;
                 }
             }
         }
-        Err(e) => {
-            eprintln!("Error analyzing project: {e}");
-            ExitCode::FAILURE
+    }
+
+    println!(
+        "✓ Analyzed {} functions ({}  warnings)",
+        all_functions.len(),
+        errors
+    );
+
+    // Write artifacts
+    if let Err(e) =
+        write_topology_artifacts(output_path, &all_functions, &all_imports, &files_by_lang)
+    {
+        eprintln!("Error writing artifacts: {e}");
+        return ExitCode::FAILURE;
+    }
+
+    println!("✓ Wrote artifacts to {}", output_path.display());
+    ExitCode::SUCCESS
+}
+
+/// Write topology artifacts to disk.
+fn write_topology_artifacts(
+    output_path: &std::path::Path,
+    functions: &[(code_topology::FunctionInfo, code_topology::FunctionMetrics)],
+    imports: &[code_topology::ImportInfo],
+    files_by_lang: &std::collections::HashMap<String, Vec<std::path::PathBuf>>,
+) -> std::io::Result<()> {
+    use std::collections::{HashMap, HashSet};
+    use std::fs;
+
+    // Create directories
+    fs::create_dir_all(output_path)?;
+    fs::create_dir_all(output_path.join("metrics"))?;
+    fs::create_dir_all(output_path.join("graphs"))?;
+
+    // Group functions by module
+    let mut modules: HashMap<
+        String,
+        Vec<&(code_topology::FunctionInfo, code_topology::FunctionMetrics)>,
+    > = HashMap::new();
+    for func_with_metrics in functions {
+        modules
+            .entry(func_with_metrics.0.module.clone())
+            .or_default()
+            .push(func_with_metrics);
+    }
+
+    // Build dependency graph from imports
+    // Map module -> set of modules it depends on (efferent coupling)
+    let mut efferent: HashMap<String, HashSet<String>> = HashMap::new();
+    // Map module -> set of modules that depend on it (afferent coupling)
+    let mut afferent: HashMap<String, HashSet<String>> = HashMap::new();
+
+    // Initialize all modules
+    for module in modules.keys() {
+        efferent.entry(module.clone()).or_default();
+        afferent.entry(module.clone()).or_default();
+    }
+
+    // Process imports to build coupling
+    for import in imports {
+        let from_module = &import.from_module;
+
+        // Skip external imports
+        if import.is_external {
+            continue;
+        }
+
+        // Try to resolve the import path to a known module
+        let import_path = &import.import_path;
+
+        // Find which module this import refers to
+        for to_module in modules.keys() {
+            // Check if the import path matches or is contained in the module
+            let matches = import_path.contains(to_module.split("::").last().unwrap_or(to_module))
+                || to_module.contains(import_path)
+                || import_path.split("::").any(|part| to_module.contains(part));
+
+            if matches && from_module != to_module {
+                // from_module depends on to_module
+                efferent
+                    .entry(from_module.clone())
+                    .or_default()
+                    .insert(to_module.clone());
+                // to_module is depended upon by from_module
+                afferent
+                    .entry(to_module.clone())
+                    .or_default()
+                    .insert(from_module.clone());
+            }
         }
     }
+
+    // Write manifest.toml
+    let languages: Vec<&str> = files_by_lang.keys().map(|s| s.as_str()).collect();
+    let total_files: usize = files_by_lang.values().map(|v| v.len()).sum();
+    let total_deps: usize = efferent.values().map(|s| s.len()).sum();
+    let manifest = format!(
+        r#"[topology]
+version = "0.1.0"
+generated_at = "{}"
+generator = "aps-cli"
+generator_version = "0.1.0"
+
+[analysis]
+root = "."
+languages = {:?}
+total_files = {}
+total_functions = {}
+total_modules = {}
+total_dependencies = {}
+"#,
+        chrono_lite_now(),
+        languages,
+        total_files,
+        functions.len(),
+        modules.len(),
+        total_deps
+    );
+    fs::write(output_path.join("manifest.toml"), manifest)?;
+
+    // Write functions.json
+    let functions_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "functions": functions.iter().map(|(func, metrics)| {
+            serde_json::json!({
+                "id": func.qualified_name,
+                "name": func.name,
+                "module": func.module,
+                "file": func.file_path.to_string_lossy(),
+                "line": func.start_line,
+                "metrics": {
+                    "cyclomatic": metrics.cyclomatic_complexity,
+                    "cognitive": metrics.cognitive_complexity,
+                    "halstead": {
+                        "vocabulary": metrics.halstead.vocabulary,
+                        "length": metrics.halstead.length,
+                        "volume": metrics.halstead.volume,
+                        "difficulty": metrics.halstead.difficulty,
+                        "effort": metrics.halstead.effort
+                    },
+                    "loc": metrics.total_lines
+                }
+            })
+        }).collect::<Vec<_>>()
+    });
+    fs::write(
+        output_path.join("metrics/functions.json"),
+        serde_json::to_string_pretty(&functions_json).unwrap(),
+    )?;
+
+    // Write modules.json with real Martin metrics
+    let modules_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "modules": modules.iter().map(|(module_id, funcs)| {
+            let total_cc: u32 = funcs.iter().map(|(_, m)| m.cyclomatic_complexity).sum();
+            let total_cog: u32 = funcs.iter().map(|(_, m)| m.cognitive_complexity).sum();
+            let total_loc: u32 = funcs.iter().map(|(_, m)| m.total_lines).sum();
+            let count = funcs.len() as f64;
+
+            // Unique files
+            let unique_files: HashSet<_> = funcs.iter()
+                .map(|(f, _)| f.file_path.clone())
+                .collect();
+
+            // Martin metrics
+            let ca = afferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
+            let ce = efferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
+            let instability = if ca + ce > 0 {
+                ce as f64 / (ca + ce) as f64
+            } else {
+                0.5 // Default when no coupling
+            };
+            let abstractness = 0.0; // TODO: Would need type analysis
+            let distance = (instability + abstractness - 1.0).abs();
+
+            serde_json::json!({
+                "id": module_id,
+                "name": module_id.split("::").last().unwrap_or(module_id),
+                "path": format!("{}/", module_id.replace("::", "/")),
+                "languages": languages,
+                "metrics": {
+                    "file_count": unique_files.len(),
+                    "function_count": funcs.len(),
+                    "total_cyclomatic": total_cc,
+                    "avg_cyclomatic": if count > 0.0 { total_cc as f64 / count } else { 0.0 },
+                    "total_cognitive": total_cog,
+                    "avg_cognitive": if count > 0.0 { total_cog as f64 / count } else { 0.0 },
+                    "lines_of_code": total_loc,
+                    "martin": {
+                        "ca": ca,
+                        "ce": ce,
+                        "instability": instability,
+                        "abstractness": abstractness,
+                        "distance_from_main_sequence": distance
+                    }
+                }
+            })
+        }).collect::<Vec<_>>()
+    });
+    fs::write(
+        output_path.join("metrics/modules.json"),
+        serde_json::to_string_pretty(&modules_json).unwrap(),
+    )?;
+
+    // Build coupling matrix from import dependencies
+    let module_names: Vec<&str> = modules.keys().map(|s| s.as_str()).collect();
+    let n = module_names.len();
+    let mut matrix = vec![vec![0.0; n]; n];
+
+    // Create index map
+    let module_index: HashMap<&str, usize> = module_names
+        .iter()
+        .enumerate()
+        .map(|(i, &name)| (name, i))
+        .collect();
+
+    // Fill matrix with coupling values
+    for (i, row) in matrix.iter_mut().enumerate() {
+        row[i] = 1.0; // Self-coupling is 1.0
+    }
+
+    // Add actual coupling from dependencies
+    for (from, deps) in &efferent {
+        if let Some(&from_idx) = module_index.get(from.as_str()) {
+            for to in deps {
+                if let Some(&to_idx) = module_index.get(to.as_str()) {
+                    // Coupling strength of 0.5 for each import dependency
+                    matrix[from_idx][to_idx] = 0.5;
+                    matrix[to_idx][from_idx] = 0.5; // Symmetric
+                }
+            }
+        }
+    }
+
+    let coupling_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "metric": "import_coupling",
+        "description": "Normalized coupling strength between modules (0-1)",
+        "modules": module_names,
+        "matrix": matrix
+    });
+    fs::write(
+        output_path.join("graphs/coupling-matrix.json"),
+        serde_json::to_string_pretty(&coupling_json).unwrap(),
+    )?;
+
+    Ok(())
 }
 
 /// Validate existing .topology/ artifacts.
@@ -1535,4 +1915,152 @@ fn topology_report(path: &str, _verbose: bool) -> ExitCode {
 
     eprintln!("Error: Could not parse modules.json");
     ExitCode::FAILURE
+}
+
+/// Generate 3D visualization from topology artifacts.
+fn topology_viz(path: &str, output: &str, verbose: bool) -> ExitCode {
+    use code_topology::{
+        CouplingMatrixData, CouplingMatrixFile, MartinMetrics, ModuleMetrics, ModuleRecord,
+        OutputFormat, Projector, Topology,
+    };
+    use code_topology_3d::ForceDirectedProjector;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    let topology_path = Path::new(path);
+    let modules_path = topology_path.join("metrics/modules.json");
+    let coupling_path = topology_path.join("graphs/coupling-matrix.json");
+
+    // Check for required artifacts
+    if !modules_path.exists() {
+        eprintln!("Error: No modules.json found at {}", modules_path.display());
+        eprintln!("Run 'aps run topology analyze' first.");
+        return ExitCode::FAILURE;
+    }
+
+    if !coupling_path.exists() {
+        eprintln!(
+            "Error: No coupling-matrix.json found at {}",
+            coupling_path.display()
+        );
+        eprintln!("Run 'aps run topology analyze' first.");
+        return ExitCode::FAILURE;
+    }
+
+    if verbose {
+        println!("Loading topology from: {}", topology_path.display());
+    }
+
+    // Load coupling matrix
+    let coupling_content = match fs::read_to_string(&coupling_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading coupling matrix: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let matrix_file: CouplingMatrixFile = match serde_json::from_str(&coupling_content) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error parsing coupling matrix: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if verbose {
+        println!(
+            "  Loaded {} modules from coupling matrix",
+            matrix_file.modules.len()
+        );
+    }
+
+    // Load module metrics
+    let modules_content = match fs::read_to_string(&modules_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading modules: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    #[derive(serde::Deserialize)]
+    struct ModulesFile {
+        modules: Vec<ModuleRecord>,
+    }
+
+    let modules_file: ModulesFile = match serde_json::from_str(&modules_content) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error parsing modules: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if verbose {
+        println!("  Loaded {} module metrics", modules_file.modules.len());
+    }
+
+    // Build topology
+    let mut topology = Topology {
+        languages: vec!["rust".to_string()],
+        ..Default::default()
+    };
+
+    // Convert coupling matrix to internal format
+    let positions = matrix_file.layout.map(|l| l.positions);
+    topology.coupling_matrix = Some(CouplingMatrixData {
+        modules: matrix_file.modules,
+        values: matrix_file.matrix,
+        positions,
+    });
+
+    // Convert module records to ModuleMetrics
+    for record in &modules_file.modules {
+        topology.modules.push(ModuleMetrics {
+            id: record.id.clone(),
+            name: record.name.clone(),
+            path: PathBuf::from(&record.path),
+            languages: record.languages.clone(),
+            file_count: record.metrics.file_count,
+            function_count: record.metrics.function_count,
+            total_cyclomatic: record.metrics.total_cyclomatic,
+            avg_cyclomatic: record.metrics.avg_cyclomatic,
+            total_cognitive: record.metrics.total_cognitive,
+            avg_cognitive: record.metrics.avg_cognitive,
+            lines_of_code: record.metrics.lines_of_code,
+            martin: MartinMetrics {
+                ca: record.metrics.martin.ca,
+                ce: record.metrics.martin.ce,
+                instability: record.metrics.martin.instability,
+                abstractness: record.metrics.martin.abstractness,
+                distance_from_main_sequence: record.metrics.martin.distance_from_main_sequence,
+            },
+        });
+    }
+
+    // Render 3D visualization
+    let projector = ForceDirectedProjector::new();
+
+    if verbose {
+        println!("Rendering 3D visualization...");
+    }
+
+    match projector.render(&topology, OutputFormat::Html, None) {
+        Ok(html) => {
+            if let Err(e) = fs::write(output, &html) {
+                eprintln!("Error writing output: {e}");
+                return ExitCode::FAILURE;
+            }
+            println!("✓ Generated: {output}");
+            println!();
+            println!("Open in browser:");
+            println!("  open {output}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("Error rendering visualization: {}", e.message);
+            ExitCode::FAILURE
+        }
+    }
 }
