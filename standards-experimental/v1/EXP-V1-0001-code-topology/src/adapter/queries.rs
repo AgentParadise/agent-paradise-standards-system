@@ -235,14 +235,98 @@ pub fn extract_imports(
 
 /// Extract type definitions from a parsed tree.
 pub fn extract_types(
-    _tree: &Tree,
-    _source: &str,
-    _file_path: &Path,
-    _grammar: &dyn Grammar,
+    tree: &Tree,
+    source: &str,
+    file_path: &Path,
+    grammar: &dyn Grammar,
 ) -> Result<Vec<TypeInfo>, AdapterError> {
-    // TODO: Implement type extraction for abstractness calculation
-    // This is optional per the LanguageAdapter trait
-    Ok(vec![])
+    let query_str = grammar.type_query();
+    if query_str.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let query = Query::new(&grammar.ts_language(), query_str).map_err(|e| AdapterError {
+        code: "QUERY_ERROR".to_string(),
+        message: format!("Failed to compile type query: {e}"),
+        file: Some(file_path.to_path_buf()),
+        line: None,
+    })?;
+
+    let mut cursor = QueryCursor::new();
+    let capture_names = query.capture_names();
+    let module = grammar.compute_module_path(file_path, Path::new("."));
+
+    let mut types = Vec::new();
+    let mut abstract_classes: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut all_classes: std::collections::HashMap<String, bool> = std::collections::HashMap::new();
+
+    let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+
+    while let Some(m) = matches.next() {
+        let mut class_name = String::new();
+        let mut is_abstract_match = false;
+
+        for capture in m.captures {
+            let capture_name: &str = capture_names[capture.index as usize];
+            let node = capture.node;
+            let text = node.utf8_text(source.as_bytes()).unwrap_or("");
+
+            match capture_name {
+                "class.name" => {
+                    class_name = text.to_string();
+                }
+                "class.abstract" => {
+                    is_abstract_match = true;
+                }
+                "method.abstract" | "method.abstract.name" => {
+                    // If we see an abstract method, the containing class is abstract
+                    // Find the parent class
+                    let mut current = node;
+                    while let Some(parent) = current.parent() {
+                        if parent.kind() == "class_definition" {
+                            // Use child_by_field_name for more robust class name extraction
+                            if let Some(name_node) = parent.child_by_field_name("name") {
+                                let name = name_node.utf8_text(source.as_bytes()).unwrap_or("");
+                                abstract_classes.insert(name.to_string());
+                            } else {
+                                // Fallback: scan children for an identifier
+                                for child in parent.children(&mut parent.walk()) {
+                                    if child.kind() == "identifier" {
+                                        let name = child.utf8_text(source.as_bytes()).unwrap_or("");
+                                        abstract_classes.insert(name.to_string());
+                                        break;
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                        current = parent;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if !class_name.is_empty() {
+            // Track this class, will determine abstractness later
+            let entry = all_classes.entry(class_name.clone()).or_insert(false);
+            if is_abstract_match {
+                *entry = true;
+            }
+        }
+    }
+
+    // Build final type list
+    for (name, is_abstract) in &all_classes {
+        let is_abstract_final = *is_abstract || abstract_classes.contains(name);
+        types.push(TypeInfo {
+            name: name.clone(),
+            module: module.clone(),
+            is_abstract: is_abstract_final,
+        });
+    }
+
+    Ok(types)
 }
 
 // ============================================================================
