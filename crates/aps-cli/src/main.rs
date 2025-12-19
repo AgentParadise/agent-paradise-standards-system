@@ -2233,19 +2233,80 @@ fn health_label(health: f64) -> &'static str {
 fn detect_layer(module_path: &str) -> &'static str {
     let path_lower = module_path.to_lowercase();
 
-    // Check patterns in order of specificity
-    let patterns: [(&str, &[&str]); 5] = [
+    // Check patterns in order of specificity - includes Rust patterns
+    let patterns: [(&str, &[&str]); 6] = [
+        // Entry points / handlers
         (
             "handlers",
-            &["handler", "controller", "api", "routes", "endpoint", "view"],
+            &[
+                "handler",
+                "controller",
+                "api",
+                "routes",
+                "endpoint",
+                "view",
+                "main",
+                "cli",
+                "bin",
+                "cmd",
+            ],
         ),
+        // Business logic
         (
             "services",
-            &["service", "usecase", "application", "interactor"],
+            &[
+                "service",
+                "usecase",
+                "application",
+                "interactor",
+                "core",
+                "engine",
+                "processor",
+                "worker",
+            ],
         ),
-        ("models", &["model", "entity", "domain", "schema", "type"]),
-        ("data", &["repository", "repo", "data", "store", "db"]),
-        ("utils", &["util", "helper", "common", "shared", "lib"]),
+        // Domain models and types
+        (
+            "models",
+            &[
+                "model", "entity", "domain", "schema", "types", "struct", "metadata", "config",
+            ],
+        ),
+        // Data access
+        (
+            "data",
+            &[
+                "repository",
+                "repo",
+                "data",
+                "store",
+                "db",
+                "persistence",
+                "storage",
+                "discovery",
+            ],
+        ),
+        // Utilities and helpers
+        (
+            "utils",
+            &[
+                "util", "helper", "common", "shared", "lib", "support", "tools", "ext",
+            ],
+        ),
+        // Adapters and integrations (Rust-specific)
+        (
+            "adapters",
+            &[
+                "adapter",
+                "grammars",
+                "queries",
+                "parser",
+                "lexer",
+                "projector",
+                "renderer",
+                "visitor",
+            ],
+        ),
     ];
 
     for (layer, keywords) in patterns {
@@ -2255,11 +2316,46 @@ fn detect_layer(module_path: &str) -> &'static str {
             }
         }
     }
+
+    // Fallback: Check Rust directory patterns
+    if path_lower.contains("examples") {
+        return "examples";
+    }
+    if path_lower.contains("tests") || path_lower.contains("test_") {
+        return "tests";
+    }
+    if path_lower.contains("src") && !path_lower.contains("adapter") {
+        return "core";
+    }
+
     "other"
 }
 
 /// Get slice (top-level package) from module ID
+/// For Rust: crates::foo -> "crates::foo", standards-experimental::v1::NAME -> "NAME"
 fn get_slice_from_id(module_id: &str) -> String {
+    // Handle Rust-style paths with ::
+    if module_id.contains("::") {
+        let parts: Vec<&str> = module_id.split("::").collect();
+
+        // For standards-experimental, use the standard name as slice
+        if parts.len() >= 3 && parts[0] == "standards-experimental" {
+            return parts[2].to_string(); // e.g., "EXP-V1-0001-code-topology"
+        }
+
+        // For crates, use crate name
+        if parts.len() >= 2 && parts[0] == "crates" {
+            return parts[1].to_string(); // e.g., "aps-core"
+        }
+
+        // Default: first two segments
+        if parts.len() >= 2 {
+            return format!("{}::{}", parts[0], parts[1]);
+        }
+        return parts.first().unwrap_or(&module_id).to_string();
+    }
+
+    // Handle dot-separated paths (Python style)
     let parts: Vec<&str> = module_id.split('.').collect();
     if parts.len() >= 2 {
         format!("{}.{}", parts[0], parts[1])
@@ -2691,8 +2787,9 @@ fn generate_codecity_html(modules_json: &str, coupling_json: &str) -> String {
                 const localX = (i % buildingGrid) * buildingSpacing - (buildingGrid * buildingSpacing) / 2;
                 const localZ = Math.floor(i / buildingGrid) * buildingSpacing - (buildingGrid * buildingSpacing) / 2;
 
-                // Building dimensions based on metrics
-                const height = Math.max(1, m.total_cyclomatic / 10);
+                // Building dimensions based on metrics (log scale for height to prevent extreme outliers)
+                const rawHeight = m.total_cyclomatic || 1;
+                const height = Math.max(1, Math.log10(rawHeight + 1) * 3);
                 const width = Math.max(0.8, Math.sqrt(m.function_count) * 0.5);
                 const depth = width;
 
@@ -2818,7 +2915,7 @@ fn generate_codecity_html(modules_json: &str, coupling_json: &str) -> String {
     )
 }
 
-/// Generate Package Clusters HTML (2D force-directed)
+/// Generate Package Clusters HTML (2D force-directed) with sidebar and coupling filter
 fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
     format!(
         r##"<!DOCTYPE html>
@@ -2829,25 +2926,48 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
     <title>Package Clusters - Topology Visualization</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; display: flex; }}
+        #main {{ flex: 1; position: relative; }}
         canvas {{ display: block; }}
         #info {{ position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 12px; border: 1px solid #333; max-width: 280px; z-index: 100; }}
         #info h1 {{ font-size: 18px; margin-bottom: 10px; color: #00ff88; }}
         #info p {{ font-size: 12px; color: #888; margin-bottom: 8px; }}
+        #filter {{ margin-top: 15px; padding-top: 15px; border-top: 1px solid #333; }}
+        #filter label {{ display: block; font-size: 11px; color: #888; margin-bottom: 6px; }}
+        #filter input[type="range"] {{ width: 100%; cursor: pointer; }}
+        #filter-value {{ float: right; color: #00ff88; }}
+        #sidebar {{ width: 280px; background: #111116; border-left: 1px solid #222; overflow-y: auto; padding: 15px; }}
+        #sidebar h2 {{ font-size: 14px; color: #888; margin-bottom: 15px; display: flex; justify-content: space-between; }}
+        .package-item {{ padding: 10px; margin-bottom: 8px; background: #1a1a20; border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }}
+        .package-item:hover {{ border-color: #444; }}
+        .package-item.selected {{ border-color: #00ff88; background: #1a2a20; }}
+        .package-name {{ font-weight: 500; margin-bottom: 4px; font-size: 13px; }}
+        .package-stats {{ font-size: 11px; color: #666; display: flex; gap: 12px; }}
+        .package-coupling {{ color: #88aaff; }}
+        .package-health {{ }}
         #tooltip {{ position: fixed; display: none; background: rgba(0,0,0,0.95); padding: 15px; border-radius: 8px; border: 1px solid #444; font-size: 12px; pointer-events: none; z-index: 200; }}
         #tooltip h3 {{ color: #00ff88; margin-bottom: 8px; }}
         #controls {{ position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px 16px; border-radius: 8px; font-size: 11px; color: #666; }}
     </style>
 </head>
 <body>
-    <div id="info">
-        <h1>🔧 Package Clusters</h1>
-        <p>Circles = packages (slices). Lines = coupling between packages.</p>
-        <p style="margin-top: 10px; color: #666;">Circle size = module count<br>Color = average health</p>
+    <div id="main">
+        <div id="info">
+            <h1>🔧 Package Clusters</h1>
+            <p>Circles = packages. Lines = coupling strength.</p>
+            <div id="filter">
+                <label>Coupling Threshold <span id="filter-value">0%</span></label>
+                <input type="range" id="coupling-slider" min="0" max="100" value="0">
+            </div>
+        </div>
+        <div id="tooltip"></div>
+        <div id="controls">🖱️ Drag to pan • Scroll to zoom • Click sidebar to focus</div>
+        <canvas id="canvas"></canvas>
     </div>
-    <div id="tooltip"></div>
-    <div id="controls">🖱️ Drag to pan • Scroll to zoom</div>
-    <canvas id="canvas"></canvas>
+    <div id="sidebar">
+        <h2>Packages <span id="package-count"></span></h2>
+        <div id="package-list"></div>
+    </div>
 
     <script>
         const MODULES = {modules_json};
@@ -2856,9 +2976,11 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         let width, height;
+        let couplingThreshold = 0;
+        let selectedSlice = null;
 
         function resize() {{
-            width = window.innerWidth;
+            width = canvas.parentElement.clientWidth;
             height = window.innerHeight;
             canvas.width = width * devicePixelRatio;
             canvas.height = height * devicePixelRatio;
@@ -2892,7 +3014,8 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
                 y: height / 2 + (Math.random() - 0.5) * 200,
                 vx: 0,
                 vy: 0,
-                radius: Math.max(25, Math.sqrt(data.modules.length) * 15)
+                radius: Math.max(25, Math.sqrt(data.modules.length) * 15),
+                totalCoupling: 0
             }};
         }});
 
@@ -2908,7 +3031,6 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
                     const sliceA = moduleToSlice[COUPLING.modules[i]];
                     const sliceB = moduleToSlice[COUPLING.modules[j]];
                     if (sliceA && sliceB && sliceA !== sliceB) {{
-                        // Find or create edge
                         let edge = edges.find(e => 
                             (e.source === sliceA && e.target === sliceB) ||
                             (e.source === sliceB && e.target === sliceA)
@@ -2923,6 +3045,60 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
             }}
         }}
 
+        // Calculate total coupling per slice
+        const maxStrength = Math.max(...edges.map(e => e.strength), 1);
+        edges.forEach(edge => {{
+            const sourceSlice = slices.find(s => s.name === edge.source);
+            const targetSlice = slices.find(s => s.name === edge.target);
+            if (sourceSlice) sourceSlice.totalCoupling += edge.strength;
+            if (targetSlice) targetSlice.totalCoupling += edge.strength;
+        }});
+
+        // Sort slices by coupling (descending)
+        const sortedSlices = [...slices].sort((a, b) => b.totalCoupling - a.totalCoupling);
+
+        // Populate sidebar
+        function renderSidebar() {{
+            const list = document.getElementById('package-list');
+            document.getElementById('package-count').textContent = `(${{slices.length}})`;
+            
+            list.innerHTML = sortedSlices.map(s => `
+                <div class="package-item ${{selectedSlice === s.name ? 'selected' : ''}}" data-slice="${{s.name}}">
+                    <div class="package-name" style="color:${{s.color}}">${{s.name}}</div>
+                    <div class="package-stats">
+                        <span class="package-coupling">⚡ ${{s.totalCoupling.toFixed(1)}}</span>
+                        <span class="package-health" style="color:${{s.color}}">❤ ${{(s.health * 100).toFixed(0)}}%</span>
+                        <span>📦 ${{s.count}}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            list.querySelectorAll('.package-item').forEach(item => {{
+                item.addEventListener('click', () => {{
+                    const name = item.dataset.slice;
+                    selectedSlice = selectedSlice === name ? null : name;
+                    renderSidebar();
+                    
+                    // Center on selected slice
+                    if (selectedSlice) {{
+                        const slice = slices.find(s => s.name === selectedSlice);
+                        if (slice) {{
+                            transform.x = width / 2 - slice.x * transform.scale;
+                            transform.y = height / 2 - slice.y * transform.scale;
+                        }}
+                    }}
+                }});
+            }});
+        }}
+        renderSidebar();
+
+        // Coupling slider
+        document.getElementById('coupling-slider').addEventListener('input', e => {{
+            couplingThreshold = parseInt(e.target.value) / 100;
+            document.getElementById('filter-value').textContent = `${{e.target.value}}%`;
+        }});
+
         function healthToColor(h) {{
             if (h >= 0.80) return '#00ff88';
             if (h >= 0.65) return '#44dd77';
@@ -2932,20 +3108,16 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
             return '#ff3333';
         }}
 
-        // Simple force simulation
         let transform = {{ x: 0, y: 0, scale: 1 }};
         
         function simulate() {{
             const centerX = width / 2;
             const centerY = height / 2;
 
-            // Apply forces
             slices.forEach(node => {{
-                // Center gravity
                 node.vx += (centerX - node.x) * 0.0005;
                 node.vy += (centerY - node.y) * 0.0005;
 
-                // Repulsion from other nodes
                 slices.forEach(other => {{
                     if (node === other) return;
                     const dx = node.x - other.x;
@@ -2960,7 +3132,6 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
                 }});
             }});
 
-            // Spring forces for edges
             edges.forEach(edge => {{
                 const source = slices.find(s => s.name === edge.source);
                 const target = slices.find(s => s.name === edge.target);
@@ -2978,7 +3149,6 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
                 target.vy -= dy / dist * force;
             }});
 
-            // Apply velocity with damping
             slices.forEach(node => {{
                 node.vx *= 0.9;
                 node.vy *= 0.9;
@@ -2993,30 +3163,42 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
             ctx.translate(transform.x, transform.y);
             ctx.scale(transform.scale, transform.scale);
 
+            // Filter edges by threshold
+            const thresholdValue = couplingThreshold * maxStrength;
+            const visibleEdges = edges.filter(e => e.strength >= thresholdValue);
+
             // Draw edges
-            const maxStrength = Math.max(...edges.map(e => e.strength), 1);
-            edges.forEach(edge => {{
+            visibleEdges.forEach(edge => {{
                 const source = slices.find(s => s.name === edge.source);
                 const target = slices.find(s => s.name === edge.target);
                 if (!source || !target) return;
 
+                const isHighlighted = selectedSlice && (edge.source === selectedSlice || edge.target === selectedSlice);
+                const opacity = isHighlighted ? 0.8 : (0.1 + (edge.strength / maxStrength) * 0.5);
+                const lineWidth = isHighlighted ? 3 : (1 + (edge.strength / maxStrength) * 3);
+
                 ctx.beginPath();
                 ctx.moveTo(source.x, source.y);
                 ctx.lineTo(target.x, target.y);
-                ctx.strokeStyle = `rgba(100, 100, 150, ${{0.1 + (edge.strength / maxStrength) * 0.5}})`;
-                ctx.lineWidth = 1 + (edge.strength / maxStrength) * 3;
+                ctx.strokeStyle = isHighlighted ? '#00ff88' : `rgba(100, 100, 150, ${{opacity}})`;
+                ctx.lineWidth = lineWidth;
                 ctx.stroke();
             }});
 
             // Draw nodes
             slices.forEach(node => {{
+                const isSelected = node.name === selectedSlice;
+                const hasVisibleEdge = visibleEdges.some(e => e.source === node.name || e.target === node.name);
+                const alpha = (couplingThreshold > 0 && !hasVisibleEdge && !isSelected) ? 0.3 : 1;
+
                 // Glow
                 const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.radius * 1.5);
-                gradient.addColorStop(0, node.color + '40');
+                gradient.addColorStop(0, node.color + (isSelected ? '80' : '40'));
                 gradient.addColorStop(1, 'transparent');
                 ctx.beginPath();
-                ctx.arc(node.x, node.y, node.radius * 1.5, 0, Math.PI * 2);
+                ctx.arc(node.x, node.y, node.radius * (isSelected ? 2 : 1.5), 0, Math.PI * 2);
                 ctx.fillStyle = gradient;
+                ctx.globalAlpha = alpha;
                 ctx.fill();
 
                 // Circle
@@ -3024,23 +3206,23 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
                 ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
                 ctx.fillStyle = node.color + '30';
                 ctx.fill();
-                ctx.strokeStyle = node.color;
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = isSelected ? '#fff' : node.color;
+                ctx.lineWidth = isSelected ? 3 : 2;
                 ctx.stroke();
 
                 // Label
                 ctx.fillStyle = '#fff';
-                ctx.font = '12px -apple-system, sans-serif';
+                ctx.font = (isSelected ? 'bold ' : '') + '12px -apple-system, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                const label = node.name.split('.').pop() || node.name;
+                const label = node.name.split('::').pop() || node.name.split('.').pop() || node.name;
                 ctx.fillText(label, node.x, node.y);
+                ctx.globalAlpha = 1;
             }});
 
             ctx.restore();
         }}
 
-        // Animation
         function animate() {{
             simulate();
             draw();
@@ -3048,7 +3230,6 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
         }}
         animate();
 
-        // Pan and zoom
         let isDragging = false;
         let lastMouse = {{ x: 0, y: 0 }};
 
@@ -3064,7 +3245,6 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
                 lastMouse = {{ x: e.clientX, y: e.clientY }};
             }}
 
-            // Tooltip
             const tooltip = document.getElementById('tooltip');
             const mx = (e.clientX - transform.x) / transform.scale;
             const my = (e.clientY - transform.y) / transform.scale;
@@ -3082,6 +3262,7 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
                 tooltip.innerHTML = `
                     <h3>${{hovered.name}}</h3>
                     <div>Modules: ${{hovered.count}}</div>
+                    <div>Coupling: ${{hovered.totalCoupling.toFixed(1)}}</div>
                     <div style="color:${{hovered.color}}">Health: ${{(hovered.health * 100).toFixed(0)}}%</div>
                     <div style="margin-top:8px;color:#666;font-size:11px">
                         ${{hovered.modules.slice(0, 5).map(m => m.name).join(', ')}}${{hovered.modules.length > 5 ? '...' : ''}}
@@ -3162,7 +3343,7 @@ fn generate_vsa_html(modules_json: &str) -> String {
 
     <script>
         const MODULES = {modules_json};
-        const LAYERS = ['handlers', 'services', 'models', 'data', 'utils', 'other'];
+        const LAYERS = ['handlers', 'services', 'models', 'data', 'adapters', 'utils', 'core', 'examples', 'tests', 'other'];
 
         // Build slice × layer matrix
         const matrix = {{}};
