@@ -1310,6 +1310,105 @@ total_dependencies = {}
         serde_json::to_string_pretty(&coupling_json).unwrap(),
     )?;
 
+    // =========================================================================
+    // M4: Slice Independence Score (SIS) for Vertical Slice Architecture
+    // =========================================================================
+
+    // Detect slices from first-level module path segment
+    // e.g., "aef.core.events" -> slice "aef.core"
+    //       "crates::aps-cli::src::main" -> slice "crates::aps-cli"
+    fn get_slice_id(module_id: &str) -> String {
+        // Split by :: or . and take first two segments
+        let separator = if module_id.contains("::") { "::" } else { "." };
+        let parts: Vec<&str> = module_id.split(separator).collect();
+        if parts.len() >= 2 {
+            format!("{}{}{}", parts[0], separator, parts[1])
+        } else {
+            parts[0].to_string()
+        }
+    }
+
+    // Group modules by slice
+    let mut slices: HashMap<String, Vec<String>> = HashMap::new();
+    for module_id in modules.keys() {
+        let slice_id = get_slice_id(module_id);
+        slices.entry(slice_id).or_default().push(module_id.clone());
+    }
+
+    // Calculate SIS for each slice
+    // SIS = internal_imports / (internal_imports + external_imports)
+    let slices_json: Vec<serde_json::Value> = slices
+        .iter()
+        .map(|(slice_id, slice_modules)| {
+            let slice_module_set: HashSet<&str> =
+                slice_modules.iter().map(|s| s.as_str()).collect();
+
+            let mut internal_imports = 0u32;
+            let mut cross_slice_imports = 0u32;
+            let mut inbound_coupling = 0u32;
+            let mut outbound_coupling = 0u32;
+
+            // Count imports for modules in this slice
+            for module in slice_modules {
+                // Outbound: modules this slice depends on
+                if let Some(deps) = efferent.get(module) {
+                    for dep in deps {
+                        let dep_slice = get_slice_id(dep);
+                        if dep_slice == *slice_id {
+                            internal_imports += 1;
+                        } else {
+                            cross_slice_imports += 1;
+                            outbound_coupling += 1;
+                        }
+                    }
+                }
+
+                // Inbound: modules that depend on this slice
+                if let Some(dependents) = afferent.get(module) {
+                    for dependent in dependents {
+                        if !slice_module_set.contains(dependent.as_str()) {
+                            inbound_coupling += 1;
+                        }
+                    }
+                }
+            }
+
+            let total_imports = internal_imports + cross_slice_imports;
+            let sis = if total_imports > 0 {
+                internal_imports as f64 / total_imports as f64
+            } else {
+                1.0 // No imports = fully independent
+            };
+
+            serde_json::json!({
+                "id": slice_id,
+                "modules": slice_modules,
+                "metrics": {
+                    "module_count": slice_modules.len(),
+                    "internal_imports": internal_imports,
+                    "cross_slice_imports": cross_slice_imports,
+                    "sis": sis,
+                    "inbound_coupling": inbound_coupling,
+                    "outbound_coupling": outbound_coupling
+                }
+            })
+        })
+        .collect();
+
+    let slices_output = serde_json::json!({
+        "schema_version": "1.0.0",
+        "description": "Slice Independence Score (SIS) for Vertical Slice Architecture analysis. SIS = internal_imports / total_imports. Higher = more isolated.",
+        "slices": slices_json,
+        "metadata": {
+            "total_slices": slices.len(),
+            "slice_detection": "first_two_path_segments"
+        }
+    });
+    fs::write(
+        output_path.join("metrics/slices.json"),
+        serde_json::to_string_pretty(&slices_output).unwrap(),
+    )?;
+
     Ok(())
 }
 
