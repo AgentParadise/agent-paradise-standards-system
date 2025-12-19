@@ -626,11 +626,17 @@ impl ForceDirectedProjector {
         #filter-value {{ float: right; color: #ff6b9d; }}
         #sidebar {{
             width: 280px;
+            height: 100vh;
             background: linear-gradient(180deg, rgba(15,15,30,0.98), rgba(20,20,35,0.98));
             border-left: 1px solid rgba(255,255,255,0.1);
-            overflow-y: auto;
+            overflow-y: scroll;
             padding: 15px;
             z-index: 100;
+            box-sizing: border-box;
+        }}
+        #module-list {{
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
         }}
         #sidebar h2 {{ 
             font-size: 14px; 
@@ -652,6 +658,7 @@ impl ForceDirectedProjector {
         }}
         .module-item:hover {{ border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.06); }}
         .module-item.selected {{ border-color: #ff6b9d; background: rgba(255,107,157,0.1); }}
+        .module-item.filtered-out {{ opacity: 0.3; pointer-events: none; }}
         .module-name {{ 
             font-weight: 500; 
             margin-bottom: 4px; 
@@ -971,15 +978,40 @@ impl ForceDirectedProjector {
             }}
         }});
         
+        let currentThreshold = 0;
+        
         document.getElementById('coupling-slider').addEventListener('input', e => {{
-            const threshold = parseInt(e.target.value) / 100;
+            currentThreshold = parseInt(e.target.value) / 100;
             document.getElementById('filter-value').textContent = `${{e.target.value}}%`;
             
             // Filter edges based on threshold
             edgeMeshes.forEach((mesh, i) => {{
                 if (i < data.edges.length) {{
-                    mesh.visible = data.edges[i].strength >= threshold;
+                    mesh.visible = data.edges[i].strength >= currentThreshold;
                 }}
+            }});
+            
+            // Find modules that still have visible edges
+            const visibleModules = new Set();
+            data.edges.forEach(edge => {{
+                if (edge.strength >= currentThreshold) {{
+                    visibleModules.add(edge.from);
+                    visibleModules.add(edge.to);
+                }}
+            }});
+            
+            // Grey out modules in sidebar that have no visible edges
+            document.querySelectorAll('.module-item').forEach(item => {{
+                const moduleId = item.dataset.id;
+                const hasVisibleEdge = visibleModules.has(moduleId);
+                item.classList.toggle('filtered-out', currentThreshold > 0 && !hasVisibleEdge);
+            }});
+            
+            // Also fade out 3D nodes that have no visible edges
+            nodeMeshes.forEach(mesh => {{
+                const hasVisibleEdge = visibleModules.has(mesh.userData.id);
+                mesh.material.opacity = (currentThreshold > 0 && !hasVisibleEdge) ? 0.2 : 1.0;
+                mesh.material.transparent = true;
             }});
         }});
         
