@@ -866,10 +866,12 @@ impl ForceDirectedProjector {
         
         // Highlight module and its connections, fade everything else
         let hoveredModule = null;
+        let hoverSource = null; // 'sidebar' or '3d'
         let currentThreshold = 0;
         
-        function highlightModule(moduleId) {{
+        function highlightModule(moduleId, source) {{
             hoveredModule = moduleId;
+            hoverSource = source || '3d';
             
             // Find connected modules
             const connectedModules = new Set([moduleId]);
@@ -903,9 +905,13 @@ impl ForceDirectedProjector {
             }});
         }}
         
-        function clearHighlight() {{
+        function clearHighlight(source) {{
+            // Only clear if source matches or no source specified
             if (!hoveredModule) return;
+            if (source && hoverSource !== source) return;
+            
             hoveredModule = null;
+            hoverSource = null;
             
             // Restore all nodes
             nodeMeshes.forEach(mesh => {{
@@ -942,9 +948,7 @@ impl ForceDirectedProjector {
                 tooltip.style.top = event.clientY + 15 + 'px';
                 
                 // Highlight on 3D node hover
-                if (typeof highlightModule === 'function') {{
-                    highlightModule(node.id);
-                }}
+                highlightModule(node.id, '3d');
 
                 // Find connections
                 const connections = data.edges
@@ -976,10 +980,8 @@ impl ForceDirectedProjector {
                 `;
             }} else {{
                 tooltip.style.display = 'none';
-                // Clear highlight when not hovering a node
-                if (typeof clearHighlight === 'function') {{
-                    clearHighlight();
-                }}
+                // Only clear 3D-initiated highlights when not hovering a node
+                clearHighlight('3d');
             }}
         }}
 
@@ -1050,11 +1052,11 @@ impl ForceDirectedProjector {
                 // Hover handlers for focus effect
                 item.addEventListener('mouseenter', () => {{
                     const id = item.dataset.id;
-                    highlightModule(id);
+                    highlightModule(id, 'sidebar');
                 }});
                 
                 item.addEventListener('mouseleave', () => {{
-                    clearHighlight();
+                    clearHighlight('sidebar');
                 }});
             }});
         }}
