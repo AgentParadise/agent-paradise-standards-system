@@ -1,0 +1,20 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "EXP-V1-0001.VIZ01"
+name = "Topology Visualization Dashboard"
+slug = "dashboard"
+version = "0.1.0"
+parent_id = "EXP-V1-0001"
+parent_major = "0"
+
+[projector]
+type = "dashboard"
+formats = ["html", "webgl"]
+requires = ["graphs/coupling-matrix.json", "metrics/modules.json"]
+
+[ownership]
+maintainers = ["AgentParadise"]
+
+[visualizations]
+types = ["3d-force", "codecity", "clusters", "vsa", "index"]
