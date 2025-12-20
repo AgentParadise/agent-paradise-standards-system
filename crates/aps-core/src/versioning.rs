@@ -191,21 +191,17 @@ fn bump_semver(version: &str, part: BumpPart) -> Result<String, VersionError> {
 
 /// Parse a version string into (major, minor, patch) components.
 ///
-/// Returns None if the version is not valid semver.
+/// Returns None if the version is not valid semver (must be MAJOR.MINOR.PATCH).
 pub fn parse_semver(version: &str) -> Option<(u32, u32, u32)> {
     let parts: Vec<&str> = version.split('.').collect();
 
-    if parts.len() < 2 || parts.len() > 3 {
+    if parts.len() != 3 {
         return None;
     }
 
     let major: u32 = parts[0].parse().ok()?;
     let minor: u32 = parts[1].parse().ok()?;
-    let patch: u32 = if parts.len() == 3 {
-        parts[2].parse().ok()?
-    } else {
-        0
-    };
+    let patch: u32 = parts[2].parse().ok()?;
 
     Some((major, minor, patch))
 }
@@ -338,7 +334,9 @@ mod tests {
     fn test_parse_semver() {
         assert_eq!(parse_semver("1.2.3"), Some((1, 2, 3)));
         assert_eq!(parse_semver("0.1.0"), Some((0, 1, 0)));
-        assert_eq!(parse_semver("1.0"), Some((1, 0, 0)));
+        assert_eq!(parse_semver("10.20.30"), Some((10, 20, 30)));
+        // Two-part versions are rejected (spec requires MAJOR.MINOR.PATCH)
+        assert_eq!(parse_semver("1.0"), None);
         assert_eq!(parse_semver("invalid"), None);
         assert_eq!(parse_semver("1"), None);
         assert_eq!(parse_semver("1.2.3.4"), None);

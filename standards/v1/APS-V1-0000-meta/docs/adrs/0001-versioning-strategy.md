@@ -16,16 +16,21 @@ The Consumer SDK (EXP-V1-0002) introduces package distribution via GitHub releas
 
 ## Decision
 
-Adopt a **hybrid versioning model** with three layers:
+Adopt a **hybrid versioning model** with four layers:
 
 ### 1. Standard Version (Semver)
 
 Each standard maintains its own semantic version:
 
 ```toml
-# standard.toml / experiment.toml
+# standard.toml
 [standard]
 version = "1.2.3"
+backwards_compat = true
+
+# experiment.toml
+[experiment]
+version = "0.1.0"
 backwards_compat = true
 ```
 

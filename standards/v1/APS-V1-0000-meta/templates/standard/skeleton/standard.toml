@@ -7,6 +7,7 @@ slug = "{{slug}}"
 version = "{{version}}"
 category = "{{category}}"
 status = "active"
+backwards_compat = true  # Set to false when introducing breaking changes
 
 [aps]
 aps_major = "v1"
