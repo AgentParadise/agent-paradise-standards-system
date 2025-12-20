@@ -35,6 +35,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 // ============================================================================
+// Tree-Sitter Adapter Framework
+// ============================================================================
+
+pub mod adapter;
+
+// ============================================================================
 // Error Codes
 // ============================================================================
 
@@ -425,6 +431,11 @@ pub struct CouplingMatrix {
     /// Optional: saved layout positions for visualization
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layout: Option<LayoutInfo>,
+    /// Whether the matrix is directional (asymmetric) or symmetric
+    /// Directional: matrix[i][j] = coupling of i depending on j
+    /// Symmetric: matrix[i][j] = matrix[j][i]
+    #[serde(default)]
+    pub directional: bool,
 }
 
 /// Saved layout positions for deterministic visualization.
@@ -439,8 +450,13 @@ pub struct LayoutInfo {
 }
 
 impl CouplingMatrix {
-    /// Create a new empty coupling matrix.
+    /// Create a new empty coupling matrix (symmetric by default).
     pub fn new(modules: Vec<String>) -> Self {
+        Self::with_directional(modules, false)
+    }
+
+    /// Create a new coupling matrix with specified directionality.
+    pub fn with_directional(modules: Vec<String>, directional: bool) -> Self {
         let n = modules.len();
         let matrix = vec![vec![0.0; n]; n];
 
@@ -452,6 +468,7 @@ impl CouplingMatrix {
             modules,
             matrix,
             layout: None,
+            directional,
         };
 
         for i in 0..n {
@@ -463,7 +480,8 @@ impl CouplingMatrix {
 
     /// Set coupling value between two modules.
     ///
-    /// Automatically maintains symmetry: matrix[i][j] = matrix[j][i]
+    /// For symmetric matrices (directional=false): maintains matrix[i][j] = matrix[j][i]
+    /// For directional matrices: only sets matrix[i][j] (A depends on B)
     pub fn set_coupling(&mut self, module_a: &str, module_b: &str, value: f64) {
         let i = self.modules.iter().position(|m| m == module_a);
         let j = self.modules.iter().position(|m| m == module_b);
@@ -471,7 +489,9 @@ impl CouplingMatrix {
         if let (Some(i), Some(j)) = (i, j) {
             let clamped = value.clamp(0.0, 1.0);
             self.matrix[i][j] = clamped;
-            self.matrix[j][i] = clamped; // Symmetric
+            if !self.directional {
+                self.matrix[j][i] = clamped; // Symmetric only for non-directional
+            }
         }
     }
 
@@ -505,7 +525,7 @@ impl CouplingMatrix {
                 ));
             }
 
-            // Check symmetry and range
+            // Check range (and symmetry for non-directional matrices)
             for (j, &value) in row.iter().enumerate() {
                 if !(0.0..=1.0).contains(&value) {
                     return Err(format!(
@@ -513,13 +533,15 @@ impl CouplingMatrix {
                     ));
                 }
 
-                // Use a tolerance for floating-point comparison (more lenient than EPSILON)
-                const SYMMETRY_TOLERANCE: f64 = 1e-10;
-                if (value - self.matrix[j][i]).abs() > SYMMETRY_TOLERANCE {
-                    let other = self.matrix[j][i];
-                    return Err(format!(
-                        "Matrix is not symmetric: [{i},{j}]={value} != [{j},{i}]={other}"
-                    ));
+                // Only check symmetry for non-directional matrices
+                if !self.directional {
+                    const SYMMETRY_TOLERANCE: f64 = 1e-10;
+                    if (value - self.matrix[j][i]).abs() > SYMMETRY_TOLERANCE {
+                        let other = self.matrix[j][i];
+                        return Err(format!(
+                            "Matrix is not symmetric: [{i},{j}]={value} != [{j},{i}]={other}"
+                        ));
+                    }
                 }
             }
 
@@ -1011,15 +1033,29 @@ mod tests {
     }
 
     #[test]
-    fn test_coupling_matrix_validation_fails_asymmetric() {
+    fn test_coupling_matrix_validation_fails_asymmetric_when_not_directional() {
         let modules = vec!["a".to_string(), "b".to_string()];
-        let mut matrix = CouplingMatrix::new(modules);
+        let mut matrix = CouplingMatrix::new(modules); // directional=false by default
 
         // Break symmetry manually
         matrix.matrix[0][1] = 0.5;
         // Don't set [1][0]
 
+        // Non-directional matrices must be symmetric
         assert!(matrix.validate().is_err());
+    }
+
+    #[test]
+    fn test_coupling_matrix_validation_allows_asymmetric_when_directional() {
+        let modules = vec!["a".to_string(), "b".to_string()];
+        let mut matrix = CouplingMatrix::with_directional(modules, true);
+
+        // Asymmetric values are allowed for directional matrices
+        matrix.matrix[0][1] = 0.5;
+        matrix.matrix[1][0] = 0.3; // Different value
+
+        // Directional matrices can be asymmetric
+        assert!(matrix.validate().is_ok());
     }
 
     #[test]

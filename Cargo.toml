@@ -5,6 +5,7 @@ members = [
     "crates/aps-cli",
     "standards/v1/APS-V1-0000-meta",
     "standards/v1/APS-V1-0000-meta/substandards/SS01-substandard-structure",
+    "standards/v1/APS-V1-0000-meta/substandards/CL01-cli-contract",
     # Experimental standards
     "standards-experimental/v1/EXP-V1-0001-code-topology",
     "standards-experimental/v1/EXP-V1-0001-code-topology/substandards/3D01-force-directed",
@@ -25,6 +26,11 @@ rust-version = "1.85"
 [workspace.dependencies]
 # Error handling
 thiserror = "2.0"
+
+# Tree-sitter (for language analysis)
+tree-sitter = "0.24"
+tree-sitter-rust = "0.23"
+tree-sitter-python = "0.23"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

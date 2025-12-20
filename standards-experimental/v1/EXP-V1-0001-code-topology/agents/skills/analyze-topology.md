@@ -30,18 +30,53 @@ Generate `.topology/` artifacts from a codebase by running complexity analysis a
 ## Procedure
 
 1. **Detect languages** in the codebase by scanning file extensions
-2. **Load language adapters** for detected languages (TypeScript, Python, Rust, C++)
-3. **Extract functions** from all source files using tree-sitter queries
-4. **Compute metrics** for each function:
+2. **Load grammars** from the unified tree-sitter framework (Rust, Python)
+3. **Walk directory** tree, filtering hidden dirs and build artifacts
+4. **Extract functions** from all source files using tree-sitter queries
+5. **Compute metrics** for each function using shared complexity engine:
    - Cyclomatic complexity (decision points + 1)
    - Cognitive complexity (nesting-aware)
    - Halstead metrics (operators/operands)
-5. **Build call graph** by analyzing function call sites
-6. **Build dependency graph** by analyzing imports
-7. **Compute coupling matrix** between modules
-8. **Calculate Martin's metrics** (Ca, Ce, I, A, D) per module
-9. **Run force-directed layout** to compute 3D positions
-10. **Write artifacts** to `.topology/` directory
+6. **Aggregate by module** to compute module-level metrics
+7. **Build coupling matrix** between modules
+8. **Write artifacts** to `.topology/` directory:
+   - `manifest.toml` — Analysis metadata
+   - `metrics/functions.json` — Per-function metrics
+   - `metrics/modules.json` — Per-module aggregates
+   - `graphs/coupling-matrix.json` — Module coupling
+
+## Supported Languages
+
+| Language | Extensions | Status |
+|----------|------------|--------|
+| Rust | `.rs` | ✅ Implemented |
+| Python | `.py`, `.pyi` | ✅ Implemented |
+| TypeScript/JS | `.ts`, `.tsx`, `.js`, `.jsx` | 📋 Planned (see [Issue #13](https://github.com/AgentParadise/agent-paradise-standards-system/issues/13)) |
+
+## CLI Commands
+
+```bash
+# Analyze the current directory (auto-detect languages)
+aps run topology analyze .
+
+# Analyze only Python files
+aps run topology analyze . --language python
+
+# Analyze only Rust files
+aps run topology analyze . --language rust
+
+# Analyze with custom output location
+aps run topology analyze . --output .topology/
+
+# Validate existing artifacts
+aps run topology validate .topology/
+
+# Generate a report
+aps run topology report .topology/
+
+# Show supported languages
+aps run topology --help
+```
 
 ## Example Usage
 

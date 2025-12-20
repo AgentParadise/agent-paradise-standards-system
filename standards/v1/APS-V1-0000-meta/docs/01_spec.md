@@ -356,6 +356,50 @@ Each standard and substandard MUST use SemVer:
 - Minor/Patch releases MUST be backward compatible
 - Breaking changes require a SemVer major bump
 
+#### 10.2.1 Version Format
+
+Versions MUST use the format `MAJOR.MINOR.PATCH`:
+
+- **MAJOR**: Increment for breaking changes to schema, artifacts, or behavior
+- **MINOR**: Increment for backward-compatible new features
+- **PATCH**: Increment for backward-compatible bug fixes
+
+#### 10.2.2 Backwards Compatibility Flag
+
+The `backwards_compat` field indicates API stability:
+
+```toml
+[standard]
+backwards_compat = true   # No breaking changes from previous version
+backwards_compat = false  # Contains breaking changes
+```
+
+**Rule**: `backwards_compat: false` REQUIRES a MAJOR version increment.
+
+CLI validation MUST fail if:
+- `backwards_compat: false` but MAJOR version is 0 for non-experiments
+- `backwards_compat: false` but version was not bumped from previous release
+
+#### 10.2.3 Experiment Versioning
+
+Experiments (EXP-*) MAY use `0.x.x` versions freely:
+
+```toml
+[experiment]
+version = "0.1.0"  # Pre-1.0 indicates experimental status
+```
+
+Upon promotion to official standard, version MAY:
+- Reset to `1.0.0` if significant changes occurred
+- Continue from experiment version if mature
+
+#### 10.2.4 Substandard Versioning
+
+Substandards:
+- MUST inherit the APS major version from their parent (e.g., `V1`)
+- MAY version independently from parent standard
+- SHOULD align major versions with parent for clarity
+
 ### 10.3 Required Evolution Pack on Major Bump
 
 If a standard or substandard introduces a SemVer major bump, it MUST include:
@@ -536,6 +580,44 @@ CLI validation commands MUST use:
 - `0` — All checks passed
 - `1` — Errors found
 - `2` — Warnings only (no errors)
+
+---
+
+## 17. Package Distribution
+
+### 17.1 Bundle Releases
+
+Standards are distributed via GitHub Releases as individual tarballs:
+
+```
+aps-<slug>-<version>.tar.gz
+aps-<slug>-<version>.tar.gz.sha256
+```
+
+Each release includes a `registry.json` listing all available standards and versions.
+
+### 17.2 Lock Files
+
+Consumers pin exact versions in `.aps/manifest.lock`:
+
+```toml
+[[package]]
+slug = "code-topology"
+version = "0.1.0"
+checksum = "sha256:..."
+resolved_url = "https://github.com/.../aps-code-topology-0.1.0.tar.gz"
+```
+
+Lock files ensure reproducible builds regardless of new releases.
+
+### 17.3 Version Selection
+
+When adding a standard:
+- If version specified: use that exact version
+- If no version: use `latest` from registry
+- Lock file pins the resolved version
+
+See ADR 0001 (Versioning Strategy) for detailed semantics.
 
 ---
 

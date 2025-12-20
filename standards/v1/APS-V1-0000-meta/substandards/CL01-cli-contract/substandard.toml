@@ -1,0 +1,18 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0000.CL01"
+name = "CLI Contract"
+slug = "cli-contract"
+version = "1.0.0"
+parent_id = "APS-V1-0000"
+parent_major = "1"
+category = "governance"
+backwards_compat = true
+
+[ownership]
+maintainers = ["AgentParadise/standards-team"]
+
+[metadata]
+description = "Defines the CLI contract for APS standards - command patterns, output formats, and integration traits."
+keywords = ["cli", "tooling", "commands", "automation"]
