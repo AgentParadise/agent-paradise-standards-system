@@ -6,6 +6,8 @@
 //! - **Color** = health score
 //! - **Districts** = slices/packages
 
+use crate::escape_json_for_html;
+
 /// Generate CodeCity HTML visualization.
 ///
 /// # Arguments
@@ -16,6 +18,9 @@
 /// Complete HTML document as a string
 #[allow(clippy::uninlined_format_args)]
 pub fn generate(modules_json: &str, coupling_json: &str) -> String {
+    let modules_escaped = escape_json_for_html(modules_json);
+    let coupling_escaped = escape_json_for_html(coupling_json);
+
     format!(
         r##"<!DOCTYPE html>
 <html lang="en">
@@ -23,7 +28,7 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CodeCity - Topology Visualization</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; }}
@@ -244,8 +249,8 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
     </script>
 </body>
 </html>"##,
-        modules_json = modules_json,
-        coupling_json = coupling_json
+        modules_json = modules_escaped,
+        coupling_json = coupling_escaped
     )
 }
 

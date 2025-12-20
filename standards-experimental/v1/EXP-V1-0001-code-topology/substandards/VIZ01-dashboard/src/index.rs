@@ -2,6 +2,8 @@
 //!
 //! Landing page linking to all visualization types with summary statistics.
 
+use crate::{health_label, health_to_color};
+
 /// Generate dashboard index HTML.
 ///
 /// # Arguments
@@ -14,7 +16,7 @@
 #[allow(clippy::uninlined_format_args)]
 pub fn generate(module_count: usize, slice_count: usize, avg_health: f64) -> String {
     let health_color = health_to_color(avg_health);
-    let health_label = get_health_label(avg_health);
+    let health_lbl = health_label(avg_health);
     let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
 
     format!(
@@ -97,42 +99,8 @@ pub fn generate(module_count: usize, slice_count: usize, avg_health: f64) -> Str
         slice_count = slice_count,
         health_color = health_color,
         health_pct = (avg_health * 100.0).round() as i32,
-        health_label = health_label
+        health_label = health_lbl
     )
-}
-
-/// Convert health score to color hex string.
-fn health_to_color(health: f64) -> &'static str {
-    if health >= 0.80 {
-        "#00ff88"
-    } else if health >= 0.65 {
-        "#44dd77"
-    } else if health >= 0.50 {
-        "#88cc55"
-    } else if health >= 0.35 {
-        "#ddaa33"
-    } else if health >= 0.20 {
-        "#ff7744"
-    } else {
-        "#ff3333"
-    }
-}
-
-/// Get health label from score.
-fn get_health_label(health: f64) -> &'static str {
-    if health >= 0.80 {
-        "Excellent"
-    } else if health >= 0.65 {
-        "Good"
-    } else if health >= 0.50 {
-        "OK"
-    } else if health >= 0.35 {
-        "Warning"
-    } else if health >= 0.20 {
-        "Poor"
-    } else {
-        "Critical"
-    }
 }
 
 #[cfg(test)]
@@ -150,19 +118,5 @@ mod tests {
         let html = generate(42, 5, 0.85);
         assert!(html.contains("42"));
         assert!(html.contains("5"));
-    }
-
-    #[test]
-    fn test_health_to_color() {
-        assert_eq!(health_to_color(0.90), "#00ff88");
-        assert_eq!(health_to_color(0.50), "#88cc55");
-        assert_eq!(health_to_color(0.10), "#ff3333");
-    }
-
-    #[test]
-    fn test_health_label() {
-        assert_eq!(get_health_label(0.90), "Excellent");
-        assert_eq!(get_health_label(0.50), "OK");
-        assert_eq!(get_health_label(0.10), "Critical");
     }
 }

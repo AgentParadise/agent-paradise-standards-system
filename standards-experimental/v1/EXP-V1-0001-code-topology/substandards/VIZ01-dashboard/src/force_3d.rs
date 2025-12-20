@@ -10,6 +10,8 @@
 //! - Interactive sidebar with module list and coupling filter
 //! - Click to focus, hover for tooltips
 
+use crate::escape_json_for_html;
+
 /// Generate 3D Force-Directed HTML visualization.
 ///
 /// This function generates a complete, self-contained HTML document with
@@ -24,6 +26,8 @@
 /// Complete HTML document as a string
 #[allow(clippy::uninlined_format_args)]
 pub fn generate(scene_json: &str, node_count: usize, edge_count: usize) -> String {
+    let scene_escaped = escape_json_for_html(scene_json);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -618,7 +622,7 @@ pub fn generate(scene_json: &str, node_count: usize, edge_count: usize) -> Strin
 </html>"#,
         node_count = node_count,
         edge_count = edge_count,
-        scene_json = scene_json
+        scene_json = scene_escaped
     )
 }
 

@@ -5,6 +5,8 @@
 //! - **Rows** = architectural layers
 //! - **Cells** = module count with health indicator
 
+use crate::escape_json_for_html;
+
 /// Generate VSA Diagram HTML visualization.
 ///
 /// # Arguments
@@ -14,6 +16,8 @@
 /// Complete HTML document as a string
 #[allow(clippy::uninlined_format_args)]
 pub fn generate(modules_json: &str) -> String {
+    let modules_escaped = escape_json_for_html(modules_json);
+
     format!(
         r##"<!DOCTYPE html>
 <html lang="en">
@@ -168,7 +172,7 @@ pub fn generate(modules_json: &str) -> String {
     </script>
 </body>
 </html>"##,
-        modules_json = modules_json
+        modules_json = modules_escaped
     )
 }
 
