@@ -930,10 +930,11 @@ fn topology_analyze(
         println!("  {lang}: {} files", files.len());
     }
 
-    // Analyze all files - extract functions, imports, AND types
+    // Analyze all files - extract functions, imports, types, AND calls
     let mut all_functions = Vec::new();
     let mut all_imports: Vec<code_topology::ImportInfo> = Vec::new();
     let mut all_types: Vec<code_topology::TypeInfo> = Vec::new();
+    let mut all_calls: Vec<code_topology::CallInfo> = Vec::new();
     let mut errors = 0;
 
     for (lang, files) in &files_by_lang {
@@ -961,6 +962,11 @@ fn topology_analyze(
             // Extract types for abstractness calculation
             if let Ok(types) = adapter.extract_types(&source, file_path) {
                 all_types.extend(types);
+            }
+
+            // Extract calls for call coupling analysis
+            if let Ok(calls) = adapter.extract_calls(&source, file_path) {
+                all_calls.extend(calls);
             }
 
             match adapter.extract_functions(&source, file_path) {
@@ -1004,6 +1010,7 @@ fn topology_analyze(
         &all_functions,
         &all_imports,
         &all_types,
+        &all_calls,
         &files_by_lang,
     ) {
         eprintln!("Error writing artifacts: {e}");
@@ -1020,6 +1027,7 @@ fn write_topology_artifacts(
     functions: &[(code_topology::FunctionInfo, code_topology::FunctionMetrics)],
     imports: &[code_topology::ImportInfo],
     types: &[code_topology::TypeInfo],
+    calls: &[code_topology::CallInfo],
     files_by_lang: &std::collections::HashMap<String, Vec<std::path::PathBuf>>,
 ) -> std::io::Result<()> {
     use std::collections::{HashMap, HashSet};
@@ -1060,8 +1068,9 @@ fn write_topology_artifacts(
     let mut efferent: HashMap<String, HashSet<String>> = HashMap::new();
     // Map module -> set of modules that depend on it (afferent coupling)
     let mut afferent: HashMap<String, HashSet<String>> = HashMap::new();
-    // Map (from, to) -> list of imported items (for coupling strength calculation)
-    let mut import_edges: HashMap<(String, String), Vec<String>> = HashMap::new();
+    // Map (from, to) -> list of imports with full details (for weighted coupling calculation)
+    let mut import_edges: HashMap<(String, String), Vec<code_topology::ImportInfo>> =
+        HashMap::new();
 
     // Initialize all modules
     for module in modules.keys() {
@@ -1069,7 +1078,7 @@ fn write_topology_artifacts(
         afferent.entry(module.clone()).or_default();
     }
 
-    // Process imports to build coupling
+    // Process imports to build coupling with weighted scoring
     for import in imports {
         let from_module = &import.from_module;
 
@@ -1099,11 +1108,11 @@ fn write_topology_artifacts(
                     .entry(to_module.clone())
                     .or_default()
                     .insert(from_module.clone());
-                // Track the specific import for coupling strength
+                // Track the full import for weighted coupling calculation
                 import_edges
                     .entry((from_module.clone(), to_module.clone()))
                     .or_default()
-                    .push(import_path.clone());
+                    .push(import.clone());
             }
         }
     }
@@ -1293,38 +1302,252 @@ total_dependencies = {}
         row[i] = 1.0;
     }
 
-    // Find max import count for normalization
-    let max_imports = import_edges
-        .values()
-        .map(|v| v.len())
-        .max()
-        .unwrap_or(1)
-        .max(1); // Ensure at least 1 to avoid division by zero
+    // =========================================================================
+    // COMPOSITE COUPLING CALCULATION (v2.0)
+    // Uses weighted import coupling with logarithmic percentile normalization
+    // =========================================================================
 
-    // Calculate normalized coupling strength based on import count
-    // Coupling = import_count / max_imports (normalized to 0-1)
+    // Step 1: Calculate raw weighted import coupling
+    // Weight by import kind: wildcard=0.3, multi=0.7/symbol, single=1.0, module=0.5
+    let mut raw_coupling: HashMap<(usize, usize), f64> = HashMap::new();
+
     for ((from, to), imports_list) in &import_edges {
         if let (Some(&from_idx), Some(&to_idx)) = (
             module_index.get(from.as_str()),
             module_index.get(to.as_str()),
         ) {
-            // Directional coupling: from -> to
-            let strength = imports_list.len() as f64 / max_imports as f64;
-            matrix[from_idx][to_idx] = strength;
-            // Note: NOT making it symmetric - coupling is directional
-            // A depending on B doesn't mean B depends on A
+            let mut weighted_score = 0.0;
+            for import in imports_list {
+                let base_weight = import.kind.weight();
+                // For multi-imports, weight per symbol but cap total contribution
+                // to avoid single large imports dominating the score
+                let symbol_count = if import.symbols.is_empty() {
+                    1.0
+                } else {
+                    import.symbols.len() as f64
+                };
+                // Cap at 3.0 to prevent outliers (e.g., `use foo::{a,b,c,d,e,f,g}`)
+                let import_score = (base_weight * symbol_count).min(3.0);
+                weighted_score += import_score;
+            }
+            raw_coupling.insert((from_idx, to_idx), weighted_score);
         }
     }
 
+    // Step 2: Logarithmic percentile normalization
+    // This produces a smooth distribution instead of discrete buckets
+    fn logarithmic_percentile_normalize(
+        values: &HashMap<(usize, usize), f64>,
+    ) -> HashMap<(usize, usize), f64> {
+        if values.is_empty() {
+            return HashMap::new();
+        }
+
+        // Apply log transform to handle outliers
+        let log_values: Vec<((usize, usize), f64)> =
+            values.iter().map(|(&k, &v)| (k, (v + 1.0).ln())).collect();
+
+        // Sort by log value to compute percentile ranks
+        let mut sorted_values: Vec<f64> = log_values.iter().map(|(_, v)| *v).collect();
+        sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Compute percentile rank for each value
+        let n = sorted_values.len();
+        if n <= 1 {
+            // Single value or empty: all get 1.0
+            return log_values.iter().map(|(k, _)| (*k, 1.0)).collect();
+        }
+        log_values
+            .iter()
+            .map(|(k, log_v)| {
+                // Count values strictly less than current (0-indexed rank)
+                let rank = sorted_values.iter().filter(|&&v| v < *log_v).count() as f64;
+                // Use (rank) / (n-1) to get proper 0.0 to 1.0 range
+                let percentile = rank / (n - 1) as f64;
+                (*k, percentile)
+            })
+            .collect()
+    }
+
+    // Step 3: Store raw import coupling for components breakdown (normalized by max)
+    let mut import_coupling_matrix = vec![vec![0.0; n]; n];
+    let max_import_raw = raw_coupling.values().cloned().fold(1.0_f64, f64::max);
+    for ((from_idx, to_idx), raw_score) in &raw_coupling {
+        import_coupling_matrix[*from_idx][*to_idx] = raw_score / max_import_raw;
+    }
+
+    // =========================================================================
+    // CALL COUPLING CALCULATION
+    // Count cross-module function calls
+    // =========================================================================
+    let mut call_edges: HashMap<(String, String), usize> = HashMap::new();
+    for call in calls {
+        let caller_module = &call.caller;
+        let callee = &call.callee;
+
+        // Try to resolve callee to a module with stricter matching
+        for to_module in modules.keys() {
+            if caller_module == to_module {
+                continue; // Skip self-references
+            }
+
+            let to_name = to_module.split("::").last().unwrap_or(to_module);
+
+            // Match if:
+            // 1. Qualified call: callee starts with module path (e.g., "discovery::find_packages")
+            // 2. Direct module call: callee equals module name (e.g., "discovery")
+            // 3. Function in module: callee contains "::" and first part matches module
+            let is_qualified_call =
+                callee.starts_with(to_module) || callee.starts_with(&format!("{to_name}::"));
+            let is_module_reference = callee == to_name || callee == to_module;
+            let is_namespaced_call = callee.contains("::") && {
+                let parts: Vec<&str> = callee.split("::").collect();
+                parts.first().is_some_and(|first| *first == to_name)
+            };
+
+            if is_qualified_call || is_module_reference || is_namespaced_call {
+                *call_edges
+                    .entry((caller_module.clone(), to_module.clone()))
+                    .or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Build call coupling matrix
+    let mut call_coupling_matrix = vec![vec![0.0; n]; n];
+    let mut raw_call_coupling: HashMap<(usize, usize), f64> = HashMap::new();
+    for ((from, to), count) in &call_edges {
+        if let (Some(&from_idx), Some(&to_idx)) = (
+            module_index.get(from.as_str()),
+            module_index.get(to.as_str()),
+        ) {
+            raw_call_coupling.insert((from_idx, to_idx), *count as f64);
+        }
+    }
+
+    // Normalize call coupling
+    let max_call_raw = raw_call_coupling.values().cloned().fold(1.0_f64, f64::max);
+    for ((from_idx, to_idx), raw_score) in &raw_call_coupling {
+        call_coupling_matrix[*from_idx][*to_idx] = raw_score / max_call_raw;
+    }
+
+    // =========================================================================
+    // TYPE COUPLING CALCULATION
+    // Track type references between modules
+    // =========================================================================
+    let mut type_edges: HashMap<(String, String), usize> = HashMap::new();
+
+    // Build a map of type name -> defining module
+    let mut type_to_module: HashMap<String, String> = HashMap::new();
+    for type_info in types {
+        type_to_module.insert(type_info.name.clone(), type_info.module.clone());
+    }
+
+    // For each function, check if it uses types from other modules
+    // This is a simplified approach - we look for type names in the same module's functions
+    for (func, _) in functions {
+        let func_module = &func.module;
+        // Check for type usages - simplified: count types defined in other modules
+        for (type_name, defining_module) in &type_to_module {
+            if func_module != defining_module && func.qualified_name.contains(type_name) {
+                *type_edges
+                    .entry((func_module.clone(), defining_module.clone()))
+                    .or_insert(0) += 1;
+            }
+        }
+    }
+
+    // Build type coupling matrix
+    let mut type_coupling_matrix = vec![vec![0.0; n]; n];
+    let mut raw_type_coupling: HashMap<(usize, usize), f64> = HashMap::new();
+    for ((from, to), count) in &type_edges {
+        if let (Some(&from_idx), Some(&to_idx)) = (
+            module_index.get(from.as_str()),
+            module_index.get(to.as_str()),
+        ) {
+            raw_type_coupling.insert((from_idx, to_idx), *count as f64);
+        }
+    }
+
+    // Normalize type coupling
+    let max_type_raw = raw_type_coupling.values().cloned().fold(1.0_f64, f64::max);
+    for ((from_idx, to_idx), raw_score) in &raw_type_coupling {
+        type_coupling_matrix[*from_idx][*to_idx] = raw_score / max_type_raw;
+    }
+
+    // =========================================================================
+    // COMPOSITE SCORE
+    // Combine all coupling components with weights
+    // =========================================================================
+    const IMPORT_WEIGHT: f64 = 0.40; // Increased since we have fewer components
+    const CALL_WEIGHT: f64 = 0.35;
+    const TYPE_WEIGHT: f64 = 0.25;
+
+    // Combine all raw couplings for composite percentile normalization
+    let mut composite_raw: HashMap<(usize, usize), f64> = HashMap::new();
+    for i in 0..n {
+        for j in 0..n {
+            if i != j {
+                let import_score = import_coupling_matrix[i][j];
+                let call_score = call_coupling_matrix[i][j];
+                let type_score = type_coupling_matrix[i][j];
+
+                let composite = IMPORT_WEIGHT * import_score
+                    + CALL_WEIGHT * call_score
+                    + TYPE_WEIGHT * type_score;
+
+                if composite > 0.0 {
+                    composite_raw.insert((i, j), composite);
+                }
+            }
+        }
+    }
+
+    // Re-normalize the composite scores using percentile ranking
+    let normalized_composite = logarithmic_percentile_normalize(&composite_raw);
+
+    // Fill the final matrix with composite normalized values
+    for ((from_idx, to_idx), strength) in &normalized_composite {
+        matrix[*from_idx][*to_idx] = *strength;
+    }
+
     let coupling_json = serde_json::json!({
-        "schema_version": "1.0.0",
-        "metric": "import_coupling",
-        "description": "Normalized coupling strength between modules (0-1). Directional: matrix[i][j] = strength of module i depending on module j.",
+        "schema_version": "2.0.0",
+        "metric": "composite_coupling",
+        "description": "Composite coupling strength combining import, call, and type coupling (0-1). Directional: matrix[i][j] = strength of module i depending on module j.",
         "modules": module_names,
         "matrix": matrix,
+        "components": {
+            "import_coupling": {
+                "weight": IMPORT_WEIGHT,
+                "description": "Weighted import statement dependencies (wildcard=0.3, multi=0.7, single=1.0)",
+                "matrix": import_coupling_matrix
+            },
+            "call_coupling": {
+                "weight": CALL_WEIGHT,
+                "description": "Cross-module function call count",
+                "matrix": call_coupling_matrix,
+                "total_calls": calls.len()
+            },
+            "type_coupling": {
+                "weight": TYPE_WEIGHT,
+                "description": "Type references between modules",
+                "matrix": type_coupling_matrix,
+                "total_types": types.len()
+            }
+        },
         "metadata": {
-            "max_imports_between_pair": max_imports,
-            "normalization": "import_count / max_imports"
+            "normalization": "logarithmic_percentile",
+            "directional": true,
+            "total_import_edges": import_edges.len(),
+            "total_call_edges": call_edges.len(),
+            "total_type_edges": type_edges.len(),
+            "weights": {
+                "wildcard": 0.3,
+                "multi_per_symbol": 0.7,
+                "single": 1.0,
+                "module": 0.5
+            }
         }
     });
     fs::write(
@@ -2678,6 +2901,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
 }
 
 /// Generate CodeCity HTML (3D city metaphor)
+#[allow(clippy::uninlined_format_args)]
 fn generate_codecity_html(modules_json: &str, coupling_json: &str) -> String {
     format!(
         r##"<!DOCTYPE html>
@@ -2916,6 +3140,7 @@ fn generate_codecity_html(modules_json: &str, coupling_json: &str) -> String {
 }
 
 /// Generate Package Clusters HTML (2D force-directed) with sidebar and coupling filter
+#[allow(clippy::uninlined_format_args)]
 fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
     format!(
         r##"<!DOCTYPE html>
@@ -3290,6 +3515,7 @@ fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
 }
 
 /// Generate VSA Diagram HTML (Vertical Slice Architecture matrix)
+#[allow(clippy::uninlined_format_args)]
 fn generate_vsa_html(modules_json: &str) -> String {
     format!(
         r##"<!DOCTYPE html>

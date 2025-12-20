@@ -317,6 +317,41 @@ pub struct ImportInfo {
     pub import_path: String,
     /// Whether this is an external (third-party) import
     pub is_external: bool,
+    /// Symbols imported (empty for wildcard or module-level imports)
+    #[serde(default)]
+    pub symbols: Vec<String>,
+    /// Whether this is a wildcard import (use foo::*)
+    #[serde(default)]
+    pub is_wildcard: bool,
+    /// Import kind for coupling weight calculation
+    #[serde(default)]
+    pub kind: ImportKind,
+}
+
+/// Import kind for coupling weight calculation
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum ImportKind {
+    /// Wildcard import (use foo::*) - weight 0.3
+    Wildcard,
+    /// Multi-symbol import (use foo::{A, B, C}) - weight 0.7 per symbol
+    Multi,
+    /// Single symbol import (use foo::bar) - weight 1.0
+    #[default]
+    Single,
+    /// Module-level import (use foo) - weight 0.5
+    Module,
+}
+
+impl ImportKind {
+    /// Get the coupling weight for this import kind
+    pub fn weight(&self) -> f64 {
+        match self {
+            ImportKind::Wildcard => 0.3,
+            ImportKind::Multi => 0.7,
+            ImportKind::Single => 1.0,
+            ImportKind::Module => 0.5,
+        }
+    }
 }
 
 /// Information about a type definition (for abstractness calculation).

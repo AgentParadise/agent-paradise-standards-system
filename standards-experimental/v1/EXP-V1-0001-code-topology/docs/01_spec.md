@@ -321,21 +321,49 @@ Includes Martin's coupling metrics:
 
 #### 3.4.3 Coupling Matrix (`graphs/coupling-matrix.json`)
 
-The coupling matrix is the primary input for 3D visualization:
+The coupling matrix is the primary input for 3D visualization. **Schema version 2.0** includes component breakdown:
 
 ```json
 {
-  "schema_version": "0.1.0",
-  "metric": "normalized_coupling",
-  "description": "Normalized coupling strength between modules (0-1)",
+  "schema_version": "2.0.0",
+  "metric": "composite_coupling",
+  "description": "Composite coupling strength combining structural metrics (0-1)",
   "modules": ["auth", "api", "db", "utils", "crypto"],
   "matrix": [
-    [1.00, 0.75, 0.20, 0.40, 0.85],
-    [0.75, 1.00, 0.65, 0.30, 0.25],
-    [0.20, 0.65, 1.00, 0.15, 0.10],
-    [0.40, 0.30, 0.15, 1.00, 0.20],
-    [0.85, 0.25, 0.10, 0.20, 1.00]
+    [1.00, 0.73, 0.22, 0.41, 0.82],
+    [0.68, 1.00, 0.61, 0.35, 0.28],
+    [0.18, 0.59, 1.00, 0.17, 0.12],
+    [0.38, 0.31, 0.14, 1.00, 0.23],
+    [0.79, 0.24, 0.09, 0.19, 1.00]
   ],
+  "components": {
+    "import_coupling": {
+      "weight": 0.30,
+      "description": "Weighted import statement dependencies",
+      "matrix": [[1.0, 0.8, 0.1, 0.3, 0.9], ...]
+    },
+    "call_coupling": {
+      "weight": 0.25,
+      "description": "Cross-module function invocations",
+      "matrix": [[1.0, 0.7, 0.3, 0.5, 0.8], ...]
+    },
+    "symbol_coupling": {
+      "weight": 0.20,
+      "description": "Distinct symbols used from other modules",
+      "matrix": [[1.0, 0.6, 0.2, 0.4, 0.7], ...]
+    },
+    "type_coupling": {
+      "weight": 0.15,
+      "description": "Type references (struct, enum, trait)",
+      "matrix": [[1.0, 0.9, 0.4, 0.6, 0.8], ...]
+    },
+    "change_coupling": {
+      "weight": 0.10,
+      "description": "Co-change frequency from git history",
+      "source": "git",
+      "matrix": [[1.0, 0.5, 0.1, 0.2, 0.6], ...]
+    }
+  },
   "layout": {
     "algorithm": "force-directed",
     "seed": 42,
@@ -346,17 +374,24 @@ The coupling matrix is the primary input for 3D visualization:
       "utils": [0.0, -1.5, 2.0],
       "crypto": [1.8, 3.8, 0.2]
     }
+  },
+  "metadata": {
+    "normalization": "logarithmic_percentile",
+    "directional": true,
+    "generated_at": "2025-12-17T10:30:00Z"
   }
 }
 ```
 
-**Coupling Calculation:**
+**Backward Compatibility:**
 
-```
-coupling(A, B) = (calls_A_to_B + calls_B_to_A + imports_A_B + imports_B_A) / max_possible_coupling
-```
+Schema version 1.0 files (without `components`) are still valid. Implementations SHOULD support both versions. When reading v1.0, assume the single matrix is `import_coupling` with weight 1.0.
 
-The matrix is symmetric: `matrix[i][j] == matrix[j][i]`.
+**Matrix Interpretation:**
+
+- `matrix[i][j]` = coupling from module `modules[i]` TO module `modules[j]`
+- Directional: A depending on B ≠ B depending on A
+- Visualizations MAY use `max(matrix[i][j], matrix[j][i])` for edge rendering
 
 ### 3.5 Snapshot Schema (`snapshots/YYYY-MM-DD.json`)
 
@@ -568,30 +603,101 @@ Where:
 
 ### 4.5 Coupling Matrix Calculation
 
-The coupling matrix captures normalized coupling strength between all module pairs:
+The coupling matrix captures **composite coupling strength** between all module pairs.
+
+#### 4.5.1 Types of Coupling
+
+| Type | Description | Data Source | Visibility |
+|------|-------------|-------------|------------|
+| **Structural Coupling** | Static code dependencies visible in source | AST/Tree-sitter | Explicit |
+| **Logical Coupling** | Files that change together over time | Git history | Implicit |
+| **Temporal Coupling** | Execution order dependencies | Runtime traces | Hidden |
+
+This standard focuses on **Structural Coupling** with optional **Logical Coupling** from version control history.
+
+#### 4.5.2 Coupling Component Metrics
+
+The composite coupling score is derived from five component metrics:
+
+| Component | Weight | Description | Calculation |
+|-----------|--------|-------------|-------------|
+| **Import Coupling** | 30% | Import statement dependencies | Weighted by specificity: wildcard=0.3, multi=0.7, single=1.0 |
+| **Call Coupling** | 25% | Cross-module function invocations | Count of calls from A to functions in B |
+| **Symbol Coupling** | 20% | Distinct symbols used from other modules | Unique identifiers referenced from B used in A |
+| **Type Coupling** | 15% | Type references (struct, enum, trait) | Count of type usages from module B in A |
+| **Change Coupling** | 10% | Co-change frequency in version control | commits_together / min(commits_A, commits_B) |
+
+> **Note:** Change Coupling is OPTIONAL and only available when git history is provided.
+
+#### 4.5.3 Import Specificity Weighting
+
+Not all imports indicate equal coupling strength:
 
 ```
-For modules A and B:
-
-raw_coupling(A, B) = 
-    calls_from_A_to_B + 
-    calls_from_B_to_A + 
-    imports_A_to_B + 
-    imports_B_to_A +
-    shared_types(A, B)
-
-coupling(A, B) = raw_coupling(A, B) / max(all_raw_couplings)
+use crate::*;              // Wildcard: 0.3 weight (low specificity)
+use crate::{A, B, C};      // Multi-import: 0.7 weight × 3 symbols
+use crate::specific_fn;    // Single: 1.0 weight (high specificity)
 ```
 
-> **Note:** The actual computation of raw coupling values from calls, imports, and shared 
-> types is left to language adapter implementations. This specification provides the 
-> normative formula, but does not mandate a specific implementation. Adapters SHOULD 
-> ensure that their calculation is consistent with this formula.
+Formula:
+```
+import_coupling(A, B) = Σ(import_weight × symbol_count) / total_possible
+```
 
-The matrix MUST be:
-- **Symmetric:** `coupling[i][j] == coupling[j][i]`
-- **Normalized:** Values in range [0, 1]
-- **Diagonal = 1:** A module is fully coupled with itself
+#### 4.5.4 Composite Coupling Formula
+
+```
+composite_coupling(A, B) =
+    0.30 × normalize(import_coupling(A, B)) +
+    0.25 × normalize(call_coupling(A, B)) +
+    0.20 × normalize(symbol_coupling(A, B)) +
+    0.15 × normalize(type_coupling(A, B)) +
+    0.10 × normalize(change_coupling(A, B))  // Optional
+```
+
+When change coupling is unavailable, weights are redistributed proportionally:
+```
+import: 0.333, call: 0.278, symbol: 0.222, type: 0.167
+```
+
+#### 4.5.5 Normalization Strategy
+
+To avoid coarse bucketing (e.g., only 0.5 or 1.0 values), implementations SHOULD use **logarithmic percentile ranking**:
+
+```
+normalize(values) =
+    1. Apply log transform: log_v = ln(v + 1)
+    2. Compute percentile rank for each value
+    3. Return rank / total_count  (yields 0.0 - 1.0)
+```
+
+This produces a **smooth distribution** rather than discrete buckets.
+
+Alternative normalizations (in decreasing preference):
+1. Logarithmic percentile (RECOMMENDED)
+2. Min-max with log transform
+3. Z-score normalization
+4. Simple min-max (NOT RECOMMENDED - produces coarse values)
+
+#### 4.5.6 Directional vs Symmetric Coupling
+
+Coupling MAY be either:
+
+- **Directional:** `matrix[A][B]` ≠ `matrix[B][A]` — A depends on B differently than B depends on A
+- **Symmetric:** `matrix[A][B]` == `matrix[B][A]` — Bidirectional average
+
+Implementations SHOULD use **directional coupling** for accuracy. Visualizations MAY display the maximum of both directions.
+
+#### 4.5.7 Matrix Properties
+
+The coupling matrix MUST satisfy:
+- **Normalized:** All values in range [0.0, 1.0]
+- **Diagonal = 1.0:** A module is fully coupled with itself
+- **Non-negative:** No negative coupling values
+
+The matrix SHOULD satisfy:
+- **Granular:** Distribution across the range, not clustered at discrete values
+- **Reproducible:** Same codebase → same values (within floating-point tolerance)
 
 ---
 
