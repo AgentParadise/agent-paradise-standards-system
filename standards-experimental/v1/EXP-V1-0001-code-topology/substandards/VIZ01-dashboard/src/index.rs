@@ -66,7 +66,7 @@ pub fn generate(module_count: usize, slice_count: usize, avg_health: f64) -> Str
         </div>
 
         <div class="viz-grid">
-            <a href="3d.html" class="viz-card">
+            <a href="topology-3d.html" class="viz-card">
                 <div class="viz-icon">🌐</div>
                 <div class="viz-title">3D Coupling Graph</div>
                 <div class="viz-desc">Force-directed graph showing module coupling relationships with Martin metrics.</div>
