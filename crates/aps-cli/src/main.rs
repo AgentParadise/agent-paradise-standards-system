@@ -2904,15 +2904,31 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
     for file in &generated_files {
         println!("  {file}");
     }
-    println!();
-    println!("Open in browser:");
-    if viz_type == "all" {
-        println!("  open {}", viz_dir.join("index.html").display());
+    // Auto-open in browser
+    let open_path = if viz_type == "all" {
+        viz_dir.join("index.html")
     } else {
-        println!(
-            "  open {}",
-            generated_files.first().unwrap_or(&String::new())
-        );
+        PathBuf::from(generated_files.first().unwrap_or(&String::new()))
+    };
+
+    println!();
+    println!("Opening in browser: {}", open_path.display());
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(&open_path).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open")
+            .arg(&open_path)
+            .spawn();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", &open_path.display().to_string()])
+            .spawn();
     }
 
     ExitCode::SUCCESS
