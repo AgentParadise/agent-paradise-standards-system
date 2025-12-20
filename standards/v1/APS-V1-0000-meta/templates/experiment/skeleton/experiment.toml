@@ -6,6 +6,7 @@ name = "{{name}}"
 slug = "{{slug}}"
 version = "{{version}}"
 category = "{{category}}"
+backwards_compat = true  # Set to false when introducing breaking changes
 
 [aps]
 aps_major = "v1"

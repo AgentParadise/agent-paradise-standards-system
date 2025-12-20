@@ -6,6 +6,11 @@
 use serde::Deserialize;
 use std::path::Path;
 
+/// Default value for backwards_compat field (true = no breaking changes).
+fn default_backwards_compat() -> bool {
+    true
+}
+
 /// Standard metadata from `standard.toml`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct StandardMetadata {
@@ -34,6 +39,10 @@ pub struct StandardFields {
     pub category: String,
     /// Status: active, deprecated, experimental.
     pub status: String,
+    /// Whether this release maintains backward compatibility with the previous version.
+    /// Set to `false` when introducing breaking changes (requires MAJOR version bump).
+    #[serde(default = "default_backwards_compat")]
+    pub backwards_compat: bool,
 }
 
 /// Substandard metadata from `substandard.toml`.
@@ -62,6 +71,10 @@ pub struct SubstandardFields {
     pub parent_id: String,
     /// Parent major version alignment.
     pub parent_major: String,
+    /// Whether this release maintains backward compatibility with the previous version.
+    /// Set to `false` when introducing breaking changes (requires MAJOR version bump).
+    #[serde(default = "default_backwards_compat")]
+    pub backwards_compat: bool,
 }
 
 /// Experiment metadata from `experiment.toml`.
@@ -92,6 +105,11 @@ pub struct ExperimentFields {
     pub version: String,
     /// Category.
     pub category: String,
+    /// Whether this release maintains backward compatibility with the previous version.
+    /// Set to `false` when introducing breaking changes.
+    /// Note: Experiments (0.x.x) are exempt from MAJOR version requirements.
+    #[serde(default = "default_backwards_compat")]
+    pub backwards_compat: bool,
 }
 
 /// APS ecosystem fields.
