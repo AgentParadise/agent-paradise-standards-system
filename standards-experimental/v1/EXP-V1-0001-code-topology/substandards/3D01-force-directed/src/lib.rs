@@ -575,7 +575,8 @@ impl ForceDirectedProjector {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Topology - 3D Coupling Visualization</title>
     <style>
-        body {{ margin: 0; overflow: hidden; font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; }}
+        body {{ margin: 0; overflow: hidden; font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; display: flex; background: #0f0f1a; }}
+        #main {{ flex: 1; position: relative; }}
         #info {{
             position: absolute;
             top: 10px;
@@ -615,35 +616,101 @@ impl ForceDirectedProjector {
         #legend h4 {{ margin: 0 0 10px 0; color: #aaa; font-weight: 500; }}
         .legend-item {{ display: flex; align-items: center; margin: 6px 0; }}
         .legend-color {{ width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; }}
+        #filter {{
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }}
+        #filter label {{ display: block; font-size: 11px; color: #888; margin-bottom: 6px; }}
+        #filter input[type="range"] {{ width: 100%; cursor: pointer; }}
+        #filter-value {{ float: right; color: #ff6b9d; }}
+        #sidebar {{
+            width: 280px;
+            height: 100vh;
+            background: linear-gradient(180deg, rgba(15,15,30,0.98), rgba(20,20,35,0.98));
+            border-left: 1px solid rgba(255,255,255,0.1);
+            overflow-y: scroll;
+            padding: 15px;
+            z-index: 100;
+            box-sizing: border-box;
+        }}
+        #module-list {{
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+        }}
+        #sidebar h2 {{ 
+            font-size: 14px; 
+            color: #888; 
+            margin-bottom: 15px; 
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+        }}
+        #sidebar h2 span {{ color: #666; font-weight: normal; }}
+        .module-item {{
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }}
+        .module-item:hover {{ border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.06); }}
+        .module-item.selected {{ border-color: #ff6b9d; background: rgba(255,107,157,0.1); }}
+        .module-item.filtered-out {{ opacity: 0.3; pointer-events: none; }}
+        .module-name {{ 
+            font-weight: 500; 
+            margin-bottom: 4px; 
+            font-size: 12px; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .module-stats {{ font-size: 10px; color: #666; display: flex; gap: 10px; }}
+        .module-coupling {{ color: #88aaff; }}
+        .module-complexity {{ color: #ffaa88; }}
         #tooltip {{
-            position: absolute;
-            padding: 12px 16px;
-            background: rgba(10,10,20,0.95);
+            position: fixed;
+            padding: 16px 20px;
+            background: rgba(20,20,35,0.98);
             color: #fff;
-            border-radius: 10px;
-            font-size: 12px;
+            border-radius: 12px;
+            font-size: 13px;
             pointer-events: none;
             display: none;
-            z-index: 1000;
-            border: 1px solid rgba(255,100,150,0.3);
-            max-width: 250px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            z-index: 10000;
+            border: 2px solid rgba(100,180,255,0.6);
+            min-width: 220px;
+            max-width: 320px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 20px rgba(100,180,255,0.3);
+            backdrop-filter: blur(10px);
         }}
-        #tooltip .name {{ 
-            font-weight: 700; 
-            font-size: 14px; 
-            margin-bottom: 8px;
-            color: #ff6b9d;
+        #tooltip .name {{
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #6bf;
+            word-break: break-word;
         }}
-        #tooltip .metric {{ 
-            display: flex; 
-            justify-content: space-between; 
-            margin: 4px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 4px;
+        #tooltip .metric {{
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+            padding-bottom: 6px;
         }}
-        #tooltip .metric-label {{ color: #888; }}
-        #tooltip .metric-value {{ color: #fff; font-weight: 500; }}
+        #tooltip .metric-label {{ color: #aaa; font-size: 12px; }}
+        #tooltip .metric-value {{ color: #fff; font-weight: 600; font-size: 14px; }}
+        #tooltip .active-hint {{
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(100,180,255,0.4);
+            font-size: 12px;
+            color: #8cf;
+            text-align: center;
+            font-style: italic;
+        }}
         .node-label {{
             color: #fff;
             font-size: 12px;
@@ -661,23 +728,33 @@ impl ForceDirectedProjector {
     </style>
 </head>
 <body>
-    <div id="info">
-        <h3>🌐 Code Topology</h3>
-        <p><strong>{node_count}</strong> modules</p>
-        <p><strong>{edge_count}</strong> coupling relationships</p>
-        <p><em>Drag to rotate • Scroll to zoom • Hover for details</em></p>
+    <div id="main">
+        <div id="info">
+            <h3>🌐 Code Topology</h3>
+            <p><strong>{node_count}</strong> modules</p>
+            <p><strong>{edge_count}</strong> coupling relationships</p>
+            <p><em>Drag to rotate • Scroll to zoom • Hover for details</em></p>
+            <div id="filter">
+                <label>Coupling Threshold <span id="filter-value">0%</span></label>
+                <input type="range" id="coupling-slider" min="0" max="100" value="0">
+            </div>
+        </div>
+        <div id="legend">
+            <h4>Module Health</h4>
+            <div class="legend-item"><div class="legend-color" style="background: #00cc88;"></div>🟢 Healthy (on main sequence)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #ffaa40;"></div>🟡 Moderate concern</div>
+            <div class="legend-item"><div class="legend-color" style="background: #ff4040;"></div>🔴 Needs attention (Zone of Pain)</div>
+            <h4 style="margin-top: 12px;">Coupling Strength</h4>
+            <div class="legend-item"><div class="legend-color" style="background: #ffffff; border: 1px solid #666;"></div>Strong (≥0.7)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #888888;"></div>Medium (0.3-0.7)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #444444;"></div>Weak (&lt;0.3)</div>
+        </div>
+        <div id="tooltip"></div>
     </div>
-    <div id="legend">
-        <h4>Module Health</h4>
-        <div class="legend-item"><div class="legend-color" style="background: #00cc88;"></div>🟢 Healthy (on main sequence)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #ffaa40;"></div>🟡 Moderate concern</div>
-        <div class="legend-item"><div class="legend-color" style="background: #ff4040;"></div>🔴 Needs attention (Zone of Pain)</div>
-        <h4 style="margin-top: 12px;">Coupling Strength</h4>
-        <div class="legend-item"><div class="legend-color" style="background: #ffffff; border: 1px solid #666;"></div>Strong (≥0.7)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #888888;"></div>Medium (0.3-0.7)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #444444;"></div>Weak (&lt;0.3)</div>
+    <div id="sidebar">
+        <h2>Modules <span id="module-count"></span></h2>
+        <div id="module-list"></div>
     </div>
-    <div id="tooltip"></div>
     <script type="importmap">
     {{
         "imports": {{
@@ -694,21 +771,24 @@ impl ForceDirectedProjector {
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x0f0f1a);
         
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const mainContainer = document.getElementById('main');
+        const mainWidth = mainContainer.clientWidth;
+        
+        const camera = new THREE.PerspectiveCamera(75, mainWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 5, 10);
         
         const renderer = new THREE.WebGLRenderer({{ antialias: true }});
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(mainWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
+        mainContainer.appendChild(renderer.domElement);
         
         // CSS2D Renderer for labels
         const labelRenderer = new CSS2DRenderer();
-        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.setSize(mainWidth, window.innerHeight);
         labelRenderer.domElement.style.position = 'absolute';
         labelRenderer.domElement.style.top = '0px';
         labelRenderer.domElement.style.pointerEvents = 'none';
-        document.body.appendChild(labelRenderer.domElement);
+        mainContainer.appendChild(labelRenderer.domElement);
         
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -733,13 +813,16 @@ impl ForceDirectedProjector {
         
         // Create nodes with labels
         data.nodes.forEach(node => {{
-            // Create sphere
-            const geometry = new THREE.SphereGeometry(node.size * 0.35, 32, 32);
-            const material = new THREE.MeshPhongMaterial({{ 
+            // Create sphere - minimum size for easy clicking
+            const nodeRadius = Math.max(0.6, node.size * 0.5);
+            const geometry = new THREE.SphereGeometry(nodeRadius, 32, 32);
+            const material = new THREE.MeshPhongMaterial({{
                 color: node.color,
                 emissive: node.color,
-                emissiveIntensity: 0.2,
-                shininess: 80
+                emissiveIntensity: 0.4,
+                shininess: 100,
+                transparent: true,
+                opacity: 1.0
             }});
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(...node.position);
@@ -756,23 +839,27 @@ impl ForceDirectedProjector {
             mesh.add(label);
         }});
         
-        // Create edges with labels
-        data.edges.forEach(edge => {{
+        // Create edges with labels - store in array for proper ordering
+        const edgeMeshes = [];
+        data.edges.forEach((edge, edgeIndex) => {{
             const fromNode = data.nodes.find(n => n.id === edge.from);
             const toNode = data.nodes.find(n => n.id === edge.to);
             if (fromNode && toNode) {{
                 const start = new THREE.Vector3(...fromNode.position);
                 const end = new THREE.Vector3(...toNode.position);
-                
+
                 // Create tube for thicker edges
                 const path = new THREE.LineCurve3(start, end);
                 const tubeGeometry = new THREE.TubeGeometry(path, 1, edge.strength * 0.08 + 0.02, 8, false);
-                const tubeMaterial = new THREE.MeshBasicMaterial({{ 
+                const tubeMaterial = new THREE.MeshBasicMaterial({{
                     color: edge.color,
                     opacity: 0.4 + edge.strength * 0.4,
                     transparent: true
                 }});
                 const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+                // Store edge data directly in mesh for reliable access
+                tube.userData = {{ edgeIndex, from: edge.from, to: edge.to, strength: edge.strength }};
+                edgeMeshes.push(tube);
                 scene.add(tube);
                 
                 // Edge label at midpoint (only for strong connections)
@@ -788,10 +875,79 @@ impl ForceDirectedProjector {
             }}
         }});
         
-        // Mouse hover for tooltips
+        // Highlight module and its connections, fade everything else
+        let hoveredModule = null;
+        let hoverSource = null; // 'sidebar' or '3d'
+        let currentThreshold = 0;
+        
+        function highlightModule(moduleId, source) {{
+            hoveredModule = moduleId;
+            hoverSource = source || '3d';
+            
+            // Find connected modules
+            const connectedModules = new Set([moduleId]);
+            data.edges.forEach(edge => {{
+                if (edge.from === moduleId) connectedModules.add(edge.to);
+                if (edge.to === moduleId) connectedModules.add(edge.from);
+            }});
+            
+            // Fade out non-connected nodes
+            nodeMeshes.forEach(mesh => {{
+                const isConnected = connectedModules.has(mesh.userData.id);
+                mesh.material.opacity = isConnected ? 1.0 : 0.15;
+                mesh.material.transparent = true;
+                mesh.scale.setScalar(mesh.userData.id === moduleId ? 1.4 : (isConnected ? 1.1 : 0.8));
+            }});
+            
+            // Fade out non-connected edges (use stored userData for reliable access)
+            edgeMeshes.forEach(mesh => {{
+                const isConnected = mesh.userData.from === moduleId || mesh.userData.to === moduleId;
+                mesh.material.opacity = isConnected ? 1.0 : 0.05;
+                mesh.material.transparent = true;
+            }});
+            
+            // Highlight sidebar item
+            document.querySelectorAll('.module-item').forEach(el => {{
+                const isConnected = connectedModules.has(el.dataset.id);
+                el.style.opacity = isConnected ? '1' : '0.3';
+            }});
+        }}
+        
+        function clearHighlight(source) {{
+            // Only clear if source matches or no source specified
+            if (!hoveredModule) return;
+            if (source && hoverSource !== source) return;
+            
+            hoveredModule = null;
+            hoverSource = null;
+            
+            // Restore all nodes
+            nodeMeshes.forEach(mesh => {{
+                mesh.material.opacity = 1.0;
+                mesh.scale.setScalar(1.0);
+            }});
+            
+            // Restore all edges (respecting threshold filter, use stored userData)
+            edgeMeshes.forEach(mesh => {{
+                mesh.material.opacity = 0.6;
+                mesh.visible = mesh.userData.strength >= currentThreshold;
+            }});
+            
+            // Restore sidebar
+            document.querySelectorAll('.module-item').forEach(el => {{
+                el.style.opacity = '';
+            }});
+        }}
+        
+        // Track active (clicked) module in 3D view
+        let activeModule = null;
+        
+        // Mouse hover for tooltips only (no highlighting on hover)
         function onMouseMove(event) {{
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            // Calculate mouse position relative to the canvas, not the window
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(nodeMeshes);
@@ -799,9 +955,48 @@ impl ForceDirectedProjector {
             if (intersects.length > 0) {{
                 const node = intersects[0].object.userData;
                 tooltip.style.display = 'block';
-                tooltip.style.left = event.clientX + 15 + 'px';
-                tooltip.style.top = event.clientY + 15 + 'px';
                 
+                // Position tooltip, keeping it on screen
+                const tooltipWidth = 280;
+                const tooltipHeight = 200;
+                let left = event.clientX + 20;
+                let top = event.clientY + 20;
+                
+                // Keep on right side of screen
+                if (left + tooltipWidth > window.innerWidth) {{
+                    left = event.clientX - tooltipWidth - 20;
+                }}
+                // Keep on bottom of screen
+                if (top + tooltipHeight > window.innerHeight) {{
+                    top = event.clientY - tooltipHeight - 20;
+                }}
+                
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                
+                // Show cursor as pointer and highlight hovered node
+                document.body.style.cursor = 'pointer';
+                
+                // Glow effect on hovered node
+                const hoveredMesh = intersects[0].object;
+                if (!hoveredMesh.userData.isHovered) {{
+                    // Reset previous hovered node (preserve selected/active state)
+                    nodeMeshes.forEach(m => {{
+                        if (m.userData.isHovered && m !== hoveredMesh) {{
+                            m.userData.isHovered = false;
+                            // Preserve intensity for selected or active nodes
+                            const isActive = m.userData.id === activeModule;
+                            const isSelected = m.userData.id === selectedModule;
+                            m.material.emissiveIntensity = isActive ? 0.6 : (isSelected ? 0.5 : 0.4);
+                            m.scale.setScalar(isActive || isSelected ? 1.1 : 1.0);
+                        }}
+                    }});
+                    // Highlight current
+                    hoveredMesh.userData.isHovered = true;
+                    hoveredMesh.material.emissiveIntensity = 0.8;
+                    hoveredMesh.scale.setScalar(1.15);
+                }}
+
                 // Find connections
                 const connections = data.edges
                     .filter(e => e.from === node.id || e.to === node.id)
@@ -829,13 +1024,170 @@ impl ForceDirectedProjector {
                         <span class="metric-label">Connected to</span>
                         <span class="metric-value">${{connections || 'none'}}</span>
                     </div>
+                    ${{activeModule === node.id ? '<div class="active-hint">Click to deactivate</div>' : '<div class="active-hint">Click to focus connections</div>'}}
                 `;
             }} else {{
                 tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+                
+                // Reset any hovered node glow (preserve selected/active state)
+                nodeMeshes.forEach(m => {{
+                    if (m.userData.isHovered) {{
+                        m.userData.isHovered = false;
+                        const isActive = m.userData.id === activeModule;
+                        const isSelected = m.userData.id === selectedModule;
+                        m.material.emissiveIntensity = isActive ? 0.6 : (isSelected ? 0.5 : 0.4);
+                        m.scale.setScalar(isActive || isSelected ? 1.1 : 1.0);
+                    }}
+                }});
             }}
         }}
-        
+
+        // Click to activate/deactivate connection highlighting
+        function onClick(event) {{
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodeMeshes);
+            
+            if (intersects.length > 0) {{
+                const node = intersects[0].object.userData;
+                
+                if (activeModule === node.id) {{
+                    // Deactivate
+                    activeModule = null;
+                    clearHighlight('3d');
+                }} else {{
+                    // Activate new module
+                    activeModule = node.id;
+                    highlightModule(node.id, '3d');
+                }}
+            }} else {{
+                // Clicked on empty space - deactivate
+                if (activeModule) {{
+                    activeModule = null;
+                    clearHighlight('3d');
+                }}
+            }}
+        }}
+
         window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('click', onClick);
+        
+        // Calculate total coupling per module
+        const moduleCoupling = {{}};
+        data.nodes.forEach(n => moduleCoupling[n.id] = 0);
+        data.edges.forEach(e => {{
+            moduleCoupling[e.from] = (moduleCoupling[e.from] || 0) + e.strength;
+            moduleCoupling[e.to] = (moduleCoupling[e.to] || 0) + e.strength;
+        }});
+        
+        // Sort modules by coupling (descending)
+        const sortedModules = [...data.nodes].sort((a, b) => 
+            (moduleCoupling[b.id] || 0) - (moduleCoupling[a.id] || 0)
+        );
+        
+        // Populate sidebar
+        let selectedModule = null;
+        const sidebarList = document.getElementById('module-list');
+        
+        function renderSidebar() {{
+            document.getElementById('module-count').textContent = `(${{data.nodes.length}})`;
+            sidebarList.innerHTML = sortedModules.map(m => {{
+                const coupling = moduleCoupling[m.id] || 0;
+                const shortName = m.label.split('::').pop() || m.label;
+                return `
+                    <div class="module-item ${{selectedModule === m.id ? 'selected' : ''}}" data-id="${{m.id}}">
+                        <div class="module-name" style="color:${{m.color}}">${{shortName}}</div>
+                        <div class="module-stats">
+                            <span class="module-coupling">⚡ ${{coupling.toFixed(1)}}</span>
+                            <span class="module-complexity">📊 CC:${{m.metrics.cyclomatic}}</span>
+                            <span>🔧 ${{m.metrics.function_count}}</span>
+                        </div>
+                    </div>
+                `;
+            }}).join('');
+        }}
+        
+        // Event delegation - attach once to parent, not to each item (prevents memory leaks)
+        sidebarList.addEventListener('click', (e) => {{
+            const item = e.target.closest('.module-item');
+            if (!item) return;
+            
+            const id = item.dataset.id;
+            selectedModule = selectedModule === id ? null : id;
+            renderSidebar();
+            
+            // Focus camera on selected module
+            if (selectedModule) {{
+                const node = data.nodes.find(n => n.id === selectedModule);
+                if (node) {{
+                    const targetPos = new THREE.Vector3(...node.position);
+                    controls.target.copy(targetPos);
+                    camera.position.set(
+                        targetPos.x + 5,
+                        targetPos.y + 3,
+                        targetPos.z + 5
+                    );
+                }}
+            }}
+            
+            // Highlight selected node
+            nodeMeshes.forEach(mesh => {{
+                const isSelected = mesh.userData.id === selectedModule;
+                mesh.material.emissiveIntensity = isSelected ? 0.6 : 0.2;
+                mesh.scale.setScalar(isSelected ? 1.3 : 1.0);
+            }});
+        }});
+        
+        sidebarList.addEventListener('mouseover', (e) => {{
+            const item = e.target.closest('.module-item');
+            if (!item) return;
+            highlightModule(item.dataset.id, 'sidebar');
+        }});
+        
+        sidebarList.addEventListener('mouseout', (e) => {{
+            const item = e.target.closest('.module-item');
+            if (!item) return;
+            // Only clear if we're leaving the item entirely
+            if (!e.relatedTarget || !e.relatedTarget.closest || e.relatedTarget.closest('.module-item') !== item) {{
+                clearHighlight('sidebar');
+            }}
+        }});
+        
+        renderSidebar();
+        
+        // Coupling threshold slider
+        document.getElementById('coupling-slider').addEventListener('input', e => {{
+            currentThreshold = parseInt(e.target.value) / 100;
+            document.getElementById('filter-value').textContent = `${{e.target.value}}%`;
+            
+            // Filter edges based on threshold (use stored userData)
+            edgeMeshes.forEach(mesh => {{
+                mesh.visible = mesh.userData.strength >= currentThreshold;
+            }});
+            
+            // Find modules that still have visible edges
+            const visibleModules = new Set();
+            data.edges.forEach(edge => {{
+                if (edge.strength >= currentThreshold) {{
+                    visibleModules.add(edge.from);
+                    visibleModules.add(edge.to);
+                }}
+            }});
+            
+            // Grey out modules in sidebar that have no visible edges
+            document.querySelectorAll('.module-item').forEach(item => {{
+                const moduleId = item.dataset.id;
+                const hasVisibleEdge = visibleModules.has(moduleId);
+                item.classList.toggle('filtered-out', currentThreshold > 0 && !hasVisibleEdge);
+            }});
+            
+            // Also fade out 3D nodes that have no visible edges
+            nodeMeshes.forEach(mesh => {{
+                const hasVisibleEdge = visibleModules.has(mesh.userData.id);
+                mesh.material.opacity = (currentThreshold > 0 && !hasVisibleEdge) ? 0.2 : 1.0;
+                mesh.material.transparent = true;
+            }});
+        }});
         
         // Animation loop
         function animate() {{
@@ -848,11 +1200,15 @@ impl ForceDirectedProjector {
         
         // Handle resize
         window.addEventListener('resize', () => {{
-            camera.aspect = window.innerWidth / window.innerHeight;
+            const mainWidth = document.getElementById('main').clientWidth;
+            camera.aspect = mainWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(mainWidth, window.innerHeight);
+            labelRenderer.setSize(mainWidth, window.innerHeight);
         }});
+        
+        // Trigger initial resize
+        window.dispatchEvent(new Event('resize'));
     </script>
 </body>
 </html>"#,
