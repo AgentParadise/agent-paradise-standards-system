@@ -2802,7 +2802,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                     Ok(html_bytes) => {
                         let html = String::from_utf8_lossy(&html_bytes).to_string();
                         let out = if viz_type == "all" {
-                            viz_dir.join("3d.html")
+                            viz_dir.join("topology-3d.html")
                         } else {
                             PathBuf::from(output.unwrap_or("topology-3d.html"))
                         };
