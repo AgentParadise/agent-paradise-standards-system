@@ -1,5 +1,8 @@
 # Agent Paradise Standards System (APS)
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/AgentParadise/agent-paradise-standards-system/actions/workflows/ci.yml/badge.svg)](https://github.com/AgentParadise/agent-paradise-standards-system/actions)
+
 The Agent Paradise Standards System (APS) is an **executable, evolvable standards framework** designed for agentic engineering at scale.
 
 ## What is APS?
@@ -158,4 +161,4 @@ cargo build --release
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0 — See [LICENSE](LICENSE) for details.
