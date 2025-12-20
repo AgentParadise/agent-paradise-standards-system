@@ -5,6 +5,7 @@ id = "{{id}}"
 name = "{{name}}"
 slug = "{{slug}}"
 version = "{{version}}"
+backwards_compat = true  # Set to false when introducing breaking changes
 
 [parent]
 standard_id = "{{parent_id}}"
