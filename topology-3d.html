@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Topology - 3D Coupling Visualization</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; display: flex; background: #0f0f1a; }
+        #main { flex: 1; position: relative; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, rgba(20,20,40,0.95), rgba(40,30,60,0.9));
+            color: #e0e0e0;
+            border-radius: 12px;
+            font-size: 13px;
+            z-index: 100;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        #info h3 { 
+            margin: 0 0 12px 0; 
+            font-size: 18px;
+            background: linear-gradient(90deg, #ff6b9d, #c44569);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }
+        #info p { margin: 4px 0; color: #b0b0b0; }
+        #info em { color: #888; font-size: 11px; }
+        #legend {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, rgba(20,20,40,0.95), rgba(40,30,60,0.9));
+            color: #e0e0e0;
+            border-radius: 12px;
+            font-size: 12px;
+            z-index: 100;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        #legend h4 { margin: 0 0 10px 0; color: #aaa; font-weight: 500; }
+        .legend-item { display: flex; align-items: center; margin: 6px 0; }
+        .legend-color { width: 14px; height: 14px; border-radius: 50%; margin-right: 10px; }
+        #filter {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        #filter label { display: block; font-size: 11px; color: #888; margin-bottom: 6px; }
+        #filter input[type="range"] { width: 100%; cursor: pointer; }
+        #filter-value { float: right; color: #ff6b9d; }
+        #sidebar {
+            width: 280px;
+            height: 100vh;
+            background: linear-gradient(180deg, rgba(15,15,30,0.98), rgba(20,20,35,0.98));
+            border-left: 1px solid rgba(255,255,255,0.1);
+            overflow-y: scroll;
+            padding: 15px;
+            z-index: 100;
+            box-sizing: border-box;
+        }
+        #module-list {
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+        }
+        #sidebar h2 { 
+            font-size: 14px; 
+            color: #888; 
+            margin-bottom: 15px; 
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+        }
+        #sidebar h2 span { color: #666; font-weight: normal; }
+        .module-item {
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .module-item:hover { border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.06); }
+        .module-item.selected { border-color: #ff6b9d; background: rgba(255,107,157,0.1); }
+        .module-item.filtered-out { opacity: 0.3; pointer-events: none; }
+        .module-name { 
+            font-weight: 500; 
+            margin-bottom: 4px; 
+            font-size: 12px; 
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .module-stats { font-size: 10px; color: #666; display: flex; gap: 10px; }
+        .module-coupling { color: #88aaff; }
+        .module-complexity { color: #ffaa88; }
+        #tooltip {
+            position: fixed;
+            padding: 16px 20px;
+            background: rgba(20,20,35,0.98);
+            color: #fff;
+            border-radius: 12px;
+            font-size: 13px;
+            pointer-events: none;
+            display: none;
+            z-index: 10000;
+            border: 2px solid rgba(100,180,255,0.6);
+            min-width: 220px;
+            max-width: 320px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 20px rgba(100,180,255,0.3);
+            backdrop-filter: blur(10px);
+        }
+        #tooltip .name {
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #6bf;
+            word-break: break-word;
+        }
+        #tooltip .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.15);
+            padding-bottom: 6px;
+        }
+        #tooltip .metric-label { color: #aaa; font-size: 12px; }
+        #tooltip .metric-value { color: #fff; font-weight: 600; font-size: 14px; }
+        #tooltip .active-hint {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(100,180,255,0.4);
+            font-size: 12px;
+            color: #8cf;
+            text-align: center;
+            font-style: italic;
+        }
+        .node-label {
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .edge-label {
+            color: rgba(255,255,255,0.6);
+            font-size: 10px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="main">
+        <div id="info">
+            <h3>🌐 Code Topology</h3>
+            <p><strong>18</strong> modules</p>
+            <p><strong>23</strong> coupling relationships</p>
+            <p><em>Drag to rotate • Scroll to zoom • Hover for details</em></p>
+            <div id="filter">
+                <label>Coupling Threshold <span id="filter-value">0%</span></label>
+                <input type="range" id="coupling-slider" min="0" max="100" value="0">
+            </div>
+        </div>
+        <div id="legend">
+            <h4>Module Health</h4>
+            <div class="legend-item"><div class="legend-color" style="background: #00cc88;"></div>🟢 Healthy (on main sequence)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #ffaa40;"></div>🟡 Moderate concern</div>
+            <div class="legend-item"><div class="legend-color" style="background: #ff4040;"></div>🔴 Needs attention (Zone of Pain)</div>
+            <h4 style="margin-top: 12px;">Coupling Strength</h4>
+            <div class="legend-item"><div class="legend-color" style="background: #ffffff; border: 1px solid #666;"></div>Strong (≥0.7)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #888888;"></div>Medium (0.3-0.7)</div>
+            <div class="legend-item"><div class="legend-color" style="background: #444444;"></div>Weak (&lt;0.3)</div>
+        </div>
+        <div id="tooltip"></div>
+    </div>
+    <div id="sidebar">
+        <h2>Modules <span id="module-count"></span></h2>
+        <div id="module-list"></div>
+    </div>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f0f1a);
+        
+        const mainContainer = document.getElementById('main');
+        const mainWidth = mainContainer.clientWidth;
+        
+        const camera = new THREE.PerspectiveCamera(75, mainWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 10);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(mainWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        mainContainer.appendChild(renderer.domElement);
+        
+        // CSS2D Renderer for labels
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(mainWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        mainContainer.appendChild(labelRenderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+        const backLight = new THREE.DirectionalLight(0x6060ff, 0.3);
+        backLight.position.set(-5, -5, -5);
+        scene.add(backLight);
+        
+        // Load topology data
+        const data = {"format":"topology-webgl/v1","camera":{"position":[0.0,5.0,10.0],"target":[0.0,0.0,0.0],"up":[0.0,1.0,0.0]},"nodes":[{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars::python","label":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars::python","position":[10.742437616160144,-14.624506127146468,-6.767645212445205],"size":2.5,"color":"#ff0040","metrics":{"cyclomatic":42,"cognitive":4,"instability":0.0,"function_count":38}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_mermaid","label":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_mermaid","position":[-3.5649596078547714,-7.993850919224466,5.4595898893053825],"size":0.7,"color":"#ff5440","metrics":{"cyclomatic":2,"cognitive":1,"instability":0.5,"function_count":1}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::analyze_rust","label":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::analyze_rust","position":[15.693634201211042,-8.25533238706626,11.445388168159134],"size":0.7,"color":"#ff5440","metrics":{"cyclomatic":16,"cognitive":37,"instability":0.5,"function_count":1}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::queries","label":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::queries","position":[5.53787549877249,-4.9305191552931396,5.2478421868272696],"size":1.5,"color":"#00ccc8","metrics":{"cyclomatic":67,"cognitive":197,"instability":1.0,"function_count":5}},{"id":"crates::aps-core::src::discovery","label":"crates::aps-core::src::discovery","position":[2.233210712429803,3.8957990218580774,-2.1669181698071007],"size":2.5,"color":"#ffe240","metrics":{"cyclomatic":74,"cognitive":85,"instability":0.6666666666666666,"function_count":30}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars","label":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars","position":[-1.788139697942171,-6.359297315599787,21.44804795494717],"size":2.5,"color":"#ff0040","metrics":{"cyclomatic":31,"cognitive":0,"instability":0.0,"function_count":31}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_sample","label":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_sample","position":[-10.65754416057612,0.24952135772763964,13.19317568963381],"size":0.7,"color":"#ff5440","metrics":{"cyclomatic":4,"cognitive":4,"instability":0.5,"function_count":1}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::complexity","label":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::complexity","position":[-6.232739240779583,-4.804813818560781,2.5850255997198275],"size":2.5,"color":"#19cc96","metrics":{"cyclomatic":202,"cognitive":222,"instability":0.75,"function_count":60}},{"id":"crates::aps-core::src::versioning","label":"crates::aps-core::src::versioning","position":[-0.4183554005096817,7.555663246515482,-0.6366651502546139],"size":2.5,"color":"#ffe240","metrics":{"cyclomatic":42,"cognitive":37,"instability":0.6666666666666666,"function_count":18}},{"id":"crates::aps-core::src::diagnostics","label":"crates::aps-core::src::diagnostics","position":[-22.876000550921702,-1.6013423596618934,5.463970085862862],"size":2.5,"color":"#ff0040","metrics":{"cyclomatic":95,"cognitive":66,"instability":0.0,"function_count":57}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_aps","label":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_aps","position":[-15.941471452036554,2.1591096240047043,-1.6488620175499193],"size":0.7,"color":"#ff5440","metrics":{"cyclomatic":14,"cognitive":25,"instability":0.5,"function_count":1}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter","label":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter","position":[-4.116449259870234,-7.541988527230562,-4.374996287744593],"size":2.5,"color":"#00ccc8","metrics":{"cyclomatic":52,"cognitive":8,"instability":1.0,"function_count":46}},{"id":"crates::aps-core::src::promotion","label":"crates::aps-core::src::promotion","position":[-0.8158072875055191,8.435885921323559,-5.798967650539731],"size":2.3,"color":"#ffe240","metrics":{"cyclomatic":35,"cognitive":54,"instability":0.6666666666666666,"function_count":9}},{"id":"src","label":"src","position":[-0.3085746067171671,-1.3307668565110606,-6.184440621089808],"size":2.5,"color":"#ff5440","metrics":{"cyclomatic":1243,"cognitive":2107,"instability":0.5,"function_count":355}},{"id":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars::rust","label":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars::rust","position":[-0.49588964143335645,8.756629016559144,-19.800352388640132],"size":2.5,"color":"#ff0040","metrics":{"cyclomatic":45,"cognitive":12,"instability":0.0,"function_count":35}},{"id":"crates::aps-core::src::metadata","label":"crates::aps-core::src::metadata","position":[12.378961024212831,5.675163360676956,-13.410961626716244],"size":1.3,"color":"#ff0040","metrics":{"cyclomatic":4,"cognitive":0,"instability":0.0,"function_count":4}},{"id":"crates::aps-core::src::templates","label":"crates::aps-core::src::templates","position":[16.664801358543823,12.100796414275065,-1.184700666983052],"size":2.5,"color":"#ff0040","metrics":{"cyclomatic":44,"cognitive":52,"instability":0.0,"function_count":24}},{"id":"crates::aps-core::src::views","label":"crates::aps-core::src::views","position":[3.9650104948167226,8.613849503353796,-2.868529782685048],"size":1.9,"color":"#ffe240","metrics":{"cyclomatic":17,"cognitive":23,"instability":0.6666666666666666,"function_count":7}}],"edges":[{"from":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_mermaid","to":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_sample","strength":0.4791666666666667,"color":"#969696","width":0.9583333333333334},{"from":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_mermaid","to":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_aps","strength":0.4791666666666667,"color":"#969696","width":0.9583333333333334},{"from":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::queries","to":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars","strength":0.3958333333333333,"color":"#868686","width":0.7916666666666666},{"from":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::queries","to":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars::rust","strength":0.3958333333333333,"color":"#868686","width":0.7916666666666666},{"from":"crates::aps-core::src::discovery","to":"crates::aps-core::src::versioning","strength":0.9375,"color":"#f2f2f2","width":1.875},{"from":"crates::aps-core::src::discovery","to":"crates::aps-core::src::diagnostics","strength":0.9375,"color":"#f2f2f2","width":1.875},{"from":"crates::aps-core::src::discovery","to":"crates::aps-core::src::promotion","strength":0.9375,"color":"#f2f2f2","width":1.875},{"from":"crates::aps-core::src::discovery","to":"crates::aps-core::src::metadata","strength":1.0,"color":"#ffffff","width":2.0},{"from":"crates::aps-core::src::discovery","to":"crates::aps-core::src::templates","strength":0.9375,"color":"#f2f2f2","width":1.875},{"from":"crates::aps-core::src::discovery","to":"crates::aps-core::src::views","strength":0.9375,"color":"#f2f2f2","width":1.875},{"from":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_sample","to":"standards-experimental::v1::EXP-V1-0001-code-topology::examples::render_aps","strength":0.1875,"color":"#5c5c5c","width":0.375},{"from":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::complexity","to":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars::rust","strength":0.3958333333333333,"color":"#868686","width":0.7916666666666666},{"from":"crates::aps-core::src::versioning","to":"crates::aps-core::src::diagnostics","strength":0.8333333333333334,"color":"#dddddd","width":1.6666666666666667},{"from":"crates::aps-core::src::versioning","to":"crates::aps-core::src::promotion","strength":0.8333333333333334,"color":"#dddddd","width":1.6666666666666667},{"from":"crates::aps-core::src::versioning","to":"crates::aps-core::src::metadata","strength":0.9791666666666666,"color":"#fafafa","width":1.9583333333333333},{"from":"crates::aps-core::src::versioning","to":"crates::aps-core::src::templates","strength":0.8333333333333334,"color":"#dddddd","width":1.6666666666666667},{"from":"crates::aps-core::src::versioning","to":"crates::aps-core::src::views","strength":0.8333333333333334,"color":"#dddddd","width":1.6666666666666667},{"from":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter","to":"standards-experimental::v1::EXP-V1-0001-code-topology::src::adapter::grammars::rust","strength":0.3958333333333333,"color":"#868686","width":0.7916666666666666},{"from":"crates::aps-core::src::promotion","to":"crates::aps-core::src::metadata","strength":0.625,"color":"#b4b4b4","width":1.25},{"from":"crates::aps-core::src::promotion","to":"crates::aps-core::src::templates","strength":0.6041666666666666,"color":"#afafaf","width":1.2083333333333333},{"from":"crates::aps-core::src::promotion","to":"crates::aps-core::src::views","strength":0.6041666666666666,"color":"#afafaf","width":1.2083333333333333},{"from":"src","to":"crates::aps-core::src::metadata","strength":0.5,"color":"#9b9b9b","width":1.0},{"from":"src","to":"crates::aps-core::src::views","strength":0.1875,"color":"#5c5c5c","width":0.375}]};
+        
+        const nodeMeshes = [];
+        const tooltip = document.getElementById('tooltip');
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        // Create nodes with labels
+        data.nodes.forEach(node => {
+            // Create sphere - minimum size for easy clicking
+            const nodeRadius = Math.max(0.6, node.size * 0.5);
+            const geometry = new THREE.SphereGeometry(nodeRadius, 32, 32);
+            const material = new THREE.MeshPhongMaterial({
+                color: node.color,
+                emissive: node.color,
+                emissiveIntensity: 0.4,
+                shininess: 100,
+                transparent: true,
+                opacity: 1.0
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(...node.position);
+            mesh.userData = node;
+            scene.add(mesh);
+            nodeMeshes.push(mesh);
+            
+            // Create text label
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'node-label';
+            labelDiv.textContent = node.label;
+            const label = new CSS2DObject(labelDiv);
+            label.position.set(0, node.size * 0.5 + 0.3, 0);
+            mesh.add(label);
+        });
+        
+        // Create edges with labels
+        data.edges.forEach(edge => {
+            const fromNode = data.nodes.find(n => n.id === edge.from);
+            const toNode = data.nodes.find(n => n.id === edge.to);
+            if (fromNode && toNode) {
+                const start = new THREE.Vector3(...fromNode.position);
+                const end = new THREE.Vector3(...toNode.position);
+                
+                // Create tube for thicker edges
+                const path = new THREE.LineCurve3(start, end);
+                const tubeGeometry = new THREE.TubeGeometry(path, 1, edge.strength * 0.08 + 0.02, 8, false);
+                const tubeMaterial = new THREE.MeshBasicMaterial({ 
+                    color: edge.color,
+                    opacity: 0.4 + edge.strength * 0.4,
+                    transparent: true
+                });
+                const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+                scene.add(tube);
+                
+                // Edge label at midpoint (only for strong connections)
+                if (edge.strength >= 0.5) {
+                    const midpoint = start.clone().add(end).multiplyScalar(0.5);
+                    const edgeLabelDiv = document.createElement('div');
+                    edgeLabelDiv.className = 'edge-label';
+                    edgeLabelDiv.textContent = edge.strength.toFixed(2);
+                    const edgeLabel = new CSS2DObject(edgeLabelDiv);
+                    edgeLabel.position.copy(midpoint);
+                    scene.add(edgeLabel);
+                }
+            }
+        });
+        
+        // Collect edge meshes for filtering/highlighting
+        const edgeMeshes = [];
+        scene.children.forEach(child => {
+            if (child.geometry && child.geometry.type === 'TubeGeometry') {
+                edgeMeshes.push(child);
+            }
+        });
+        
+        // Highlight module and its connections, fade everything else
+        let hoveredModule = null;
+        let hoverSource = null; // 'sidebar' or '3d'
+        let currentThreshold = 0;
+        
+        function highlightModule(moduleId, source) {
+            hoveredModule = moduleId;
+            hoverSource = source || '3d';
+            
+            // Find connected modules
+            const connectedModules = new Set([moduleId]);
+            data.edges.forEach(edge => {
+                if (edge.from === moduleId) connectedModules.add(edge.to);
+                if (edge.to === moduleId) connectedModules.add(edge.from);
+            });
+            
+            // Fade out non-connected nodes
+            nodeMeshes.forEach(mesh => {
+                const isConnected = connectedModules.has(mesh.userData.id);
+                mesh.material.opacity = isConnected ? 1.0 : 0.15;
+                mesh.material.transparent = true;
+                mesh.scale.setScalar(mesh.userData.id === moduleId ? 1.4 : (isConnected ? 1.1 : 0.8));
+            });
+            
+            // Fade out non-connected edges
+            edgeMeshes.forEach((mesh, i) => {
+                if (i < data.edges.length) {
+                    const edge = data.edges[i];
+                    const isConnected = edge.from === moduleId || edge.to === moduleId;
+                    mesh.material.opacity = isConnected ? 1.0 : 0.05;
+                    mesh.material.transparent = true;
+                }
+            });
+            
+            // Highlight sidebar item
+            document.querySelectorAll('.module-item').forEach(el => {
+                const isConnected = connectedModules.has(el.dataset.id);
+                el.style.opacity = isConnected ? '1' : '0.3';
+            });
+        }
+        
+        function clearHighlight(source) {
+            // Only clear if source matches or no source specified
+            if (!hoveredModule) return;
+            if (source && hoverSource !== source) return;
+            
+            hoveredModule = null;
+            hoverSource = null;
+            
+            // Restore all nodes
+            nodeMeshes.forEach(mesh => {
+                mesh.material.opacity = 1.0;
+                mesh.scale.setScalar(1.0);
+            });
+            
+            // Restore all edges (respecting threshold filter)
+            edgeMeshes.forEach((mesh, i) => {
+                if (i < data.edges.length) {
+                    mesh.material.opacity = 0.6;
+                    mesh.visible = data.edges[i].strength >= currentThreshold;
+                }
+            });
+            
+            // Restore sidebar
+            document.querySelectorAll('.module-item').forEach(el => {
+                el.style.opacity = '';
+            });
+        }
+        
+        // Track active (clicked) module in 3D view
+        let activeModule = null;
+        
+        // Mouse hover for tooltips only (no highlighting on hover)
+        function onMouseMove(event) {
+            // Calculate mouse position relative to the canvas, not the window
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodeMeshes);
+            
+            if (intersects.length > 0) {
+                const node = intersects[0].object.userData;
+                tooltip.style.display = 'block';
+                
+                // Position tooltip, keeping it on screen
+                const tooltipWidth = 280;
+                const tooltipHeight = 200;
+                let left = event.clientX + 20;
+                let top = event.clientY + 20;
+                
+                // Keep on right side of screen
+                if (left + tooltipWidth > window.innerWidth) {
+                    left = event.clientX - tooltipWidth - 20;
+                }
+                // Keep on bottom of screen
+                if (top + tooltipHeight > window.innerHeight) {
+                    top = event.clientY - tooltipHeight - 20;
+                }
+                
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                
+                // Show cursor as pointer and highlight hovered node
+                document.body.style.cursor = 'pointer';
+                
+                // Glow effect on hovered node
+                const hoveredMesh = intersects[0].object;
+                if (!hoveredMesh.userData.isHovered) {
+                    // Reset previous hovered node
+                    nodeMeshes.forEach(m => {
+                        if (m.userData.isHovered && m !== hoveredMesh) {
+                            m.userData.isHovered = false;
+                            m.material.emissiveIntensity = 0.4;
+                            m.scale.setScalar(1.0);
+                        }
+                    });
+                    // Highlight current
+                    hoveredMesh.userData.isHovered = true;
+                    hoveredMesh.material.emissiveIntensity = 0.8;
+                    hoveredMesh.scale.setScalar(1.15);
+                }
+
+                // Find connections
+                const connections = data.edges
+                    .filter(e => e.from === node.id || e.to === node.id)
+                    .map(e => {
+                        const other = e.from === node.id ? e.to : e.from;
+                        return `${other} (${e.strength.toFixed(2)})`;
+                    })
+                    .join(', ');
+                
+                tooltip.innerHTML = `
+                    <div class="name">${node.label}</div>
+                    <div class="metric">
+                        <span class="metric-label">Cyclomatic</span>
+                        <span class="metric-value">${node.metrics.cyclomatic}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Cognitive</span>
+                        <span class="metric-value">${node.metrics.cognitive}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Instability</span>
+                        <span class="metric-value">${(node.metrics.instability * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Connected to</span>
+                        <span class="metric-value">${connections || 'none'}</span>
+                    </div>
+                    ${activeModule === node.id ? '<div class="active-hint">Click to deactivate</div>' : '<div class="active-hint">Click to focus connections</div>'}
+                `;
+            } else {
+                tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+                
+                // Reset any hovered node glow
+                nodeMeshes.forEach(m => {
+                    if (m.userData.isHovered) {
+                        m.userData.isHovered = false;
+                        m.material.emissiveIntensity = 0.4;
+                        m.scale.setScalar(1.0);
+                    }
+                });
+            }
+        }
+
+        // Click to activate/deactivate connection highlighting
+        function onClick(event) {
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodeMeshes);
+            
+            if (intersects.length > 0) {
+                const node = intersects[0].object.userData;
+                
+                if (activeModule === node.id) {
+                    // Deactivate
+                    activeModule = null;
+                    clearHighlight('3d');
+                } else {
+                    // Activate new module
+                    activeModule = node.id;
+                    highlightModule(node.id, '3d');
+                }
+            } else {
+                // Clicked on empty space - deactivate
+                if (activeModule) {
+                    activeModule = null;
+                    clearHighlight('3d');
+                }
+            }
+        }
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('click', onClick);
+        
+        // Calculate total coupling per module
+        const moduleCoupling = {};
+        data.nodes.forEach(n => moduleCoupling[n.id] = 0);
+        data.edges.forEach(e => {
+            moduleCoupling[e.from] = (moduleCoupling[e.from] || 0) + e.strength;
+            moduleCoupling[e.to] = (moduleCoupling[e.to] || 0) + e.strength;
+        });
+        
+        // Sort modules by coupling (descending)
+        const sortedModules = [...data.nodes].sort((a, b) => 
+            (moduleCoupling[b.id] || 0) - (moduleCoupling[a.id] || 0)
+        );
+        
+        // Populate sidebar
+        let selectedModule = null;
+        function renderSidebar() {
+            document.getElementById('module-count').textContent = `(${data.nodes.length})`;
+            const list = document.getElementById('module-list');
+            list.innerHTML = sortedModules.map(m => {
+                const coupling = moduleCoupling[m.id] || 0;
+                const shortName = m.label.split('::').pop() || m.label;
+                return `
+                    <div class="module-item ${selectedModule === m.id ? 'selected' : ''}" data-id="${m.id}">
+                        <div class="module-name" style="color:${m.color}">${shortName}</div>
+                        <div class="module-stats">
+                            <span class="module-coupling">⚡ ${coupling.toFixed(1)}</span>
+                            <span class="module-complexity">📊 CC:${m.metrics.cyclomatic}</span>
+                            <span>🔧 ${m.metrics.function_count}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Add click and hover handlers
+            list.querySelectorAll('.module-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const id = item.dataset.id;
+                    selectedModule = selectedModule === id ? null : id;
+                    renderSidebar();
+                    
+                    // Focus camera on selected module
+                    if (selectedModule) {
+                        const node = data.nodes.find(n => n.id === selectedModule);
+                        if (node) {
+                            const targetPos = new THREE.Vector3(...node.position);
+                            controls.target.copy(targetPos);
+                            camera.position.set(
+                                targetPos.x + 5,
+                                targetPos.y + 3,
+                                targetPos.z + 5
+                            );
+                        }
+                    }
+                    
+                    // Highlight selected node
+                    nodeMeshes.forEach(mesh => {
+                        const isSelected = mesh.userData.id === selectedModule;
+                        mesh.material.emissiveIntensity = isSelected ? 0.6 : 0.2;
+                        mesh.scale.setScalar(isSelected ? 1.3 : 1.0);
+                    });
+                });
+                
+                // Hover handlers for focus effect
+                item.addEventListener('mouseenter', () => {
+                    const id = item.dataset.id;
+                    highlightModule(id, 'sidebar');
+                });
+                
+                item.addEventListener('mouseleave', () => {
+                    clearHighlight('sidebar');
+                });
+            });
+        }
+        renderSidebar();
+        
+        // Coupling threshold slider
+        document.getElementById('coupling-slider').addEventListener('input', e => {
+            currentThreshold = parseInt(e.target.value) / 100;
+            document.getElementById('filter-value').textContent = `${e.target.value}%`;
+            
+            // Filter edges based on threshold
+            edgeMeshes.forEach((mesh, i) => {
+                if (i < data.edges.length) {
+                    mesh.visible = data.edges[i].strength >= currentThreshold;
+                }
+            });
+            
+            // Find modules that still have visible edges
+            const visibleModules = new Set();
+            data.edges.forEach(edge => {
+                if (edge.strength >= currentThreshold) {
+                    visibleModules.add(edge.from);
+                    visibleModules.add(edge.to);
+                }
+            });
+            
+            // Grey out modules in sidebar that have no visible edges
+            document.querySelectorAll('.module-item').forEach(item => {
+                const moduleId = item.dataset.id;
+                const hasVisibleEdge = visibleModules.has(moduleId);
+                item.classList.toggle('filtered-out', currentThreshold > 0 && !hasVisibleEdge);
+            });
+            
+            // Also fade out 3D nodes that have no visible edges
+            nodeMeshes.forEach(mesh => {
+                const hasVisibleEdge = visibleModules.has(mesh.userData.id);
+                mesh.material.opacity = (currentThreshold > 0 && !hasVisibleEdge) ? 0.2 : 1.0;
+                mesh.material.transparent = true;
+            });
+        });
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
+            const mainWidth = document.getElementById('main').clientWidth;
+            camera.aspect = mainWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(mainWidth, window.innerHeight);
+            labelRenderer.setSize(mainWidth, window.innerHeight);
+        });
+        
+        // Trigger initial resize
+        window.dispatchEvent(new Event('resize'));
+    </script>
+</body>
+</html>

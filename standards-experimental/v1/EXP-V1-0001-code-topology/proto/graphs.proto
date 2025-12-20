@@ -91,7 +91,7 @@ enum CallEdgeType {
 
 // Module/file dependency graph.
 // Nodes are modules or files, edges are import relationships.
-// Stored at: .topology/graphs/dependency-graph.json
+// Stored at: .topology/graphs/dependencies.json
 message DependencyGraphFile {
   // Schema version
   string schema_version = 1 [json_name = "schema_version"];
@@ -104,6 +104,21 @@ message DependencyGraphFile {
 
   // All dependency edges
   repeated DependencyEdge edges = 4;
+
+  // Graph metadata
+  DependencyMetadata metadata = 5;
+}
+
+// Metadata about the dependency graph
+message DependencyMetadata {
+  // Total number of nodes
+  uint32 total_nodes = 1 [json_name = "total_nodes"];
+
+  // Total number of internal edges
+  uint32 total_edges = 2 [json_name = "total_edges"];
+
+  // Number of external (library) imports
+  uint32 external_imports = 3 [json_name = "external_imports"];
 }
 
 // Granularity level for dependency graph
@@ -151,6 +166,9 @@ message DependencyEdge {
 
   // Weight: number of import statements or symbols imported
   uint32 weight = 4;
+
+  // List of imported symbols/paths (for debugging and detailed analysis)
+  repeated string imports = 5;
 }
 
 // Type of dependency edge
@@ -169,7 +187,7 @@ enum DependencyEdgeType {
 // ============================================================================
 
 // Module coupling matrix for architecture visualization.
-// Symmetric NxN matrix where matrix[i][j] represents coupling strength.
+// NxN matrix where matrix[i][j] represents coupling strength.
 // Primary input for 3D visualization projectors.
 // Stored at: .topology/graphs/coupling-matrix.json
 message CouplingMatrixFile {
@@ -187,14 +205,26 @@ message CouplingMatrixFile {
   repeated string modules = 4;
 
   // NxN coupling matrix
-  // matrix[i][j] = coupling strength between modules[i] and modules[j]
+  // matrix[i][j] = coupling strength of modules[i] depending on modules[j]
   // Values MUST be in range [0, 1]
-  // Matrix MUST be symmetric: matrix[i][j] == matrix[j][i]
+  // Matrix MAY be asymmetric for directional coupling (A→B ≠ B→A)
   // Diagonal MUST be 1.0: matrix[i][i] == 1.0
   repeated MatrixRow matrix = 5;
 
   // Optional: saved layout positions for deterministic visualization
   LayoutInfo layout = 6;
+
+  // Optional: metadata about the coupling calculation
+  CouplingMetadata metadata = 7;
+}
+
+// Metadata about coupling calculation
+message CouplingMetadata {
+  // Maximum imports between any pair (for normalization reference)
+  uint32 max_imports_between_pair = 1 [json_name = "max_imports_between_pair"];
+
+  // Description of normalization method
+  string normalization = 2;
 }
 
 // A row in the coupling matrix

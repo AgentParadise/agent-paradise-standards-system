@@ -1,0 +1,68 @@
+name: 📋 New Standard Proposal
+description: Propose a new experimental standard (EXP-V1-XXXX)
+labels: ["new-standard", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Proposing a new standard? Great! All standards start as experiments.
+        
+  - type: input
+    id: name
+    attributes:
+      label: Proposed Name
+      description: What should this standard be called?
+      placeholder: "e.g., Context Index, Agent Tools, ADR Standard"
+    validations:
+      required: true
+      
+  - type: input
+    id: slug
+    attributes:
+      label: Slug (kebab-case)
+      description: Short identifier for directory naming
+      placeholder: "e.g., context-index, agent-tools"
+    validations:
+      required: true
+      
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this standard solve?
+      placeholder: Currently, there is no standard way to...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How does your standard address this?
+      placeholder: |
+        This standard defines:
+        - A schema for...
+        - A CLI command to...
+        - Agent skills for...
+    validations:
+      required: true
+      
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What's in scope? What's explicitly out of scope?
+    validations:
+      required: false
+      
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I've searched existing standards and experiments
+          required: true
+        - label: This fits the APS mission (agentic engineering at scale)
+          required: true
+        - label: I'm willing to help implement this standard
+          required: false

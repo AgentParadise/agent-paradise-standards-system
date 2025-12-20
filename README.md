@@ -1,5 +1,8 @@
 # Agent Paradise Standards System (APS)
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/AgentParadise/agent-paradise-standards-system/actions/workflows/ci.yml/badge.svg)](https://github.com/AgentParadise/agent-paradise-standards-system/actions)
+
 The Agent Paradise Standards System (APS) is an **executable, evolvable standards framework** designed for agentic engineering at scale.
 
 ## What is APS?
@@ -47,7 +50,25 @@ cargo run --bin aps -- v1 --help
 
 ## CLI Commands
 
-### Validation
+### Running Standard Commands
+
+The `aps run` command dispatches to standard-specific CLIs:
+
+```bash
+# List available standards
+aps run --list
+
+# Run topology commands
+aps run topology analyze .                    # Analyze codebase
+aps run topology validate .topology/          # Validate artifacts
+aps run topology report .topology/            # Generate report
+aps run topology diff base/ pr/              # Compare snapshots
+
+# Get help for a standard
+aps run topology help
+```
+
+### Validation (Authoring)
 
 ```bash
 # Validate the entire V1 repo structure
@@ -140,4 +161,4 @@ cargo build --release
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0 — See [LICENSE](LICENSE) for details.

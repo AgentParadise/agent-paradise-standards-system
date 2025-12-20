@@ -115,8 +115,10 @@ Topology artifacts MUST be stored in a `.topology/` directory with the following
 │   ├── call-graph.json        # Function call relationships
 │   ├── dependency-graph.json  # Module/file dependencies
 │   └── coupling-matrix.json   # Module coupling coefficients
-└── snapshots/                 # OPTIONAL: Historical snapshots
-    └── YYYY-MM-DD.json        # Dated full snapshot
+├── snapshots/                 # OPTIONAL: Historical snapshots
+│   └── YYYY-MM-DD.json        # Dated full snapshot
+└── diffs/                     # OPTIONAL: Comparison artifacts
+    └── <name>.json            # Diff between two snapshots
 ```
 
 ### 3.2 Manifest Schema (`manifest.toml`)
@@ -383,6 +385,79 @@ Historical snapshots enable trend analysis:
   ]
 }
 ```
+
+### 3.6 Diff Schema (`diffs/<name>.json`)
+
+Diff artifacts compare two topology snapshots for CI integration. The diff schema provides a standardized format for detecting regressions and generating PR comments.
+
+**Storage:** `.topology/diffs/<name>.json` or stdout from `aps run topology diff`
+
+```json
+{
+  "schema_version": "1.0.0",
+  "status": "warning",
+  "timestamp": "2025-12-17T12:00:00Z",
+  "base": {
+    "git_ref": "main",
+    "commit": "abc1234",
+    "path": ".topology-base/"
+  },
+  "target": {
+    "git_ref": "feat/new-feature",
+    "commit": "def5678",
+    "path": ".topology-pr/"
+  },
+  "summary": {
+    "functions_added": 3,
+    "functions_removed": 1,
+    "functions_modified": 5,
+    "modules_added": 0,
+    "modules_removed": 0,
+    "modules_modified": 2
+  },
+  "metrics": {
+    "total_cyclomatic": { "base": 142, "target": 156, "delta": 14, "percent_change": 9.86 },
+    "avg_cyclomatic": { "base": 4.2, "target": 4.8, "delta": 0.6, "percent_change": 14.29 },
+    "total_cognitive": { "base": 98, "target": 112, "delta": 14, "percent_change": 14.29 },
+    "coupling_density": { "base": 0.42, "target": 0.44, "delta": 0.02, "percent_change": 4.76 }
+  },
+  "hotspots": [
+    {
+      "id": "rust:auth::validator::validate_token",
+      "type": "INCREASED_COMPLEXITY",
+      "reason": "Cyclomatic complexity increased from 8 to 12 (+50%)",
+      "severity": 2,
+      "suggestion": "Consider extracting validation sub-functions"
+    }
+  ],
+  "violations": [
+    {
+      "threshold": "avg_cognitive_delta",
+      "value": 0.5,
+      "limit": 0.3,
+      "severity": "WARNING",
+      "message": "Average cognitive complexity increased by 17%"
+    }
+  ]
+}
+```
+
+#### 3.6.1 Status Values
+
+| Status | Exit Code | CI Action |
+|--------|-----------|-----------|
+| `success` | 0 | Merge allowed |
+| `warning` | 2 | Merge allowed with review |
+| `error` | 1 | Merge blocked |
+
+#### 3.6.2 Hotspot Types
+
+| Type | Description |
+|------|-------------|
+| `NEW_COMPLEX` | New function with high complexity |
+| `INCREASED_COMPLEXITY` | Existing function became more complex |
+| `COUPLING_INCREASE` | Module coupling increased |
+| `ZONE_OF_PAIN` | Module moved toward Zone of Pain |
 
 ---
 
@@ -1212,6 +1287,94 @@ topology project --projector 3d-force --format webgl --output scene.json
 
 # With projector-specific config
 topology project --projector 3d-force --config '{"nodeScale": 2.0}'
+```
+
+### 9.8 Built-in Visualization Generators
+
+The CLI provides built-in visualization generators that don't require separate projector installations:
+
+```bash
+# Generate all visualizations + dashboard
+aps run topology viz .topology --type all
+
+# Generate specific visualization
+aps run topology viz .topology --type codecity
+aps run topology viz .topology --type clusters
+aps run topology viz .topology --type vsa
+aps run topology viz .topology --type 3d
+
+# Custom output
+aps run topology viz .topology --type codecity --output my-city.html
+```
+
+#### 9.8.1 Available Visualization Types
+
+| Type | Description | Technology | Best For |
+|------|-------------|------------|----------|
+| `3d` | Force-directed coupling graph | Three.js | Coupling relationships, Martin metrics |
+| `codecity` | 3D city metaphor (buildings = modules) | Three.js | Health assessment, complexity hotspots |
+| `clusters` | 2D package relationship graph | Canvas 2D | Package-level coupling |
+| `vsa` | Vertical Slice Architecture matrix | HTML/CSS | VSA compliance, layer completeness |
+| `all` | All visualizations + index dashboard | Mixed | Comprehensive overview |
+
+#### 9.8.2 Health Score Formula
+
+All visualizations use a standardized health score (0.0-1.0):
+
+```
+health = average(
+    complexity_score,    // ideal: 3-8 CC/function, bad: >15
+    cognitive_score,     // ideal: <10/function, bad: >30
+    loc_score,           // ideal: 10-50 LOC/function, bad: >100
+    coupling_score,      // ideal: 1-20 total, bad: 0 or >20
+    size_score           // ideal: 5-30 functions, bad: <2 or >50
+)
+```
+
+Color mapping:
+
+| Health | Color | Label |
+|--------|-------|-------|
+| ≥0.80 | `#00ff88` | Excellent |
+| ≥0.65 | `#44dd77` | Good |
+| ≥0.50 | `#88cc55` | OK |
+| ≥0.35 | `#ddaa33` | Warning |
+| ≥0.20 | `#ff7744` | Poor |
+| <0.20 | `#ff3333` | Critical |
+
+#### 9.8.3 CodeCity Visual Mapping
+
+| Building Property | Metric |
+|-------------------|--------|
+| Height | Total Cyclomatic Complexity |
+| Width/Depth | sqrt(Function Count) |
+| Color | Health Score |
+| District | Top-level package (slice) |
+
+#### 9.8.4 VSA Layer Detection
+
+Layers are detected from path patterns:
+
+| Layer | Keywords |
+|-------|----------|
+| handlers | handler, controller, api, routes, endpoint, view |
+| services | service, usecase, application, interactor |
+| models | model, entity, domain, schema, type |
+| data | repository, repo, data, store, db |
+| utils | util, helper, common, shared, lib |
+
+#### 9.8.5 Output Structure
+
+When using `--type all`, visualizations are generated to `.topology/viz/`:
+
+```
+.topology/
+└── viz/
+    ├── index.html      # Dashboard with summary stats
+    ├── 3d.html         # Force-directed coupling graph
+    ├── codecity.html   # 3D city metaphor
+    ├── clusters.html   # Package clusters
+    └── vsa.html        # VSA matrix
 ```
 
 ---
