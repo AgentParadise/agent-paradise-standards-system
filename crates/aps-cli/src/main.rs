@@ -803,12 +803,7 @@ fn dispatch_topology(
             topology_report(path, verbose)
         }
         "viz" | "3d" | "visualize" => {
-            // Get path (first non-option argument)
-            let path = args
-                .iter()
-                .find(|a| !a.starts_with('-'))
-                .map(|s| s.as_str())
-                .unwrap_or(".topology");
+            // Parse options first
             let viz_type = args
                 .iter()
                 .position(|a| a == "--type" || a == "-t")
@@ -820,6 +815,28 @@ fn dispatch_topology(
                 .position(|a| a == "--output" || a == "-o")
                 .and_then(|i| args.get(i + 1))
                 .map(|s| s.as_str());
+
+            // Get path: first non-option argument that's not a value of --type or --output
+            let type_value_idx = args
+                .iter()
+                .position(|a| a == "--type" || a == "-t")
+                .map(|i| i + 1);
+            let output_value_idx = args
+                .iter()
+                .position(|a| a == "--output" || a == "-o")
+                .map(|i| i + 1);
+
+            let path = args
+                .iter()
+                .enumerate()
+                .find(|(i, a)| {
+                    !a.starts_with('-')
+                        && Some(*i) != type_value_idx
+                        && Some(*i) != output_value_idx
+                })
+                .map(|(_, s)| s.as_str())
+                .unwrap_or(".topology");
+
             topology_viz(path, viz_type, output, verbose)
         }
         _ => {
@@ -2803,7 +2820,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                 }
                 let modules_json = serde_json::to_string_pretty(&viz_modules).unwrap_or_default();
                 let coupling_json = serde_json::to_string_pretty(&matrix_file).unwrap_or_default();
-                let html = generate_codecity_html(&modules_json, &coupling_json);
+                let html = code_topology_viz::codecity::generate(&modules_json, &coupling_json);
                 let out = if viz_type == "all" {
                     viz_dir.join("codecity.html")
                 } else {
@@ -2817,7 +2834,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                 }
                 let modules_json = serde_json::to_string_pretty(&viz_modules).unwrap_or_default();
                 let coupling_json = serde_json::to_string_pretty(&matrix_file).unwrap_or_default();
-                let html = generate_clusters_html(&modules_json, &coupling_json);
+                let html = code_topology_viz::clusters::generate(&modules_json, &coupling_json);
                 let out = if viz_type == "all" {
                     viz_dir.join("clusters.html")
                 } else {
@@ -2830,7 +2847,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                     println!("Rendering VSA diagram...");
                 }
                 let modules_json = serde_json::to_string_pretty(&viz_modules).unwrap_or_default();
-                let html = generate_vsa_html(&modules_json);
+                let html = code_topology_viz::vsa::generate(&modules_json);
                 let out = if viz_type == "all" {
                     viz_dir.join("vsa.html")
                 } else {
@@ -2872,7 +2889,8 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
             0.0
         };
 
-        let index_html = generate_index_html(total_modules, slices.len(), avg_health);
+        let index_html =
+            code_topology_viz::index::generate(total_modules, slices.len(), avg_health);
         let index_path = viz_dir.join("index.html");
         if let Err(e) = fs::write(&index_path, &index_html) {
             eprintln!("Error writing index: {e}");
@@ -2886,881 +2904,32 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
     for file in &generated_files {
         println!("  {file}");
     }
-    println!();
-    println!("Open in browser:");
-    if viz_type == "all" {
-        println!("  open {}", viz_dir.join("index.html").display());
+    // Auto-open in browser
+    let open_path = if viz_type == "all" {
+        viz_dir.join("index.html")
     } else {
-        println!(
-            "  open {}",
-            generated_files.first().unwrap_or(&String::new())
-        );
+        PathBuf::from(generated_files.first().unwrap_or(&String::new()))
+    };
+
+    println!();
+    println!("Opening in browser: {}", open_path.display());
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(&open_path).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open")
+            .arg(&open_path)
+            .spawn();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", &open_path.display().to_string()])
+            .spawn();
     }
 
     ExitCode::SUCCESS
-}
-
-/// Generate CodeCity HTML (3D city metaphor)
-#[allow(clippy::uninlined_format_args)]
-fn generate_codecity_html(modules_json: &str, coupling_json: &str) -> String {
-    format!(
-        r##"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodeCity - Topology Visualization</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; }}
-        #info {{ position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 12px; border: 1px solid #333; max-width: 300px; z-index: 100; }}
-        #info h1 {{ font-size: 18px; margin-bottom: 10px; color: #00ff88; }}
-        #info p {{ font-size: 12px; color: #888; margin-bottom: 8px; }}
-        #legend {{ margin-top: 15px; }}
-        .legend-item {{ display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 11px; }}
-        .legend-color {{ width: 16px; height: 16px; border-radius: 3px; }}
-        #tooltip {{ position: fixed; display: none; background: rgba(0,0,0,0.95); padding: 15px; border-radius: 8px; border: 1px solid #444; font-size: 12px; pointer-events: none; z-index: 200; max-width: 320px; }}
-        #tooltip h3 {{ color: #00ff88; margin-bottom: 8px; font-size: 14px; }}
-        #tooltip .metric {{ display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #222; }}
-        #tooltip .metric:last-child {{ border-bottom: none; }}
-        #tooltip .label {{ color: #888; }}
-        #tooltip .value {{ color: #fff; font-weight: 500; }}
-        #controls {{ position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px 16px; border-radius: 8px; font-size: 11px; color: #666; }}
-    </style>
-</head>
-<body>
-    <div id="info">
-        <h1>🏙️ CodeCity</h1>
-        <p>Buildings represent modules. Height = complexity, color = health.</p>
-        <div id="legend">
-            <div class="legend-item"><div class="legend-color" style="background:#00ff88"></div>Excellent (≥80%)</div>
-            <div class="legend-item"><div class="legend-color" style="background:#44dd77"></div>Good (≥65%)</div>
-            <div class="legend-item"><div class="legend-color" style="background:#88cc55"></div>OK (≥50%)</div>
-            <div class="legend-item"><div class="legend-color" style="background:#ddaa33"></div>Warning (≥35%)</div>
-            <div class="legend-item"><div class="legend-color" style="background:#ff7744"></div>Poor (≥20%)</div>
-            <div class="legend-item"><div class="legend-color" style="background:#ff3333"></div>Critical (&lt;20%)</div>
-        </div>
-    </div>
-    <div id="tooltip"></div>
-    <div id="controls">🖱️ Drag to rotate • Scroll to zoom • Right-click to pan</div>
-
-    <script>
-        const MODULES = {modules_json};
-        const COUPLING = {coupling_json};
-
-        // Scene setup
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a0f);
-        
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(30, 40, 50);
-        camera.lookAt(0, 0, 0);
-
-        const renderer = new THREE.WebGLRenderer({{ antialias: true }});
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
-
-        // Lighting
-        const ambient = new THREE.AmbientLight(0x404040, 0.5);
-        scene.add(ambient);
-        const directional = new THREE.DirectionalLight(0xffffff, 0.8);
-        directional.position.set(50, 100, 50);
-        scene.add(directional);
-
-        // Ground plane
-        const groundGeo = new THREE.PlaneGeometry(200, 200);
-        const groundMat = new THREE.MeshStandardMaterial({{ color: 0x111115, roughness: 1 }});
-        const ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.1;
-        scene.add(ground);
-
-        // Grid
-        const grid = new THREE.GridHelper(100, 50, 0x222222, 0x181818);
-        scene.add(grid);
-
-        // Group modules by slice (district)
-        const slices = {{}};
-        MODULES.forEach(m => {{
-            if (!slices[m.slice]) slices[m.slice] = [];
-            slices[m.slice].push(m);
-        }});
-
-        // Layout districts
-        const districtNames = Object.keys(slices);
-        const gridSize = Math.ceil(Math.sqrt(districtNames.length));
-        const districtSpacing = 25;
-        const buildingSpacing = 3;
-
-        const buildings = [];
-        let districtIndex = 0;
-
-        districtNames.forEach(sliceName => {{
-            const modules = slices[sliceName];
-            const districtX = (districtIndex % gridSize) * districtSpacing - (gridSize * districtSpacing) / 2;
-            const districtZ = Math.floor(districtIndex / gridSize) * districtSpacing - (gridSize * districtSpacing) / 2;
-
-            // District label
-            // TODO: Add text labels
-
-            // Layout buildings in district
-            const buildingGrid = Math.ceil(Math.sqrt(modules.length));
-            modules.forEach((m, i) => {{
-                const localX = (i % buildingGrid) * buildingSpacing - (buildingGrid * buildingSpacing) / 2;
-                const localZ = Math.floor(i / buildingGrid) * buildingSpacing - (buildingGrid * buildingSpacing) / 2;
-
-                // Building dimensions based on metrics (log scale for height to prevent extreme outliers)
-                const rawHeight = m.total_cyclomatic || 1;
-                const height = Math.max(1, Math.log10(rawHeight + 1) * 3);
-                const width = Math.max(0.8, Math.sqrt(m.function_count) * 0.5);
-                const depth = width;
-
-                const geometry = new THREE.BoxGeometry(width, height, depth);
-                const material = new THREE.MeshStandardMaterial({{
-                    color: new THREE.Color(m.color),
-                    roughness: 0.6,
-                    metalness: 0.2
-                }});
-                const building = new THREE.Mesh(geometry, material);
-                building.position.set(districtX + localX, height / 2, districtZ + localZ);
-                building.userData = m;
-                scene.add(building);
-                buildings.push(building);
-            }});
-
-            districtIndex++;
-        }});
-
-        // Simple orbit controls
-        let isDragging = false;
-        let isPanning = false;
-        let previousMouse = {{ x: 0, y: 0 }};
-        let spherical = {{ radius: 80, theta: Math.PI / 4, phi: Math.PI / 3 }};
-        let target = new THREE.Vector3(0, 0, 0);
-
-        function updateCamera() {{
-            camera.position.x = target.x + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
-            camera.position.y = target.y + spherical.radius * Math.cos(spherical.phi);
-            camera.position.z = target.z + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
-            camera.lookAt(target);
-        }}
-        updateCamera();
-
-        renderer.domElement.addEventListener('mousedown', e => {{
-            if (e.button === 0) isDragging = true;
-            if (e.button === 2) isPanning = true;
-            previousMouse = {{ x: e.clientX, y: e.clientY }};
-        }});
-
-        renderer.domElement.addEventListener('mousemove', e => {{
-            const deltaX = e.clientX - previousMouse.x;
-            const deltaY = e.clientY - previousMouse.y;
-
-            if (isDragging) {{
-                spherical.theta -= deltaX * 0.01;
-                spherical.phi -= deltaY * 0.01;
-                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-                updateCamera();
-            }}
-            if (isPanning) {{
-                const right = new THREE.Vector3();
-                const up = new THREE.Vector3(0, 1, 0);
-                camera.getWorldDirection(right);
-                right.cross(up).normalize();
-                target.add(right.multiplyScalar(-deltaX * 0.1));
-                target.y += deltaY * 0.1;
-                updateCamera();
-            }}
-            previousMouse = {{ x: e.clientX, y: e.clientY }};
-        }});
-
-        window.addEventListener('mouseup', () => {{ isDragging = false; isPanning = false; }});
-        renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
-
-        renderer.domElement.addEventListener('wheel', e => {{
-            spherical.radius *= 1 + e.deltaY * 0.001;
-            spherical.radius = Math.max(10, Math.min(200, spherical.radius));
-            updateCamera();
-        }});
-
-        // Raycasting for tooltips
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        const tooltip = document.getElementById('tooltip');
-
-        renderer.domElement.addEventListener('mousemove', e => {{
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(buildings);
-
-            if (intersects.length > 0) {{
-                const m = intersects[0].object.userData;
-                tooltip.style.display = 'block';
-                tooltip.style.left = (e.clientX + 15) + 'px';
-                tooltip.style.top = (e.clientY + 15) + 'px';
-                tooltip.innerHTML = `
-                    <h3>${{m.name}}</h3>
-                    <div class="metric"><span class="label">Slice</span><span class="value">${{m.slice}}</span></div>
-                    <div class="metric"><span class="label">Layer</span><span class="value">${{m.layer}}</span></div>
-                    <div class="metric"><span class="label">Functions</span><span class="value">${{m.function_count}}</span></div>
-                    <div class="metric"><span class="label">Complexity</span><span class="value">${{m.total_cyclomatic}}</span></div>
-                    <div class="metric"><span class="label">Cognitive</span><span class="value">${{m.total_cognitive}}</span></div>
-                    <div class="metric"><span class="label">LOC</span><span class="value">${{m.lines_of_code}}</span></div>
-                    <div class="metric"><span class="label">Coupling (Ca/Ce)</span><span class="value">${{m.ca}} / ${{m.ce}}</span></div>
-                    <div class="metric"><span class="label">Health</span><span class="value" style="color:${{m.color}}">${{(m.health * 100).toFixed(0)}}% (${{m.health_label}})</span></div>
-                `;
-            }} else {{
-                tooltip.style.display = 'none';
-            }}
-        }});
-
-        // Resize handler
-        window.addEventListener('resize', () => {{
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }});
-
-        // Animation loop
-        function animate() {{
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
-        }}
-        animate();
-    </script>
-</body>
-</html>"##,
-        modules_json = modules_json,
-        coupling_json = coupling_json
-    )
-}
-
-/// Generate Package Clusters HTML (2D force-directed) with sidebar and coupling filter
-#[allow(clippy::uninlined_format_args)]
-fn generate_clusters_html(modules_json: &str, coupling_json: &str) -> String {
-    format!(
-        r##"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Package Clusters - Topology Visualization</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; display: flex; }}
-        #main {{ flex: 1; position: relative; }}
-        canvas {{ display: block; }}
-        #info {{ position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 12px; border: 1px solid #333; max-width: 280px; z-index: 100; }}
-        #info h1 {{ font-size: 18px; margin-bottom: 10px; color: #00ff88; }}
-        #info p {{ font-size: 12px; color: #888; margin-bottom: 8px; }}
-        #filter {{ margin-top: 15px; padding-top: 15px; border-top: 1px solid #333; }}
-        #filter label {{ display: block; font-size: 11px; color: #888; margin-bottom: 6px; }}
-        #filter input[type="range"] {{ width: 100%; cursor: pointer; }}
-        #filter-value {{ float: right; color: #00ff88; }}
-        #sidebar {{ width: 280px; background: #111116; border-left: 1px solid #222; overflow-y: auto; padding: 15px; }}
-        #sidebar h2 {{ font-size: 14px; color: #888; margin-bottom: 15px; display: flex; justify-content: space-between; }}
-        .package-item {{ padding: 10px; margin-bottom: 8px; background: #1a1a20; border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }}
-        .package-item:hover {{ border-color: #444; }}
-        .package-item.selected {{ border-color: #00ff88; background: #1a2a20; }}
-        .package-name {{ font-weight: 500; margin-bottom: 4px; font-size: 13px; }}
-        .package-stats {{ font-size: 11px; color: #666; display: flex; gap: 12px; }}
-        .package-coupling {{ color: #88aaff; }}
-        .package-health {{ }}
-        #tooltip {{ position: fixed; display: none; background: rgba(0,0,0,0.95); padding: 15px; border-radius: 8px; border: 1px solid #444; font-size: 12px; pointer-events: none; z-index: 200; }}
-        #tooltip h3 {{ color: #00ff88; margin-bottom: 8px; }}
-        #controls {{ position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px 16px; border-radius: 8px; font-size: 11px; color: #666; }}
-    </style>
-</head>
-<body>
-    <div id="main">
-        <div id="info">
-            <h1>🔧 Package Clusters</h1>
-            <p>Circles = packages. Lines = coupling strength.</p>
-            <div id="filter">
-                <label>Coupling Threshold <span id="filter-value">0%</span></label>
-                <input type="range" id="coupling-slider" min="0" max="100" value="0">
-            </div>
-        </div>
-        <div id="tooltip"></div>
-        <div id="controls">🖱️ Drag to pan • Scroll to zoom • Click sidebar to focus</div>
-        <canvas id="canvas"></canvas>
-    </div>
-    <div id="sidebar">
-        <h2>Packages <span id="package-count"></span></h2>
-        <div id="package-list"></div>
-    </div>
-
-    <script>
-        const MODULES = {modules_json};
-        const COUPLING = {coupling_json};
-
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        let width, height;
-        let couplingThreshold = 0;
-        let selectedSlice = null;
-
-        function resize() {{
-            width = canvas.parentElement.clientWidth;
-            height = window.innerHeight;
-            canvas.width = width * devicePixelRatio;
-            canvas.height = height * devicePixelRatio;
-            canvas.style.width = width + 'px';
-            canvas.style.height = height + 'px';
-            ctx.scale(devicePixelRatio, devicePixelRatio);
-        }}
-        resize();
-        window.addEventListener('resize', () => {{ resize(); draw(); }});
-
-        // Group modules by slice
-        const sliceMap = {{}};
-        MODULES.forEach(m => {{
-            if (!sliceMap[m.slice]) {{
-                sliceMap[m.slice] = {{ modules: [], totalHealth: 0 }};
-            }}
-            sliceMap[m.slice].modules.push(m);
-            sliceMap[m.slice].totalHealth += m.health;
-        }});
-
-        // Build slice nodes
-        const slices = Object.entries(sliceMap).map(([name, data], i) => {{
-            const avgHealth = data.totalHealth / data.modules.length;
-            return {{
-                name,
-                modules: data.modules,
-                count: data.modules.length,
-                health: avgHealth,
-                color: healthToColor(avgHealth),
-                x: width / 2 + (Math.random() - 0.5) * 200,
-                y: height / 2 + (Math.random() - 0.5) * 200,
-                vx: 0,
-                vy: 0,
-                radius: Math.max(25, Math.sqrt(data.modules.length) * 15),
-                totalCoupling: 0
-            }};
-        }});
-
-        // Build edges from coupling matrix
-        const edges = [];
-        const moduleToSlice = {{}};
-        MODULES.forEach(m => moduleToSlice[m.id] = m.slice);
-
-        for (let i = 0; i < COUPLING.modules.length; i++) {{
-            for (let j = i + 1; j < COUPLING.modules.length; j++) {{
-                const strength = COUPLING.matrix[i][j] + COUPLING.matrix[j][i];
-                if (strength > 0) {{
-                    const sliceA = moduleToSlice[COUPLING.modules[i]];
-                    const sliceB = moduleToSlice[COUPLING.modules[j]];
-                    if (sliceA && sliceB && sliceA !== sliceB) {{
-                        let edge = edges.find(e => 
-                            (e.source === sliceA && e.target === sliceB) ||
-                            (e.source === sliceB && e.target === sliceA)
-                        );
-                        if (!edge) {{
-                            edges.push({{ source: sliceA, target: sliceB, strength: strength }});
-                        }} else {{
-                            edge.strength += strength;
-                        }}
-                    }}
-                }}
-            }}
-        }}
-
-        // Calculate total coupling per slice
-        const maxStrength = Math.max(...edges.map(e => e.strength), 1);
-        edges.forEach(edge => {{
-            const sourceSlice = slices.find(s => s.name === edge.source);
-            const targetSlice = slices.find(s => s.name === edge.target);
-            if (sourceSlice) sourceSlice.totalCoupling += edge.strength;
-            if (targetSlice) targetSlice.totalCoupling += edge.strength;
-        }});
-
-        // Sort slices by coupling (descending)
-        const sortedSlices = [...slices].sort((a, b) => b.totalCoupling - a.totalCoupling);
-
-        // Populate sidebar
-        function renderSidebar() {{
-            const list = document.getElementById('package-list');
-            document.getElementById('package-count').textContent = `(${{slices.length}})`;
-            
-            list.innerHTML = sortedSlices.map(s => `
-                <div class="package-item ${{selectedSlice === s.name ? 'selected' : ''}}" data-slice="${{s.name}}">
-                    <div class="package-name" style="color:${{s.color}}">${{s.name}}</div>
-                    <div class="package-stats">
-                        <span class="package-coupling">⚡ ${{s.totalCoupling.toFixed(1)}}</span>
-                        <span class="package-health" style="color:${{s.color}}">❤ ${{(s.health * 100).toFixed(0)}}%</span>
-                        <span>📦 ${{s.count}}</span>
-                    </div>
-                </div>
-            `).join('');
-
-            // Add click handlers
-            list.querySelectorAll('.package-item').forEach(item => {{
-                item.addEventListener('click', () => {{
-                    const name = item.dataset.slice;
-                    selectedSlice = selectedSlice === name ? null : name;
-                    renderSidebar();
-                    
-                    // Center on selected slice
-                    if (selectedSlice) {{
-                        const slice = slices.find(s => s.name === selectedSlice);
-                        if (slice) {{
-                            transform.x = width / 2 - slice.x * transform.scale;
-                            transform.y = height / 2 - slice.y * transform.scale;
-                        }}
-                    }}
-                }});
-            }});
-        }}
-        renderSidebar();
-
-        // Coupling slider
-        document.getElementById('coupling-slider').addEventListener('input', e => {{
-            couplingThreshold = parseInt(e.target.value) / 100;
-            document.getElementById('filter-value').textContent = `${{e.target.value}}%`;
-        }});
-
-        function healthToColor(h) {{
-            if (h >= 0.80) return '#00ff88';
-            if (h >= 0.65) return '#44dd77';
-            if (h >= 0.50) return '#88cc55';
-            if (h >= 0.35) return '#ddaa33';
-            if (h >= 0.20) return '#ff7744';
-            return '#ff3333';
-        }}
-
-        let transform = {{ x: 0, y: 0, scale: 1 }};
-        
-        function simulate() {{
-            const centerX = width / 2;
-            const centerY = height / 2;
-
-            slices.forEach(node => {{
-                node.vx += (centerX - node.x) * 0.0005;
-                node.vy += (centerY - node.y) * 0.0005;
-
-                slices.forEach(other => {{
-                    if (node === other) return;
-                    const dx = node.x - other.x;
-                    const dy = node.y - other.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                    const minDist = node.radius + other.radius + 30;
-                    if (dist < minDist) {{
-                        const force = (minDist - dist) / dist * 0.05;
-                        node.vx += dx * force;
-                        node.vy += dy * force;
-                    }}
-                }});
-            }});
-
-            edges.forEach(edge => {{
-                const source = slices.find(s => s.name === edge.source);
-                const target = slices.find(s => s.name === edge.target);
-                if (!source || !target) return;
-
-                const dx = target.x - source.x;
-                const dy = target.y - source.y;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-                const idealDist = 150;
-                const force = (dist - idealDist) * 0.0001 * edge.strength;
-
-                source.vx += dx / dist * force;
-                source.vy += dy / dist * force;
-                target.vx -= dx / dist * force;
-                target.vy -= dy / dist * force;
-            }});
-
-            slices.forEach(node => {{
-                node.vx *= 0.9;
-                node.vy *= 0.9;
-                node.x += node.vx;
-                node.y += node.vy;
-            }});
-        }}
-
-        function draw() {{
-            ctx.clearRect(0, 0, width, height);
-            ctx.save();
-            ctx.translate(transform.x, transform.y);
-            ctx.scale(transform.scale, transform.scale);
-
-            // Filter edges by threshold
-            const thresholdValue = couplingThreshold * maxStrength;
-            const visibleEdges = edges.filter(e => e.strength >= thresholdValue);
-
-            // Draw edges
-            visibleEdges.forEach(edge => {{
-                const source = slices.find(s => s.name === edge.source);
-                const target = slices.find(s => s.name === edge.target);
-                if (!source || !target) return;
-
-                const isHighlighted = selectedSlice && (edge.source === selectedSlice || edge.target === selectedSlice);
-                const opacity = isHighlighted ? 0.8 : (0.1 + (edge.strength / maxStrength) * 0.5);
-                const lineWidth = isHighlighted ? 3 : (1 + (edge.strength / maxStrength) * 3);
-
-                ctx.beginPath();
-                ctx.moveTo(source.x, source.y);
-                ctx.lineTo(target.x, target.y);
-                ctx.strokeStyle = isHighlighted ? '#00ff88' : `rgba(100, 100, 150, ${{opacity}})`;
-                ctx.lineWidth = lineWidth;
-                ctx.stroke();
-            }});
-
-            // Draw nodes
-            slices.forEach(node => {{
-                const isSelected = node.name === selectedSlice;
-                const hasVisibleEdge = visibleEdges.some(e => e.source === node.name || e.target === node.name);
-                const alpha = (couplingThreshold > 0 && !hasVisibleEdge && !isSelected) ? 0.3 : 1;
-
-                // Glow
-                const gradient = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.radius * 1.5);
-                gradient.addColorStop(0, node.color + (isSelected ? '80' : '40'));
-                gradient.addColorStop(1, 'transparent');
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, node.radius * (isSelected ? 2 : 1.5), 0, Math.PI * 2);
-                ctx.fillStyle = gradient;
-                ctx.globalAlpha = alpha;
-                ctx.fill();
-
-                // Circle
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-                ctx.fillStyle = node.color + '30';
-                ctx.fill();
-                ctx.strokeStyle = isSelected ? '#fff' : node.color;
-                ctx.lineWidth = isSelected ? 3 : 2;
-                ctx.stroke();
-
-                // Label
-                ctx.fillStyle = '#fff';
-                ctx.font = (isSelected ? 'bold ' : '') + '12px -apple-system, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                const label = node.name.split('::').pop() || node.name.split('.').pop() || node.name;
-                ctx.fillText(label, node.x, node.y);
-                ctx.globalAlpha = 1;
-            }});
-
-            ctx.restore();
-        }}
-
-        function animate() {{
-            simulate();
-            draw();
-            requestAnimationFrame(animate);
-        }}
-        animate();
-
-        let isDragging = false;
-        let lastMouse = {{ x: 0, y: 0 }};
-
-        canvas.addEventListener('mousedown', e => {{
-            isDragging = true;
-            lastMouse = {{ x: e.clientX, y: e.clientY }};
-        }});
-
-        canvas.addEventListener('mousemove', e => {{
-            if (isDragging) {{
-                transform.x += e.clientX - lastMouse.x;
-                transform.y += e.clientY - lastMouse.y;
-                lastMouse = {{ x: e.clientX, y: e.clientY }};
-            }}
-
-            const tooltip = document.getElementById('tooltip');
-            const mx = (e.clientX - transform.x) / transform.scale;
-            const my = (e.clientY - transform.y) / transform.scale;
-
-            const hovered = slices.find(s => {{
-                const dx = s.x - mx;
-                const dy = s.y - my;
-                return Math.sqrt(dx*dx + dy*dy) < s.radius;
-            }});
-
-            if (hovered) {{
-                tooltip.style.display = 'block';
-                tooltip.style.left = (e.clientX + 15) + 'px';
-                tooltip.style.top = (e.clientY + 15) + 'px';
-                tooltip.innerHTML = `
-                    <h3>${{hovered.name}}</h3>
-                    <div>Modules: ${{hovered.count}}</div>
-                    <div>Coupling: ${{hovered.totalCoupling.toFixed(1)}}</div>
-                    <div style="color:${{hovered.color}}">Health: ${{(hovered.health * 100).toFixed(0)}}%</div>
-                    <div style="margin-top:8px;color:#666;font-size:11px">
-                        ${{hovered.modules.slice(0, 5).map(m => m.name).join(', ')}}${{hovered.modules.length > 5 ? '...' : ''}}
-                    </div>
-                `;
-            }} else {{
-                tooltip.style.display = 'none';
-            }}
-        }});
-
-        canvas.addEventListener('mouseup', () => isDragging = false);
-        canvas.addEventListener('mouseleave', () => isDragging = false);
-
-        canvas.addEventListener('wheel', e => {{
-            e.preventDefault();
-            const scale = transform.scale * (1 - e.deltaY * 0.001);
-            transform.scale = Math.max(0.2, Math.min(3, scale));
-        }});
-    </script>
-</body>
-</html>"##,
-        modules_json = modules_json,
-        coupling_json = coupling_json
-    )
-}
-
-/// Generate VSA Diagram HTML (Vertical Slice Architecture matrix)
-#[allow(clippy::uninlined_format_args)]
-fn generate_vsa_html(modules_json: &str) -> String {
-    format!(
-        r##"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VSA Diagram - Topology Visualization</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; padding: 20px; }}
-        h1 {{ color: #00ff88; margin-bottom: 10px; }}
-        .subtitle {{ color: #666; margin-bottom: 30px; }}
-        .matrix-container {{ overflow-x: auto; }}
-        table {{ border-collapse: collapse; min-width: 100%; }}
-        th, td {{ padding: 12px 16px; text-align: center; border: 1px solid #222; min-width: 100px; }}
-        th {{ background: #1a1a20; color: #888; font-weight: 500; position: sticky; top: 0; }}
-        th.layer-header {{ writing-mode: horizontal-tb; background: #15151a; }}
-        .layer-label {{ background: #15151a; font-weight: 500; text-align: left; color: #888; }}
-        .cell {{ position: relative; cursor: pointer; transition: transform 0.2s; }}
-        .cell:hover {{ transform: scale(1.05); z-index: 10; }}
-        .cell-inner {{ border-radius: 6px; padding: 8px; min-height: 50px; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
-        .cell-count {{ font-size: 20px; font-weight: 600; }}
-        .cell-label {{ font-size: 10px; color: rgba(255,255,255,0.6); margin-top: 4px; }}
-        .empty {{ background: #0f0f12; color: #333; }}
-        .legend {{ margin-top: 30px; display: flex; gap: 20px; flex-wrap: wrap; }}
-        .legend-item {{ display: flex; align-items: center; gap: 8px; font-size: 12px; color: #888; }}
-        .legend-color {{ width: 20px; height: 20px; border-radius: 4px; }}
-        #tooltip {{ position: fixed; display: none; background: rgba(0,0,0,0.95); padding: 15px; border-radius: 8px; border: 1px solid #444; font-size: 12px; pointer-events: none; z-index: 200; max-width: 300px; }}
-        #tooltip h3 {{ color: #00ff88; margin-bottom: 8px; }}
-        #tooltip .module-list {{ max-height: 200px; overflow-y: auto; }}
-        #tooltip .module-item {{ padding: 4px 0; border-bottom: 1px solid #222; }}
-    </style>
-</head>
-<body>
-    <h1>🍰 Vertical Slice Architecture</h1>
-    <p class="subtitle">Columns = feature slices, Rows = architectural layers, Cells = module count</p>
-    
-    <div class="matrix-container">
-        <table id="matrix"></table>
-    </div>
-
-    <div class="legend">
-        <div class="legend-item"><div class="legend-color" style="background:#00ff88"></div>Excellent health</div>
-        <div class="legend-item"><div class="legend-color" style="background:#88cc55"></div>OK health</div>
-        <div class="legend-item"><div class="legend-color" style="background:#ff7744"></div>Poor health</div>
-        <div class="legend-item"><div class="legend-color" style="background:#0f0f12;border:1px solid #333"></div>Empty (no modules)</div>
-    </div>
-
-    <div id="tooltip"></div>
-
-    <script>
-        const MODULES = {modules_json};
-        const LAYERS = ['handlers', 'services', 'models', 'data', 'adapters', 'utils', 'core', 'examples', 'tests', 'other'];
-
-        // Build slice × layer matrix
-        const matrix = {{}};
-        const slices = new Set();
-
-        MODULES.forEach(m => {{
-            slices.add(m.slice);
-            const key = `${{m.slice}}|${{m.layer}}`;
-            if (!matrix[key]) {{
-                matrix[key] = {{ modules: [], totalHealth: 0 }};
-            }}
-            matrix[key].modules.push(m);
-            matrix[key].totalHealth += m.health;
-        }});
-
-        const sliceList = Array.from(slices).sort();
-
-        function healthToColor(h) {{
-            if (h >= 0.80) return '#00ff88';
-            if (h >= 0.65) return '#44dd77';
-            if (h >= 0.50) return '#88cc55';
-            if (h >= 0.35) return '#ddaa33';
-            if (h >= 0.20) return '#ff7744';
-            return '#ff3333';
-        }}
-
-        // Render table
-        const table = document.getElementById('matrix');
-        
-        // Header row
-        let headerRow = '<tr><th class="layer-header">Layer \\ Slice</th>';
-        sliceList.forEach(slice => {{
-            const label = slice.split('.').pop() || slice;
-            headerRow += `<th>${{label}}</th>`;
-        }});
-        headerRow += '</tr>';
-        table.innerHTML = headerRow;
-
-        // Data rows
-        LAYERS.forEach(layer => {{
-            let row = `<tr><td class="layer-label">${{layer}}</td>`;
-            sliceList.forEach(slice => {{
-                const key = `${{slice}}|${{layer}}`;
-                const cell = matrix[key];
-                
-                if (cell && cell.modules.length > 0) {{
-                    const avgHealth = cell.totalHealth / cell.modules.length;
-                    const color = healthToColor(avgHealth);
-                    row += `
-                        <td class="cell" data-slice="${{slice}}" data-layer="${{layer}}">
-                            <div class="cell-inner" style="background:${{color}}20;border:1px solid ${{color}}">
-                                <span class="cell-count" style="color:${{color}}">${{cell.modules.length}}</span>
-                                <span class="cell-label">${{(avgHealth * 100).toFixed(0)}}%</span>
-                            </div>
-                        </td>
-                    `;
-                }} else {{
-                    row += '<td class="cell empty"><div class="cell-inner">-</div></td>';
-                }}
-            }});
-            row += '</tr>';
-            table.innerHTML += row;
-        }});
-
-        // Tooltips
-        const tooltip = document.getElementById('tooltip');
-        document.querySelectorAll('.cell[data-slice]').forEach(cell => {{
-            cell.addEventListener('mouseenter', e => {{
-                const slice = cell.dataset.slice;
-                const layer = cell.dataset.layer;
-                const key = `${{slice}}|${{layer}}`;
-                const data = matrix[key];
-                
-                if (data) {{
-                    tooltip.style.display = 'block';
-                    tooltip.innerHTML = `
-                        <h3>${{slice}} / ${{layer}}</h3>
-                        <div class="module-list">
-                            ${{data.modules.map(m => `
-                                <div class="module-item">
-                                    <span style="color:${{m.color}}">●</span> ${{m.name}}
-                                    <span style="color:#666;font-size:10px">(${{(m.health * 100).toFixed(0)}}%)</span>
-                                </div>
-                            `).join('')}}
-                        </div>
-                    `;
-                }}
-            }});
-            
-            cell.addEventListener('mousemove', e => {{
-                tooltip.style.left = (e.clientX + 15) + 'px';
-                tooltip.style.top = (e.clientY + 15) + 'px';
-            }});
-            
-            cell.addEventListener('mouseleave', () => {{
-                tooltip.style.display = 'none';
-            }});
-        }});
-    </script>
-</body>
-</html>"##,
-        modules_json = modules_json
-    )
-}
-
-/// Generate index HTML (dashboard linking all visualizations)
-fn generate_index_html(module_count: usize, slice_count: usize, avg_health: f64) -> String {
-    let health_color = health_to_color(avg_health);
-    let health_label = health_label(avg_health);
-    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
-
-    format!(
-        r##"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Topology Dashboard</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; padding: 40px; min-height: 100vh; }}
-        .container {{ max-width: 1000px; margin: 0 auto; }}
-        h1 {{ font-size: 32px; margin-bottom: 8px; }}
-        .subtitle {{ color: #666; margin-bottom: 40px; }}
-        .stats {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }}
-        .stat {{ background: #15151a; padding: 24px; border-radius: 12px; border: 1px solid #222; }}
-        .stat-value {{ font-size: 36px; font-weight: 600; margin-bottom: 8px; }}
-        .stat-label {{ color: #666; font-size: 14px; }}
-        .viz-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }}
-        .viz-card {{ background: #15151a; border-radius: 12px; border: 1px solid #222; padding: 24px; text-decoration: none; color: #fff; transition: all 0.2s; }}
-        .viz-card:hover {{ border-color: #00ff88; transform: translateY(-2px); }}
-        .viz-icon {{ font-size: 40px; margin-bottom: 16px; }}
-        .viz-title {{ font-size: 18px; font-weight: 600; margin-bottom: 8px; }}
-        .viz-desc {{ color: #666; font-size: 13px; line-height: 1.5; }}
-        footer {{ margin-top: 60px; text-align: center; color: #444; font-size: 12px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>📊 Topology Dashboard</h1>
-        <p class="subtitle">Generated: {timestamp}</p>
-
-        <div class="stats">
-            <div class="stat">
-                <div class="stat-value">{module_count}</div>
-                <div class="stat-label">Modules</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value">{slice_count}</div>
-                <div class="stat-label">Slices</div>
-            </div>
-            <div class="stat">
-                <div class="stat-value" style="color:{health_color}">{health_pct}%</div>
-                <div class="stat-label">Avg Health ({health_label})</div>
-            </div>
-        </div>
-
-        <div class="viz-grid">
-            <a href="3d.html" class="viz-card">
-                <div class="viz-icon">🌐</div>
-                <div class="viz-title">3D Coupling Graph</div>
-                <div class="viz-desc">Force-directed graph showing module coupling relationships with Martin metrics.</div>
-            </a>
-            <a href="codecity.html" class="viz-card">
-                <div class="viz-icon">🏙️</div>
-                <div class="viz-title">CodeCity</div>
-                <div class="viz-desc">3D city metaphor where buildings represent modules. Height = complexity, color = health.</div>
-            </a>
-            <a href="clusters.html" class="viz-card">
-                <div class="viz-icon">🔧</div>
-                <div class="viz-title">Package Clusters</div>
-                <div class="viz-desc">2D force-directed graph of package relationships with coupling strength.</div>
-            </a>
-            <a href="vsa.html" class="viz-card">
-                <div class="viz-icon">🍰</div>
-                <div class="viz-title">VSA Diagram</div>
-                <div class="viz-desc">Vertical Slice Architecture matrix showing feature slices vs. architectural layers.</div>
-            </a>
-        </div>
-
-        <footer>
-            Generated by Agent Paradise Standards System • EXP-V1-0001 Code Topology
-        </footer>
-    </div>
-</body>
-</html>"##,
-        timestamp = timestamp,
-        module_count = module_count,
-        slice_count = slice_count,
-        health_color = health_color,
-        health_pct = (avg_health * 100.0).round() as i32,
-        health_label = health_label
-    )
 }

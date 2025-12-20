@@ -81,6 +81,7 @@ dependencies = [
  "code-topology",
  "code-topology-3d",
  "code-topology-rust-adapter",
+ "code-topology-viz",
  "regex",
  "serde",
  "serde_json",
@@ -275,6 +276,17 @@ dependencies = [
  "thiserror",
  "toml",
  "walkdir",
+]
+
+[[package]]
+name = "code-topology-viz"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "code-topology",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
