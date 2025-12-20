@@ -1352,25 +1352,24 @@ total_dependencies = {}
         sorted_values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         // Compute percentile rank for each value
-        let n = sorted_values.len() as f64;
+        let n = sorted_values.len();
+        if n <= 1 {
+            // Single value or empty: all get 1.0
+            return log_values.iter().map(|(k, _)| (*k, 1.0)).collect();
+        }
         log_values
             .iter()
             .map(|(k, log_v)| {
-                let rank = sorted_values.iter().filter(|&&v| v <= *log_v).count() as f64;
-                let percentile = rank / n;
+                // Count values strictly less than current (0-indexed rank)
+                let rank = sorted_values.iter().filter(|&&v| v < *log_v).count() as f64;
+                // Use (rank) / (n-1) to get proper 0.0 to 1.0 range
+                let percentile = rank / (n - 1) as f64;
                 (*k, percentile)
             })
             .collect()
     }
 
-    let normalized_coupling = logarithmic_percentile_normalize(&raw_coupling);
-
-    // Step 3: Fill the matrix with normalized values
-    for ((from_idx, to_idx), strength) in &normalized_coupling {
-        matrix[*from_idx][*to_idx] = *strength;
-    }
-
-    // Step 4: Also store raw import coupling for components breakdown
+    // Step 3: Store raw import coupling for components breakdown (normalized by max)
     let mut import_coupling_matrix = vec![vec![0.0; n]; n];
     let max_import_raw = raw_coupling.values().cloned().fold(1.0_f64, f64::max);
     for ((from_idx, to_idx), raw_score) in &raw_coupling {

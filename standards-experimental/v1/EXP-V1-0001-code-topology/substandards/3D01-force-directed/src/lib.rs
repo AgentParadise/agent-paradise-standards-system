@@ -839,23 +839,27 @@ impl ForceDirectedProjector {
             mesh.add(label);
         }});
         
-        // Create edges with labels
-        data.edges.forEach(edge => {{
+        // Create edges with labels - store in array for proper ordering
+        const edgeMeshes = [];
+        data.edges.forEach((edge, edgeIndex) => {{
             const fromNode = data.nodes.find(n => n.id === edge.from);
             const toNode = data.nodes.find(n => n.id === edge.to);
             if (fromNode && toNode) {{
                 const start = new THREE.Vector3(...fromNode.position);
                 const end = new THREE.Vector3(...toNode.position);
-                
+
                 // Create tube for thicker edges
                 const path = new THREE.LineCurve3(start, end);
                 const tubeGeometry = new THREE.TubeGeometry(path, 1, edge.strength * 0.08 + 0.02, 8, false);
-                const tubeMaterial = new THREE.MeshBasicMaterial({{ 
+                const tubeMaterial = new THREE.MeshBasicMaterial({{
                     color: edge.color,
                     opacity: 0.4 + edge.strength * 0.4,
                     transparent: true
                 }});
                 const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+                // Store edge data directly in mesh for reliable access
+                tube.userData = {{ edgeIndex, from: edge.from, to: edge.to, strength: edge.strength }};
+                edgeMeshes.push(tube);
                 scene.add(tube);
                 
                 // Edge label at midpoint (only for strong connections)
@@ -868,14 +872,6 @@ impl ForceDirectedProjector {
                     edgeLabel.position.copy(midpoint);
                     scene.add(edgeLabel);
                 }}
-            }}
-        }});
-        
-        // Collect edge meshes for filtering/highlighting
-        const edgeMeshes = [];
-        scene.children.forEach(child => {{
-            if (child.geometry && child.geometry.type === 'TubeGeometry') {{
-                edgeMeshes.push(child);
             }}
         }});
         
@@ -903,14 +899,11 @@ impl ForceDirectedProjector {
                 mesh.scale.setScalar(mesh.userData.id === moduleId ? 1.4 : (isConnected ? 1.1 : 0.8));
             }});
             
-            // Fade out non-connected edges
-            edgeMeshes.forEach((mesh, i) => {{
-                if (i < data.edges.length) {{
-                    const edge = data.edges[i];
-                    const isConnected = edge.from === moduleId || edge.to === moduleId;
-                    mesh.material.opacity = isConnected ? 1.0 : 0.05;
-                    mesh.material.transparent = true;
-                }}
+            // Fade out non-connected edges (use stored userData for reliable access)
+            edgeMeshes.forEach(mesh => {{
+                const isConnected = mesh.userData.from === moduleId || mesh.userData.to === moduleId;
+                mesh.material.opacity = isConnected ? 1.0 : 0.05;
+                mesh.material.transparent = true;
             }});
             
             // Highlight sidebar item
@@ -934,12 +927,10 @@ impl ForceDirectedProjector {
                 mesh.scale.setScalar(1.0);
             }});
             
-            // Restore all edges (respecting threshold filter)
-            edgeMeshes.forEach((mesh, i) => {{
-                if (i < data.edges.length) {{
-                    mesh.material.opacity = 0.6;
-                    mesh.visible = data.edges[i].strength >= currentThreshold;
-                }}
+            // Restore all edges (respecting threshold filter, use stored userData)
+            edgeMeshes.forEach(mesh => {{
+                mesh.material.opacity = 0.6;
+                mesh.visible = mesh.userData.strength >= currentThreshold;
             }});
             
             // Restore sidebar
@@ -1096,10 +1087,11 @@ impl ForceDirectedProjector {
         
         // Populate sidebar
         let selectedModule = null;
+        const sidebarList = document.getElementById('module-list');
+        
         function renderSidebar() {{
             document.getElementById('module-count').textContent = `(${{data.nodes.length}})`;
-            const list = document.getElementById('module-list');
-            list.innerHTML = sortedModules.map(m => {{
+            sidebarList.innerHTML = sortedModules.map(m => {{
                 const coupling = moduleCoupling[m.id] || 0;
                 const shortName = m.label.split('::').pop() || m.label;
                 return `
@@ -1113,47 +1105,54 @@ impl ForceDirectedProjector {
                     </div>
                 `;
             }}).join('');
-            
-            // Add click and hover handlers
-            list.querySelectorAll('.module-item').forEach(item => {{
-                item.addEventListener('click', () => {{
-                    const id = item.dataset.id;
-                    selectedModule = selectedModule === id ? null : id;
-                    renderSidebar();
-                    
-                    // Focus camera on selected module
-                    if (selectedModule) {{
-                        const node = data.nodes.find(n => n.id === selectedModule);
-                        if (node) {{
-                            const targetPos = new THREE.Vector3(...node.position);
-                            controls.target.copy(targetPos);
-                            camera.position.set(
-                                targetPos.x + 5,
-                                targetPos.y + 3,
-                                targetPos.z + 5
-                            );
-                        }}
-                    }}
-                    
-                    // Highlight selected node
-                    nodeMeshes.forEach(mesh => {{
-                        const isSelected = mesh.userData.id === selectedModule;
-                        mesh.material.emissiveIntensity = isSelected ? 0.6 : 0.2;
-                        mesh.scale.setScalar(isSelected ? 1.3 : 1.0);
-                    }});
-                }});
-                
-                // Hover handlers for focus effect
-                item.addEventListener('mouseenter', () => {{
-                    const id = item.dataset.id;
-                    highlightModule(id, 'sidebar');
-                }});
-                
-                item.addEventListener('mouseleave', () => {{
-                    clearHighlight('sidebar');
-                }});
-            }});
         }}
+        
+        // Event delegation - attach once to parent, not to each item (prevents memory leaks)
+        sidebarList.addEventListener('click', (e) => {{
+            const item = e.target.closest('.module-item');
+            if (!item) return;
+            
+            const id = item.dataset.id;
+            selectedModule = selectedModule === id ? null : id;
+            renderSidebar();
+            
+            // Focus camera on selected module
+            if (selectedModule) {{
+                const node = data.nodes.find(n => n.id === selectedModule);
+                if (node) {{
+                    const targetPos = new THREE.Vector3(...node.position);
+                    controls.target.copy(targetPos);
+                    camera.position.set(
+                        targetPos.x + 5,
+                        targetPos.y + 3,
+                        targetPos.z + 5
+                    );
+                }}
+            }}
+            
+            // Highlight selected node
+            nodeMeshes.forEach(mesh => {{
+                const isSelected = mesh.userData.id === selectedModule;
+                mesh.material.emissiveIntensity = isSelected ? 0.6 : 0.2;
+                mesh.scale.setScalar(isSelected ? 1.3 : 1.0);
+            }});
+        }});
+        
+        sidebarList.addEventListener('mouseover', (e) => {{
+            const item = e.target.closest('.module-item');
+            if (!item) return;
+            highlightModule(item.dataset.id, 'sidebar');
+        }});
+        
+        sidebarList.addEventListener('mouseout', (e) => {{
+            const item = e.target.closest('.module-item');
+            if (!item) return;
+            // Only clear if we're leaving the item entirely
+            if (!e.relatedTarget || !e.relatedTarget.closest || e.relatedTarget.closest('.module-item') !== item) {{
+                clearHighlight('sidebar');
+            }}
+        }});
+        
         renderSidebar();
         
         // Coupling threshold slider
@@ -1161,11 +1160,9 @@ impl ForceDirectedProjector {
             currentThreshold = parseInt(e.target.value) / 100;
             document.getElementById('filter-value').textContent = `${{e.target.value}}%`;
             
-            // Filter edges based on threshold
-            edgeMeshes.forEach((mesh, i) => {{
-                if (i < data.edges.length) {{
-                    mesh.visible = data.edges[i].strength >= currentThreshold;
-                }}
+            // Filter edges based on threshold (use stored userData)
+            edgeMeshes.forEach(mesh => {{
+                mesh.visible = mesh.userData.strength >= currentThreshold;
             }});
             
             // Find modules that still have visible edges
