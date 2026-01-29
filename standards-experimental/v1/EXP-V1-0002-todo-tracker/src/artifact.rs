@@ -3,6 +3,7 @@
 //! This module defines the core data structures that represent the
 //! TODO/FIXME tracking artifacts as specified in the standard.
 
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -45,7 +46,7 @@ impl TrackerManifest {
     ) -> Self {
         Self {
             schema: MANIFEST_SCHEMA.to_string(),
-            generated_at: chrono::Utc::now().to_rfc3339(),
+            generated_at: Utc::now().to_rfc3339(),
             scanner_version,
             scan,
             config,
@@ -111,7 +112,7 @@ impl TodoItems {
     pub fn new(items: Vec<TodoItem>) -> Self {
         Self {
             schema_version: ARTIFACT_SCHEMA_VERSION.to_string(),
-            generated_at: chrono::Utc::now().to_rfc3339(),
+            generated_at: Utc::now().to_rfc3339(),
             items,
         }
     }
@@ -225,7 +226,7 @@ impl IssueReference {
             validated: true,
             state: Some(state),
             title: Some(title),
-            validated_at: Some(chrono::Utc::now().to_rfc3339()),
+            validated_at: Some(Utc::now().to_rfc3339()),
         }
     }
 }
@@ -344,7 +345,7 @@ impl ItemSummary {
 
         Self {
             schema_version: ARTIFACT_SCHEMA_VERSION.to_string(),
-            generated_at: chrono::Utc::now().to_rfc3339(),
+            generated_at: Utc::now().to_rfc3339(),
             totals: TotalStats {
                 items: items.len(),
                 files: files_set.len(),
