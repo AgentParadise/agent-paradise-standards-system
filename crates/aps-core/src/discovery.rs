@@ -114,7 +114,7 @@ impl DiscoveredPackage {
             };
             self.metadata = Some(metadata);
         }
-        
+
         Ok(self.metadata.as_ref().expect("metadata was just loaded"))
     }
 

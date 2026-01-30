@@ -122,21 +122,16 @@ fn default_require_issue_tags() -> Vec<String> {
 }
 
 /// Enforcement level
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum EnforcementLevel {
     /// No enforcement, informational only
     Off,
     /// Report violations as warnings, exit code 0
+    #[default]
     Warn,
     /// Report violations as errors, exit code 1
     Error,
-}
-
-impl Default for EnforcementLevel {
-    fn default() -> Self {
-        Self::Warn
-    }
 }
 
 impl std::fmt::Display for EnforcementLevel {
