@@ -1,0 +1,37 @@
+[package]
+name = "todo-tracker"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "TODO/FIXME Tracker and Issue Validator (Experimental)"
+
+[dependencies]
+aps-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+walkdir.workspace = true
+glob.workspace = true
+thiserror.workspace = true
+
+# For regex-based scanning
+regex = "1.11"
+
+# For timestamps
+chrono = { version = "0.4", features = ["serde"] }
+
+# For hashing
+sha2 = "0.10"
+hex = "0.4"
+
+# For GitHub API (optional feature)
+reqwest = { version = "0.12", features = ["json"], optional = true }
+
+[dev-dependencies]
+tempfile = "3.14"
+
+[features]
+default = []
+github = ["reqwest"]

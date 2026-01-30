@@ -99,25 +99,23 @@ impl DiscoveredPackage {
 
     /// Load and cache the package metadata.
     pub fn load_metadata(&mut self) -> Result<&PackageMetadata, crate::metadata::MetadataError> {
-        if self.metadata.is_some() {
-            return Ok(self.metadata.as_ref().unwrap());
+        if self.metadata.is_none() {
+            let metadata_path = self.metadata_path();
+            let metadata = match self.package_type {
+                PackageType::Standard => {
+                    PackageMetadata::Standard(parse_standard_metadata(&metadata_path)?)
+                }
+                PackageType::Substandard => {
+                    PackageMetadata::Substandard(parse_substandard_metadata(&metadata_path)?)
+                }
+                PackageType::Experiment => {
+                    PackageMetadata::Experiment(parse_experiment_metadata(&metadata_path)?)
+                }
+            };
+            self.metadata = Some(metadata);
         }
 
-        let metadata_path = self.metadata_path();
-        let metadata = match self.package_type {
-            PackageType::Standard => {
-                PackageMetadata::Standard(parse_standard_metadata(&metadata_path)?)
-            }
-            PackageType::Substandard => {
-                PackageMetadata::Substandard(parse_substandard_metadata(&metadata_path)?)
-            }
-            PackageType::Experiment => {
-                PackageMetadata::Experiment(parse_experiment_metadata(&metadata_path)?)
-            }
-        };
-
-        self.metadata = Some(metadata);
-        Ok(self.metadata.as_ref().unwrap())
+        Ok(self.metadata.as_ref().expect("metadata was just loaded"))
     }
 
     /// Get cached metadata if already loaded.
