@@ -1,0 +1,21 @@
+schema = "aps.experiment/v1"
+
+[experiment]
+id = "EXP-V1-0002"
+name = "TODO/FIXME Tracker and Issue Validator"
+slug = "todo-tracker"
+version = "0.1.0"
+category = "technical"
+backwards_compat = true  # Set to false when introducing breaking changes
+
+[aps]
+aps_major = "v1"
+
+[ownership]
+maintainers = ["AgentParadise"]
+
+# Promotion metadata (added after promotion, do not edit manually)
+# [promotion]
+# promoted_to = "APS-V1-XXXX"
+# promoted_at = "YYYY-MM-DD"
+
