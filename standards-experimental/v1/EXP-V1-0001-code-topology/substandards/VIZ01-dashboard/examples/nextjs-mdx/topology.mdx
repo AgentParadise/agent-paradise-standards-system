@@ -1,0 +1,29 @@
+---
+title: Module Dependency Topology
+description: Interactive force-directed graph of module dependencies.
+---
+
+import { TopologyDependencyGraph } from '@/components/diagrams/topology';
+import depData from '@/../.topology/graphs/dependencies.json';
+import modData from '@/../.topology/metrics/modules.json';
+
+# Module Dependency Topology
+
+This visualization renders every module (≥ 100 LOC) as an interactive
+force-directed graph.
+
+- **Node size** reflects lines of code
+- **Node color** indicates the bounded context
+- **Edge opacity** scales with coupling weight
+- **Scroll** to zoom, **drag** to pan, **hover** for module details
+
+<TopologyDependencyGraph
+  dependencies={depData.edges}
+  modules={modData.modules}
+  height={600}
+/>
+
+## Data Sources
+
+- `dependencies.json` — import edges between modules
+- `modules.json` — per-module metrics (LOC, cyclomatic complexity, Martin metrics)
