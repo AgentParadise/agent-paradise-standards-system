@@ -37,6 +37,20 @@ pub fn generate(repo_name: &str, module_count: usize, slice_count: usize, avg_he
         .stat {{ background: #15151a; padding: 24px; border-radius: 12px; border: 1px solid #222; }}
         .stat-value {{ font-size: 36px; font-weight: 600; margin-bottom: 8px; }}
         .stat-label {{ color: #666; font-size: 14px; }}
+        .about {{ margin-bottom: 40px; }}
+        .about-toggle {{ background: #15151a; border: 1px solid #222; border-radius: 12px; padding: 18px 24px; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; width: 100%; text-align: left; display: flex; justify-content: space-between; align-items: center; transition: border-color 0.2s; }}
+        .about-toggle:hover {{ border-color: #00ff88; }}
+        .about-toggle .chevron {{ transition: transform 0.3s; font-size: 12px; color: #666; }}
+        .about-toggle.open .chevron {{ transform: rotate(180deg); }}
+        .about-body {{ max-height: 0; overflow: hidden; transition: max-height 0.4s ease, padding 0.3s ease; background: #15151a; border: 1px solid #222; border-top: none; border-radius: 0 0 12px 12px; }}
+        .about-body.open {{ max-height: 800px; padding: 24px; }}
+        .about-body h3 {{ font-size: 15px; font-weight: 600; margin: 20px 0 8px 0; color: #ccc; }}
+        .about-body h3:first-child {{ margin-top: 0; }}
+        .about-body p {{ color: #888; font-size: 13px; line-height: 1.7; margin-bottom: 8px; }}
+        .about-body .metric-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 12px 0; }}
+        .about-body .metric-item {{ background: #1a1a22; padding: 12px 16px; border-radius: 8px; }}
+        .about-body .metric-item strong {{ color: #ddd; font-size: 13px; display: block; margin-bottom: 4px; }}
+        .about-body .metric-item span {{ color: #666; font-size: 12px; line-height: 1.5; }}
         .viz-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }}
         .viz-card {{ background: #15151a; border-radius: 12px; border: 1px solid #222; padding: 24px; text-decoration: none; color: #fff; transition: all 0.2s; }}
         .viz-card:hover {{ border-color: #00ff88; transform: translateY(-2px); }}
@@ -63,6 +77,76 @@ pub fn generate(repo_name: &str, module_count: usize, slice_count: usize, avg_he
             <div class="stat">
                 <div class="stat-value" style="color:{health_color}">{health_pct}%</div>
                 <div class="stat-label">Avg Health ({health_label})</div>
+            </div>
+        </div>
+
+        <div class="about">
+            <button class="about-toggle" onclick="this.classList.toggle('open'); document.getElementById('about-body').classList.toggle('open');">
+                About This Dashboard <span class="chevron">▼</span>
+            </button>
+            <div id="about-body" class="about-body">
+                <h3>Philosophy</h3>
+                <p>
+                    Code topology treats a codebase as a living structure — not just lines of text,
+                    but a system of interconnected modules with measurable structural properties.
+                    Like an X-ray for your architecture, topology analysis reveals the hidden forces
+                    that make code easy or hard to change: coupling density, complexity hotspots,
+                    and boundary violations.
+                </p>
+                <p>
+                    The goal is <strong style="color:#ccc">deterministic, self-validating artifacts</strong>.
+                    Same code + same seed = same output. No opinions, no heuristics that drift —
+                    just structural facts derived from the AST via tree-sitter parsing.
+                </p>
+
+                <h3>What Gets Measured</h3>
+                <div class="metric-grid">
+                    <div class="metric-item">
+                        <strong>Cyclomatic Complexity</strong>
+                        <span>Branch points per function. High values signal code that's hard to test and reason about.</span>
+                    </div>
+                    <div class="metric-item">
+                        <strong>Cognitive Complexity</strong>
+                        <span>Measures how hard code is to understand, penalizing nesting and broken flow.</span>
+                    </div>
+                    <div class="metric-item">
+                        <strong>Afferent Coupling (Ca)</strong>
+                        <span>How many modules depend on this one. High Ca = widely used, risky to change.</span>
+                    </div>
+                    <div class="metric-item">
+                        <strong>Efferent Coupling (Ce)</strong>
+                        <span>How many modules this one depends on. High Ce = fragile, breaks when dependencies change.</span>
+                    </div>
+                </div>
+
+                <h3>Health Score</h3>
+                <p>
+                    Each module gets a composite health score (0–100%) from five equally-weighted metrics:
+                    cyclomatic complexity, cognitive complexity, lines-of-code per function, coupling fan-out,
+                    and module size. The color scale runs from
+                    <span style="color:#00ff88">green (healthy)</span> through
+                    <span style="color:#ddaa33">yellow (warning)</span> to
+                    <span style="color:#ff3333">red (critical)</span>.
+                </p>
+
+                <h3>How to Use the Visualizations</h3>
+                <p>
+                    <strong style="color:#ddd">CodeCity</strong> — look for tall, red buildings. Those are your complexity hotspots.
+                    Districts group modules by package/slice. Hover any building for a full metric breakdown.
+                </p>
+                <p>
+                    <strong style="color:#ddd">3D Coupling Graph</strong> — thick edges mean high coupling.
+                    Clusters of tightly-connected nodes may indicate a bounded context — or a tangled dependency mess.
+                    Hover nodes to see their connections.
+                </p>
+                <p>
+                    <strong style="color:#ddd">Package Clusters</strong> — shows how packages relate to each other at a higher level.
+                    Isolated clusters are healthy boundaries. Dense interconnections suggest leaky abstractions.
+                </p>
+                <p>
+                    <strong style="color:#ddd">VSA Diagram</strong> — maps feature slices against architectural layers.
+                    A well-structured vertical slice should touch exactly the layers it needs — no more, no less.
+                </p>
             </div>
         </div>
 
