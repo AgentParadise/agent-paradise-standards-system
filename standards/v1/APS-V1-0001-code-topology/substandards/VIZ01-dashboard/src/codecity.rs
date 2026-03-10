@@ -89,7 +89,7 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
     </div>
     <div id="tooltip"></div>
     <div id="controls">
-        <span>🖱️ Left: rotate • Right: pan • Scroll: zoom • Click: select</span>
+        <span>🖱️ Left: rotate • Right: pan • Scroll: zoom • Hover: inspect</span>
         <label class="toggle"><input type="checkbox" id="label-toggle" checked><span class="switch"></span>Labels</label>
     </div>
     <div id="minimap"><canvas id="minimap-canvas"></canvas></div>
@@ -415,7 +415,6 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         const tooltip = document.getElementById('tooltip');
-        let selectedBuilding = null;
         let hoveredBuilding = null;
 
         function healthBreakdown(m) {{
@@ -496,56 +495,11 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
                 `;
 
                 // Highlight only this building on hover
-                if (!selectedBuilding) {{
-                    hoveredBuilding = hit;
-                    hit.material.emissiveIntensity = 0.4;
-                }}
+                hoveredBuilding = hit;
+                hit.material.emissiveIntensity = 0.4;
             }} else {{
                 tooltip.style.display = 'none';
                 document.body.style.cursor = 'default';
-            }}
-        }});
-
-        // Click to select/deselect
-        renderer.domElement.addEventListener('click', e => {{
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(buildings);
-
-            if (intersects.length > 0) {{
-                const clicked = intersects[0].object;
-                if (selectedBuilding === clicked) {{
-                    // Deselect
-                    selectedBuilding = null;
-                    buildings.forEach(b => {{
-                        b.material.emissiveIntensity = b.userData.health < 0.35 ? 0.15 : 0.02;
-                        b.material.opacity = 1.0;
-                        b.material.transparent = false;
-                    }});
-                }} else {{
-                    // Select: highlight same-district buildings
-                    selectedBuilding = clicked;
-                    const district = clicked.userData._district;
-                    buildings.forEach(b => {{
-                        if (b.userData._district === district) {{
-                            b.material.emissiveIntensity = 0.2;
-                            b.material.opacity = 1.0;
-                            b.material.transparent = false;
-                        }} else {{
-                            b.material.emissiveIntensity = 0.01;
-                            b.material.opacity = 0.3;
-                            b.material.transparent = true;
-                        }}
-                    }});
-                    clicked.material.emissiveIntensity = 0.5;
-                }}
-            }} else {{
-                // Click empty: deselect
-                selectedBuilding = null;
-                buildings.forEach(b => {{
-                    b.material.emissiveIntensity = b.userData.health < 0.35 ? 0.15 : 0.02;
-                    b.material.opacity = 1.0;
-                    b.material.transparent = false;
-                }});
             }}
         }});
 
