@@ -121,18 +121,22 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
         </p>
 
         <h3>Inspirations</h3>
-        <div class="reading-item">
-            <strong>Wettel &amp; Lanza — "Software Systems as Cities" (2007)</strong>
+        <a href="https://wettel.github.io/download/Wettel07b-vissoft.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
+            <strong>Wettel &amp; Lanza — "Software Systems as Cities" (VISSOFT 2007) ↗</strong>
             <span>The original CodeCity paper. Established the building metaphor: height = methods, footprint = attributes, color = nesting depth.</span>
-        </div>
-        <div class="reading-item">
-            <strong>CodeCharta (MaibornWolff)</strong>
+        </a>
+        <a href="https://wettel.github.io/download/Wettel11a-icse.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
+            <strong>Wettel &amp; Lanza — Controlled Experiment (ICSE 2011) ↗</strong>
+            <span>Empirical validation: developers using CodeCity completed tasks 20% faster than with standard tools.</span>
+        </a>
+        <a href="https://codecharta.com/" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
+            <strong>CodeCharta (MaibornWolff) ↗</strong>
             <span>Modern open-source tool that added treemap layouts, metric switching, and delta comparison between versions.</span>
-        </div>
-        <div class="reading-item">
-            <strong>Squarified Treemaps — Bruls, Huizing &amp; van Wijk (2000)</strong>
+        </a>
+        <a href="https://vanwijk.win.tue.nl/stm.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
+            <strong>Squarified Treemaps — Bruls, Huizing &amp; van Wijk (2000) ↗</strong>
             <span>The layout algorithm used for district and building placement. Optimizes for square-ish rectangles to minimize wasted space.</span>
-        </div>
+        </a>
 
         <h3>What the Dimensions Mean</h3>
         <dl class="metric-explain">
