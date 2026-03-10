@@ -61,6 +61,21 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
         .toggle input:checked + .switch::after {{ transform: translateX(12px); }}
         #minimap {{ position: fixed; bottom: 20px; right: 20px; width: 180px; height: 180px; background: rgba(0,0,0,0.85); border-radius: 10px; border: 1px solid #333; overflow: hidden; z-index: 100; }}
         #minimap canvas {{ width: 100%; height: 100%; }}
+        #about-btn {{ position: fixed; top: 20px; right: 20px; background: rgba(0,0,0,0.85); border: 1px solid #333; color: #888; font-size: 13px; padding: 8px 14px; border-radius: 8px; cursor: pointer; z-index: 200; backdrop-filter: blur(10px); transition: border-color 0.2s; }}
+        #about-btn:hover {{ border-color: #00ff88; color: #ccc; }}
+        #about-panel {{ display: none; position: fixed; top: 0; right: 0; width: 420px; height: 100vh; background: rgba(8,8,15,0.97); border-left: 1px solid #222; z-index: 300; overflow-y: auto; padding: 30px; backdrop-filter: blur(20px); }}
+        #about-panel.open {{ display: block; }}
+        #about-panel h2 {{ font-size: 20px; color: #00ff88; margin-bottom: 16px; }}
+        #about-panel h3 {{ font-size: 14px; color: #aaa; margin: 20px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }}
+        #about-panel p {{ font-size: 13px; color: #777; line-height: 1.7; margin-bottom: 10px; }}
+        #about-panel .close {{ position: absolute; top: 16px; right: 16px; background: none; border: none; color: #666; font-size: 20px; cursor: pointer; padding: 4px 8px; }}
+        #about-panel .close:hover {{ color: #fff; }}
+        #about-panel .reading-item {{ background: #12121a; padding: 10px 14px; border-radius: 8px; margin: 6px 0; border-left: 3px solid #333; }}
+        #about-panel .reading-item strong {{ color: #ccc; font-size: 12px; display: block; margin-bottom: 2px; }}
+        #about-panel .reading-item span {{ color: #666; font-size: 11px; }}
+        #about-panel .metric-explain {{ display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 10px 0; font-size: 12px; }}
+        #about-panel .metric-explain dt {{ color: #aaa; font-weight: 600; }}
+        #about-panel .metric-explain dd {{ color: #666; }}
     </style>
 </head>
 <body>
@@ -86,6 +101,93 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
                 <div class="legend-item"><div class="legend-color" style="background:#ff3333"></div>Critical (&lt;20%)</div>
             </div>
         </div>
+    </div>
+    <button id="about-btn" onclick="document.getElementById('about-panel').classList.toggle('open')">ℹ️ About CodeCity</button>
+    <div id="about-panel">
+        <button class="close" onclick="this.parentElement.classList.remove('open')">✕</button>
+        <h2>🏙️ About CodeCity</h2>
+
+        <h3>Philosophy</h3>
+        <p>
+            CodeCity visualizes your codebase as a living city. Each building is a source module,
+            each district is a package or bounded context. The metaphor is intuitive: you can
+            <em>see</em> complexity hotspots (tall buildings), large modules (wide footprints),
+            and unhealthy code (red buildings) at a glance — no spreadsheets needed.
+        </p>
+        <p>
+            The goal is to make structural problems <strong style="color:#ccc">visible and visceral</strong>.
+            A 3,000-line file with cyclomatic complexity of 50 isn't just a number — it's a
+            skyscraper towering over its neighbors, impossible to ignore.
+        </p>
+
+        <h3>Inspirations</h3>
+        <div class="reading-item">
+            <strong>Wettel &amp; Lanza — "Software Systems as Cities" (2007)</strong>
+            <span>The original CodeCity paper. Established the building metaphor: height = methods, footprint = attributes, color = nesting depth.</span>
+        </div>
+        <div class="reading-item">
+            <strong>CodeCharta (MaibornWolff)</strong>
+            <span>Modern open-source tool that added treemap layouts, metric switching, and delta comparison between versions.</span>
+        </div>
+        <div class="reading-item">
+            <strong>Squarified Treemaps — Bruls, Huizing &amp; van Wijk (2000)</strong>
+            <span>The layout algorithm used for district and building placement. Optimizes for square-ish rectangles to minimize wasted space.</span>
+        </div>
+
+        <h3>What the Dimensions Mean</h3>
+        <dl class="metric-explain">
+            <dt>Height</dt>
+            <dd>Cyclomatic complexity (log-scaled). Tall = many branch points = hard to test.</dd>
+            <dt>Footprint</dt>
+            <dd>Lines of code (sqrt-scaled via treemap). Wide = large module.</dd>
+            <dt>Color</dt>
+            <dd>Health score: <span style="color:#00ff88">green</span> (healthy) → <span style="color:#ddaa33">yellow</span> (warning) → <span style="color:#ff3333">red</span> (critical).</dd>
+            <dt>Districts</dt>
+            <dd>Top-level packages or bounded contexts. Ground color varies by district.</dd>
+        </dl>
+
+        <h3>Health Score Breakdown</h3>
+        <p>Each module's health is a composite of five equally-weighted metrics (hover a building to see the breakdown):</p>
+        <dl class="metric-explain">
+            <dt>Complexity</dt>
+            <dd>Average cyclomatic complexity per function. Target: &lt;5 per function.</dd>
+            <dt>Cognitive</dt>
+            <dd>Average cognitive complexity. Penalizes nesting, breaks in flow. Target: &lt;15.</dd>
+            <dt>LOC/func</dt>
+            <dd>Average lines per function. Target: &lt;50 lines.</dd>
+            <dt>Coupling</dt>
+            <dd>Ca + Ce (afferent + efferent). High coupling = fragile, risky to change.</dd>
+            <dt>Module size</dt>
+            <dd>Function count. Sweet spot: 2–30 functions per module.</dd>
+        </dl>
+
+        <h3>How to Read the City</h3>
+        <p>
+            <strong style="color:#ccc">Tall red buildings</strong> — complexity hotspots. These are the files most likely
+            to harbor bugs and resist refactoring. Prioritize these for cleanup.
+        </p>
+        <p>
+            <strong style="color:#ccc">Large green blocks</strong> — big but healthy modules. These have lots of code
+            but good averages per function. Monitor but don't panic.
+        </p>
+        <p>
+            <strong style="color:#ccc">Tiny scattered buildings</strong> — small utility modules.
+            If there are too many, it may indicate over-decomposition.
+        </p>
+        <p>
+            <strong style="color:#ccc">Dense districts</strong> — packages with many modules.
+            If they also have lots of red, the bounded context may need decomposition.
+        </p>
+
+        <h3>Data Source</h3>
+        <p>
+            All metrics are derived deterministically from the AST (Abstract Syntax Tree) using
+            tree-sitter parsing. No heuristics, no opinions — just structural facts.
+            Same code + same seed = same visualization.
+        </p>
+        <p style="color:#555; font-size:11px; margin-top:20px;">
+            Generated by APS-V1-0001 Code Topology • Agent Paradise Standards System
+        </p>
     </div>
     <div id="tooltip"></div>
     <div id="controls">

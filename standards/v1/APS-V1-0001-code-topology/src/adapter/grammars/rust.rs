@@ -98,8 +98,8 @@ impl Grammar for RustGrammar {
         let file_name = relative.file_stem().and_then(|s| s.to_str()).unwrap_or("");
 
         if file_name == "lib" || file_name == "main" {
-            // Root module - use parent directory name or "crate"
-            // Strip the src:: prefix if present
+            // Root module - use parent path as module ID.
+            // Strip the filename, then strip trailing "::src" segment.
             let without_file = path_str
                 .rsplit_once("::")
                 .map(|(prefix, _)| prefix)
@@ -109,27 +109,32 @@ impl Grammar for RustGrammar {
                 return "crate".to_string();
             }
 
-            // Use the parent as module name
-            return without_file
-                .rsplit_once("::")
-                .map(|(_, name)| name)
-                .unwrap_or(without_file)
-                .replace('-', "_");
+            // Strip trailing ::src since it's just Rust convention, not a meaningful boundary
+            let without_src = without_file
+                .strip_suffix("::src")
+                .unwrap_or(without_file);
+
+            return without_src.replace('-', "_");
         }
 
         if file_name == "mod" {
-            // Module file - strip ::mod and src:: prefix
+            // Module file - strip ::mod, then remove any src:: segments
             let without_mod = path_str.trim_end_matches("::mod");
-            let without_src = without_mod.strip_prefix("src::").unwrap_or(without_mod);
-            return without_src.to_string();
+            return remove_src_segments(without_mod);
         }
 
-        // Regular file - strip src:: prefix if present
-        path_str
-            .strip_prefix("src::")
-            .unwrap_or(&path_str)
-            .to_string()
+        // Regular file - remove src:: segments from path
+        remove_src_segments(&path_str)
     }
+}
+
+/// Remove `src` segments from module paths.
+/// e.g., `crates::aps_cli::src::parser` → `crates::aps_cli::parser`
+fn remove_src_segments(path: &str) -> String {
+    path.split("::")
+        .filter(|seg| *seg != "src")
+        .collect::<Vec<_>>()
+        .join("::")
 }
 
 // ============================================================================
