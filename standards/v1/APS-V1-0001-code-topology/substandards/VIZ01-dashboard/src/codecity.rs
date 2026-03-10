@@ -52,7 +52,13 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
         #tooltip .health-breakdown {{ margin-top: 6px; }}
         #tooltip .breakdown-item {{ display: flex; justify-content: space-between; font-size: 10px; padding: 2px 0; color: #777; }}
         #tooltip .breakdown-item .score {{ font-weight: 500; }}
-        #controls {{ position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px 16px; border-radius: 8px; font-size: 11px; color: #666; }}
+        #controls {{ position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px 16px; border-radius: 8px; font-size: 11px; color: #666; display: flex; align-items: center; gap: 16px; }}
+        .toggle {{ display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }}
+        .toggle input {{ display: none; }}
+        .toggle .switch {{ width: 28px; height: 16px; background: #333; border-radius: 8px; position: relative; transition: background 0.2s; }}
+        .toggle input:checked + .switch {{ background: #00ff88; }}
+        .toggle .switch::after {{ content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: transform 0.2s; }}
+        .toggle input:checked + .switch::after {{ transform: translateX(12px); }}
         #minimap {{ position: fixed; bottom: 20px; right: 20px; width: 180px; height: 180px; background: rgba(0,0,0,0.85); border-radius: 10px; border: 1px solid #333; overflow: hidden; z-index: 100; }}
         #minimap canvas {{ width: 100%; height: 100%; }}
     </style>
@@ -82,7 +88,10 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
         </div>
     </div>
     <div id="tooltip"></div>
-    <div id="controls">🖱️ Left-drag: rotate • Right-drag: pan • Scroll: zoom • Click: select</div>
+    <div id="controls">
+        <span>🖱️ Left: rotate • Right: pan • Scroll: zoom • Click: select</span>
+        <label class="toggle"><input type="checkbox" id="label-toggle" checked><span class="switch"></span>Labels</label>
+    </div>
     <div id="minimap"><canvas id="minimap-canvas"></canvas></div>
 
     <script type="importmap">
@@ -238,6 +247,7 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
         // ====================================================================
         const buildings = [];
         const districtGroups = [];
+        const districtLabels = [];
         const PADDING = 0.8; // District padding ratio
         const GAP = 1.5; // Gap between buildings
 
@@ -280,6 +290,7 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
             const label = new CSS2DObject(labelDiv);
             label.position.set(dr.x + dr.w / 2, 0.5, dr.y + 1.5);
             scene.add(label);
+            districtLabels.push(label);
 
             // Inner treemap for buildings within district
             const innerPad = dr.w * (1 - PADDING) / 2;
@@ -405,6 +416,7 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
         const mouse = new THREE.Vector2();
         const tooltip = document.getElementById('tooltip');
         let selectedBuilding = null;
+        let hoveredBuilding = null;
 
         function healthBreakdown(m) {{
             // Replicate the health calculation to show breakdown
@@ -447,8 +459,16 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(buildings);
 
+            // Clear previous hover highlight
+            if (hoveredBuilding && hoveredBuilding !== selectedBuilding) {{
+                const hd = hoveredBuilding.userData;
+                hoveredBuilding.material.emissiveIntensity = hd.health < 0.35 ? 0.15 : 0.02;
+                hoveredBuilding = null;
+            }}
+
             if (intersects.length > 0) {{
-                const m = intersects[0].object.userData;
+                const hit = intersects[0].object;
+                const m = hit.userData;
                 document.body.style.cursor = 'pointer';
                 tooltip.style.display = 'block';
 
@@ -475,18 +495,14 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
                     <div class="health-breakdown">${{healthBreakdown(m)}}</div>
                 `;
 
-                // Highlight on hover
+                // Highlight only this building on hover
                 if (!selectedBuilding) {{
-                    intersects[0].object.material.emissiveIntensity = 0.4;
+                    hoveredBuilding = hit;
+                    hit.material.emissiveIntensity = 0.4;
                 }}
             }} else {{
                 tooltip.style.display = 'none';
                 document.body.style.cursor = 'default';
-                if (!selectedBuilding) {{
-                    buildings.forEach(b => {{
-                        b.material.emissiveIntensity = b.userData.health < 0.35 ? 0.15 : 0.02;
-                    }});
-                }}
             }}
         }});
 
@@ -531,6 +547,14 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
                     b.material.transparent = false;
                 }});
             }}
+        }});
+
+        // ====================================================================
+        // Label Toggle
+        // ====================================================================
+        document.getElementById('label-toggle').addEventListener('change', e => {{
+            const visible = e.target.checked;
+            districtLabels.forEach(l => {{ l.visible = visible; }});
         }});
 
         // ====================================================================
