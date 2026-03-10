@@ -35,6 +35,7 @@ pub mod vsa;
 pub use clusters::generate as generate_clusters;
 pub use codecity::generate as generate_codecity;
 pub use force_3d::generate as generate_force_3d;
+// Note: index::generate takes a repo_name parameter — use index::generate directly
 pub use index::generate as generate_index;
 pub use vsa::generate as generate_vsa;
 

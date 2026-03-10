@@ -28,7 +28,6 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CodeCity - Topology Visualization</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; }}
@@ -63,7 +62,17 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
     <div id="tooltip"></div>
     <div id="controls">🖱️ Drag to rotate • Scroll to zoom • Right-click to pan</div>
 
-    <script>
+    <script type="importmap">
+    {{
+        "imports": {{
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }}
+    }}
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+
         const MODULES = {modules_json};
         const COUPLING = {coupling_json};
 

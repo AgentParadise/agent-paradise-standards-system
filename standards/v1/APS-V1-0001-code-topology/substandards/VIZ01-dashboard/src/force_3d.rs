@@ -179,12 +179,20 @@ pub fn generate(scene_json: &str, node_count: usize, edge_count: usize) -> Strin
             text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6);
             pointer-events: none;
             white-space: nowrap;
+            display: none;
+        }}
+        .node-label.visible {{
+            display: block;
         }}
         .edge-label {{
             color: rgba(255,255,255,0.6);
             font-size: 10px;
             text-shadow: 0 1px 4px rgba(0,0,0,0.9);
             pointer-events: none;
+            display: none;
+        }}
+        .edge-label.visible {{
+            display: block;
         }}
     </style>
 </head>
@@ -288,10 +296,11 @@ pub fn generate(scene_json: &str, node_count: usize, edge_count: usize) -> Strin
             
             const labelDiv = document.createElement('div');
             labelDiv.className = 'node-label';
-            labelDiv.textContent = node.label;
+            labelDiv.textContent = node.label.split('::').pop() || node.label;
             const label = new CSS2DObject(labelDiv);
             label.position.set(0, node.size * 0.5 + 0.3, 0);
             mesh.add(label);
+            mesh.userData._labelDiv = labelDiv;
         }});
         
         const edgeMeshes = [];
@@ -318,6 +327,8 @@ pub fn generate(scene_json: &str, node_count: usize, edge_count: usize) -> Strin
                     const edgeLabelDiv = document.createElement('div');
                     edgeLabelDiv.className = 'edge-label';
                     edgeLabelDiv.textContent = edge.strength.toFixed(2);
+                    edgeLabelDiv.dataset.from = edge.from;
+                    edgeLabelDiv.dataset.to = edge.to;
                     const edgeLabel = new CSS2DObject(edgeLabelDiv);
                     edgeLabel.position.copy(midpoint);
                     scene.add(edgeLabel);
@@ -356,6 +367,12 @@ pub fn generate(scene_json: &str, node_count: usize, edge_count: usize) -> Strin
                 const isConnected = connectedModules.has(el.dataset.id);
                 el.style.opacity = isConnected ? '1' : '0.3';
             }});
+
+            // Show edge labels for connected edges
+            document.querySelectorAll('.edge-label').forEach(el => {{
+                const isConnected = el.dataset.from === moduleId || el.dataset.to === moduleId;
+                el.classList.toggle('visible', isConnected);
+            }});
         }}
         
         function clearHighlight(source) {{
@@ -377,6 +394,11 @@ pub fn generate(scene_json: &str, node_count: usize, edge_count: usize) -> Strin
             
             document.querySelectorAll('.module-item').forEach(el => {{
                 el.style.opacity = '';
+            }});
+
+            // Hide edge labels
+            document.querySelectorAll('.edge-label').forEach(el => {{
+                el.classList.remove('visible');
             }});
         }}
         
@@ -600,9 +622,26 @@ pub fn generate(scene_json: &str, node_count: usize, edge_count: usize) -> Strin
             }});
         }});
         
+        // Show labels only for nearby nodes or hovered/active nodes
+        function updateLabelVisibility() {{
+            const cameraPos = camera.position;
+            const labelDistThreshold = 8; // Show labels when camera is within this distance
+            nodeMeshes.forEach(mesh => {{
+                const dist = cameraPos.distanceTo(mesh.position);
+                const isNearby = dist < labelDistThreshold;
+                const isActive = mesh.userData.id === activeModule || mesh.userData.id === selectedModule;
+                const isHovered = mesh.userData.isHovered;
+                const shouldShow = isNearby || isActive || isHovered;
+                if (mesh.userData._labelDiv) {{
+                    mesh.userData._labelDiv.classList.toggle('visible', shouldShow);
+                }}
+            }});
+        }}
+
         function animate() {{
             requestAnimationFrame(animate);
             controls.update();
+            updateLabelVisibility();
             renderer.render(scene, camera);
             labelRenderer.render(scene, camera);
         }}
