@@ -459,7 +459,7 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
             const intersects = raycaster.intersectObjects(buildings);
 
             // Clear previous hover highlight
-            if (hoveredBuilding && hoveredBuilding !== selectedBuilding) {{
+            if (hoveredBuilding) {{
                 const hd = hoveredBuilding.userData;
                 hoveredBuilding.material.emissiveIntensity = hd.health < 0.35 ? 0.15 : 0.02;
                 hoveredBuilding = null;
