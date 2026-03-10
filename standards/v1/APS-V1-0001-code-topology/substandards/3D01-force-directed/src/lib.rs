@@ -718,12 +718,20 @@ impl ForceDirectedProjector {
             text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6);
             pointer-events: none;
             white-space: nowrap;
+            display: none;
+        }}
+        .node-label.visible {{
+            display: block;
         }}
         .edge-label {{
             color: rgba(255,255,255,0.6);
             font-size: 10px;
             text-shadow: 0 1px 4px rgba(0,0,0,0.9);
             pointer-events: none;
+            display: none;
+        }}
+        .edge-label.visible {{
+            display: block;
         }}
     </style>
 </head>
@@ -830,13 +838,15 @@ impl ForceDirectedProjector {
             scene.add(mesh);
             nodeMeshes.push(mesh);
             
-            // Create text label
+            // Create text label (short name = last segment after ::)
             const labelDiv = document.createElement('div');
             labelDiv.className = 'node-label';
-            labelDiv.textContent = node.label;
+            const shortName = node.label.split('::').pop() || node.label;
+            labelDiv.textContent = shortName;
             const label = new CSS2DObject(labelDiv);
             label.position.set(0, node.size * 0.5 + 0.3, 0);
             mesh.add(label);
+            mesh.userData._labelDiv = labelDiv;
         }});
         
         // Create edges with labels - store in array for proper ordering
@@ -868,6 +878,8 @@ impl ForceDirectedProjector {
                     const edgeLabelDiv = document.createElement('div');
                     edgeLabelDiv.className = 'edge-label';
                     edgeLabelDiv.textContent = edge.strength.toFixed(2);
+                    edgeLabelDiv.dataset.from = edge.from;
+                    edgeLabelDiv.dataset.to = edge.to;
                     const edgeLabel = new CSS2DObject(edgeLabelDiv);
                     edgeLabel.position.copy(midpoint);
                     scene.add(edgeLabel);
@@ -906,6 +918,15 @@ impl ForceDirectedProjector {
                 mesh.material.transparent = true;
             }});
             
+            // Show edge labels for connections to/from this module
+            document.querySelectorAll('.edge-label').forEach(el => {{
+                if (el.dataset.from === moduleId || el.dataset.to === moduleId) {{
+                    el.classList.add('visible');
+                }} else {{
+                    el.classList.remove('visible');
+                }}
+            }});
+
             // Highlight sidebar item
             document.querySelectorAll('.module-item').forEach(el => {{
                 const isConnected = connectedModules.has(el.dataset.id);
@@ -933,6 +954,11 @@ impl ForceDirectedProjector {
                 mesh.visible = mesh.userData.strength >= currentThreshold;
             }});
             
+            // Hide all edge labels
+            document.querySelectorAll('.edge-label').forEach(el => {{
+                el.classList.remove('visible');
+            }});
+
             // Restore sidebar
             document.querySelectorAll('.module-item').forEach(el => {{
                 el.style.opacity = '';
@@ -1189,10 +1215,30 @@ impl ForceDirectedProjector {
             }});
         }});
         
+        // Show node labels based on camera proximity, hover, or active state
+        function updateLabelVisibility() {{
+            const camPos = camera.position;
+            nodeMeshes.forEach(mesh => {{
+                const labelDiv = mesh.userData._labelDiv;
+                if (!labelDiv) return;
+                const dist = camPos.distanceTo(mesh.position);
+                const isNear = dist < 8;
+                const isHovered = mesh.userData.isHovered === true;
+                const isActive = mesh.userData.id === activeModule;
+                const isSelected = mesh.userData.id === selectedModule;
+                if (isNear || isHovered || isActive || isSelected) {{
+                    labelDiv.classList.add('visible');
+                }} else {{
+                    labelDiv.classList.remove('visible');
+                }}
+            }});
+        }}
+
         // Animation loop
         function animate() {{
             requestAnimationFrame(animate);
             controls.update();
+            updateLabelVisibility();
             renderer.render(scene, camera);
             labelRenderer.render(scene, camera);
         }}
