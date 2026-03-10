@@ -362,7 +362,7 @@ pub fn generate(modules_json: &str, coupling_json: &str) -> String {
             const deltaY = e.clientY - previousMouse.y;
 
             if (isDragging) {{
-                spherical.theta -= deltaX * 0.008;
+                spherical.theta += deltaX * 0.008;
                 spherical.phi -= deltaY * 0.008;
                 spherical.phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, spherical.phi));
                 updateCamera();
