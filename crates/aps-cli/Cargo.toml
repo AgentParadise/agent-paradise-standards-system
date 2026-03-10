@@ -14,10 +14,10 @@ path = "src/main.rs"
 [dependencies]
 aps-core.workspace = true
 aps-v1-0000-meta = { path = "../../standards/v1/APS-V1-0000-meta" }
-code-topology = { path = "../../standards-experimental/v1/EXP-V1-0001-code-topology" }
-code-topology-3d = { path = "../../standards-experimental/v1/EXP-V1-0001-code-topology/substandards/3D01-force-directed" }
-code-topology-viz = { path = "../../standards-experimental/v1/EXP-V1-0001-code-topology/substandards/VIZ01-dashboard" }
-code-topology-rust-adapter = { path = "../../standards-experimental/v1/EXP-V1-0001-code-topology/substandards/LANG01-rust" }
+code-topology = { path = "../../standards/v1/APS-V1-0001-code-topology" }
+code-topology-3d = { path = "../../standards/v1/APS-V1-0001-code-topology/substandards/3D01-force-directed" }
+code-topology-viz = { path = "../../standards/v1/APS-V1-0001-code-topology/substandards/VIZ01-dashboard" }
+code-topology-rust-adapter = { path = "../../standards/v1/APS-V1-0001-code-topology/substandards/LANG01-rust" }
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -1,0 +1,21 @@
+schema = "aps.standard/v1"
+
+[standard]
+id = "APS-V1-0001"
+name = "Code Topology and Coupling Analysis"
+slug = "code-topology"
+version = "0.1.0"
+category = "technical"
+status = "active"
+
+[aps]
+aps_major = "v1"
+backwards_compatible_major_required = true
+
+[ownership]
+maintainers = ["AgentParadise"]
+
+# Promotion metadata
+[promotion]
+promoted_from = "EXP-V1-0001"
+promoted_at = "2026-03-10"
