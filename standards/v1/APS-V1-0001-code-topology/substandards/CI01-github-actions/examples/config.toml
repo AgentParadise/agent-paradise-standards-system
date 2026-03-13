@@ -1,0 +1,110 @@
+# Example topology configuration for CI checks
+# Copy to: .topology/config.toml
+
+schema_version = "1.0.0"
+
+# =============================================================================
+# Thresholds
+# =============================================================================
+# Define warning and failure thresholds for various metrics.
+# Warning: Annotates the PR but doesn't block merge
+# Failure: Blocks the PR from merging
+
+[thresholds]
+# Function-level cyclomatic complexity
+# CC = number of independent paths through code
+max_cyclomatic_warning = 10   # Flag functions > 10
+max_cyclomatic_failure = 20   # Block if any function > 20
+
+# Function-level cognitive complexity
+# Measures understandability (nesting, breaks from linear flow)
+max_cognitive_warning = 15
+max_cognitive_failure = 30
+
+# Module coupling delta
+# How much coupling can increase in a single PR
+max_coupling_delta_warning = 0.10  # 10% increase triggers warning
+max_coupling_delta_failure = 0.25  # 25% increase blocks PR
+
+# Distance from main sequence
+# D = |A + I - 1| where A=abstractness, I=instability
+# D ≈ 0 is ideal, D ≈ 1 is "zone of pain" or "zone of uselessness"
+max_distance_warning = 0.5
+max_distance_failure = 0.8
+
+# =============================================================================
+# Behavior
+# =============================================================================
+# Control how the CI check behaves
+
+[behavior]
+# Whether warnings should also fail the check
+# Start with false, enable once team is comfortable
+fail_on_warning = false
+
+# Post a comment on the PR with analysis results
+post_comment = true
+
+# Include Mermaid diagrams showing module changes
+include_diagrams = true
+
+# Only analyze files changed in the PR (faster but less comprehensive)
+# Recommended for very large codebases (>100k LOC)
+incremental_only = false
+
+# Baseline comparison mode:
+# - "branch": Compare against base branch (default)
+# - "committed": Compare against committed .topology/
+# - "none": No comparison, just check absolute thresholds
+comparison_mode = "branch"
+
+# =============================================================================
+# Ignores
+# =============================================================================
+# Exclude certain code from analysis
+
+[ignore]
+# Paths to completely skip
+paths = [
+    "tests/",
+    "benches/",
+    "examples/",
+    "target/",
+    ".git/",
+]
+
+# Function patterns to ignore (glob syntax)
+# These won't contribute to hotspot warnings
+functions = [
+    "*::main",           # CLI entry points naturally have high CC
+    "*::test_*",         # Test functions
+    "*::benchmark_*",    # Benchmark functions
+    "*::setup",          # Test setup functions
+]
+
+# Module patterns to ignore
+modules = [
+    "generated::*",      # Code generation output
+    "vendor::*",         # Vendored dependencies
+    "proto::*",          # Protobuf generated code
+]
+
+# =============================================================================
+# Reporting
+# =============================================================================
+# Control what appears in the PR comment
+
+[reporting]
+# Maximum number of hotspots to show
+max_hotspots = 10
+
+# Show suggestions for how to fix issues
+show_suggestions = true
+
+# Include a link to the full analysis
+include_artifact_link = true
+
+# Show trend compared to last N commits
+# Set to 0 to disable
+trend_commits = 5
+

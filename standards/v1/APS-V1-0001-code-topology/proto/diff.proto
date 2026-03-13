@@ -1,0 +1,304 @@
+// Code Topology and Coupling Analysis - Diff Schema
+// EXP-V1-0001 | Version: 0.1.0
+//
+// This file defines the structure of diff artifacts:
+// - .topology/diffs/<name>.json
+// - Output of `aps run topology diff`
+//
+// Diff artifacts compare two topology snapshots and provide
+// a standardized format for CI integration and tooling.
+
+syntax = "proto3";
+
+package code_topology.v1;
+
+option java_package = "dev.agentparadise.topology.v1";
+option go_package = "github.com/AgentParadise/topology/v1;topologyv1";
+
+import "metrics.proto";
+
+// ============================================================================
+// Diff File (.topology/diffs/<name>.json or stdout from `aps run topology diff`)
+// ============================================================================
+
+// Comparison between two topology snapshots.
+// Stored at: .topology/diffs/<name>.json
+// Also output by: `aps run topology diff <base> <target> --format json`
+message DiffFile {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // Overall status for CI decision making
+  DiffStatus status = 2;
+
+  // ISO 8601 timestamp when diff was computed
+  string timestamp = 3;
+
+  // Base snapshot reference
+  DiffRef base = 4;
+
+  // Target snapshot reference
+  DiffRef target = 5;
+
+  // High-level summary counts
+  DiffSummary summary = 6;
+
+  // Metric deltas (aggregated changes)
+  MetricDeltas metrics = 7;
+
+  // Changed functions (added, removed, modified)
+  FunctionChanges functions = 8;
+
+  // Changed modules (added, removed, modified)
+  ModuleChanges modules = 9;
+
+  // Complexity hotspots that need attention
+  repeated DiffHotspot hotspots = 10;
+
+  // Threshold violations (if thresholds configured)
+  repeated ThresholdViolation violations = 11;
+}
+
+// Overall diff status for CI integration
+enum DiffStatus {
+  DIFF_STATUS_UNSPECIFIED = 0;
+  // No issues, safe to merge
+  DIFF_STATUS_SUCCESS = 1;
+  // Warnings present, review recommended
+  DIFF_STATUS_WARNING = 2;
+  // Errors present, should block merge
+  DIFF_STATUS_ERROR = 3;
+}
+
+// Reference to a topology snapshot
+message DiffRef {
+  // Git ref (branch, tag, or commit)
+  optional string git_ref = 1 [json_name = "git_ref"];
+
+  // Git commit hash
+  optional string commit = 2;
+
+  // Path to topology directory
+  string path = 3;
+
+  // Snapshot timestamp
+  optional string timestamp = 4;
+}
+
+// Summary counts of changes
+message DiffSummary {
+  // Function changes
+  uint32 functions_added = 1 [json_name = "functions_added"];
+  uint32 functions_removed = 2 [json_name = "functions_removed"];
+  uint32 functions_modified = 3 [json_name = "functions_modified"];
+
+  // Module changes
+  uint32 modules_added = 4 [json_name = "modules_added"];
+  uint32 modules_removed = 5 [json_name = "modules_removed"];
+  uint32 modules_modified = 6 [json_name = "modules_modified"];
+
+  // File changes
+  uint32 files_added = 7 [json_name = "files_added"];
+  uint32 files_removed = 8 [json_name = "files_removed"];
+  uint32 files_modified = 9 [json_name = "files_modified"];
+}
+
+// Delta values for aggregated metrics
+message MetricDeltas {
+  // Total cyclomatic complexity
+  MetricDelta total_cyclomatic = 1 [json_name = "total_cyclomatic"];
+
+  // Average cyclomatic complexity
+  MetricDelta avg_cyclomatic = 2 [json_name = "avg_cyclomatic"];
+
+  // Total cognitive complexity
+  MetricDelta total_cognitive = 3 [json_name = "total_cognitive"];
+
+  // Average cognitive complexity
+  MetricDelta avg_cognitive = 4 [json_name = "avg_cognitive"];
+
+  // Total lines of code
+  MetricDelta lines_of_code = 5 [json_name = "lines_of_code"];
+
+  // Function count
+  MetricDelta function_count = 6 [json_name = "function_count"];
+
+  // Coupling density
+  MetricDelta coupling_density = 7 [json_name = "coupling_density"];
+}
+
+// A single metric's delta
+message MetricDelta {
+  // Value in base snapshot
+  double base = 1;
+
+  // Value in target snapshot
+  double target = 2;
+
+  // Absolute change (target - base)
+  double delta = 3;
+
+  // Percentage change ((target - base) / base * 100)
+  optional double percent_change = 4 [json_name = "percent_change"];
+}
+
+// Changes to functions
+message FunctionChanges {
+  // Newly added functions
+  repeated FunctionChange added = 1;
+
+  // Removed functions
+  repeated FunctionChange removed = 2;
+
+  // Modified functions (metrics changed)
+  repeated FunctionModification modified = 3;
+}
+
+// A function that was added or removed
+message FunctionChange {
+  // Function ID
+  string id = 1;
+
+  // Function name
+  string name = 2;
+
+  // Module containing the function
+  string module = 3;
+
+  // Metrics (for added functions: new values, for removed: old values)
+  FunctionMetrics metrics = 4;
+}
+
+// A function whose metrics changed
+message FunctionModification {
+  // Function ID
+  string id = 1;
+
+  // Function name
+  string name = 2;
+
+  // Module containing the function
+  string module = 3;
+
+  // Metrics in base snapshot
+  FunctionMetrics base_metrics = 4 [json_name = "base_metrics"];
+
+  // Metrics in target snapshot
+  FunctionMetrics target_metrics = 5 [json_name = "target_metrics"];
+
+  // Change classification
+  ChangeClassification classification = 6;
+}
+
+// Classification of a modification
+enum ChangeClassification {
+  CHANGE_CLASSIFICATION_UNSPECIFIED = 0;
+  // Improved: complexity decreased
+  CHANGE_CLASSIFICATION_IMPROVED = 1;
+  // Unchanged: no significant change
+  CHANGE_CLASSIFICATION_UNCHANGED = 2;
+  // Degraded: complexity increased (minor)
+  CHANGE_CLASSIFICATION_DEGRADED = 3;
+  // Severely degraded: complexity increased significantly
+  CHANGE_CLASSIFICATION_SEVERE = 4;
+}
+
+// Changes to modules
+message ModuleChanges {
+  // Newly added modules
+  repeated ModuleChange added = 1;
+
+  // Removed modules
+  repeated ModuleChange removed = 2;
+
+  // Modified modules
+  repeated ModuleModification modified = 3;
+}
+
+// A module that was added or removed
+message ModuleChange {
+  // Module ID
+  string id = 1;
+
+  // Module name
+  string name = 2;
+
+  // Metrics
+  ModuleMetrics metrics = 3;
+}
+
+// A module whose metrics changed
+message ModuleModification {
+  // Module ID
+  string id = 1;
+
+  // Module name
+  string name = 2;
+
+  // Metrics in base snapshot
+  ModuleMetrics base_metrics = 3 [json_name = "base_metrics"];
+
+  // Metrics in target snapshot
+  ModuleMetrics target_metrics = 4 [json_name = "target_metrics"];
+
+  // Change classification
+  ChangeClassification classification = 5;
+}
+
+// A hotspot requiring attention
+message DiffHotspot {
+  // Function or module ID
+  string id = 1;
+
+  // Type of hotspot
+  HotspotType type = 2;
+
+  // Human-readable reason
+  string reason = 3;
+
+  // Severity (higher = worse)
+  uint32 severity = 4;
+
+  // Suggested action
+  optional string suggestion = 5;
+}
+
+// Type of hotspot
+enum HotspotType {
+  HOTSPOT_TYPE_UNSPECIFIED = 0;
+  // New high-complexity function
+  HOTSPOT_TYPE_NEW_COMPLEX = 1;
+  // Existing function became more complex
+  HOTSPOT_TYPE_INCREASED_COMPLEXITY = 2;
+  // Module coupling increased
+  HOTSPOT_TYPE_COUPLING_INCREASE = 3;
+  // Module moved toward Zone of Pain
+  HOTSPOT_TYPE_ZONE_OF_PAIN = 4;
+}
+
+// A threshold violation
+message ThresholdViolation {
+  // Threshold that was violated
+  string threshold = 1;
+
+  // Actual value
+  double value = 2;
+
+  // Threshold limit
+  double limit = 3;
+
+  // Severity level
+  ViolationSeverity severity = 4;
+
+  // Human-readable message
+  string message = 5;
+}
+
+// Severity of a threshold violation
+enum ViolationSeverity {
+  VIOLATION_SEVERITY_UNSPECIFIED = 0;
+  // Warning: should be reviewed
+  VIOLATION_SEVERITY_WARNING = 1;
+  // Error: should block merge
+  VIOLATION_SEVERITY_ERROR = 2;
+}
