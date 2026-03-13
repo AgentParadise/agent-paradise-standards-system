@@ -222,6 +222,10 @@ fn main() -> ExitCode {
                 println!("    Code Topology - architectural metrics and visualization");
                 println!("    Commands: analyze, validate, diff, report, viz");
                 println!();
+                println!("  fitness (EXP-V1-0003) v0.1.0");
+                println!("    Architecture Fitness Functions - declarative architectural assertions");
+                println!("    Commands: validate");
+                println!();
                 println!("Use 'aps run <slug> --help' for command details.");
                 return ExitCode::SUCCESS;
             }
@@ -675,6 +679,12 @@ fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
             name: "Code Topology",
             version: "0.1.0",
         }),
+        "fitness" | "fitness-functions" | "exp-v1-0003" => Some(StandardCliInfo {
+            id: "EXP-V1-0003",
+            slug: "fitness",
+            name: "Architecture Fitness Functions",
+            version: "0.1.0",
+        }),
         _ => None,
     }
 }
@@ -691,6 +701,7 @@ fn dispatch_standard_cli(
 
     match info.slug {
         "topology" => dispatch_topology(command, cmd_args, repo_root, verbose),
+        "fitness" => dispatch_fitness(command, cmd_args, repo_root, verbose),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -842,6 +853,131 @@ fn dispatch_topology(
         _ => {
             eprintln!("Error: Unknown topology command '{command}'");
             eprintln!("Use 'aps run topology --help' for available commands.");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Dispatch fitness function commands.
+fn dispatch_fitness(
+    command: &str,
+    args: &[String],
+    repo_root: &std::path::Path,
+    _verbose: bool,
+) -> ExitCode {
+    match command {
+        "--help" | "-h" | "help" => {
+            println!("Architecture Fitness Functions (EXP-V1-0003) v0.1.0");
+            println!();
+            println!("USAGE:");
+            println!("    aps run fitness <COMMAND> [OPTIONS]");
+            println!();
+            println!("COMMANDS:");
+            println!("    validate <path>    Validate fitness rules against topology artifacts");
+            println!();
+            println!("OPTIONS:");
+            println!("    --config <file>    Path to fitness.toml (default: ./fitness.toml)");
+            println!("    --report <file>    Write JSON report to file");
+            println!("    --help             Show this help message");
+            ExitCode::SUCCESS
+        }
+        "validate" => {
+            let path = args.first().map(|s| s.as_str()).unwrap_or(".");
+            let config_path = args
+                .iter()
+                .position(|a| a == "--config")
+                .and_then(|i| args.get(i + 1))
+                .map(|s| std::path::PathBuf::from(s));
+            let report_path = args
+                .iter()
+                .position(|a| a == "--report")
+                .and_then(|i| args.get(i + 1));
+
+            let target = if std::path::Path::new(path).is_absolute() {
+                std::path::PathBuf::from(path)
+            } else {
+                repo_root.join(path)
+            };
+
+            let validator = match fitness_functions::FitnessValidator::load(
+                &target,
+                config_path.as_deref(),
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            let report = match validator.validate() {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("Error during validation: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            // Print human-readable summary
+            println!("Fitness Validation Report");
+            println!("========================\n");
+            for result in &report.results {
+                let status_icon = match result.status {
+                    fitness_functions::RuleStatus::Pass => "PASS",
+                    fitness_functions::RuleStatus::Fail => "FAIL",
+                    fitness_functions::RuleStatus::Warn => "WARN",
+                    fitness_functions::RuleStatus::Skip => "SKIP",
+                };
+                println!("  [{status_icon}] {} ({})", result.rule_name, result.rule_id);
+                for v in &result.violations {
+                    let exc = if v.excepted { " (excepted)" } else { "" };
+                    println!(
+                        "         {} = {} (threshold: {} {:?}){exc}",
+                        v.entity, v.actual, v.threshold, v.direction
+                    );
+                }
+            }
+
+            if !report.stale_exceptions.is_empty() {
+                println!("\nStale Exceptions:");
+                for s in &report.stale_exceptions {
+                    println!("  {} [{}]: {:?}", s.entity, s.rule_id, s.reason);
+                }
+            }
+
+            println!(
+                "\nSummary: {} passed, {} failed, {} warned, {} violations ({} excepted), {} stale exceptions",
+                report.summary.passed,
+                report.summary.failed,
+                report.summary.warned,
+                report.summary.total_violations,
+                report.summary.excepted_violations,
+                report.summary.stale_exceptions,
+            );
+
+            // Write JSON report if requested
+            if let Some(report_file) = report_path {
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => {
+                        if let Err(e) = std::fs::write(report_file, json) {
+                            eprintln!("Error writing report: {e}");
+                        } else {
+                            println!("\nReport written to: {report_file}");
+                        }
+                    }
+                    Err(e) => eprintln!("Error serializing report: {e}"),
+                }
+            }
+
+            if fitness_functions::FitnessValidator::has_failures(&report) {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        other => {
+            eprintln!("Error: Unknown fitness command '{other}'");
+            eprintln!("Use 'aps run fitness --help' for available commands.");
             ExitCode::FAILURE
         }
     }
