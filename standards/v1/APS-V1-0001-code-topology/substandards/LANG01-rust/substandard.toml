@@ -1,0 +1,12 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0001.RS01"
+name = "Rust Language Adapter"
+slug = "rust-adapter"
+version = "0.1.0"
+parent_id = "APS-V1-0001"
+parent_major = "0"
+
+[ownership]
+maintainers = ["AgentParadise"]

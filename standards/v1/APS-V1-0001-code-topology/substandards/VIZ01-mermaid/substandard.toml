@@ -1,0 +1,17 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0001.MM01"
+name = "Mermaid Diagram Projector"
+slug = "mermaid"
+version = "0.1.0"
+parent_id = "APS-V1-0001"
+parent_major = "0"
+
+[projector]
+type = "mermaid"
+formats = ["md", "svg"]
+requires = ["graphs/dependency-graph.json"]
+
+[ownership]
+maintainers = ["AgentParadise"]

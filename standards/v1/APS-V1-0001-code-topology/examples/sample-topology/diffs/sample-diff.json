@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.0.0",
+  "status": "warning",
+  "timestamp": "2025-12-17T12:00:00Z",
+  "base": {
+    "git_ref": "main",
+    "commit": "abc1234",
+    "path": ".topology-base/",
+    "timestamp": "2025-12-15T10:00:00Z"
+  },
+  "target": {
+    "git_ref": "feat/new-feature",
+    "commit": "def5678",
+    "path": ".topology-pr/",
+    "timestamp": "2025-12-17T12:00:00Z"
+  },
+  "summary": {
+    "functions_added": 3,
+    "functions_removed": 1,
+    "functions_modified": 5,
+    "modules_added": 0,
+    "modules_removed": 0,
+    "modules_modified": 2,
+    "files_added": 1,
+    "files_removed": 0,
+    "files_modified": 3
+  },
+  "metrics": {
+    "total_cyclomatic": {
+      "base": 142,
+      "target": 156,
+      "delta": 14,
+      "percent_change": 9.86
+    },
+    "avg_cyclomatic": {
+      "base": 4.2,
+      "target": 4.8,
+      "delta": 0.6,
+      "percent_change": 14.29
+    },
+    "total_cognitive": {
+      "base": 98,
+      "target": 112,
+      "delta": 14,
+      "percent_change": 14.29
+    },
+    "avg_cognitive": {
+      "base": 2.9,
+      "target": 3.4,
+      "delta": 0.5,
+      "percent_change": 17.24
+    },
+    "lines_of_code": {
+      "base": 2450,
+      "target": 2680,
+      "delta": 230,
+      "percent_change": 9.39
+    },
+    "function_count": {
+      "base": 34,
+      "target": 36,
+      "delta": 2,
+      "percent_change": 5.88
+    },
+    "coupling_density": {
+      "base": 0.42,
+      "target": 0.44,
+      "delta": 0.02,
+      "percent_change": 4.76
+    }
+  },
+  "functions": {
+    "added": [
+      {
+        "id": "rust:api::handlers::create_user",
+        "name": "create_user",
+        "module": "api",
+        "metrics": {
+          "cyclomatic_complexity": 6,
+          "cognitive_complexity": 8,
+          "lines_of_code": 45
+        }
+      }
+    ],
+    "removed": [],
+    "modified": [
+      {
+        "id": "rust:auth::validator::validate_token",
+        "name": "validate_token",
+        "module": "auth",
+        "base_metrics": {
+          "cyclomatic_complexity": 8,
+          "cognitive_complexity": 10,
+          "lines_of_code": 52
+        },
+        "target_metrics": {
+          "cyclomatic_complexity": 12,
+          "cognitive_complexity": 16,
+          "lines_of_code": 68
+        },
+        "classification": "DEGRADED"
+      }
+    ]
+  },
+  "modules": {
+    "added": [],
+    "removed": [],
+    "modified": []
+  },
+  "hotspots": [
+    {
+      "id": "rust:auth::validator::validate_token",
+      "type": "INCREASED_COMPLEXITY",
+      "reason": "Cyclomatic complexity increased from 8 to 12 (+50%)",
+      "severity": 2,
+      "suggestion": "Consider extracting validation sub-functions"
+    }
+  ],
+  "violations": [
+    {
+      "threshold": "avg_cognitive_delta",
+      "value": 0.5,
+      "limit": 0.3,
+      "severity": "WARNING",
+      "message": "Average cognitive complexity increased by 17%, exceeds 10% warning threshold"
+    }
+  ]
+}

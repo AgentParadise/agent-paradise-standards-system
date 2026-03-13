@@ -2889,8 +2889,25 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
             0.0
         };
 
+        // Derive repo name from topology path or current directory
+        let repo_name = topology_path
+            .canonicalize()
+            .ok()
+            .and_then(|p| {
+                // Go up from .topology to the repo root
+                let repo_root = if p.ends_with(".topology") || p.ends_with(".topology/") {
+                    p.parent()
+                } else {
+                    Some(p.as_path())
+                };
+                repo_root
+                    .and_then(|r| r.file_name())
+                    .map(|n| n.to_string_lossy().to_string())
+            })
+            .unwrap_or_else(|| "Project".to_string());
+
         let index_html =
-            code_topology_viz::index::generate(total_modules, slices.len(), avg_health);
+            code_topology_viz::index::generate(&repo_name, total_modules, slices.len(), avg_health);
         let index_path = viz_dir.join("index.html");
         if let Err(e) = fs::write(&index_path, &index_html) {
             eprintln!("Error writing index: {e}");
