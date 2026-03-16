@@ -47,8 +47,11 @@ pub mod error_codes {
     pub const PACKAGE_VALIDATION_FAILED: &str = "PACKAGE_VALIDATION_FAILED";
 }
 
-/// Required directories for all standard packages.
-pub const REQUIRED_PACKAGE_DIRS: &[&str] = &["docs", "examples", "tests", "agents/skills", "src"];
+/// Required directories for standards and experiments (§5.1).
+pub const REQUIRED_STANDARD_DIRS: &[&str] = &["docs", "examples", "tests", "agents/skills", "src"];
+
+/// Required directories for substandards (§5.2) — reduced requirements.
+pub const REQUIRED_SUBSTANDARD_DIRS: &[&str] = &["docs", "src"];
 
 /// Metadata file options (one must exist).
 pub const METADATA_FILES: &[&str] = &["standard.toml", "substandard.toml", "experiment.toml"];
@@ -94,8 +97,15 @@ impl MetaStandard {
     fn validate_structure(&self, path: &Path, diagnostics: &mut Diagnostics) {
         use error_codes::*;
 
+        let is_substandard = path.join("substandard.toml").exists();
+        let required_dirs = if is_substandard {
+            REQUIRED_SUBSTANDARD_DIRS
+        } else {
+            REQUIRED_STANDARD_DIRS
+        };
+
         // Check required directories
-        for dir in REQUIRED_PACKAGE_DIRS {
+        for dir in required_dirs {
             let dir_path = path.join(dir);
             if !dir_path.exists() {
                 diagnostics.push(
@@ -156,42 +166,50 @@ impl MetaStandard {
             );
         }
 
-        // §11.1: examples/ MUST contain at least one example
-        let examples_dir = path.join("examples");
-        if examples_dir.exists() && is_dir_empty_or_readme_only(&examples_dir) {
-            diagnostics.push(
-                Diagnostic::error(
-                    EMPTY_EXAMPLES_DIR,
-                    "examples/ must contain at least one example (§11.1)",
-                )
-                .with_path(&examples_dir)
-                .with_hint("Add example files (configs, data, or code) to examples/"),
-            );
+        // Content checks — only for standards and experiments (§5.1), not substandards (§5.2)
+        if !is_substandard {
+            // §11.1: examples/ MUST contain at least one example
+            let examples_dir = path.join("examples");
+            if examples_dir.exists() && is_dir_empty_or_readme_only(&examples_dir) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        EMPTY_EXAMPLES_DIR,
+                        "examples/ must contain at least one example (§11.1)",
+                    )
+                    .with_path(&examples_dir)
+                    .with_hint("Add example files (configs, data, or code) to examples/"),
+                );
+            }
+
+            // §12.1: agents/skills/ MUST include at least one skill file or README
+            let skills_dir = path.join("agents/skills");
+            if skills_dir.exists() && is_dir_empty(&skills_dir) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        EMPTY_AGENT_SKILLS_DIR,
+                        "agents/skills/ must include at least one skill file or README (§12.1)",
+                    )
+                    .with_path(&skills_dir)
+                    .with_hint("Add a README.md documenting available agent skills"),
+                );
+            }
         }
 
-        // §11.2: tests/ MUST include automated tests
-        let tests_dir = path.join("tests");
-        if tests_dir.exists() && is_dir_empty_or_readme_only(&tests_dir) {
+        // §11.2: All packages MUST have test coverage (integration tests OR inline tests)
+        let has_test_dir_content = {
+            let tests_dir = path.join("tests");
+            tests_dir.exists() && !is_dir_empty_or_readme_only(&tests_dir)
+        };
+        let has_inline_tests = has_inline_test_module(&path.join("src/lib.rs"));
+
+        if !has_test_dir_content && !has_inline_tests {
             diagnostics.push(
                 Diagnostic::error(
                     EMPTY_TESTS_DIR,
-                    "tests/ must include automated tests (§11.2)",
+                    "Package must have test coverage: tests/ directory with test files or #[cfg(test)] in src/lib.rs (§11.2)",
                 )
-                .with_path(&tests_dir)
-                .with_hint("Add test files (.rs integration tests) to tests/"),
-            );
-        }
-
-        // §12.1: agents/skills/ MUST include at least one skill file or README
-        let skills_dir = path.join("agents/skills");
-        if skills_dir.exists() && is_dir_empty(&skills_dir) {
-            diagnostics.push(
-                Diagnostic::error(
-                    EMPTY_AGENT_SKILLS_DIR,
-                    "agents/skills/ must include at least one skill file or README (§12.1)",
-                )
-                .with_path(&skills_dir)
-                .with_hint("Add a README.md documenting available agent skills"),
+                .with_path(path)
+                .with_hint("Add integration tests to tests/ or inline #[cfg(test)] modules in src/lib.rs"),
             );
         }
     }
@@ -600,6 +618,14 @@ fn is_dir_empty_or_readme_only(path: &Path) -> bool {
     true
 }
 
+/// Check if a Rust source file contains an inline test module (`#[cfg(test)]`).
+fn has_inline_test_module(path: &Path) -> bool {
+    match std::fs::read_to_string(path) {
+        Ok(content) => content.contains("#[cfg(test)]"),
+        Err(_) => false,
+    }
+}
+
 /// Check if a string looks like valid SemVer (basic check).
 fn is_valid_semver(version: &str) -> bool {
     let parts: Vec<&str> = version.split('.').collect();
@@ -768,22 +794,21 @@ maintainers = ["Test"]
     fn test_validate_substandard_package() {
         let temp_dir = tempfile::tempdir().unwrap();
 
-        // Create minimal valid substandard structure
+        // Create minimal valid substandard structure (§5.2 — reduced requirements)
         let pkg_dir = temp_dir
             .path()
             .join("standards/v1/APS-V1-0001-test/substandards/GH01-github");
         fs::create_dir_all(pkg_dir.join("docs")).unwrap();
-        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
-        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
-        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
 
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
-        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        // Inline tests count as test coverage (§11.2)
+        fs::write(
+            pkg_dir.join("src/lib.rs"),
+            "// lib\n#[cfg(test)]\nmod tests { #[test] fn it_works() {} }",
+        )
+        .unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
-        fs::write(pkg_dir.join("examples/example.toml"), "# example").unwrap();
-        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
-        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
 
         let substandard_toml = r#"
 schema = "aps.substandard/v1"

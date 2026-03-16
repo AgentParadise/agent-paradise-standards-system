@@ -144,9 +144,20 @@ APS-V1-XXXX.YYYY
 
 Where `YYYY` is a short, uppercase alphanumeric profile identifier (e.g., `GH01`, `PY01`).
 
-Example: `APS-V1-0002.GH01`
+Example: `APS-V1-0001.VZ01`
 
 Substandard IDs are immutable.
+
+#### 4.2.1 Substandard Directory Naming
+
+Substandard directories SHOULD be prefixed with the parent standard number for discoverability in flat listings (Cargo workspace, search results):
+
+```
+substandards/0001-VIZ01-dashboard/     # RECOMMENDED — parent visible
+substandards/VIZ01-dashboard/          # ALLOWED — parent inferred from path
+```
+
+The prefix is the 4-digit parent standard number (matching `APS-V1-XXXX`).
 
 ### 4.3 Experiment ID
 
@@ -166,9 +177,9 @@ All directory names and filenames MUST be cross-platform safe, including Windows
 
 ## 5. Package Structure Requirements
 
-### 5.1 Required Directories (Standards and Substandards)
+### 5.1 Required Directories (Standards and Experiments)
 
-Every official standard and substandard package MUST include:
+Every official standard and experimental standard MUST include:
 
 ```
 <package>/
@@ -180,15 +191,33 @@ Every official standard and substandard package MUST include:
 └── src/                 # Rust source (Standard trait impl)
 ```
 
-### 5.2 Optional Directories
+### 5.2 Required Directories (Substandards)
 
-The following are optional, but if present MUST conform to this spec:
+Substandards consume their parent standard's artifacts and produce further output. They have reduced structural requirements — the `docs/01_spec.md` serves as both normative specification and agent-readable knowledge about what the substandard consumes and produces.
+
+Every substandard MUST include:
+
+```
+<package>/
+├── docs/                # MUST contain 01_spec.md
+└── src/                 # Rust source
+```
+
+The following directories are OPTIONAL for substandards (they inherit context from the parent):
+
+- `examples/` — MAY be present; parent standard examples cover end-to-end usage
+- `tests/` — MAY be present as a directory; see §11.2 for inline test alternative
+- `agents/skills/` — MAY be present; the substandard's `docs/01_spec.md` serves as agent context
+
+### 5.3 Optional Directories
+
+The following are optional for all package types, but if present MUST conform to this spec:
 
 - `templates/` — Scaffolding templates
 - `proto/` — Protobuf contracts (REQUIRED for technical standards)
 - `evolution/` — Evolution packs for major version bumps
 
-### 5.3 Category-based Requirements
+### 5.4 Category-based Requirements
 
 Standards and substandards MUST declare a `category` in metadata.
 
@@ -423,18 +452,18 @@ CI MUST fail if:
 
 ### 11.1 Examples
 
-`examples/` MUST contain at least one example that demonstrates valid usage.
+For standards and experiments, `examples/` MUST contain at least one example that demonstrates valid usage. An `examples/README.md` SHOULD index available examples.
 
-An `examples/README.md` SHOULD index available examples.
+For substandards, `examples/` is OPTIONAL. Substandards inherit end-to-end usage examples from the parent standard.
 
 ### 11.2 Tests
 
-`tests/` MUST include automated tests that validate:
+Every package MUST have automated test coverage. Tests MAY be provided via either:
 
-- The standard/substandard structure and metadata
-- At least one example under `examples/`
+1. **Integration test files** in a `tests/` directory (e.g., `tests/my_test.rs`), OR
+2. **Inline test modules** in source files (e.g., `#[cfg(test)] mod tests` in `src/lib.rs`)
 
-CI MUST run these tests for official standards and substandards.
+At least one of these forms MUST be present. CI MUST run these tests for all packages.
 
 ---
 
@@ -442,13 +471,9 @@ CI MUST run these tests for official standards and substandards.
 
 ### 12.1 Required Skills
 
-Standards and substandards MUST provide agent assets under:
+Standards and experiments MUST provide agent assets under `agents/skills/`. This directory MUST include at least one skill file or README usable by an agent.
 
-```
-agents/skills/
-```
-
-This directory MUST include at least one skill file or README usable by an agent.
+For substandards, `agents/skills/` is OPTIONAL. The substandard's `docs/01_spec.md` serves as agent-readable context — it specifies what artifacts the substandard consumes and produces, which is sufficient for agent reasoning.
 
 ### 12.2 Reserved Directories
 
@@ -623,17 +648,24 @@ See ADR 0001 (Versioning Strategy) for detailed semantics.
 
 ## Appendix A: Validation Checklist
 
-For quick reference, every official standard MUST have:
+### Standards and Experiments
 
-- [ ] `standard.toml` with valid schema
+- [ ] `standard.toml` or `experiment.toml` with valid schema
 - [ ] `docs/01_spec.md` (normative spec)
 - [ ] `examples/` with at least one example
-- [ ] `tests/` with at least one test
+- [ ] Test coverage (integration tests in `tests/` or inline `#[cfg(test)]`)
 - [ ] `agents/skills/` with at least one skill or README
 - [ ] `Cargo.toml` and `src/lib.rs` (Rust crate)
 - [ ] Implements `Standard` trait
 
-For `technical` category, also:
+### Substandards
+
+- [ ] `substandard.toml` with valid schema and parent reference
+- [ ] `docs/01_spec.md` (specifies consumed/produced artifacts)
+- [ ] Test coverage (integration tests in `tests/` or inline `#[cfg(test)]`)
+- [ ] `Cargo.toml` and `src/lib.rs` (Rust crate)
+
+### Technical category (additional)
 
 - [ ] `proto/` with protobuf contracts
 - [ ] Breaking-change detection enabled
