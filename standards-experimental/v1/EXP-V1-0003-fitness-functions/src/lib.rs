@@ -31,17 +31,12 @@ pub mod error_codes {
 // ─── Severity ───────────────────────────────────────────────────────────────
 
 /// Rule severity level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
+    #[default]
     Error,
     Warning,
-}
-
-impl Default for Severity {
-    fn default() -> Self {
-        Self::Error
-    }
 }
 
 // ─── Fitness Config (fitness.toml) ──────────────────────────────────────────

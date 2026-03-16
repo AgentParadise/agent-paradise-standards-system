@@ -889,7 +889,7 @@ fn dispatch_fitness(
                 .iter()
                 .position(|a| a == "--config")
                 .and_then(|i| args.get(i + 1))
-                .map(|s| std::path::PathBuf::from(s));
+                .map(std::path::PathBuf::from);
             let report_path = args
                 .iter()
                 .position(|a| a == "--report")

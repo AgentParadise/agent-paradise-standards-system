@@ -383,10 +383,7 @@ impl MetaStandard {
                     diagnostics.push(
                         Diagnostic::error(
                             INVALID_EXPERIMENT_ID,
-                            format!(
-                                "Invalid experiment ID '{}': must match pattern EXP-V1-XXXX",
-                                id
-                            ),
+                            format!("Invalid experiment ID '{id}': must match pattern EXP-V1-XXXX"),
                         )
                         .with_path(&metadata_path)
                         .with_hint("Use format: EXP-V1-0001, EXP-V1-0002, etc."),
@@ -399,7 +396,7 @@ impl MetaStandard {
                     diagnostics.push(
                         Diagnostic::warning(
                             INVALID_VERSION,
-                            format!("Version '{}' may not be valid SemVer", version),
+                            format!("Version '{version}' may not be valid SemVer"),
                         )
                         .with_path(&metadata_path)
                         .with_hint("Use SemVer format: MAJOR.MINOR.PATCH (e.g., 0.1.0)"),
