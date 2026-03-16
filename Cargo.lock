@@ -119,6 +119,7 @@ version = "1.0.0"
 dependencies = [
  "aps-core",
  "tempfile",
+ "toml",
 ]
 
 [[package]]

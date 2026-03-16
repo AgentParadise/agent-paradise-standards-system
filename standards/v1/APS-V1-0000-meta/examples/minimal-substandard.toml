@@ -1,0 +1,19 @@
+# Example: Minimal valid substandard.toml
+#
+# Substandards consume their parent standard's artifacts and produce
+# further output. They have reduced structural requirements (§5.2).
+#
+# See: docs/01_spec.md §6.2
+
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0042.PY01"
+name = "Python Language Adapter"
+slug = "python-adapter"
+version = "1.0.0"
+parent_id = "APS-V1-0042"
+parent_major = "1"
+
+[ownership]
+maintainers = ["MyOrg/my-team"]

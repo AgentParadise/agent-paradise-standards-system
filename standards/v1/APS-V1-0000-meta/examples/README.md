@@ -1,64 +1,36 @@
 # APS-V1-0000 Meta-Standard Examples
 
-Examples demonstrating valid APS package structures and workflows.
+Minimal valid metadata files for each package type. Copy these as starting points.
 
 ## Available Examples
 
 | Example | Description |
 |---------|-------------|
-| `minimal-standard/` | Minimal valid standard structure (reference) |
+| [`minimal-standard.toml`](minimal-standard.toml) | Minimal valid `standard.toml` for official standards |
+| [`minimal-substandard.toml`](minimal-substandard.toml) | Minimal valid `substandard.toml` with parent reference |
+| [`minimal-experiment.toml`](minimal-experiment.toml) | Minimal valid `experiment.toml` for incubating standards |
 
-## Using Examples
+## Package Structure Reference
 
-Each example can be used as a reference when creating new standards:
-
-```bash
-# The meta-standard itself is the canonical example
-ls standards/v1/APS-V1-0000-meta/
-
-# Or create a new standard using the template
-aps v1 create standard my-standard
-```
-
-## Example: Minimal Valid Standard
-
-A minimal valid standard package requires:
+### Standard / Experiment (§5.1)
 
 ```
 APS-V1-XXXX-slug/
-├── standard.toml       # Package metadata
-├── Cargo.toml          # Rust crate manifest
-├── src/
-│   └── lib.rs          # Standard trait implementation
-├── docs/
-│   └── 01_spec.md      # Normative specification
-├── examples/
-│   └── README.md       # Examples index
-├── tests/
-│   └── README.md       # Test documentation
-└── agents/
-    └── skills/
-        └── README.md   # Agent skill instructions
+├── standard.toml       # or experiment.toml
+├── Cargo.toml
+├── src/lib.rs
+├── docs/01_spec.md
+├── examples/           # MUST have content
+├── tests/              # MUST have test coverage
+└── agents/skills/      # MUST have skills or README
 ```
 
-## CLI Workflow Example
+### Substandard (§5.2 — reduced requirements)
 
-```bash
-# 1. Create a new experiment
-aps v1 create experiment my-idea
-
-# 2. Develop and iterate
-# ... make changes ...
-
-# 3. Validate
-aps v1 validate experiment EXP-V1-0001
-
-# 4. Promote to official standard
-aps v1 promote EXP-V1-0001
-
-# 5. Version management
-aps v1 version bump APS-V1-0001 minor
-
-# 6. Generate registry
-aps v1 generate views
+```
+XXXX-YY01-slug/
+├── substandard.toml
+├── Cargo.toml
+├── src/lib.rs          # Inline tests count as coverage
+└── docs/01_spec.md     # Agent-readable: what it consumes/produces
 ```

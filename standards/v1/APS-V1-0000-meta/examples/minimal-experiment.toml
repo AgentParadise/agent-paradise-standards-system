@@ -1,0 +1,26 @@
+# Example: Minimal valid experiment.toml
+#
+# Experiments follow the same structure as standards but use 0.x versions
+# and are never automatically enforced on downstream repos.
+#
+# See: docs/01_spec.md §6.3, §14
+
+schema = "aps.experiment/v1"
+
+[experiment]
+id = "EXP-V1-0099"
+name = "My Experiment"
+slug = "my-experiment"
+version = "0.1.0"
+category = "technical"
+
+[aps]
+aps_major = "v1"
+
+[ownership]
+maintainers = ["MyOrg/my-team"]
+
+# Promotion metadata — added after promotion, do not edit manually
+# [promotion]
+# promoted_to = "APS-V1-YYYY"
+# promoted_at = "YYYY-MM-DD"
