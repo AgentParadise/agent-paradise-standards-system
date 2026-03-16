@@ -200,7 +200,7 @@ impl MetaStandard {
             let tests_dir = path.join("tests");
             tests_dir.exists() && !is_dir_empty_or_readme_only(&tests_dir)
         };
-        let has_inline_tests = has_inline_test_module(&path.join("src/lib.rs"));
+        let has_inline_tests = has_inline_tests_in_src(&path.join("src"));
 
         if !has_test_dir_content && !has_inline_tests {
             diagnostics.push(
@@ -572,12 +572,23 @@ fn is_valid_experiment_id(id: &str) -> bool {
     suffix.len() == 4 && suffix.chars().all(|c| c.is_ascii_digit())
 }
 
-/// Check if a directory is completely empty (no files, no subdirs).
+/// Check if a directory has no substantive content (ignoring hidden/junk files).
 fn is_dir_empty(path: &Path) -> bool {
-    match std::fs::read_dir(path) {
-        Ok(mut entries) => entries.next().is_none(),
-        Err(_) => true,
+    let entries = match std::fs::read_dir(path) {
+        Ok(e) => e,
+        Err(_) => return true,
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        // Skip hidden files (.DS_Store, .gitkeep) and __pycache__
+        if name_str.starts_with('.') || name_str == "__pycache__" {
+            continue;
+        }
+        return false;
     }
+    true
 }
 
 /// Check if a directory contains only a README.md and nothing else substantive.
@@ -615,12 +626,29 @@ fn is_dir_empty_or_readme_only(path: &Path) -> bool {
     true
 }
 
-/// Check if a Rust source file contains an inline test module (`#[cfg(test)]`).
-fn has_inline_test_module(path: &Path) -> bool {
-    match std::fs::read_to_string(path) {
-        Ok(content) => content.contains("#[cfg(test)]"),
-        Err(_) => false,
+/// Check if any Rust source file under `src/` contains an inline test module (`#[cfg(test)]`).
+fn has_inline_tests_in_src(src_dir: &Path) -> bool {
+    let entries = match std::fs::read_dir(src_dir) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "rs") {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if content.contains("#[cfg(test)]") {
+                    return true;
+                }
+            }
+        } else if path.is_dir() {
+            // Recurse into subdirectories (e.g., src/adapter/)
+            if has_inline_tests_in_src(&path) {
+                return true;
+            }
+        }
     }
+    false
 }
 
 /// Check if a string looks like valid SemVer (basic check).

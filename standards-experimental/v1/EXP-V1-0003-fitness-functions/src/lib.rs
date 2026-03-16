@@ -353,11 +353,17 @@ impl FitnessValidator {
         let mut results = Vec::new();
         let mut all_stale = Vec::new();
 
-        // Track which exceptions were used (for stale detection)
+        // Track which exceptions were used and which rules were fully evaluated
         let mut used_exceptions: HashMap<String, Vec<String>> = HashMap::new();
+        let mut evaluated_rule_ids: Vec<String> = Vec::new();
 
         for rule in &self.config.rules.threshold {
             let (result, stale) = self.evaluate_threshold_rule(rule)?;
+            // Only track stale detection for rules that were actually evaluated
+            // (not skipped due to missing artifacts)
+            if result.status != RuleStatus::Skip {
+                evaluated_rule_ids.push(rule.id.clone());
+            }
             // Track used exceptions
             for v in &result.violations {
                 if v.excepted {
@@ -371,8 +377,12 @@ impl FitnessValidator {
             all_stale.extend(stale);
         }
 
-        // Detect stale exceptions (exceptions for entities not seen in any evaluation)
+        // Detect stale exceptions — only for rules that were fully evaluated.
+        // Skipped rules (missing artifact) should not trigger EntityNotFound.
         for (rule_id, entities) in &self.exceptions.rules {
+            if !evaluated_rule_ids.contains(rule_id) {
+                continue; // Rule was skipped or doesn't exist — don't flag exceptions as stale
+            }
             let used = used_exceptions.get(rule_id);
             for entity in entities.keys() {
                 let was_used = used.is_some_and(|u| u.contains(entity));

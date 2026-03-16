@@ -884,22 +884,41 @@ fn dispatch_fitness(
             ExitCode::SUCCESS
         }
         "validate" => {
-            let path = args.first().map(|s| s.as_str()).unwrap_or(".");
-            let config_path = args
-                .iter()
-                .position(|a| a == "--config")
-                .and_then(|i| args.get(i + 1))
-                .map(std::path::PathBuf::from);
-            let report_path = args
-                .iter()
-                .position(|a| a == "--report")
-                .and_then(|i| args.get(i + 1));
+            // Parse flags and positional args separately to avoid
+            // `--config custom.toml .` misinterpreting "--config" as the path
+            let mut positional_path: Option<&str> = None;
+            let mut config_path: Option<std::path::PathBuf> = None;
+            let mut report_path: Option<&String> = None;
+            let mut i = 0;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--config" => {
+                        config_path = args.get(i + 1).map(std::path::PathBuf::from);
+                        i += 2;
+                    }
+                    "--report" => {
+                        report_path = args.get(i + 1);
+                        i += 2;
+                    }
+                    arg if !arg.starts_with('-') && positional_path.is_none() => {
+                        positional_path = Some(arg);
+                        i += 1;
+                    }
+                    _ => {
+                        i += 1;
+                    }
+                }
+            }
+            let path = positional_path.unwrap_or(".");
 
             let target = if std::path::Path::new(path).is_absolute() {
                 std::path::PathBuf::from(path)
             } else {
                 repo_root.join(path)
             };
+
+            // Resolve --config relative to target repo, not CWD
+            let config_path = config_path.map(|p| if p.is_absolute() { p } else { target.join(p) });
 
             let validator =
                 match fitness_functions::FitnessValidator::load(&target, config_path.as_deref()) {

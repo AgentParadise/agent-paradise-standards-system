@@ -386,28 +386,32 @@ Warning-severity violations do not affect the exit code.
 
 > This section is informative. The CLI is provided by the `aps` tool.
 
-### 7.1 Commands
+### 7.1 Commands (v0.1.0)
 
 ```bash
 # Validate rules against topology artifacts
 aps run fitness validate <path>
 aps run fitness validate .                   # Use fitness.toml in current directory
 aps run fitness validate . --config custom-fitness.toml
-
-# Generate exceptions from current violations (v0.2.0)
-aps run fitness ratchet <path>
-
-# Generate report only (no exit code enforcement)
-aps run fitness report <path>
+aps run fitness validate . --report fitness-report.json
 ```
 
-### 7.2 Options
+### 7.2 Options (v0.1.0)
 
 | Option | Description |
 |--------|-------------|
-| `--config <path>` | Path to fitness.toml (default: `./fitness.toml`) |
-| `--format <fmt>` | Output format: `human`, `json` (default: `human`) |
+| `--config <path>` | Path to fitness.toml, relative to target repo (default: `./fitness.toml`) |
 | `--report <path>` | Write JSON report to file |
+
+### 7.3 Planned Commands
+
+> The following commands are planned for future versions and are NOT available in v0.1.0.
+
+| Command | Version | Description |
+|---------|---------|-------------|
+| `aps run fitness ratchet <path>` | v0.2.0 | Auto-generate exceptions from current violations |
+| `aps run fitness report <path>` | v0.2.0 | Generate report only (no exit code enforcement) |
+| `--format <fmt>` option | v0.2.0 | Output format: `human`, `json` (default: `human`) |
 
 ---
 
