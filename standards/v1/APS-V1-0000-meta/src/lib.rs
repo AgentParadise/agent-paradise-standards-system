@@ -23,9 +23,15 @@ pub mod error_codes {
     pub const MISSING_SPEC_DOC: &str = "MISSING_SPEC_DOC";
     pub const MISSING_LIB_RS: &str = "MISSING_LIB_RS";
 
+    // Content validation errors
+    pub const EMPTY_EXAMPLES_DIR: &str = "EMPTY_EXAMPLES_DIR";
+    pub const EMPTY_TESTS_DIR: &str = "EMPTY_TESTS_DIR";
+    pub const EMPTY_AGENT_SKILLS_DIR: &str = "EMPTY_AGENT_SKILLS_DIR";
+
     // Metadata validation errors
     pub const INVALID_METADATA: &str = "INVALID_METADATA";
     pub const INVALID_STANDARD_ID: &str = "INVALID_STANDARD_ID";
+    pub const INVALID_EXPERIMENT_ID: &str = "INVALID_EXPERIMENT_ID";
     pub const INVALID_VERSION: &str = "INVALID_VERSION";
 
     // Substandard-specific errors
@@ -147,6 +153,45 @@ impl MetaStandard {
                 Diagnostic::error(MISSING_SPEC_DOC, "Missing normative spec: docs/01_spec.md")
                     .with_path(&spec_path)
                     .with_hint("Create docs/01_spec.md with the normative specification"),
+            );
+        }
+
+        // §11.1: examples/ MUST contain at least one example
+        let examples_dir = path.join("examples");
+        if examples_dir.exists() && is_dir_empty_or_readme_only(&examples_dir) {
+            diagnostics.push(
+                Diagnostic::error(
+                    EMPTY_EXAMPLES_DIR,
+                    "examples/ must contain at least one example (§11.1)",
+                )
+                .with_path(&examples_dir)
+                .with_hint("Add example files (configs, data, or code) to examples/"),
+            );
+        }
+
+        // §11.2: tests/ MUST include automated tests
+        let tests_dir = path.join("tests");
+        if tests_dir.exists() && is_dir_empty_or_readme_only(&tests_dir) {
+            diagnostics.push(
+                Diagnostic::error(
+                    EMPTY_TESTS_DIR,
+                    "tests/ must include automated tests (§11.2)",
+                )
+                .with_path(&tests_dir)
+                .with_hint("Add test files (.rs integration tests) to tests/"),
+            );
+        }
+
+        // §12.1: agents/skills/ MUST include at least one skill file or README
+        let skills_dir = path.join("agents/skills");
+        if skills_dir.exists() && is_dir_empty(&skills_dir) {
+            diagnostics.push(
+                Diagnostic::error(
+                    EMPTY_AGENT_SKILLS_DIR,
+                    "agents/skills/ must include at least one skill file or README (§12.1)",
+                )
+                .with_path(&skills_dir)
+                .with_hint("Add a README.md documenting available agent skills"),
             );
         }
     }
@@ -275,6 +320,86 @@ impl MetaStandard {
         }
     }
 
+    /// Validate the metadata content of an experiment package.
+    fn validate_experiment_metadata(&self, path: &Path, diagnostics: &mut Diagnostics) {
+        use error_codes::*;
+
+        let metadata_path = path.join("experiment.toml");
+        if !metadata_path.exists() {
+            return;
+        }
+
+        let content = match std::fs::read_to_string(&metadata_path) {
+            Ok(c) => c,
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        INVALID_METADATA,
+                        format!("Failed to read experiment.toml: {e}"),
+                    )
+                    .with_path(&metadata_path),
+                );
+                return;
+            }
+        };
+
+        let table: toml::Table = match content.parse() {
+            Ok(t) => t,
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        INVALID_METADATA,
+                        format!("Failed to parse experiment.toml: {e}"),
+                    )
+                    .with_path(&metadata_path)
+                    .with_hint("Check the TOML syntax"),
+                );
+                return;
+            }
+        };
+
+        // Validate experiment ID format
+        if let Some(experiment) = table.get("experiment").and_then(|v| v.as_table()) {
+            if let Some(id) = experiment.get("id").and_then(|v| v.as_str()) {
+                if !is_valid_experiment_id(id) {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            INVALID_EXPERIMENT_ID,
+                            format!(
+                                "Invalid experiment ID '{}': must match pattern EXP-V1-XXXX",
+                                id
+                            ),
+                        )
+                        .with_path(&metadata_path)
+                        .with_hint("Use format: EXP-V1-0001, EXP-V1-0002, etc."),
+                    );
+                }
+            }
+
+            if let Some(version) = experiment.get("version").and_then(|v| v.as_str()) {
+                if !is_valid_semver(version) {
+                    diagnostics.push(
+                        Diagnostic::warning(
+                            INVALID_VERSION,
+                            format!("Version '{}' may not be valid SemVer", version),
+                        )
+                        .with_path(&metadata_path)
+                        .with_hint("Use SemVer format: MAJOR.MINOR.PATCH (e.g., 0.1.0)"),
+                    );
+                }
+            }
+        } else {
+            diagnostics.push(
+                Diagnostic::error(
+                    INVALID_METADATA,
+                    "experiment.toml missing [experiment] section",
+                )
+                .with_path(&metadata_path)
+                .with_hint("Add [experiment] section with id, name, slug, version, category"),
+            );
+        }
+    }
+
     /// Validate a single discovered package.
     fn validate_discovered_package(
         &self,
@@ -319,8 +444,9 @@ impl Standard for MetaStandard {
             self.validate_standard_metadata(path, &mut diagnostics);
         } else if path.join("substandard.toml").exists() {
             self.validate_substandard_metadata(path, &mut diagnostics);
+        } else if path.join("experiment.toml").exists() {
+            self.validate_experiment_metadata(path, &mut diagnostics);
         }
-        // experiment.toml validation could be added here
 
         diagnostics
     }
@@ -422,6 +548,58 @@ pub fn extract_parent_from_substandard_id(id: &str) -> Option<String> {
     id.find('.').map(|dot_pos| id[..dot_pos].to_string())
 }
 
+/// Check if a string matches the experiment ID format (EXP-V1-XXXX).
+fn is_valid_experiment_id(id: &str) -> bool {
+    if !id.starts_with("EXP-V1-") {
+        return false;
+    }
+    let suffix = &id[7..];
+    suffix.len() == 4 && suffix.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Check if a directory is completely empty (no files, no subdirs).
+fn is_dir_empty(path: &Path) -> bool {
+    match std::fs::read_dir(path) {
+        Ok(mut entries) => entries.next().is_none(),
+        Err(_) => true,
+    }
+}
+
+/// Check if a directory contains only a README.md and nothing else substantive.
+///
+/// "Substantive" means: any file that is not README.md, or any non-empty subdirectory.
+fn is_dir_empty_or_readme_only(path: &Path) -> bool {
+    let entries = match std::fs::read_dir(path) {
+        Ok(e) => e,
+        Err(_) => return true,
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        // Skip __pycache__, .DS_Store, etc.
+        if name_str.starts_with('.') || name_str == "__pycache__" {
+            continue;
+        }
+
+        // If it's a directory, check if it has content
+        if entry.file_type().is_ok_and(|ft| ft.is_dir()) {
+            if !is_dir_empty(&entry.path()) {
+                return false;
+            }
+            continue;
+        }
+
+        // Any file that isn't README.md means the dir has substantive content
+        if !name_str.eq_ignore_ascii_case("readme.md") {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Check if a string looks like valid SemVer (basic check).
 fn is_valid_semver(version: &str) -> bool {
     let parts: Vec<&str> = version.split('.').collect();
@@ -507,6 +685,9 @@ mod tests {
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("examples/example.toml"), "# example").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
 
         let standard_toml = r#"
 schema = "aps.standard/v1"
@@ -600,6 +781,9 @@ maintainers = ["Test"]
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("examples/example.toml"), "# example").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
 
         let substandard_toml = r#"
 schema = "aps.substandard/v1"
@@ -714,5 +898,155 @@ maintainers = ["Test"]
                 .errors()
                 .any(|d| d.code == error_codes::INVALID_PARENT_REF)
         );
+    }
+
+    #[test]
+    fn test_empty_examples_dir_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_dir = temp_dir.path().join("pkg");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
+        fs::write(
+            pkg_dir.join("standard.toml"),
+            "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
+        )
+        .unwrap();
+        // examples/ is empty — should fail
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+        assert!(diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::EMPTY_EXAMPLES_DIR));
+    }
+
+    #[test]
+    fn test_readme_only_examples_dir_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_dir = temp_dir.path().join("pkg");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
+        fs::write(
+            pkg_dir.join("standard.toml"),
+            "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
+        )
+        .unwrap();
+        // examples/ has ONLY a README — still fails
+        fs::write(pkg_dir.join("examples/README.md"), "# Examples").unwrap();
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+        assert!(diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::EMPTY_EXAMPLES_DIR));
+    }
+
+    #[test]
+    fn test_valid_experiment_metadata() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_dir = temp_dir.path().join("pkg");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("examples/example.toml"), "# ex").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
+
+        let experiment_toml = r#"
+schema = "aps.experiment/v1"
+
+[experiment]
+id = "EXP-V1-0099"
+name = "Test Experiment"
+slug = "test-experiment"
+version = "0.1.0"
+category = "technical"
+
+[aps]
+aps_major = "v1"
+
+[ownership]
+maintainers = ["Test"]
+"#;
+        fs::write(pkg_dir.join("experiment.toml"), experiment_toml).unwrap();
+
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+        assert!(
+            !diagnostics.has_errors(),
+            "Unexpected errors: {:?}",
+            diagnostics.errors().map(|d| &d.message).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_invalid_experiment_id() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_dir = temp_dir.path().join("pkg");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("examples/example.toml"), "# ex").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
+
+        let experiment_toml = r#"
+schema = "aps.experiment/v1"
+
+[experiment]
+id = "INVALID-ID"
+name = "Bad"
+slug = "bad"
+version = "0.1.0"
+category = "technical"
+
+[aps]
+aps_major = "v1"
+
+[ownership]
+maintainers = ["Test"]
+"#;
+        fs::write(pkg_dir.join("experiment.toml"), experiment_toml).unwrap();
+
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+        assert!(diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::INVALID_EXPERIMENT_ID));
+    }
+
+    #[test]
+    fn test_valid_experiment_id_format() {
+        assert!(is_valid_experiment_id("EXP-V1-0001"));
+        assert!(is_valid_experiment_id("EXP-V1-0003"));
+        assert!(is_valid_experiment_id("EXP-V1-9999"));
+
+        assert!(!is_valid_experiment_id("APS-V1-0001"));
+        assert!(!is_valid_experiment_id("EXP-V1-000"));
+        assert!(!is_valid_experiment_id("EXP-V2-0001"));
     }
 }
