@@ -164,8 +164,8 @@ impl ExceptionSet {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let content = std::fs::read_to_string(path)
-            .map_err(|e| FitnessError::Io(path.to_path_buf(), e))?;
+        let content =
+            std::fs::read_to_string(path).map_err(|e| FitnessError::Io(path.to_path_buf(), e))?;
         let set: Self =
             toml::from_str(&content).map_err(|e| FitnessError::ParseExceptions(e.to_string()))?;
         // Validate all exceptions have issue references
@@ -330,8 +330,8 @@ impl FitnessValidator {
 
         let config_content = std::fs::read_to_string(&config_file)
             .map_err(|e| FitnessError::Io(config_file.clone(), e))?;
-        let config: FitnessConfig =
-            toml::from_str(&config_content).map_err(|e| FitnessError::ParseConfig(e.to_string()))?;
+        let config: FitnessConfig = toml::from_str(&config_content)
+            .map_err(|e| FitnessError::ParseConfig(e.to_string()))?;
 
         // Validate all rules
         for rule in &config.rules.threshold {
@@ -396,9 +396,18 @@ impl FitnessValidator {
 
         let summary = ReportSummary {
             total_rules: results.len(),
-            passed: results.iter().filter(|r| r.status == RuleStatus::Pass).count(),
-            failed: results.iter().filter(|r| r.status == RuleStatus::Fail).count(),
-            warned: results.iter().filter(|r| r.status == RuleStatus::Warn).count(),
+            passed: results
+                .iter()
+                .filter(|r| r.status == RuleStatus::Pass)
+                .count(),
+            failed: results
+                .iter()
+                .filter(|r| r.status == RuleStatus::Fail)
+                .count(),
+            warned: results
+                .iter()
+                .filter(|r| r.status == RuleStatus::Warn)
+                .count(),
             total_violations: results.iter().map(|r| r.violations.len()).sum(),
             excepted_violations: results
                 .iter()
@@ -582,10 +591,7 @@ fn extract_entities(artifact: &serde_json::Value, scope: &str) -> Vec<(String, s
             }
 
             // Step 3: Fallback heuristic — if exactly one key has an array value, unwrap it
-            let array_entries: Vec<_> = map
-                .iter()
-                .filter(|(_, v)| v.is_array())
-                .collect();
+            let array_entries: Vec<_> = map.iter().filter(|(_, v)| v.is_array()).collect();
             if array_entries.len() == 1 {
                 if let serde_json::Value::Array(arr) = array_entries[0].1 {
                     return extract_entities_from_array(arr);
@@ -593,9 +599,7 @@ fn extract_entities(artifact: &serde_json::Value, scope: &str) -> Vec<(String, s
             }
 
             // Step 4: Fall through to flat-object behavior (backward compat)
-            map.iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect()
+            map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         }
         serde_json::Value::Array(arr) => extract_entities_from_array(arr),
         _ => vec![],
@@ -708,7 +712,10 @@ mod tests {
     #[test]
     fn test_extract_field_value() {
         let entity = serde_json::json!({ "cyclomatic_complexity": 42.0, "name": "foo" });
-        assert_eq!(extract_field_value(&entity, "cyclomatic_complexity"), Some(42.0));
+        assert_eq!(
+            extract_field_value(&entity, "cyclomatic_complexity"),
+            Some(42.0)
+        );
         assert_eq!(extract_field_value(&entity, "missing"), None);
     }
 
@@ -749,9 +756,15 @@ mod tests {
         // Single segment (backward compat)
         assert_eq!(extract_field_value(&entity, "name"), None); // "foo" is not f64
         // Dot-path navigation
-        assert_eq!(extract_field_value(&entity, "metrics.cognitive"), Some(42.0));
+        assert_eq!(
+            extract_field_value(&entity, "metrics.cognitive"),
+            Some(42.0)
+        );
         // Deep dot-path
-        assert_eq!(extract_field_value(&entity, "metrics.martin.ce"), Some(15.0));
+        assert_eq!(
+            extract_field_value(&entity, "metrics.martin.ce"),
+            Some(15.0)
+        );
         // Missing path
         assert_eq!(extract_field_value(&entity, "metrics.missing"), None);
     }

@@ -188,6 +188,9 @@ fn effective_severity_falls_back_to_default() {
         severity: None,
         exclude: vec![],
     };
-    assert_eq!(rule.effective_severity(Severity::Warning), Severity::Warning);
+    assert_eq!(
+        rule.effective_severity(Severity::Warning),
+        Severity::Warning
+    );
     assert_eq!(rule.effective_severity(Severity::Error), Severity::Error);
 }

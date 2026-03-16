@@ -947,9 +947,11 @@ maintainers = ["Test"]
         // examples/ is empty — should fail
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);
-        assert!(diagnostics
-            .errors()
-            .any(|d| d.code == error_codes::EMPTY_EXAMPLES_DIR));
+        assert!(
+            diagnostics
+                .errors()
+                .any(|d| d.code == error_codes::EMPTY_EXAMPLES_DIR)
+        );
     }
 
     #[test]
@@ -975,9 +977,11 @@ maintainers = ["Test"]
         fs::write(pkg_dir.join("examples/README.md"), "# Examples").unwrap();
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);
-        assert!(diagnostics
-            .errors()
-            .any(|d| d.code == error_codes::EMPTY_EXAMPLES_DIR));
+        assert!(
+            diagnostics
+                .errors()
+                .any(|d| d.code == error_codes::EMPTY_EXAMPLES_DIR)
+        );
     }
 
     #[test]
@@ -1059,9 +1063,11 @@ maintainers = ["Test"]
 
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);
-        assert!(diagnostics
-            .errors()
-            .any(|d| d.code == error_codes::INVALID_EXPERIMENT_ID));
+        assert!(
+            diagnostics
+                .errors()
+                .any(|d| d.code == error_codes::INVALID_EXPERIMENT_ID)
+        );
     }
 
     #[test]
