@@ -223,7 +223,9 @@ fn main() -> ExitCode {
                 println!("    Commands: analyze, validate, diff, report, viz");
                 println!();
                 println!("  fitness (EXP-V1-0003) v0.1.0");
-                println!("    Architecture Fitness Functions - declarative architectural assertions");
+                println!(
+                    "    Architecture Fitness Functions - declarative architectural assertions"
+                );
                 println!("    Commands: validate");
                 println!();
                 println!("Use 'aps run <slug> --help' for command details.");
@@ -899,16 +901,14 @@ fn dispatch_fitness(
                 repo_root.join(path)
             };
 
-            let validator = match fitness_functions::FitnessValidator::load(
-                &target,
-                config_path.as_deref(),
-            ) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    return ExitCode::FAILURE;
-                }
-            };
+            let validator =
+                match fitness_functions::FitnessValidator::load(&target, config_path.as_deref()) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                };
 
             let report = match validator.validate() {
                 Ok(r) => r,
@@ -928,7 +928,10 @@ fn dispatch_fitness(
                     fitness_functions::RuleStatus::Warn => "WARN",
                     fitness_functions::RuleStatus::Skip => "SKIP",
                 };
-                println!("  [{status_icon}] {} ({})", result.rule_name, result.rule_id);
+                println!(
+                    "  [{status_icon}] {} ({})",
+                    result.rule_name, result.rule_id
+                );
                 for v in &result.violations {
                     let exc = if v.excepted { " (excepted)" } else { "" };
                     println!(
