@@ -1,6 +1,6 @@
 # APS-V1-0000 — Meta-Standard (Canonical Specification)
 
-**Version**: 1.0.0  
+**Version**: 1.1.0
 **Status**: Active  
 **Category**: Governance
 
