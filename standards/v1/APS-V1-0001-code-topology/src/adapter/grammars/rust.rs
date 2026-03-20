@@ -110,9 +110,7 @@ impl Grammar for RustGrammar {
             }
 
             // Strip trailing ::src since it's just Rust convention, not a meaningful boundary
-            let without_src = without_file
-                .strip_suffix("::src")
-                .unwrap_or(without_file);
+            let without_src = without_file.strip_suffix("::src").unwrap_or(without_file);
 
             return without_src.replace('-', "_");
         }
