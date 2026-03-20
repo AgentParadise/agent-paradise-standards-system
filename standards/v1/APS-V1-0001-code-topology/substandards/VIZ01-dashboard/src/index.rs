@@ -15,7 +15,12 @@ use crate::{health_label, health_to_color};
 /// # Returns
 /// Complete HTML document as a string
 #[allow(clippy::uninlined_format_args)]
-pub fn generate(repo_name: &str, module_count: usize, slice_count: usize, avg_health: f64) -> String {
+pub fn generate(
+    repo_name: &str,
+    module_count: usize,
+    slice_count: usize,
+    avg_health: f64,
+) -> String {
     let health_color = health_to_color(avg_health);
     let health_lbl = health_label(avg_health);
     let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();

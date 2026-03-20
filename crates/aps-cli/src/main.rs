@@ -856,7 +856,9 @@ fn topology_analyze(
     verbose: bool,
 ) -> ExitCode {
     use code_topology::LanguageAdapter;
-    use code_topology::adapter::grammars::{PythonGrammar, RustGrammar, TsxGrammar, TypeScriptGrammar};
+    use code_topology::adapter::grammars::{
+        PythonGrammar, RustGrammar, TsxGrammar, TypeScriptGrammar,
+    };
     use code_topology::adapter::{GrammarRegistry, TreeSitterAdapter};
     use std::collections::HashMap;
     use std::fs;

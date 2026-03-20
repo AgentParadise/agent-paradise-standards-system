@@ -184,6 +184,7 @@ const TS_NESTING_NODES: &[&str] = &[
     "arrow_function",
     "function",
     "function_declaration",
+    "function_expression",
     "method_definition",
 ];
 
@@ -233,16 +234,10 @@ const TS_FUNCTION_QUERY: &str = r#"
   value: (arrow_function
     body: (_) @function.body) @function)
 
-; Arrow functions assigned to variables (with type annotation)
-(variable_declarator
-  name: (identifier) @function.name
-  value: (arrow_function
-    body: (_) @function.body) @function)
-
 ; Method definitions in classes
 (method_definition
-  name: (property_identifier) @function.name
-  body: (statement_block) @function.body) @function
+  name: (property_identifier) @method.name
+  body: (statement_block) @method.body) @method
 
 ; Function expressions assigned to variables
 (variable_declarator
