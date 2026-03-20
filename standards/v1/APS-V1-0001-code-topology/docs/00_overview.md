@@ -2,7 +2,7 @@
 
 ## What is this?
 
-**EXP-V1-0001** defines a standard format for capturing and visualizing code architecture across polyglot codebases. It enables:
+**APS-V1-0001** defines a standard format for capturing and visualizing code architecture across polyglot codebases. It enables:
 
 - **Complexity tracking** — Cyclomatic, Cognitive, Halstead metrics per function/file/module
 - **Coupling analysis** — Martin's metrics (Ca, Ce, Instability, Abstractness)
@@ -59,15 +59,17 @@ This directly maps to 3D positions:
 ## Architecture
 
 ```
-EXP-V1-0001 (This Standard)
+APS-V1-0001 (This Standard)
 ├── Artifact Format ← You are here
 ├── Metrics Definitions
 └── Projector Interface
 
-Future Substandards:
-├── EXP-V1-0001.3D01 — 3D Force-Directed Visualization
-├── EXP-V1-0001.GV01 — Graphviz/DOT Projector
-└── EXP-V1-0001.MM01 — Mermaid Diagrams
+Substandards:
+├── APS-V1-0001.3D01 — 3D Force-Directed Visualization
+├── APS-V1-0001.VIZ01 — Dashboard Visualization
+├── APS-V1-0001.VIZ01-mermaid — Mermaid Diagrams
+├── APS-V1-0001.LANG01 — Rust Language Adapter
+└── APS-V1-0001.CI01 — GitHub Actions Integration
 ```
 
 ## Getting Started
@@ -79,5 +81,5 @@ Future Substandards:
 
 ## Status
 
-⚠️ **Experimental** — This standard is incubating. Feedback welcome!
+✅ **Official** — Promoted from EXP-V1-0001. Supported languages: Rust, Python, TypeScript, TSX.
 

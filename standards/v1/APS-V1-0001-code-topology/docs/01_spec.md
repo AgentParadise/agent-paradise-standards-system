@@ -976,25 +976,41 @@ Examples:
 
 ## 7. Supported Languages
 
-### 7.1 TypeScript/JavaScript
+### 7.1 TypeScript and TSX
 
 | Property | Value |
 |----------|-------|
-| Language ID | `typescript` / `javascript` |
-| Extensions | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs` |
-| Parser | tree-sitter-typescript / tree-sitter-javascript |
-| Module System | ES6 imports, CommonJS require |
+| Language IDs | `typescript`, `tsx` |
+| Extensions | `.ts`, `.tsx` |
+| Parser | `tree-sitter-typescript` |
+| Module System | ES6 imports |
+| Status | ✅ Implemented |
 
 **Function extraction patterns:**
 - `function` declarations
 - Arrow functions assigned to variables
 - Class methods
-- Object method shorthand
+- Function expressions (`function_expression`)
+- Exported function declarations
 
 **Complexity considerations:**
 - Optional chaining (`?.`) does NOT increase CC
 - Nullish coalescing (`??`) does NOT increase CC
 - Ternary (`?:`) increases CC by 1
+- `for-in` loops increase CC by 1 (same as `for`)
+
+**Module path:** Strip extension, then strip trailing `/index` (barrel exports resolve to parent directory).
+
+**TSX note:** TSX is TypeScript + JSX syntax. JSX nodes do not affect complexity metrics; both grammars share identical queries and rules.
+
+### 7.1.1 JavaScript (Planned)
+
+| Property | Value |
+|----------|-------|
+| Language IDs | `javascript` |
+| Extensions | `.js`, `.jsx`, `.mjs` |
+| Parser | `tree-sitter-javascript` |
+| Status | 📋 Planned |
 
 ### 7.2 Python
 
