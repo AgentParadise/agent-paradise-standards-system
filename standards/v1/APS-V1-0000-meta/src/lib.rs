@@ -7,7 +7,7 @@
 //! that all V1 packages must satisfy.
 
 use aps_core::discovery::{DiscoveredPackage, discover_v1_packages};
-use aps_core::metadata::{parse_standard_metadata, parse_substandard_metadata};
+use aps_core::metadata::{parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata};
 use aps_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
@@ -206,10 +206,10 @@ impl MetaStandard {
             diagnostics.push(
                 Diagnostic::error(
                     EMPTY_TESTS_DIR,
-                    "Package must have test coverage: tests/ directory with test files or #[cfg(test)] in src/lib.rs (§11.2)",
+                    "Package must have test coverage: tests/ directory with test files or #[cfg(test)] in any src/**/*.rs file (§11.2)",
                 )
                 .with_path(path)
-                .with_hint("Add integration tests to tests/ or inline #[cfg(test)] modules in src/lib.rs"),
+                .with_hint("Add integration tests to tests/ or inline #[cfg(test)] modules in any .rs file under src/"),
             );
         }
     }
@@ -347,22 +347,8 @@ impl MetaStandard {
             return;
         }
 
-        let content = match std::fs::read_to_string(&metadata_path) {
-            Ok(c) => c,
-            Err(e) => {
-                diagnostics.push(
-                    Diagnostic::error(
-                        INVALID_METADATA,
-                        format!("Failed to read experiment.toml: {e}"),
-                    )
-                    .with_path(&metadata_path),
-                );
-                return;
-            }
-        };
-
-        let table: toml::Table = match content.parse() {
-            Ok(t) => t,
+        let metadata = match parse_experiment_metadata(&metadata_path) {
+            Ok(m) => m,
             Err(e) => {
                 diagnostics.push(
                     Diagnostic::error(
@@ -370,47 +356,34 @@ impl MetaStandard {
                         format!("Failed to parse experiment.toml: {e}"),
                     )
                     .with_path(&metadata_path)
-                    .with_hint("Check the TOML syntax"),
+                    .with_hint("Check the TOML syntax and required fields"),
                 );
                 return;
             }
         };
 
         // Validate experiment ID format
-        if let Some(experiment) = table.get("experiment").and_then(|v| v.as_table()) {
-            if let Some(id) = experiment.get("id").and_then(|v| v.as_str()) {
-                if !is_valid_experiment_id(id) {
-                    diagnostics.push(
-                        Diagnostic::error(
-                            INVALID_EXPERIMENT_ID,
-                            format!("Invalid experiment ID '{id}': must match pattern EXP-V1-XXXX"),
-                        )
-                        .with_path(&metadata_path)
-                        .with_hint("Use format: EXP-V1-0001, EXP-V1-0002, etc."),
-                    );
-                }
-            }
-
-            if let Some(version) = experiment.get("version").and_then(|v| v.as_str()) {
-                if !is_valid_semver(version) {
-                    diagnostics.push(
-                        Diagnostic::warning(
-                            INVALID_VERSION,
-                            format!("Version '{version}' may not be valid SemVer"),
-                        )
-                        .with_path(&metadata_path)
-                        .with_hint("Use SemVer format: MAJOR.MINOR.PATCH (e.g., 0.1.0)"),
-                    );
-                }
-            }
-        } else {
+        let id = &metadata.experiment.id;
+        if !is_valid_experiment_id(id) {
             diagnostics.push(
                 Diagnostic::error(
-                    INVALID_METADATA,
-                    "experiment.toml missing [experiment] section",
+                    INVALID_EXPERIMENT_ID,
+                    format!("Invalid experiment ID '{id}': must match pattern EXP-V1-XXXX"),
                 )
                 .with_path(&metadata_path)
-                .with_hint("Add [experiment] section with id, name, slug, version, category"),
+                .with_hint("Use format: EXP-V1-0001, EXP-V1-0002, etc."),
+            );
+        }
+
+        let version = &metadata.experiment.version;
+        if !is_valid_semver(version) {
+            diagnostics.push(
+                Diagnostic::warning(
+                    INVALID_VERSION,
+                    format!("Version '{version}' may not be valid SemVer"),
+                )
+                .with_path(&metadata_path)
+                .with_hint("Use SemVer format: MAJOR.MINOR.PATCH (e.g., 0.1.0)"),
             );
         }
     }

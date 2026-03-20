@@ -7,7 +7,7 @@
 //! ⚠️ EXPERIMENTAL: This standard is in incubation and may change significantly.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 // ─── Error Codes ────────────────────────────────────────────────────────────
@@ -353,24 +353,19 @@ impl FitnessValidator {
         let mut results = Vec::new();
         let mut all_stale = Vec::new();
 
-        // Track which exceptions were used and which rules were fully evaluated
-        let mut used_exceptions: HashMap<String, Vec<String>> = HashMap::new();
+        // Track which exceptions were matched (any exception entry found, budget or not)
+        // and which rules were fully evaluated (not skipped).
+        let mut matched_exceptions: HashMap<String, HashSet<String>> = HashMap::new();
         let mut evaluated_rule_ids: Vec<String> = Vec::new();
 
         for rule in &self.config.rules.threshold {
-            let (result, stale) = self.evaluate_threshold_rule(rule)?;
+            let (result, stale, matched) = self.evaluate_threshold_rule(rule)?;
             // Only track stale detection for rules that were actually evaluated
             // (not skipped due to missing artifacts)
             if result.status != RuleStatus::Skip {
                 evaluated_rule_ids.push(rule.id.clone());
-            }
-            // Track used exceptions
-            for v in &result.violations {
-                if v.excepted {
-                    used_exceptions
-                        .entry(rule.id.clone())
-                        .or_default()
-                        .push(v.entity.clone());
+                if !matched.is_empty() {
+                    matched_exceptions.insert(rule.id.clone(), matched);
                 }
             }
             results.push(result);
@@ -379,17 +374,19 @@ impl FitnessValidator {
 
         // Detect stale exceptions — only for rules that were fully evaluated.
         // Skipped rules (missing artifact) should not trigger EntityNotFound.
+        // Use matched_exceptions (not just excepted ones) so insufficient-budget
+        // exceptions are not falsely reported as EntityNotFound.
         for (rule_id, entities) in &self.exceptions.rules {
             if !evaluated_rule_ids.contains(rule_id) {
                 continue; // Rule was skipped or doesn't exist — don't flag exceptions as stale
             }
-            let used = used_exceptions.get(rule_id);
+            let matched = matched_exceptions.get(rule_id);
             for entity in entities.keys() {
-                let was_used = used.is_some_and(|u| u.contains(entity));
+                let was_matched = matched.is_some_and(|m| m.contains(entity.as_str()));
                 let already_stale = all_stale
                     .iter()
                     .any(|s: &StaleException| s.rule_id == *rule_id && s.entity == *entity);
-                if !was_used && !already_stale {
+                if !was_matched && !already_stale {
                     all_stale.push(StaleException {
                         rule_id: rule_id.clone(),
                         entity: entity.clone(),
@@ -432,10 +429,15 @@ impl FitnessValidator {
     }
 
     /// Evaluate a single threshold rule against its topology artifact.
+    ///
+    /// Returns `(result, stale_exceptions, matched_exception_entities)` where
+    /// `matched_exception_entities` contains every entity path that had *any* exception
+    /// entry (whether the budget was sufficient or not). This is used by `validate()` for
+    /// accurate stale-exception detection — an insufficient-budget exception is not stale.
     fn evaluate_threshold_rule(
         &self,
         rule: &ThresholdRule,
-    ) -> Result<(RuleResult, Vec<StaleException>), FitnessError> {
+    ) -> Result<(RuleResult, Vec<StaleException>, HashSet<String>), FitnessError> {
         let artifact_path = self
             .repo_root
             .join(&self.config.config.topology_dir)
@@ -452,6 +454,7 @@ impl FitnessValidator {
                     exceptions_used: 0,
                 },
                 vec![],
+                HashSet::new(),
             ));
         }
 
@@ -464,6 +467,9 @@ impl FitnessValidator {
         let mut violations = Vec::new();
         let mut exceptions_used = 0;
         let mut stale = Vec::new();
+        // Track every entity that has an exception entry, regardless of budget sufficiency.
+        // Used by the caller to avoid false EntityNotFound stale reports.
+        let mut matched_exception_entities: HashSet<String> = HashSet::new();
 
         for (entity_path, value) in &entities {
             // Check exclude patterns
@@ -500,6 +506,8 @@ impl FitnessValidator {
             if violated {
                 // Check for exception
                 let excepted = if let Some(exc) = self.exceptions.get(&rule.id, entity_path) {
+                    // Record match regardless of budget — prevents false EntityNotFound stale
+                    matched_exception_entities.insert(entity_path.clone());
                     // If exception has a value budget, check it
                     if let Some(budget) = exc.value {
                         match direction {
@@ -557,6 +565,7 @@ impl FitnessValidator {
                 exceptions_used,
             },
             stale,
+            matched_exception_entities,
         ))
     }
 
