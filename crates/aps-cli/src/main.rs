@@ -1217,12 +1217,22 @@ fn write_topology_artifacts(
     fs::create_dir_all(output_path.join("metrics"))?;
     fs::create_dir_all(output_path.join("graphs"))?;
 
+    // Deduplicate functions — tree-sitter queries can match the same function
+    // multiple times (e.g. a class method matches both the function pattern
+    // and the method-in-class pattern).  Keep the first occurrence per
+    // (file_path, start_line) pair.
+    let mut seen_functions: HashSet<(std::path::PathBuf, u32)> = HashSet::new();
+    let functions: Vec<_> = functions
+        .iter()
+        .filter(|(func, _)| seen_functions.insert((func.file_path.clone(), func.start_line)))
+        .collect();
+
     // Group functions by module
     let mut modules: HashMap<
         String,
-        Vec<&(code_topology::FunctionInfo, code_topology::FunctionMetrics)>,
+        Vec<&&(code_topology::FunctionInfo, code_topology::FunctionMetrics)>,
     > = HashMap::new();
-    for func_with_metrics in functions {
+    for func_with_metrics in &functions {
         modules
             .entry(func_with_metrics.0.module.clone())
             .or_default()
@@ -1327,7 +1337,7 @@ total_dependencies = {}
     // Write functions.json
     let functions_json = serde_json::json!({
         "schema_version": "1.0.0",
-        "functions": functions.iter().map(|(func, metrics)| {
+        "functions": functions.iter().map(|&(func, metrics)| {
             serde_json::json!({
                 "id": func.qualified_name,
                 "name": func.name,
@@ -1358,15 +1368,28 @@ total_dependencies = {}
     let modules_json = serde_json::json!({
         "schema_version": "1.0.0",
         "modules": modules.iter().map(|(module_id, funcs)| {
-            let total_cc: u32 = funcs.iter().map(|(_, m)| m.cyclomatic_complexity).sum();
-            let total_cog: u32 = funcs.iter().map(|(_, m)| m.cognitive_complexity).sum();
-            let total_loc: u32 = funcs.iter().map(|(_, m)| m.total_lines).sum();
+            let total_cc: u32 = funcs.iter().map(|&&(_, m)| m.cyclomatic_complexity).sum();
+            let total_cog: u32 = funcs.iter().map(|&&(_, m)| m.cognitive_complexity).sum();
+            let total_loc: u32 = funcs.iter().map(|&&(_, m)| m.total_lines).sum();
             let count = funcs.len() as f64;
 
             // Unique files
             let unique_files: HashSet<_> = funcs.iter()
-                .map(|(f, _)| f.file_path.clone())
+                .map(|&&(f, _)| f.file_path.clone())
                 .collect();
+
+            // Per-module languages (derived from qualified_name prefix)
+            let module_languages: Vec<&str> = {
+                let mut langs: HashSet<&str> = HashSet::new();
+                for &&(f, _) in funcs {
+                    if let Some(lang) = f.qualified_name.split(':').next() {
+                        langs.insert(lang);
+                    }
+                }
+                let mut v: Vec<&str> = langs.into_iter().collect();
+                v.sort();
+                v
+            };
 
             // Martin metrics
             let ca = afferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
@@ -1394,7 +1417,7 @@ total_dependencies = {}
                 "id": module_id,
                 "name": module_id.split("::").last().unwrap_or(module_id),
                 "path": format!("{}/", module_id.replace("::", "/")),
-                "languages": languages,
+                "languages": module_languages,
                 "metrics": {
                     "file_count": unique_files.len(),
                     "function_count": funcs.len(),
@@ -1624,7 +1647,7 @@ total_dependencies = {}
 
     // For each function, check if it uses types from other modules
     // This is a simplified approach - we look for type names in the same module's functions
-    for (func, _) in functions {
+    for &(func, _) in &functions {
         let func_module = &func.module;
         // Check for type usages - simplified: count types defined in other modules
         for (type_name, defining_module) in &type_to_module {
