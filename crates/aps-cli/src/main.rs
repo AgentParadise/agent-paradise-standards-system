@@ -1014,7 +1014,9 @@ fn topology_analyze(
     verbose: bool,
 ) -> ExitCode {
     use code_topology::LanguageAdapter;
-    use code_topology::adapter::grammars::{PythonGrammar, RustGrammar};
+    use code_topology::adapter::grammars::{
+        PythonGrammar, RustGrammar, TsxGrammar, TypeScriptGrammar,
+    };
     use code_topology::adapter::{GrammarRegistry, TreeSitterAdapter};
     use std::collections::HashMap;
     use std::fs;
@@ -1036,6 +1038,8 @@ fn topology_analyze(
     let mut registry = GrammarRegistry::new();
     registry.register(Box::new(RustGrammar::new()));
     registry.register(Box::new(PythonGrammar::new()));
+    registry.register(Box::new(TypeScriptGrammar::new()));
+    registry.register(Box::new(TsxGrammar::new()));
 
     let adapter = TreeSitterAdapter::new(registry);
 

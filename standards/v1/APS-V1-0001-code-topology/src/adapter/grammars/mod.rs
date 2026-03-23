@@ -25,9 +25,11 @@
 
 pub mod python;
 pub mod rust;
+pub mod typescript;
 
 pub use python::PythonGrammar;
 pub use rust::RustGrammar;
+pub use typescript::{TsxGrammar, TypeScriptGrammar};
 
 use std::path::Path;
 

@@ -30,7 +30,7 @@ Generate `.topology/` artifacts from a codebase by running complexity analysis a
 ## Procedure
 
 1. **Detect languages** in the codebase by scanning file extensions
-2. **Load grammars** from the unified tree-sitter framework (Rust, Python)
+2. **Load grammars** from the unified tree-sitter framework (Rust, Python, TypeScript, TSX)
 3. **Walk directory** tree, filtering hidden dirs and build artifacts
 4. **Extract functions** from all source files using tree-sitter queries
 5. **Compute metrics** for each function using shared complexity engine:
@@ -51,7 +51,9 @@ Generate `.topology/` artifacts from a codebase by running complexity analysis a
 |----------|------------|--------|
 | Rust | `.rs` | ✅ Implemented |
 | Python | `.py`, `.pyi` | ✅ Implemented |
-| TypeScript/JS | `.ts`, `.tsx`, `.js`, `.jsx` | 📋 Planned (see [Issue #13](https://github.com/AgentParadise/agent-paradise-standards-system/issues/13)) |
+| TypeScript | `.ts` | ✅ Implemented |
+| TSX | `.tsx` | ✅ Implemented |
+| JavaScript/JSX | `.js`, `.jsx`, `.mjs` | 📋 Planned |
 
 ## CLI Commands
 
