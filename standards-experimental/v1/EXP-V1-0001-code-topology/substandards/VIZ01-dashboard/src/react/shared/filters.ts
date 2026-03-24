@@ -6,7 +6,7 @@
  */
 
 import type { DependencyEdge, ModuleMetric, TopoNode, TopoLink } from './types';
-import { getContextColor } from './colors';
+import { CONTEXT_COLORS, getContextColor } from './colors';
 
 /* ---------- Helpers ---------- */
 
@@ -15,19 +15,8 @@ function shortName(id: string): string {
   return parts[parts.length - 1] || id;
 }
 
-const CONTEXT_KEYWORDS = [
-  'event-sourcing-platform',
-  'agentic-primitives',
-  'orchestration',
-  'observability',
-  'workspace',
-  'workflow',
-  'session',
-  'artifact',
-  'github',
-  'cost',
-  'token',
-] as const;
+// Derived from CONTEXT_COLORS keys, sorted longest-first for greedy matching
+const CONTEXT_KEYWORDS = Object.keys(CONTEXT_COLORS).sort((a, b) => b.length - a.length);
 
 function inferContext(id: string): string {
   const lower = id.toLowerCase();
