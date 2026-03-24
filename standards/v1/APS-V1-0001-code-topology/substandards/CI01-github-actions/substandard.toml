@@ -1,0 +1,12 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0001.CI01"
+name = "GitHub Actions CI Integration"
+slug = "github-actions"
+version = "0.1.0"
+parent_id = "APS-V1-0001"
+parent_major = "0"
+
+[ownership]
+maintainers = ["AgentParadise"]

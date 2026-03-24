@@ -51,7 +51,11 @@ edition = "2021"
     )
     .unwrap();
 
-    fs::write(dir.join("src/lib.rs"), "// {{name}}\n").unwrap();
+    fs::write(
+        dir.join("src/lib.rs"),
+        "// {{name}}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn it_works() {}\n}\n",
+    )
+    .unwrap();
     fs::write(
         dir.join("docs/01_spec.md"),
         "# {{id}} — {{name}} (Canonical Specification)\n\n**Version**: {{version}}\n",
@@ -59,7 +63,7 @@ edition = "2021"
     .unwrap();
 
     fs::write(dir.join("examples/README.md"), "# Examples\n").unwrap();
-    fs::write(dir.join("tests/README.md"), "# Tests\n").unwrap();
+    fs::write(dir.join("examples/placeholder.toml"), "# Example\n").unwrap();
     fs::write(dir.join("agents/skills/README.md"), "# Skills\n").unwrap();
 }
 
@@ -101,7 +105,11 @@ edition = "2021"
     )
     .unwrap();
 
-    fs::write(dir.join("src/lib.rs"), "// {{name}} (Experimental)\n").unwrap();
+    fs::write(
+        dir.join("src/lib.rs"),
+        "// {{name}} (Experimental)\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn it_works() {}\n}\n",
+    )
+    .unwrap();
     fs::write(
         dir.join("docs/01_spec.md"),
         "# {{id}} — {{name}} (Experimental Specification)\n\n**Version**: {{version}}\n",
@@ -109,7 +117,7 @@ edition = "2021"
     .unwrap();
 
     fs::write(dir.join("examples/README.md"), "# Examples\n").unwrap();
-    fs::write(dir.join("tests/README.md"), "# Tests\n").unwrap();
+    fs::write(dir.join("examples/placeholder.toml"), "# Example\n").unwrap();
     fs::write(dir.join("agents/skills/README.md"), "# Skills\n").unwrap();
 }
 

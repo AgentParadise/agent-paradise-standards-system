@@ -1,0 +1,106 @@
+// Code Topology and Coupling Analysis - Manifest Schema
+// EXP-V1-0001 | Version: 0.1.0
+//
+// This file defines the structure of .topology/manifest.toml
+// The manifest is serialized as TOML but its schema is defined here.
+
+syntax = "proto3";
+
+package code_topology.v1;
+
+option java_package = "dev.agentparadise.topology.v1";
+option go_package = "github.com/AgentParadise/topology/v1;topologyv1";
+
+// Manifest is the root metadata file for topology artifacts.
+// Stored at: .topology/manifest.toml
+message Manifest {
+  // Schema version for this manifest format
+  string schema_version = 1 [json_name = "version"];
+
+  // Topology metadata
+  TopologyMeta topology = 2;
+
+  // Analysis configuration
+  AnalysisConfig analysis = 3;
+
+  // Generation configuration
+  GenerationConfig config = 4;
+
+  // Commit strategy
+  StrategyConfig strategy = 5;
+}
+
+// Metadata about the topology generation
+message TopologyMeta {
+  // Schema version (e.g., "0.1.0")
+  string version = 1;
+
+  // ISO 8601 timestamp when generated
+  string generated_at = 2 [json_name = "generated_at"];
+
+  // Tool that generated the artifacts
+  string generator = 3;
+
+  // Version of the generator tool
+  string generator_version = 4 [json_name = "generator_version"];
+}
+
+// Analysis scope and results
+message AnalysisConfig {
+  // Root path analyzed (relative to repo root)
+  string root = 1;
+
+  // Languages detected and analyzed
+  repeated string languages = 2;
+
+  // Total number of files analyzed
+  uint32 total_files = 3 [json_name = "total_files"];
+
+  // Total number of functions analyzed
+  uint32 total_functions = 4 [json_name = "total_functions"];
+
+  // Total number of modules identified
+  uint32 total_modules = 5 [json_name = "total_modules"];
+}
+
+// Generation configuration options
+message GenerationConfig {
+  // Granularity levels computed
+  repeated Granularity granularity = 1;
+
+  // Glob patterns for included files
+  repeated string include_patterns = 2 [json_name = "include_patterns"];
+
+  // Glob patterns for excluded files
+  repeated string exclude_patterns = 3 [json_name = "exclude_patterns"];
+}
+
+// Analysis granularity level
+enum Granularity {
+  GRANULARITY_UNSPECIFIED = 0;
+  GRANULARITY_FUNCTION = 1;
+  GRANULARITY_FILE = 2;
+  GRANULARITY_MODULE = 3;
+}
+
+// Commit strategy configuration
+message StrategyConfig {
+  // Strategy mode
+  StrategyMode mode = 1;
+
+  // Whether large files are gzip compressed
+  bool compress = 2;
+
+  // Number of historical snapshots to retain (-1 = unlimited)
+  int32 snapshot_retention = 3 [json_name = "snapshot_retention"];
+}
+
+// Commit strategy mode
+enum StrategyMode {
+  STRATEGY_MODE_UNSPECIFIED = 0;
+  // Complete regeneration each analysis
+  STRATEGY_MODE_FULL = 1;
+  // Only changed files re-analyzed
+  STRATEGY_MODE_INCREMENTAL = 2;
+}
+

@@ -1,0 +1,22 @@
+# Example: Minimal valid standard.toml
+#
+# This is the minimum metadata required for an official APS standard.
+# Copy this as a starting point when creating a new standard.
+#
+# See: docs/01_spec.md §6.1
+
+schema = "aps.standard/v1"
+
+[standard]
+id = "APS-V1-0042"
+name = "My Standard Name"
+slug = "my-standard"
+version = "1.0.0"
+category = "technical"       # governance | technical | design | process | security
+status = "active"            # active | deprecated
+
+[aps]
+aps_major = "v1"
+
+[ownership]
+maintainers = ["MyOrg/my-team"]

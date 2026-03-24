@@ -1,0 +1,712 @@
+//! CodeCity Visualization
+//!
+//! 3D city metaphor where buildings represent modules.
+//! - **Height** = cyclomatic complexity (log-scaled)
+//! - **Footprint** = lines of code (sqrt-scaled)
+//! - **Color** = health score (green → red gradient)
+//! - **Districts** = slices/packages (treemap layout with labeled ground planes)
+
+use crate::escape_json_for_html;
+
+/// Generate CodeCity HTML visualization.
+///
+/// # Arguments
+/// * `modules_json` - JSON array of module data with slice, layer, health, complexity
+/// * `coupling_json` - JSON coupling matrix data
+///
+/// # Returns
+/// Complete HTML document as a string
+#[allow(clippy::uninlined_format_args)]
+pub fn generate(modules_json: &str, coupling_json: &str) -> String {
+    let modules_escaped = escape_json_for_html(modules_json);
+    let _coupling_escaped = escape_json_for_html(coupling_json);
+
+    format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCity - Topology Visualization</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; overflow: hidden; }}
+        #info {{ position: fixed; top: 20px; left: 20px; background: rgba(0,0,0,0.85); padding: 20px; border-radius: 12px; border: 1px solid #333; max-width: 320px; z-index: 100; backdrop-filter: blur(10px); }}
+        #info h1 {{ font-size: 18px; margin-bottom: 6px; color: #00ff88; }}
+        #info .subtitle {{ font-size: 11px; color: #666; margin-bottom: 12px; }}
+        #info p {{ font-size: 12px; color: #888; margin-bottom: 6px; }}
+        #legend {{ margin-top: 12px; }}
+        .legend-section {{ margin-bottom: 10px; }}
+        .legend-title {{ font-size: 11px; color: #666; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }}
+        .legend-item {{ display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 11px; color: #aaa; }}
+        .legend-color {{ width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }}
+        #tooltip {{ position: fixed; display: none; background: rgba(10,10,20,0.95); padding: 16px; border-radius: 10px; border: 1px solid #444; font-size: 12px; pointer-events: none; z-index: 200; max-width: 360px; min-width: 260px; backdrop-filter: blur(10px); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }}
+        #tooltip h3 {{ color: #6bf; margin-bottom: 10px; font-size: 14px; word-break: break-word; }}
+        #tooltip .section-label {{ color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px; margin-bottom: 4px; }}
+        #tooltip .metric {{ display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #1a1a2a; }}
+        #tooltip .metric:last-child {{ border-bottom: none; }}
+        #tooltip .label {{ color: #888; }}
+        #tooltip .value {{ color: #fff; font-weight: 500; }}
+        #tooltip .health-bar {{ height: 6px; border-radius: 3px; background: #222; margin-top: 8px; overflow: hidden; }}
+        #tooltip .health-fill {{ height: 100%; border-radius: 3px; transition: width 0.3s; }}
+        #tooltip .health-breakdown {{ margin-top: 6px; }}
+        #tooltip .breakdown-item {{ display: flex; justify-content: space-between; font-size: 10px; padding: 2px 0; color: #777; }}
+        #tooltip .breakdown-item .score {{ font-weight: 500; }}
+        #controls {{ position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px 16px; border-radius: 8px; font-size: 11px; color: #666; display: flex; align-items: center; gap: 16px; }}
+        .toggle {{ display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }}
+        .toggle input {{ display: none; }}
+        .toggle .switch {{ width: 28px; height: 16px; background: #333; border-radius: 8px; position: relative; transition: background 0.2s; }}
+        .toggle input:checked + .switch {{ background: #00ff88; }}
+        .toggle .switch::after {{ content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #fff; border-radius: 50%; transition: transform 0.2s; }}
+        .toggle input:checked + .switch::after {{ transform: translateX(12px); }}
+        #minimap {{ position: fixed; bottom: 20px; right: 20px; width: 180px; height: 180px; background: rgba(0,0,0,0.85); border-radius: 10px; border: 1px solid #333; overflow: hidden; z-index: 100; }}
+        #minimap canvas {{ width: 100%; height: 100%; }}
+        #about-btn {{ position: fixed; top: 20px; right: 20px; background: rgba(0,0,0,0.85); border: 1px solid #333; color: #888; font-size: 13px; padding: 8px 14px; border-radius: 8px; cursor: pointer; z-index: 200; backdrop-filter: blur(10px); transition: border-color 0.2s; }}
+        #about-btn:hover {{ border-color: #00ff88; color: #ccc; }}
+        #about-panel {{ display: none; position: fixed; top: 0; right: 0; width: 420px; height: 100vh; background: rgba(8,8,15,0.97); border-left: 1px solid #222; z-index: 300; overflow-y: auto; padding: 30px; backdrop-filter: blur(20px); }}
+        #about-panel.open {{ display: block; }}
+        #about-panel h2 {{ font-size: 20px; color: #00ff88; margin-bottom: 16px; }}
+        #about-panel h3 {{ font-size: 14px; color: #aaa; margin: 20px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }}
+        #about-panel p {{ font-size: 13px; color: #777; line-height: 1.7; margin-bottom: 10px; }}
+        #about-panel .close {{ position: absolute; top: 16px; right: 16px; background: none; border: none; color: #666; font-size: 20px; cursor: pointer; padding: 4px 8px; }}
+        #about-panel .close:hover {{ color: #fff; }}
+        #about-panel .reading-item {{ background: #12121a; padding: 10px 14px; border-radius: 8px; margin: 6px 0; border-left: 3px solid #333; }}
+        #about-panel .reading-item strong {{ color: #ccc; font-size: 12px; display: block; margin-bottom: 2px; }}
+        #about-panel .reading-item span {{ color: #666; font-size: 11px; }}
+        #about-panel .metric-explain {{ display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 10px 0; font-size: 12px; }}
+        #about-panel .metric-explain dt {{ color: #aaa; font-weight: 600; }}
+        #about-panel .metric-explain dd {{ color: #666; }}
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h1>🏙️ CodeCity</h1>
+        <div class="subtitle" id="stats"></div>
+        <p>Buildings = modules. Districts = packages.</p>
+        <div id="legend">
+            <div class="legend-section">
+                <div class="legend-title">Height → Complexity</div>
+                <div class="legend-item"><div class="legend-color" style="background:linear-gradient(to top, #333, #888)"></div>Low → High cyclomatic complexity</div>
+            </div>
+            <div class="legend-section">
+                <div class="legend-title">Footprint → Lines of Code</div>
+                <div class="legend-item"><div class="legend-color" style="background:#555; width:8px; height:8px;"></div>Small module</div>
+                <div class="legend-item"><div class="legend-color" style="background:#555; width:14px; height:14px;"></div>Large module</div>
+            </div>
+            <div class="legend-section">
+                <div class="legend-title">Color → Health Score</div>
+                <div class="legend-item"><div class="legend-color" style="background:#00ff88"></div>Excellent (≥80%)</div>
+                <div class="legend-item"><div class="legend-color" style="background:#88cc55"></div>OK (≥50%)</div>
+                <div class="legend-item"><div class="legend-color" style="background:#ddaa33"></div>Warning (≥35%)</div>
+                <div class="legend-item"><div class="legend-color" style="background:#ff3333"></div>Critical (&lt;20%)</div>
+            </div>
+        </div>
+    </div>
+    <button id="about-btn" onclick="document.getElementById('about-panel').classList.toggle('open')">ℹ️ About CodeCity</button>
+    <div id="about-panel">
+        <button class="close" onclick="this.parentElement.classList.remove('open')">✕</button>
+        <h2>🏙️ About CodeCity</h2>
+
+        <h3>Philosophy</h3>
+        <p>
+            CodeCity visualizes your codebase as a living city. Each building is a source module,
+            each district is a package or bounded context. The metaphor is intuitive: you can
+            <em>see</em> complexity hotspots (tall buildings), large modules (wide footprints),
+            and unhealthy code (red buildings) at a glance — no spreadsheets needed.
+        </p>
+        <p>
+            The goal is to make structural problems <strong style="color:#ccc">visible and visceral</strong>.
+            A 3,000-line file with cyclomatic complexity of 50 isn't just a number — it's a
+            skyscraper towering over its neighbors, impossible to ignore.
+        </p>
+
+        <h3>Inspirations</h3>
+        <a href="https://wettel.github.io/download/Wettel07b-vissoft.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
+            <strong>Wettel &amp; Lanza — "Software Systems as Cities" (VISSOFT 2007) ↗</strong>
+            <span>The original CodeCity paper. Established the building metaphor: height = methods, footprint = attributes, color = nesting depth.</span>
+        </a>
+        <a href="https://wettel.github.io/download/Wettel11a-icse.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
+            <strong>Wettel &amp; Lanza — Controlled Experiment (ICSE 2011) ↗</strong>
+            <span>Empirical validation: developers using CodeCity completed tasks 20% faster than with standard tools.</span>
+        </a>
+        <a href="https://codecharta.com/" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
+            <strong>CodeCharta (MaibornWolff) ↗</strong>
+            <span>Modern open-source tool that added treemap layouts, metric switching, and delta comparison between versions.</span>
+        </a>
+        <a href="https://vanwijk.win.tue.nl/stm.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
+            <strong>Squarified Treemaps — Bruls, Huizing &amp; van Wijk (2000) ↗</strong>
+            <span>The layout algorithm used for district and building placement. Optimizes for square-ish rectangles to minimize wasted space.</span>
+        </a>
+
+        <h3>What the Dimensions Mean</h3>
+        <dl class="metric-explain">
+            <dt>Height</dt>
+            <dd>Cyclomatic complexity (log-scaled). Tall = many branch points = hard to test.</dd>
+            <dt>Footprint</dt>
+            <dd>Lines of code (sqrt-scaled via treemap). Wide = large module.</dd>
+            <dt>Color</dt>
+            <dd>Health score: <span style="color:#00ff88">green</span> (healthy) → <span style="color:#ddaa33">yellow</span> (warning) → <span style="color:#ff3333">red</span> (critical).</dd>
+            <dt>Districts</dt>
+            <dd>Top-level packages or bounded contexts. Ground color varies by district.</dd>
+        </dl>
+
+        <h3>Health Score Breakdown</h3>
+        <p>Each module's health is a composite of five equally-weighted metrics (hover a building to see the breakdown):</p>
+        <dl class="metric-explain">
+            <dt>Complexity</dt>
+            <dd>Average cyclomatic complexity per function. Target: &lt;5 per function.</dd>
+            <dt>Cognitive</dt>
+            <dd>Average cognitive complexity. Penalizes nesting, breaks in flow. Target: &lt;15.</dd>
+            <dt>LOC/func</dt>
+            <dd>Average lines per function. Target: &lt;50 lines.</dd>
+            <dt>Coupling</dt>
+            <dd>Ca + Ce (afferent + efferent). High coupling = fragile, risky to change.</dd>
+            <dt>Module size</dt>
+            <dd>Function count. Sweet spot: 2–30 functions per module.</dd>
+        </dl>
+
+        <h3>How to Read the City</h3>
+        <p>
+            <strong style="color:#ccc">Tall red buildings</strong> — complexity hotspots. These are the files most likely
+            to harbor bugs and resist refactoring. Prioritize these for cleanup.
+        </p>
+        <p>
+            <strong style="color:#ccc">Large green blocks</strong> — big but healthy modules. These have lots of code
+            but good averages per function. Monitor but don't panic.
+        </p>
+        <p>
+            <strong style="color:#ccc">Tiny scattered buildings</strong> — small utility modules.
+            If there are too many, it may indicate over-decomposition.
+        </p>
+        <p>
+            <strong style="color:#ccc">Dense districts</strong> — packages with many modules.
+            If they also have lots of red, the bounded context may need decomposition.
+        </p>
+
+        <h3>Data Source</h3>
+        <p>
+            All metrics are derived deterministically from the AST (Abstract Syntax Tree) using
+            tree-sitter parsing. No heuristics, no opinions — just structural facts.
+            Same code + same seed = same visualization.
+        </p>
+        <p style="color:#555; font-size:11px; margin-top:20px;">
+            Generated by APS-V1-0001 Code Topology • Agent Paradise Standards System
+        </p>
+    </div>
+    <div id="tooltip"></div>
+    <div id="controls">
+        <span>🖱️ Left: rotate • Right: pan • Scroll: zoom • Hover: inspect</span>
+        <label class="toggle"><input type="checkbox" id="label-toggle" checked><span class="switch"></span>Labels</label>
+    </div>
+    <div id="minimap"><canvas id="minimap-canvas"></canvas></div>
+
+    <script type="importmap">
+    {{
+        "imports": {{
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }}
+    }}
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import {{ CSS2DRenderer, CSS2DObject }} from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const MODULES = {modules_json};
+
+        // ====================================================================
+        // Squarified Treemap Layout
+        // ====================================================================
+        function treemapLayout(items, x, y, w, h) {{
+            if (items.length === 0) return [];
+            if (items.length === 1) {{
+                return [{{ item: items[0], x, y, w, h }}];
+            }}
+
+            // Sort descending by value
+            const sorted = [...items].sort((a, b) => b.value - a.value);
+            const total = sorted.reduce((s, i) => s + i.value, 0);
+            if (total === 0) return sorted.map((item, i) => ({{ item, x: x + i * 0.1, y, w: 0.1, h: 0.1 }}));
+
+            // Find best split
+            let sum = 0;
+            let splitIdx = 0;
+            const half = total / 2;
+            for (let i = 0; i < sorted.length; i++) {{
+                sum += sorted[i].value;
+                if (sum >= half) {{ splitIdx = i + 1; break; }}
+            }}
+            splitIdx = Math.max(1, Math.min(splitIdx, sorted.length - 1));
+
+            const left = sorted.slice(0, splitIdx);
+            const right = sorted.slice(splitIdx);
+            const leftVal = left.reduce((s, i) => s + i.value, 0);
+            const ratio = leftVal / total;
+
+            let results = [];
+            if (w >= h) {{
+                // Split horizontally
+                const splitW = w * ratio;
+                results = results.concat(treemapLayout(left, x, y, splitW, h));
+                results = results.concat(treemapLayout(right, x + splitW, y, w - splitW, h));
+            }} else {{
+                // Split vertically
+                const splitH = h * ratio;
+                results = results.concat(treemapLayout(left, x, y, w, splitH));
+                results = results.concat(treemapLayout(right, x, y + splitH, w, h - splitH));
+            }}
+            return results;
+        }}
+
+        // ====================================================================
+        // Scene Setup
+        // ====================================================================
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0f);
+        scene.fog = new THREE.FogExp2(0x0a0a0f, 0.003);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+
+        const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // CSS2D for district labels
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+        scene.add(ambient);
+        const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+        sun.position.set(80, 120, 60);
+        sun.castShadow = true;
+        sun.shadow.mapSize.width = 2048;
+        sun.shadow.mapSize.height = 2048;
+        sun.shadow.camera.near = 1;
+        sun.shadow.camera.far = 400;
+        sun.shadow.camera.left = -200;
+        sun.shadow.camera.right = 200;
+        sun.shadow.camera.top = 200;
+        sun.shadow.camera.bottom = -200;
+        scene.add(sun);
+
+        const fill = new THREE.DirectionalLight(0x4466aa, 0.3);
+        fill.position.set(-40, 30, -60);
+        scene.add(fill);
+
+        // ====================================================================
+        // Process Data: Group by top-level package (fewer, larger districts)
+        // ====================================================================
+        function getTopPackage(slice) {{
+            // Group to top-level: packages.syn-domain, lib::agentic-primitives, etc.
+            const parts = slice.replace(/::/g, '.').split('.');
+            return parts.slice(0, 2).join('.');
+        }}
+
+        const packageGroups = {{}};
+        MODULES.forEach(m => {{
+            const pkg = getTopPackage(m.slice);
+            if (!packageGroups[pkg]) packageGroups[pkg] = [];
+            packageGroups[pkg].push(m);
+        }});
+
+        const packageNames = Object.keys(packageGroups).sort((a, b) =>
+            packageGroups[b].length - packageGroups[a].length
+        );
+
+        // Stats
+        document.getElementById('stats').textContent =
+            `${{MODULES.length}} modules • ${{packageNames.length}} districts • ${{MODULES.reduce((s,m) => s + m.lines_of_code, 0).toLocaleString()}} LOC`;
+
+        // ====================================================================
+        // Treemap Layout for Districts
+        // ====================================================================
+        const totalLOC = MODULES.reduce((s, m) => s + (m.lines_of_code || 1), 0);
+        const citySize = Math.sqrt(totalLOC) * 0.15;  // Scale city to LOC
+
+        const districtItems = packageNames.map(name => ({{
+            name,
+            value: packageGroups[name].reduce((s, m) => s + (m.lines_of_code || 1), 0)
+        }}));
+
+        const districtRects = treemapLayout(districtItems, -citySize/2, -citySize/2, citySize, citySize);
+
+        // ====================================================================
+        // District ground colors (by top-level package)
+        // ====================================================================
+        const districtColors = [
+            0x1a1a2e, 0x16213e, 0x1a2332, 0x1e1e30, 0x1c2833,
+            0x212130, 0x1a2a1a, 0x2a1a2a, 0x2a2a1a, 0x1a2a2a,
+            0x261a2e, 0x1e2e1a, 0x2e1e1a, 0x1a1e2e, 0x2e2e1a,
+        ];
+
+        // ====================================================================
+        // Build the City
+        // ====================================================================
+        const buildings = [];
+        const districtGroups = [];
+        const districtLabels = [];
+        const PADDING = 0.8; // District padding ratio
+        const GAP = 1.5; // Gap between buildings
+
+        districtRects.forEach((dr, dIdx) => {{
+            const distName = dr.item.name;
+            const modules = packageGroups[distName];
+            const shortName = distName.split('.').pop() || distName;
+
+            // District ground plane
+            const groundColor = districtColors[dIdx % districtColors.length];
+            const groundGeo = new THREE.PlaneGeometry(dr.w * 0.95, dr.h * 0.95);
+            const groundMat = new THREE.MeshStandardMaterial({{
+                color: groundColor,
+                roughness: 0.9,
+                metalness: 0.1,
+            }});
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.set(dr.x + dr.w / 2, 0.01, dr.y + dr.h / 2);
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // District border
+            const borderGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(dr.w * 0.96, dr.h * 0.96));
+            const borderMat = new THREE.LineBasicMaterial({{ color: 0x333355, transparent: true, opacity: 0.5 }});
+            const border = new THREE.LineSegments(borderGeo, borderMat);
+            border.rotation.x = -Math.PI / 2;
+            border.position.set(dr.x + dr.w / 2, 0.02, dr.y + dr.h / 2);
+            scene.add(border);
+
+            // District label (flag pole)
+            const labelDiv = document.createElement('div');
+            labelDiv.style.cssText = `
+                color: #aaa; font-size: 11px; font-weight: 600;
+                background: rgba(0,0,0,0.7); padding: 3px 8px; border-radius: 4px;
+                border-left: 3px solid #${{groundColor.toString(16).padStart(6,'0').replace(/^(.)(.)(.)$/,'$1$1$2$2$3$3')}};
+                white-space: nowrap; pointer-events: none;
+            `;
+            labelDiv.textContent = shortName + ` (${{modules.length}})`;
+            const label = new CSS2DObject(labelDiv);
+            label.position.set(dr.x + dr.w / 2, 0.5, dr.y + 1.5);
+            scene.add(label);
+            districtLabels.push(label);
+
+            // Inner treemap for buildings within district
+            const innerPad = dr.w * (1 - PADDING) / 2;
+            const buildingItems = modules.map(m => ({{
+                module: m,
+                value: Math.max(m.lines_of_code || 1, 10)
+            }}));
+
+            const buildingRects = treemapLayout(
+                buildingItems,
+                dr.x + innerPad,
+                dr.y + innerPad + 2, // offset for label
+                dr.w * PADDING,
+                dr.h * PADDING - 2
+            );
+
+            buildingRects.forEach(br => {{
+                const m = br.item.module;
+
+                // Height: cyclomatic complexity (log-scaled)
+                const rawCC = m.total_cyclomatic || 1;
+                const height = Math.max(0.5, Math.log10(rawCC + 1) * 4);
+
+                // Footprint: from treemap rect, with small gap
+                const bw = Math.max(0.3, br.w - GAP * 0.3);
+                const bd = Math.max(0.3, br.h - GAP * 0.3);
+
+                const geometry = new THREE.BoxGeometry(bw, height, bd);
+                const healthColor = new THREE.Color(m.color);
+
+                const material = new THREE.MeshStandardMaterial({{
+                    color: healthColor,
+                    roughness: 0.55,
+                    metalness: 0.15,
+                    emissive: healthColor,
+                    emissiveIntensity: m.health < 0.35 ? 0.15 : 0.02,
+                }});
+
+                const building = new THREE.Mesh(geometry, material);
+                building.position.set(
+                    br.x + br.w / 2,
+                    height / 2,
+                    br.y + br.h / 2
+                );
+                building.castShadow = true;
+                building.receiveShadow = true;
+                building.userData = {{ ...m, _district: shortName }};
+                scene.add(building);
+                buildings.push(building);
+            }});
+
+            districtGroups.push({{ name: distName, shortName, rect: dr, moduleCount: modules.length }});
+        }});
+
+        // ====================================================================
+        // Camera: OrbitControls-style with proper panning
+        // ====================================================================
+        let isDragging = false;
+        let isPanning = false;
+        let previousMouse = {{ x: 0, y: 0 }};
+        let spherical = {{ radius: citySize * 0.8, theta: Math.PI / 4, phi: Math.PI / 4 }};
+        let target = new THREE.Vector3(0, 0, 0);
+
+        function updateCamera() {{
+            camera.position.x = target.x + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+            camera.position.y = target.y + spherical.radius * Math.cos(spherical.phi);
+            camera.position.z = target.z + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+            camera.lookAt(target);
+        }}
+        updateCamera();
+
+        renderer.domElement.addEventListener('mousedown', e => {{
+            if (e.button === 0) isDragging = true;
+            if (e.button === 2) isPanning = true;
+            previousMouse = {{ x: e.clientX, y: e.clientY }};
+        }});
+
+        renderer.domElement.addEventListener('mousemove', e => {{
+            const deltaX = e.clientX - previousMouse.x;
+            const deltaY = e.clientY - previousMouse.y;
+
+            if (isDragging) {{
+                spherical.theta += deltaX * 0.008;
+                spherical.phi -= deltaY * 0.008;
+                spherical.phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, spherical.phi));
+                updateCamera();
+            }}
+            if (isPanning) {{
+                // Proper screen-space panning: move target along camera's right and up vectors
+                const panSpeed = spherical.radius * 0.001;
+                const camRight = new THREE.Vector3();
+                const camUp = new THREE.Vector3();
+                camera.matrixWorld.extractBasis(camRight, camUp, new THREE.Vector3());
+                // Project right/up onto ground plane (XZ)
+                camRight.y = 0;
+                camRight.normalize();
+                const groundForward = new THREE.Vector3();
+                camera.getWorldDirection(groundForward);
+                groundForward.y = 0;
+                groundForward.normalize();
+
+                target.add(camRight.multiplyScalar(-deltaX * panSpeed));
+                target.add(groundForward.multiplyScalar(deltaY * panSpeed));
+                updateCamera();
+            }}
+            previousMouse = {{ x: e.clientX, y: e.clientY }};
+        }});
+
+        window.addEventListener('mouseup', () => {{ isDragging = false; isPanning = false; }});
+        renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+        renderer.domElement.addEventListener('wheel', e => {{
+            e.preventDefault();
+            spherical.radius *= 1 + e.deltaY * 0.001;
+            spherical.radius = Math.max(5, Math.min(citySize * 2, spherical.radius));
+            updateCamera();
+        }}, {{ passive: false }});
+
+        // ====================================================================
+        // Raycasting for Tooltips + Selection
+        // ====================================================================
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const tooltip = document.getElementById('tooltip');
+        let hoveredBuilding = null;
+
+        function healthBreakdown(m) {{
+            // Replicate the health calculation to show breakdown
+            const avgCC = m.function_count > 0 ? m.total_cyclomatic / m.function_count : 0;
+            const avgCog = m.function_count > 0 ? m.total_cognitive / m.function_count : 0;
+            const locPerFunc = m.function_count > 0 ? m.lines_of_code / m.function_count : 0;
+            const totalCoupling = m.ca + m.ce;
+
+            const ccScore = Math.max(0, Math.min(1, 1 - Math.max(0, (avgCC - 5) / 15)));
+            const cogScore = Math.max(0, Math.min(1, 1 - avgCog / 30));
+            const locScore = Math.max(0, Math.min(1, 1 - Math.max(0, (locPerFunc - 50) / 100)));
+            const couplingScore = totalCoupling === 0 ? 0.6 : Math.max(0, Math.min(1, 1 - (totalCoupling - 10) / 30));
+
+            let sizeScore;
+            if (m.function_count < 2) sizeScore = 0.4;
+            else if (m.function_count <= 30) sizeScore = 1.0;
+            else if (m.function_count <= 50) sizeScore = 0.7;
+            else sizeScore = Math.max(0.2, 1 - (m.function_count - 50) / 100);
+
+            function scoreColor(s) {{
+                if (s >= 0.8) return '#00ff88';
+                if (s >= 0.5) return '#88cc55';
+                if (s >= 0.35) return '#ddaa33';
+                return '#ff4444';
+            }}
+
+            return `
+                <div class="breakdown-item"><span>Complexity (avg CC ${{avgCC.toFixed(1)}})</span><span class="score" style="color:${{scoreColor(ccScore)}}">${{(ccScore*100).toFixed(0)}}%</span></div>
+                <div class="breakdown-item"><span>Cognitive (avg ${{avgCog.toFixed(1)}})</span><span class="score" style="color:${{scoreColor(cogScore)}}">${{(cogScore*100).toFixed(0)}}%</span></div>
+                <div class="breakdown-item"><span>LOC/func (${{locPerFunc.toFixed(0)}})</span><span class="score" style="color:${{scoreColor(locScore)}}">${{(locScore*100).toFixed(0)}}%</span></div>
+                <div class="breakdown-item"><span>Coupling (Ca:${{m.ca}} Ce:${{m.ce}})</span><span class="score" style="color:${{scoreColor(couplingScore)}}">${{(couplingScore*100).toFixed(0)}}%</span></div>
+                <div class="breakdown-item"><span>Module size (${{m.function_count}} funcs)</span><span class="score" style="color:${{scoreColor(sizeScore)}}">${{(sizeScore*100).toFixed(0)}}%</span></div>
+            `;
+        }}
+
+        renderer.domElement.addEventListener('mousemove', e => {{
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(buildings);
+
+            // Clear previous hover highlight
+            if (hoveredBuilding) {{
+                const hd = hoveredBuilding.userData;
+                hoveredBuilding.material.emissiveIntensity = hd.health < 0.35 ? 0.15 : 0.02;
+                hoveredBuilding = null;
+            }}
+
+            if (intersects.length > 0) {{
+                const hit = intersects[0].object;
+                const m = hit.userData;
+                document.body.style.cursor = 'pointer';
+                tooltip.style.display = 'block';
+
+                let left = e.clientX + 15;
+                let top = e.clientY + 15;
+                if (left + 360 > window.innerWidth) left = e.clientX - 375;
+                if (top + 300 > window.innerHeight) top = e.clientY - 315;
+
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                tooltip.innerHTML = `
+                    <h3>${{m.name}}</h3>
+                    <div class="section-label">Location</div>
+                    <div class="metric"><span class="label">District</span><span class="value">${{m._district}}</span></div>
+                    <div class="metric"><span class="label">Slice</span><span class="value">${{m.slice}}</span></div>
+                    <div class="metric"><span class="label">Layer</span><span class="value">${{m.layer}}</span></div>
+                    <div class="section-label">Metrics</div>
+                    <div class="metric"><span class="label">Lines of Code</span><span class="value">${{m.lines_of_code.toLocaleString()}}</span></div>
+                    <div class="metric"><span class="label">Functions</span><span class="value">${{m.function_count}}</span></div>
+                    <div class="metric"><span class="label">Cyclomatic</span><span class="value">${{m.total_cyclomatic}}</span></div>
+                    <div class="metric"><span class="label">Cognitive</span><span class="value">${{m.total_cognitive}}</span></div>
+                    <div class="section-label">Health <span style="color:${{m.color}}; font-weight:600">${{(m.health * 100).toFixed(0)}}% ${{m.health_label}}</span></div>
+                    <div class="health-bar"><div class="health-fill" style="width:${{m.health*100}}%; background:${{m.color}}"></div></div>
+                    <div class="health-breakdown">${{healthBreakdown(m)}}</div>
+                `;
+
+                // Highlight only this building on hover
+                hoveredBuilding = hit;
+                hit.material.emissiveIntensity = 0.4;
+            }} else {{
+                tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+            }}
+        }});
+
+        // ====================================================================
+        // Label Toggle
+        // ====================================================================
+        document.getElementById('label-toggle').addEventListener('change', e => {{
+            const visible = e.target.checked;
+            districtLabels.forEach(l => {{ l.visible = visible; }});
+        }});
+
+        // ====================================================================
+        // Minimap
+        // ====================================================================
+        const minimapCanvas = document.getElementById('minimap-canvas');
+        const mmCtx = minimapCanvas.getContext('2d');
+        minimapCanvas.width = 180;
+        minimapCanvas.height = 180;
+
+        function drawMinimap() {{
+            mmCtx.fillStyle = '#0a0a0f';
+            mmCtx.fillRect(0, 0, 180, 180);
+
+            const scale = 160 / citySize;
+            const ox = 90, oy = 90;
+
+            // Draw districts
+            districtRects.forEach((dr, i) => {{
+                mmCtx.fillStyle = '#' + districtColors[i % districtColors.length].toString(16).padStart(6, '0');
+                mmCtx.fillRect(
+                    ox + dr.x * scale,
+                    oy + dr.y * scale,
+                    dr.w * scale,
+                    dr.h * scale
+                );
+            }});
+
+            // Draw camera position
+            mmCtx.fillStyle = '#ff4444';
+            mmCtx.beginPath();
+            mmCtx.arc(ox + target.x * scale, oy + target.z * scale, 3, 0, Math.PI * 2);
+            mmCtx.fill();
+
+            // Draw camera FOV cone
+            mmCtx.strokeStyle = 'rgba(255,100,100,0.4)';
+            mmCtx.lineWidth = 1;
+            const camDir = new THREE.Vector3();
+            camera.getWorldDirection(camDir);
+            const angle = Math.atan2(camDir.z, camDir.x);
+            const fovRad = 0.5;
+            mmCtx.beginPath();
+            mmCtx.moveTo(ox + target.x * scale, oy + target.z * scale);
+            mmCtx.lineTo(
+                ox + (target.x + Math.cos(angle - fovRad) * 30) * scale,
+                oy + (target.z + Math.sin(angle - fovRad) * 30) * scale
+            );
+            mmCtx.moveTo(ox + target.x * scale, oy + target.z * scale);
+            mmCtx.lineTo(
+                ox + (target.x + Math.cos(angle + fovRad) * 30) * scale,
+                oy + (target.z + Math.sin(angle + fovRad) * 30) * scale
+            );
+            mmCtx.stroke();
+        }}
+
+        // ====================================================================
+        // Resize + Animation
+        // ====================================================================
+        window.addEventListener('resize', () => {{
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }});
+
+        function animate() {{
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+            drawMinimap();
+        }}
+        animate();
+    </script>
+</body>
+</html>"##,
+        modules_json = modules_escaped,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_contains_doctype() {
+        let html = generate("[]", "{}");
+        assert!(html.starts_with("<!DOCTYPE html>"));
+    }
+
+    #[test]
+    fn test_generate_contains_title() {
+        let html = generate("[]", "{}");
+        assert!(html.contains("<title>CodeCity"));
+    }
+}
