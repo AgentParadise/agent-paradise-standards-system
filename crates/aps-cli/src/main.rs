@@ -222,6 +222,12 @@ fn main() -> ExitCode {
                 println!("    Code Topology - architectural metrics and visualization");
                 println!("    Commands: analyze, validate, diff, report, viz");
                 println!();
+                println!("  fitness (EXP-V1-0003) v0.1.0");
+                println!(
+                    "    Architecture Fitness Functions - declarative architectural assertions"
+                );
+                println!("    Commands: validate");
+                println!();
                 println!("Use 'aps run <slug> --help' for command details.");
                 return ExitCode::SUCCESS;
             }
@@ -675,6 +681,12 @@ fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
             name: "Code Topology",
             version: "0.1.0",
         }),
+        "fitness" | "fitness-functions" | "exp-v1-0003" => Some(StandardCliInfo {
+            id: "EXP-V1-0003",
+            slug: "fitness",
+            name: "Architecture Fitness Functions",
+            version: "0.1.0",
+        }),
         _ => None,
     }
 }
@@ -691,6 +703,7 @@ fn dispatch_standard_cli(
 
     match info.slug {
         "topology" => dispatch_topology(command, cmd_args, repo_root, verbose),
+        "fitness" => dispatch_fitness(command, cmd_args, repo_root, verbose),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -842,6 +855,151 @@ fn dispatch_topology(
         _ => {
             eprintln!("Error: Unknown topology command '{command}'");
             eprintln!("Use 'aps run topology --help' for available commands.");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Dispatch fitness function commands.
+fn dispatch_fitness(
+    command: &str,
+    args: &[String],
+    repo_root: &std::path::Path,
+    _verbose: bool,
+) -> ExitCode {
+    match command {
+        "--help" | "-h" | "help" => {
+            println!("Architecture Fitness Functions (EXP-V1-0003) v0.1.0");
+            println!();
+            println!("USAGE:");
+            println!("    aps run fitness <COMMAND> [OPTIONS]");
+            println!();
+            println!("COMMANDS:");
+            println!("    validate <path>    Validate fitness rules against topology artifacts");
+            println!();
+            println!("OPTIONS:");
+            println!("    --config <file>    Path to fitness.toml (default: ./fitness.toml)");
+            println!("    --report <file>    Write JSON report to file");
+            println!("    --help             Show this help message");
+            ExitCode::SUCCESS
+        }
+        "validate" => {
+            // Parse flags and positional args separately to avoid
+            // `--config custom.toml .` misinterpreting "--config" as the path
+            let mut positional_path: Option<&str> = None;
+            let mut config_path: Option<std::path::PathBuf> = None;
+            let mut report_path: Option<&String> = None;
+            let mut i = 0;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--config" => {
+                        config_path = args.get(i + 1).map(std::path::PathBuf::from);
+                        i += 2;
+                    }
+                    "--report" => {
+                        report_path = args.get(i + 1);
+                        i += 2;
+                    }
+                    arg if !arg.starts_with('-') && positional_path.is_none() => {
+                        positional_path = Some(arg);
+                        i += 1;
+                    }
+                    _ => {
+                        i += 1;
+                    }
+                }
+            }
+            let path = positional_path.unwrap_or(".");
+
+            let target = if std::path::Path::new(path).is_absolute() {
+                std::path::PathBuf::from(path)
+            } else {
+                repo_root.join(path)
+            };
+
+            // Resolve --config relative to target repo, not CWD
+            let config_path = config_path.map(|p| if p.is_absolute() { p } else { target.join(p) });
+
+            let validator =
+                match fitness_functions::FitnessValidator::load(&target, config_path.as_deref()) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                };
+
+            let report = match validator.validate() {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("Error during validation: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            // Print human-readable summary
+            println!("Fitness Validation Report");
+            println!("========================\n");
+            for result in &report.results {
+                let status_icon = match result.status {
+                    fitness_functions::RuleStatus::Pass => "PASS",
+                    fitness_functions::RuleStatus::Fail => "FAIL",
+                    fitness_functions::RuleStatus::Warn => "WARN",
+                    fitness_functions::RuleStatus::Skip => "SKIP",
+                };
+                println!(
+                    "  [{status_icon}] {} ({})",
+                    result.rule_name, result.rule_id
+                );
+                for v in &result.violations {
+                    let exc = if v.excepted { " (excepted)" } else { "" };
+                    println!(
+                        "         {} = {} (threshold: {} {:?}){exc}",
+                        v.entity, v.actual, v.threshold, v.direction
+                    );
+                }
+            }
+
+            if !report.stale_exceptions.is_empty() {
+                println!("\nStale Exceptions:");
+                for s in &report.stale_exceptions {
+                    println!("  {} [{}]: {:?}", s.entity, s.rule_id, s.reason);
+                }
+            }
+
+            println!(
+                "\nSummary: {} passed, {} failed, {} warned, {} violations ({} excepted), {} stale exceptions",
+                report.summary.passed,
+                report.summary.failed,
+                report.summary.warned,
+                report.summary.total_violations,
+                report.summary.excepted_violations,
+                report.summary.stale_exceptions,
+            );
+
+            // Write JSON report if requested
+            if let Some(report_file) = report_path {
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => {
+                        if let Err(e) = std::fs::write(report_file, json) {
+                            eprintln!("Error writing report: {e}");
+                        } else {
+                            println!("\nReport written to: {report_file}");
+                        }
+                    }
+                    Err(e) => eprintln!("Error serializing report: {e}"),
+                }
+            }
+
+            if fitness_functions::FitnessValidator::has_failures(&report) {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        other => {
+            eprintln!("Error: Unknown fitness command '{other}'");
+            eprintln!("Use 'aps run fitness --help' for available commands.");
             ExitCode::FAILURE
         }
     }
@@ -1059,12 +1217,22 @@ fn write_topology_artifacts(
     fs::create_dir_all(output_path.join("metrics"))?;
     fs::create_dir_all(output_path.join("graphs"))?;
 
+    // Deduplicate functions — tree-sitter queries can match the same function
+    // multiple times (e.g. a class method matches both the function pattern
+    // and the method-in-class pattern).  Keep the first occurrence per
+    // (file_path, start_line) pair.
+    let mut seen_functions: HashSet<(std::path::PathBuf, u32)> = HashSet::new();
+    let functions: Vec<_> = functions
+        .iter()
+        .filter(|(func, _)| seen_functions.insert((func.file_path.clone(), func.start_line)))
+        .collect();
+
     // Group functions by module
     let mut modules: HashMap<
         String,
-        Vec<&(code_topology::FunctionInfo, code_topology::FunctionMetrics)>,
+        Vec<&&(code_topology::FunctionInfo, code_topology::FunctionMetrics)>,
     > = HashMap::new();
-    for func_with_metrics in functions {
+    for func_with_metrics in &functions {
         modules
             .entry(func_with_metrics.0.module.clone())
             .or_default()
@@ -1169,7 +1337,7 @@ total_dependencies = {}
     // Write functions.json
     let functions_json = serde_json::json!({
         "schema_version": "1.0.0",
-        "functions": functions.iter().map(|(func, metrics)| {
+        "functions": functions.iter().map(|&(func, metrics)| {
             serde_json::json!({
                 "id": func.qualified_name,
                 "name": func.name,
@@ -1200,15 +1368,28 @@ total_dependencies = {}
     let modules_json = serde_json::json!({
         "schema_version": "1.0.0",
         "modules": modules.iter().map(|(module_id, funcs)| {
-            let total_cc: u32 = funcs.iter().map(|(_, m)| m.cyclomatic_complexity).sum();
-            let total_cog: u32 = funcs.iter().map(|(_, m)| m.cognitive_complexity).sum();
-            let total_loc: u32 = funcs.iter().map(|(_, m)| m.total_lines).sum();
+            let total_cc: u32 = funcs.iter().map(|&&(_, m)| m.cyclomatic_complexity).sum();
+            let total_cog: u32 = funcs.iter().map(|&&(_, m)| m.cognitive_complexity).sum();
+            let total_loc: u32 = funcs.iter().map(|&&(_, m)| m.total_lines).sum();
             let count = funcs.len() as f64;
 
             // Unique files
             let unique_files: HashSet<_> = funcs.iter()
-                .map(|(f, _)| f.file_path.clone())
+                .map(|&&(f, _)| f.file_path.clone())
                 .collect();
+
+            // Per-module languages (derived from qualified_name prefix)
+            let module_languages: Vec<&str> = {
+                let mut langs: HashSet<&str> = HashSet::new();
+                for &&(f, _) in funcs {
+                    if let Some(lang) = f.qualified_name.split(':').next() {
+                        langs.insert(lang);
+                    }
+                }
+                let mut v: Vec<&str> = langs.into_iter().collect();
+                v.sort();
+                v
+            };
 
             // Martin metrics
             let ca = afferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
@@ -1236,7 +1417,7 @@ total_dependencies = {}
                 "id": module_id,
                 "name": module_id.split("::").last().unwrap_or(module_id),
                 "path": format!("{}/", module_id.replace("::", "/")),
-                "languages": languages,
+                "languages": module_languages,
                 "metrics": {
                     "file_count": unique_files.len(),
                     "function_count": funcs.len(),
@@ -1466,7 +1647,7 @@ total_dependencies = {}
 
     // For each function, check if it uses types from other modules
     // This is a simplified approach - we look for type names in the same module's functions
-    for (func, _) in functions {
+    for &(func, _) in &functions {
         let func_module = &func.module;
         // Check for type usages - simplified: count types defined in other modules
         for (type_name, defining_module) in &type_to_module {

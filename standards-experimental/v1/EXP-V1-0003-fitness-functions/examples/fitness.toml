@@ -1,0 +1,70 @@
+# Example fitness.toml — Architecture Fitness Functions
+# Evaluated against .topology/metrics/ artifacts produced by APS-V1-0001
+
+[config]
+topology_dir = ".topology"
+exceptions = "fitness-exceptions.toml"
+severity_default = "error"
+
+# --- Threshold Rules ---
+
+[[rules.threshold]]
+id = "max-cyclomatic"
+name = "Maximum Cyclomatic Complexity"
+source = "metrics/complexity.json"
+field = "cyclomatic_complexity"
+max = 15
+scope = "function"
+severity = "error"
+exclude = ["**/test_*", "**/tests/**"]
+
+[[rules.threshold]]
+id = "max-cognitive"
+name = "Maximum Cognitive Complexity"
+source = "metrics/complexity.json"
+field = "cognitive_complexity"
+max = 20
+scope = "function"
+severity = "error"
+exclude = ["**/test_*", "**/tests/**"]
+
+[[rules.threshold]]
+id = "max-loc"
+name = "Maximum Lines of Code per File"
+source = "metrics/file_metrics.json"
+field = "lines_of_code"
+max = 500
+scope = "file"
+severity = "warning"
+
+[[rules.threshold]]
+id = "max-fan-out"
+name = "Maximum Fan-Out (Efferent Coupling)"
+source = "metrics/coupling.json"
+field = "efferent_coupling"
+max = 20
+scope = "module"
+severity = "error"
+exclude = ["**/tests/**", "**/conftest*"]
+
+[[rules.threshold]]
+id = "min-instability-balance"
+name = "Minimum Instability (prevent overly rigid modules)"
+source = "metrics/coupling.json"
+field = "instability"
+min = 0.1
+max = 0.9
+scope = "module"
+severity = "warning"
+exclude = ["**/interfaces/**", "**/ports/**"]
+
+# --- Dependency Rules (v0.2.0 — parsed but not evaluated) ---
+
+# [[rules.dependency]]
+# id = "no-circular-deps"
+# name = "No Circular Dependencies"
+# type = "forbidden"
+# from = { path = "src/**" }
+# to = { path = "src/**" }
+# circular = true
+# severity = "error"
