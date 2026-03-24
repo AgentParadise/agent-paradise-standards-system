@@ -45,9 +45,12 @@ impl fmt::Display for VsaConfigError {
 struct RawVsaConfig {
     version: Option<u8>,
     root: Option<String>,
+    #[allow(dead_code)]
     language: Option<String>,
     architecture: Option<String>,
     contexts: Option<HashMap<String, RawContext>>,
+    #[serde(default)]
+    #[allow(dead_code)]
     validation: Option<RawValidation>,
 }
 
@@ -57,8 +60,9 @@ struct RawContext {
     description: Option<String>,
 }
 
-/// Validation settings (optional).
+/// Validation settings (optional, reserved for future use).
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct RawValidation {
     require_tests: Option<bool>,
     max_nesting_depth: Option<u32>,
@@ -74,10 +78,6 @@ pub struct VsaConfig {
     pub version: u8,
     /// Root directory containing bounded contexts (relative to repo root).
     pub root: String,
-    /// Programming language.
-    pub language: Option<String>,
-    /// Architecture style (v2 only).
-    pub architecture: Option<String>,
     /// Named bounded contexts (v1 only; None in v2 means "discover from root").
     pub contexts: Option<HashMap<String, ContextConfig>>,
 }
@@ -85,7 +85,7 @@ pub struct VsaConfig {
 /// A validated bounded context entry.
 #[derive(Debug, Clone)]
 pub struct ContextConfig {
-    pub description: Option<String>,
+    _description: Option<String>,
 }
 
 impl VsaConfig {
@@ -157,7 +157,7 @@ impl VsaConfig {
                     (
                         name,
                         ContextConfig {
-                            description: raw_ctx.description,
+                            _description: raw_ctx.description,
                         },
                     )
                 })
@@ -171,8 +171,6 @@ impl VsaConfig {
         Ok(Self {
             version,
             root,
-            language: raw.language,
-            architecture: raw.architecture,
             contexts,
         })
     }
@@ -185,37 +183,71 @@ impl VsaConfig {
             .trim_end_matches('/')
     }
 
-    /// Check if a module path falls under the VSA root.
+    /// Split the root into path components for boundary-safe matching.
+    fn root_components(&self) -> Vec<&str> {
+        self.normalized_root()
+            .split('/')
+            .filter(|c| !c.is_empty())
+            .collect()
+    }
+
+    /// Normalize a module path/ID to `/`-separated components.
+    /// Handles `::` (Rust), `.` (Python), `\` (Windows), and `/` (path-like).
+    fn normalize_to_components(module_path: &str) -> Vec<&str> {
+        // Split on all known separators. For `::` we first replace, then split on `/`.
+        // We can't simply replace `.` because it appears in filenames, but Python module
+        // IDs don't have `/` so we can use that to disambiguate.
+        if module_path.contains('/') {
+            // Path-like: split on `/` (preserves `.` in filenames like `[[...slug]]`)
+            module_path.split('/').filter(|c| !c.is_empty()).collect()
+        } else if module_path.contains("::") {
+            // Rust-style
+            module_path.split("::").filter(|c| !c.is_empty()).collect()
+        } else {
+            // Python-style (dot-separated)
+            module_path.split('.').filter(|c| !c.is_empty()).collect()
+        }
+    }
+
+    /// Check if a module path falls under the VSA root using component-boundary matching.
     pub fn contains_path(&self, module_path: &str) -> bool {
-        let root = self.normalized_root();
-        // Module path or ID should contain the root path segments
-        let normalized = module_path.replace("::", "/");
-        normalized.starts_with(root) || normalized.contains(root)
+        let root_parts = self.root_components();
+        if root_parts.is_empty() {
+            return false;
+        }
+        let path_parts = Self::normalize_to_components(module_path);
+        // Look for the root components as a contiguous window in the path
+        path_parts
+            .windows(root_parts.len())
+            .any(|window| window == root_parts.as_slice())
     }
 
     /// Extract the bounded context name from a module path/ID, given the VSA root.
-    /// Returns the first path segment after the root.
+    /// Returns the first path component after the root component sequence.
     ///
-    /// Example: root="packages/syn-domain/src/syn_domain/contexts"
-    ///   module_path="packages/syn-domain/src/syn_domain/contexts/orchestration/core"
-    ///   → Some("orchestration")
+    /// Uses component-boundary matching to avoid substring false positives
+    /// (e.g., `contexts_backup` won't match `contexts`).
     pub fn extract_context(&self, module_path: &str) -> Option<String> {
-        let root = self.normalized_root();
-        let normalized = module_path.replace("::", "/");
-
-        // Find the root in the path and take the next segment
-        if let Some(pos) = normalized.find(root) {
-            let after_root = &normalized[pos + root.len()..];
-            let after_root = after_root.trim_start_matches('/');
-            let context = after_root.split('/').next().unwrap_or("");
-            if context.is_empty() {
-                None
-            } else {
-                Some(context.to_string())
-            }
-        } else {
-            None
+        let root_parts = self.root_components();
+        if root_parts.is_empty() {
+            return None;
         }
+        let path_parts = Self::normalize_to_components(module_path);
+        let root_len = root_parts.len();
+
+        // Find the window matching root components, then take the next component
+        for start in 0..=path_parts.len().saturating_sub(root_len) {
+            if path_parts[start..start + root_len] == root_parts[..] {
+                let context_index = start + root_len;
+                if let Some(&ctx) = path_parts.get(context_index) {
+                    if !ctx.is_empty() {
+                        return Some(ctx.to_string());
+                    }
+                }
+                return None;
+            }
+        }
+        None
     }
 
     /// Check if a context name is allowed by this config.
@@ -225,18 +257,6 @@ impl VsaConfig {
         match &self.contexts {
             Some(map) => map.contains_key(context),
             None => true, // v2: all contexts under root are valid
-        }
-    }
-
-    /// Returns the list of explicitly configured context names (v1 only).
-    pub fn context_names(&self) -> Vec<&str> {
-        match &self.contexts {
-            Some(map) => {
-                let mut names: Vec<&str> = map.keys().map(|s| s.as_str()).collect();
-                names.sort();
-                names
-            }
-            None => Vec::new(),
         }
     }
 }
@@ -268,7 +288,6 @@ contexts:
             config.normalized_root(),
             "packages/syn-domain/src/syn_domain/contexts"
         );
-        assert_eq!(config.language.as_deref(), Some("python"));
         assert!(config.contexts.is_some());
 
         let ctx = config.contexts.as_ref().unwrap();
@@ -289,10 +308,6 @@ root: src/syn_domain/contexts
         let config = VsaConfig::parse_str(yaml).unwrap();
         assert_eq!(config.version, 2);
         assert_eq!(config.normalized_root(), "src/syn_domain/contexts");
-        assert_eq!(
-            config.architecture.as_deref(),
-            Some("hexagonal-event-sourced-vsa")
-        );
         assert!(config.contexts.is_none());
     }
 
@@ -336,6 +351,32 @@ root: src/syn_domain/contexts
 
         assert!(config.contains_path("packages/syn-domain/contexts/orchestration/core"));
         assert!(!config.contains_path("packages/syn-api/routes"));
+        // Boundary check: should not match partial directory names
+        assert!(!config.contains_path("packages/syn-domain/contexts_backup/orchestration"));
+    }
+
+    #[test]
+    fn contains_path_python_modules() {
+        let config = VsaConfig::parse_str(
+            "root: ./src/syn_domain/contexts\ncontexts:\n  orchestration:\n    description: test\n",
+        )
+        .unwrap();
+
+        // Python dot-separated module IDs
+        assert!(config.contains_path("src.syn_domain.contexts.orchestration.core"));
+        assert!(!config.contains_path("src.syn_api.routes"));
+    }
+
+    #[test]
+    fn contains_path_rust_modules() {
+        let config = VsaConfig::parse_str(
+            "root: ./src/syn_domain/contexts\ncontexts:\n  orchestration:\n    description: test\n",
+        )
+        .unwrap();
+
+        // Rust :: separated module IDs
+        assert!(config.contains_path("src::syn_domain::contexts::orchestration::core"));
+        assert!(!config.contains_path("src::syn_api::routes"));
     }
 
     #[test]
@@ -354,6 +395,24 @@ root: src/syn_domain/contexts
             Some("artifacts".to_string())
         );
         assert_eq!(config.extract_context("packages/syn-api/routes"), None);
+        // Boundary: partial match should not work
+        assert_eq!(
+            config.extract_context("packages/syn-domain/contexts_backup/orchestration"),
+            None
+        );
+    }
+
+    #[test]
+    fn extract_context_python_modules() {
+        let config = VsaConfig::parse_str(
+            "root: ./src/syn_domain/contexts\ncontexts:\n  orchestration:\n    description: test\n",
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.extract_context("src.syn_domain.contexts.orchestration.core"),
+            Some("orchestration".to_string())
+        );
     }
 
     #[test]
@@ -385,17 +444,7 @@ root: src/syn_domain/contexts
 
     #[test]
     fn load_returns_none_when_missing() {
-        let dir = std::env::temp_dir().join("vsa_config_test_missing");
-        std::fs::create_dir_all(&dir).ok();
-        assert!(VsaConfig::load(&dir).unwrap().is_none());
-    }
-
-    #[test]
-    fn context_names_sorted() {
-        let config = VsaConfig::parse_str(
-            "root: ./src\ncontexts:\n  zebra:\n    description: z\n  alpha:\n    description: a\n  mid:\n    description: m\n",
-        )
-        .unwrap();
-        assert_eq!(config.context_names(), vec!["alpha", "mid", "zebra"]);
+        let dir = tempfile::tempdir().unwrap();
+        assert!(VsaConfig::load(dir.path()).unwrap().is_none());
     }
 }

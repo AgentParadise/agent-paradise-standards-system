@@ -2791,7 +2791,7 @@ fn generate_vsa_placeholder() -> String {
   <pre>
 # vsa.yaml (version 1)
 version: 1
-root: ./packages/syn-domain/src/contexts
+root: ./path/to/contexts
 language: python
 
 contexts:
@@ -2902,7 +2902,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
         }
         Err(e) => {
             eprintln!("Warning: {e}");
-            eprintln!("VSA visualization will be skipped.");
+            eprintln!("VSA config load/validation failed; VSA viz will show placeholder.");
             None
         }
     };
