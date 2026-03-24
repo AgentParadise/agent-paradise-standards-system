@@ -7,7 +7,9 @@
 //! that all V1 packages must satisfy.
 
 use aps_core::discovery::{DiscoveredPackage, discover_v1_packages};
-use aps_core::metadata::{parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata};
+use aps_core::metadata::{
+    parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata,
+};
 use aps_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
