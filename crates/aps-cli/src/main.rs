@@ -1307,7 +1307,8 @@ fn write_topology_artifacts(
     }
 
     // Write manifest.toml
-    let languages: Vec<&str> = files_by_lang.keys().map(|s| s.as_str()).collect();
+    let mut languages: Vec<&str> = files_by_lang.keys().map(|s| s.as_str()).collect();
+    languages.sort();
     let total_files: usize = files_by_lang.values().map(|v| v.len()).sum();
     let total_deps: usize = efferent.values().map(|s| s.len()).sum();
     let manifest = format!(
@@ -1765,8 +1766,16 @@ total_dependencies = {}
     // e.g., "aef.core.events" -> slice "aef.core"
     //       "crates::aps-cli::src::main" -> slice "crates::aps-cli"
     fn get_slice_id(module_id: &str) -> String {
-        // Split by :: or . and take first two segments
-        let separator = if module_id.contains("::") { "::" } else { "." };
+        // Split by the appropriate separator and take first two segments.
+        // Path-like IDs (containing '/') use '/' — this avoids splitting inside
+        // Next.js catch-all routes like [[...slug]] where '.' is literal.
+        let separator = if module_id.contains('/') {
+            "/"
+        } else if module_id.contains("::") {
+            "::"
+        } else {
+            "."
+        };
         let parts: Vec<&str> = module_id.split(separator).collect();
         if parts.len() >= 2 {
             format!("{}{}{}", parts[0], separator, parts[1])
