@@ -23,6 +23,8 @@
 //! aps v1 list
 //! ```
 
+mod vsa_config;
+
 use aps_core::discovery::{PackageType, count_packages, discover_v1_packages, find_package_by_id};
 use aps_core::versioning::BumpPart;
 use aps_core::{
@@ -2765,6 +2767,44 @@ fn detect_layer(module_path: &str) -> &'static str {
     "other"
 }
 
+/// Generate a placeholder HTML page when no vsa.yaml is found.
+fn generate_vsa_placeholder() -> String {
+    r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VSA Visualization — No Configuration</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a2e; color: #ccc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+  .card { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 48px; max-width: 560px; text-align: center; }
+  h1 { color: #e94560; font-size: 1.5em; margin-bottom: 16px; }
+  p { line-height: 1.6; margin: 8px 0; }
+  code { background: #0f3460; padding: 2px 8px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #0f3460; padding: 16px; border-radius: 8px; text-align: left; overflow-x: auto; font-size: 0.85em; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>No VSA Configuration Found</h1>
+  <p>The VSA (Vertical Slice Architecture) visualization requires a <code>vsa.yaml</code> file in your repository root to identify which bounded contexts to display.</p>
+  <p>Without this file, all modules would appear as vertical slices — which is misleading for non-VSA packages.</p>
+  <pre>
+# vsa.yaml (version 1)
+version: 1
+root: ./packages/syn-domain/src/contexts
+language: python
+
+contexts:
+  orchestration:
+    description: "Workflow execution"
+  artifacts:
+    description: "Artifact storage"</pre>
+  <p style="margin-top: 24px; font-size: 0.9em; color: #888;">See the Event Sourcing Platform docs for the full <code>vsa.yaml</code> specification.</p>
+</div>
+</body>
+</html>"#.to_string()
+}
+
 /// Get slice (top-level package) from module ID
 /// For Rust: crates::foo -> "crates::foo", standards-experimental::v1::NAME -> "NAME"
 fn get_slice_from_id(module_id: &str) -> String {
@@ -2834,6 +2874,38 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
     if verbose {
         println!("Loading topology from: {}", topology_path.display());
     }
+
+    // Load VSA config if present (look in repo root, i.e. parent of .topology/)
+    let repo_root = topology_path.parent().unwrap_or(Path::new("."));
+    let vsa_config = match vsa_config::VsaConfig::load(repo_root) {
+        Ok(Some(config)) => {
+            if verbose {
+                println!(
+                    "  Found vsa.yaml (v{}) — root: {}",
+                    config.version,
+                    config.normalized_root()
+                );
+                if let Some(names) = config.contexts.as_ref() {
+                    println!(
+                        "  Contexts: {}",
+                        names.keys().cloned().collect::<Vec<_>>().join(", ")
+                    );
+                }
+            }
+            Some(config)
+        }
+        Ok(None) => {
+            if verbose {
+                println!("  No vsa.yaml found (VSA viz will show placeholder)");
+            }
+            None
+        }
+        Err(e) => {
+            eprintln!("Warning: {e}");
+            eprintln!("VSA visualization will be skipped.");
+            None
+        }
+    };
 
     // Load coupling matrix
     let coupling_content = match fs::read_to_string(&coupling_path) {
@@ -3042,13 +3114,53 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                 if verbose {
                     println!("Rendering VSA diagram...");
                 }
-                let modules_json = serde_json::to_string_pretty(&viz_modules).unwrap_or_default();
-                let html = code_topology_viz::vsa::generate(&modules_json);
                 let out = if viz_type == "all" {
                     viz_dir.join("vsa.html")
                 } else {
                     PathBuf::from(output.unwrap_or("vsa.html"))
                 };
+
+                let html = if let Some(ref vsa_cfg) = vsa_config {
+                    // Filter to only modules under the VSA root and fix slice names
+                    let vsa_modules: Vec<serde_json::Value> = viz_modules
+                        .iter()
+                        .filter_map(|m| {
+                            let path = &m.path;
+                            let id = &m.id;
+                            // Check if module is under the VSA root
+                            if !vsa_cfg.contains_path(path) && !vsa_cfg.contains_path(id) {
+                                return None;
+                            }
+                            // Extract context name as the slice
+                            let context = vsa_cfg
+                                .extract_context(path)
+                                .or_else(|| vsa_cfg.extract_context(id))?;
+                            // If v1 config has explicit contexts, only include listed ones
+                            if !vsa_cfg.is_context_allowed(&context) {
+                                return None;
+                            }
+                            // Re-serialize with the correct slice name
+                            let mut val = serde_json::to_value(m).ok()?;
+                            val["slice"] = serde_json::Value::String(context);
+                            Some(val)
+                        })
+                        .collect();
+
+                    if verbose {
+                        println!(
+                            "  VSA: {} of {} modules matched config",
+                            vsa_modules.len(),
+                            viz_modules.len()
+                        );
+                    }
+                    let modules_json =
+                        serde_json::to_string_pretty(&vsa_modules).unwrap_or_default();
+                    code_topology_viz::vsa::generate(&modules_json)
+                } else {
+                    // No vsa.yaml — render placeholder
+                    generate_vsa_placeholder()
+                };
+
                 (html, out)
             }
             unknown => {
