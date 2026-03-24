@@ -7,7 +7,9 @@
 //! that all V1 packages must satisfy.
 
 use aps_core::discovery::{DiscoveredPackage, discover_v1_packages};
-use aps_core::metadata::{parse_standard_metadata, parse_substandard_metadata};
+use aps_core::metadata::{
+    parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata,
+};
 use aps_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
@@ -23,9 +25,15 @@ pub mod error_codes {
     pub const MISSING_SPEC_DOC: &str = "MISSING_SPEC_DOC";
     pub const MISSING_LIB_RS: &str = "MISSING_LIB_RS";
 
+    // Content validation errors
+    pub const EMPTY_EXAMPLES_DIR: &str = "EMPTY_EXAMPLES_DIR";
+    pub const EMPTY_TESTS_DIR: &str = "EMPTY_TESTS_DIR";
+    pub const EMPTY_AGENT_SKILLS_DIR: &str = "EMPTY_AGENT_SKILLS_DIR";
+
     // Metadata validation errors
     pub const INVALID_METADATA: &str = "INVALID_METADATA";
     pub const INVALID_STANDARD_ID: &str = "INVALID_STANDARD_ID";
+    pub const INVALID_EXPERIMENT_ID: &str = "INVALID_EXPERIMENT_ID";
     pub const INVALID_VERSION: &str = "INVALID_VERSION";
 
     // Substandard-specific errors
@@ -41,8 +49,11 @@ pub mod error_codes {
     pub const PACKAGE_VALIDATION_FAILED: &str = "PACKAGE_VALIDATION_FAILED";
 }
 
-/// Required directories for all standard packages.
-pub const REQUIRED_PACKAGE_DIRS: &[&str] = &["docs", "examples", "tests", "agents/skills", "src"];
+/// Required directories for standards and experiments (§5.1).
+pub const REQUIRED_STANDARD_DIRS: &[&str] = &["docs", "examples", "tests", "agents/skills", "src"];
+
+/// Required directories for substandards (§5.2) — reduced requirements.
+pub const REQUIRED_SUBSTANDARD_DIRS: &[&str] = &["docs", "src"];
 
 /// Metadata file options (one must exist).
 pub const METADATA_FILES: &[&str] = &["standard.toml", "substandard.toml", "experiment.toml"];
@@ -88,8 +99,15 @@ impl MetaStandard {
     fn validate_structure(&self, path: &Path, diagnostics: &mut Diagnostics) {
         use error_codes::*;
 
+        let is_substandard = path.join("substandard.toml").exists();
+        let required_dirs = if is_substandard {
+            REQUIRED_SUBSTANDARD_DIRS
+        } else {
+            REQUIRED_STANDARD_DIRS
+        };
+
         // Check required directories
-        for dir in REQUIRED_PACKAGE_DIRS {
+        for dir in required_dirs {
             let dir_path = path.join(dir);
             if !dir_path.exists() {
                 diagnostics.push(
@@ -147,6 +165,53 @@ impl MetaStandard {
                 Diagnostic::error(MISSING_SPEC_DOC, "Missing normative spec: docs/01_spec.md")
                     .with_path(&spec_path)
                     .with_hint("Create docs/01_spec.md with the normative specification"),
+            );
+        }
+
+        // Content checks — only for standards and experiments (§5.1), not substandards (§5.2)
+        if !is_substandard {
+            // §11.1: examples/ MUST contain at least one example
+            let examples_dir = path.join("examples");
+            if examples_dir.exists() && is_dir_empty_or_readme_only(&examples_dir) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        EMPTY_EXAMPLES_DIR,
+                        "examples/ must contain at least one example (§11.1)",
+                    )
+                    .with_path(&examples_dir)
+                    .with_hint("Add example files (configs, data, or code) to examples/"),
+                );
+            }
+
+            // §12.1: agents/skills/ MUST include at least one skill file or README
+            let skills_dir = path.join("agents/skills");
+            if skills_dir.exists() && is_dir_empty(&skills_dir) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        EMPTY_AGENT_SKILLS_DIR,
+                        "agents/skills/ must include at least one skill file or README (§12.1)",
+                    )
+                    .with_path(&skills_dir)
+                    .with_hint("Add a README.md documenting available agent skills"),
+                );
+            }
+        }
+
+        // §11.2: All packages MUST have test coverage (integration tests OR inline tests)
+        let has_test_dir_content = {
+            let tests_dir = path.join("tests");
+            tests_dir.exists() && !is_dir_empty_or_readme_only(&tests_dir)
+        };
+        let has_inline_tests = has_inline_tests_in_src(&path.join("src"));
+
+        if !has_test_dir_content && !has_inline_tests {
+            diagnostics.push(
+                Diagnostic::error(
+                    EMPTY_TESTS_DIR,
+                    "Package must have test coverage: tests/ directory with test files or #[cfg(test)] in any src/**/*.rs file (§11.2)",
+                )
+                .with_path(path)
+                .with_hint("Add integration tests to tests/ or inline #[cfg(test)] modules in any .rs file under src/"),
             );
         }
     }
@@ -275,6 +340,56 @@ impl MetaStandard {
         }
     }
 
+    /// Validate the metadata content of an experiment package.
+    fn validate_experiment_metadata(&self, path: &Path, diagnostics: &mut Diagnostics) {
+        use error_codes::*;
+
+        let metadata_path = path.join("experiment.toml");
+        if !metadata_path.exists() {
+            return;
+        }
+
+        let metadata = match parse_experiment_metadata(&metadata_path) {
+            Ok(m) => m,
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        INVALID_METADATA,
+                        format!("Failed to parse experiment.toml: {e}"),
+                    )
+                    .with_path(&metadata_path)
+                    .with_hint("Check the TOML syntax and required fields"),
+                );
+                return;
+            }
+        };
+
+        // Validate experiment ID format
+        let id = &metadata.experiment.id;
+        if !is_valid_experiment_id(id) {
+            diagnostics.push(
+                Diagnostic::error(
+                    INVALID_EXPERIMENT_ID,
+                    format!("Invalid experiment ID '{id}': must match pattern EXP-V1-XXXX"),
+                )
+                .with_path(&metadata_path)
+                .with_hint("Use format: EXP-V1-0001, EXP-V1-0002, etc."),
+            );
+        }
+
+        let version = &metadata.experiment.version;
+        if !is_valid_semver(version) {
+            diagnostics.push(
+                Diagnostic::warning(
+                    INVALID_VERSION,
+                    format!("Version '{version}' may not be valid SemVer"),
+                )
+                .with_path(&metadata_path)
+                .with_hint("Use SemVer format: MAJOR.MINOR.PATCH (e.g., 0.1.0)"),
+            );
+        }
+    }
+
     /// Validate a single discovered package.
     fn validate_discovered_package(
         &self,
@@ -319,8 +434,9 @@ impl Standard for MetaStandard {
             self.validate_standard_metadata(path, &mut diagnostics);
         } else if path.join("substandard.toml").exists() {
             self.validate_substandard_metadata(path, &mut diagnostics);
+        } else if path.join("experiment.toml").exists() {
+            self.validate_experiment_metadata(path, &mut diagnostics);
         }
-        // experiment.toml validation could be added here
 
         diagnostics
     }
@@ -422,6 +538,94 @@ pub fn extract_parent_from_substandard_id(id: &str) -> Option<String> {
     id.find('.').map(|dot_pos| id[..dot_pos].to_string())
 }
 
+/// Check if a string matches the experiment ID format (EXP-V1-XXXX).
+fn is_valid_experiment_id(id: &str) -> bool {
+    if !id.starts_with("EXP-V1-") {
+        return false;
+    }
+    let suffix = &id[7..];
+    suffix.len() == 4 && suffix.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Check if a directory has no substantive content (ignoring hidden/junk files).
+fn is_dir_empty(path: &Path) -> bool {
+    let entries = match std::fs::read_dir(path) {
+        Ok(e) => e,
+        Err(_) => return true,
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        // Skip hidden files (.DS_Store, .gitkeep) and __pycache__
+        if name_str.starts_with('.') || name_str == "__pycache__" {
+            continue;
+        }
+        return false;
+    }
+    true
+}
+
+/// Check if a directory contains only a README.md and nothing else substantive.
+///
+/// "Substantive" means: any file that is not README.md, or any non-empty subdirectory.
+fn is_dir_empty_or_readme_only(path: &Path) -> bool {
+    let entries = match std::fs::read_dir(path) {
+        Ok(e) => e,
+        Err(_) => return true,
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        // Skip __pycache__, .DS_Store, etc.
+        if name_str.starts_with('.') || name_str == "__pycache__" {
+            continue;
+        }
+
+        // If it's a directory, check if it has content
+        if entry.file_type().is_ok_and(|ft| ft.is_dir()) {
+            if !is_dir_empty(&entry.path()) {
+                return false;
+            }
+            continue;
+        }
+
+        // Any file that isn't README.md means the dir has substantive content
+        if !name_str.eq_ignore_ascii_case("readme.md") {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Check if any Rust source file under `src/` contains an inline test module (`#[cfg(test)]`).
+fn has_inline_tests_in_src(src_dir: &Path) -> bool {
+    let entries = match std::fs::read_dir(src_dir) {
+        Ok(e) => e,
+        Err(_) => return false,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "rs") {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if content.contains("#[cfg(test)]") {
+                    return true;
+                }
+            }
+        } else if path.is_dir() {
+            // Recurse into subdirectories (e.g., src/adapter/)
+            if has_inline_tests_in_src(&path) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Check if a string looks like valid SemVer (basic check).
 fn is_valid_semver(version: &str) -> bool {
     let parts: Vec<&str> = version.split('.').collect();
@@ -507,6 +711,9 @@ mod tests {
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("examples/example.toml"), "# example").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
 
         let standard_toml = r#"
 schema = "aps.standard/v1"
@@ -587,18 +794,20 @@ maintainers = ["Test"]
     fn test_validate_substandard_package() {
         let temp_dir = tempfile::tempdir().unwrap();
 
-        // Create minimal valid substandard structure
+        // Create minimal valid substandard structure (§5.2 — reduced requirements)
         let pkg_dir = temp_dir
             .path()
             .join("standards/v1/APS-V1-0001-test/substandards/GH01-github");
         fs::create_dir_all(pkg_dir.join("docs")).unwrap();
-        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
-        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
-        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
 
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
-        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        // Inline tests count as test coverage (§11.2)
+        fs::write(
+            pkg_dir.join("src/lib.rs"),
+            "// lib\n#[cfg(test)]\nmod tests { #[test] fn it_works() {} }",
+        )
+        .unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
 
         let substandard_toml = r#"
@@ -714,5 +923,161 @@ maintainers = ["Test"]
                 .errors()
                 .any(|d| d.code == error_codes::INVALID_PARENT_REF)
         );
+    }
+
+    #[test]
+    fn test_empty_examples_dir_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_dir = temp_dir.path().join("pkg");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
+        fs::write(
+            pkg_dir.join("standard.toml"),
+            "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
+        )
+        .unwrap();
+        // examples/ is empty — should fail
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+        assert!(
+            diagnostics
+                .errors()
+                .any(|d| d.code == error_codes::EMPTY_EXAMPLES_DIR)
+        );
+    }
+
+    #[test]
+    fn test_readme_only_examples_dir_fails() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_dir = temp_dir.path().join("pkg");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
+        fs::write(
+            pkg_dir.join("standard.toml"),
+            "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
+        )
+        .unwrap();
+        // examples/ has ONLY a README — still fails
+        fs::write(pkg_dir.join("examples/README.md"), "# Examples").unwrap();
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+        assert!(
+            diagnostics
+                .errors()
+                .any(|d| d.code == error_codes::EMPTY_EXAMPLES_DIR)
+        );
+    }
+
+    #[test]
+    fn test_valid_experiment_metadata() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_dir = temp_dir.path().join("pkg");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("examples/example.toml"), "# ex").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
+
+        let experiment_toml = r#"
+schema = "aps.experiment/v1"
+
+[experiment]
+id = "EXP-V1-0099"
+name = "Test Experiment"
+slug = "test-experiment"
+version = "0.1.0"
+category = "technical"
+
+[aps]
+aps_major = "v1"
+
+[ownership]
+maintainers = ["Test"]
+"#;
+        fs::write(pkg_dir.join("experiment.toml"), experiment_toml).unwrap();
+
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+        assert!(
+            !diagnostics.has_errors(),
+            "Unexpected errors: {:?}",
+            diagnostics.errors().map(|d| &d.message).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_invalid_experiment_id() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_dir = temp_dir.path().join("pkg");
+        fs::create_dir_all(pkg_dir.join("docs")).unwrap();
+        fs::create_dir_all(pkg_dir.join("examples")).unwrap();
+        fs::create_dir_all(pkg_dir.join("tests")).unwrap();
+        fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+        fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
+        fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(pkg_dir.join("examples/example.toml"), "# ex").unwrap();
+        fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
+        fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills").unwrap();
+
+        let experiment_toml = r#"
+schema = "aps.experiment/v1"
+
+[experiment]
+id = "INVALID-ID"
+name = "Bad"
+slug = "bad"
+version = "0.1.0"
+category = "technical"
+
+[aps]
+aps_major = "v1"
+
+[ownership]
+maintainers = ["Test"]
+"#;
+        fs::write(pkg_dir.join("experiment.toml"), experiment_toml).unwrap();
+
+        let meta = MetaStandard::new();
+        let diagnostics = meta.validate_package(&pkg_dir);
+        assert!(
+            diagnostics
+                .errors()
+                .any(|d| d.code == error_codes::INVALID_EXPERIMENT_ID)
+        );
+    }
+
+    #[test]
+    fn test_valid_experiment_id_format() {
+        assert!(is_valid_experiment_id("EXP-V1-0001"));
+        assert!(is_valid_experiment_id("EXP-V1-0003"));
+        assert!(is_valid_experiment_id("EXP-V1-9999"));
+
+        assert!(!is_valid_experiment_id("APS-V1-0001"));
+        assert!(!is_valid_experiment_id("EXP-V1-000"));
+        assert!(!is_valid_experiment_id("EXP-V2-0001"));
     }
 }

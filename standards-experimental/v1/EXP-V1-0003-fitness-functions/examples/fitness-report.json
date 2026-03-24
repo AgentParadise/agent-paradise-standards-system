@@ -1,0 +1,99 @@
+{
+  "version": "0.1.0",
+  "timestamp": "2026-03-12T10:30:00Z",
+  "summary": {
+    "total_rules": 5,
+    "passed": 3,
+    "failed": 1,
+    "warned": 1,
+    "total_violations": 5,
+    "excepted_violations": 3,
+    "stale_exceptions": 1
+  },
+  "results": [
+    {
+      "rule_id": "max-cyclomatic",
+      "rule_name": "Maximum Cyclomatic Complexity",
+      "status": "fail",
+      "violations": [
+        {
+          "entity": "src/orchestration/engine.py::execute",
+          "field": "cyclomatic_complexity",
+          "actual": 42.0,
+          "threshold": 15.0,
+          "direction": "max",
+          "excepted": true
+        },
+        {
+          "entity": "src/orchestration/engine.py::setup_workspace",
+          "field": "cyclomatic_complexity",
+          "actual": 28.0,
+          "threshold": 15.0,
+          "direction": "max",
+          "excepted": true
+        },
+        {
+          "entity": "src/api/routes.py::handle_request",
+          "field": "cyclomatic_complexity",
+          "actual": 22.0,
+          "threshold": 15.0,
+          "direction": "max",
+          "excepted": false
+        }
+      ],
+      "exceptions_used": 2
+    },
+    {
+      "rule_id": "max-cognitive",
+      "rule_name": "Maximum Cognitive Complexity",
+      "status": "pass",
+      "violations": [],
+      "exceptions_used": 0
+    },
+    {
+      "rule_id": "max-loc",
+      "rule_name": "Maximum Lines of Code per File",
+      "status": "warn",
+      "violations": [
+        {
+          "entity": "src/setup.py",
+          "field": "lines_of_code",
+          "actual": 2284.0,
+          "threshold": 500.0,
+          "direction": "max",
+          "excepted": true
+        },
+        {
+          "entity": "src/utils/helpers.py",
+          "field": "lines_of_code",
+          "actual": 612.0,
+          "threshold": 500.0,
+          "direction": "max",
+          "excepted": false
+        }
+      ],
+      "exceptions_used": 1
+    },
+    {
+      "rule_id": "max-fan-out",
+      "rule_name": "Maximum Fan-Out (Efferent Coupling)",
+      "status": "pass",
+      "violations": [],
+      "exceptions_used": 0
+    },
+    {
+      "rule_id": "min-instability-balance",
+      "rule_name": "Minimum Instability (prevent overly rigid modules)",
+      "status": "pass",
+      "violations": [],
+      "exceptions_used": 0
+    }
+  ],
+  "stale_exceptions": [
+    {
+      "rule_id": "max-fan-out",
+      "entity": "src/providers/claude",
+      "reason": "now_passing"
+    }
+  ]
+}

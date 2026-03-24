@@ -40,7 +40,7 @@ def main() -> None:
             input_data = sys.stdin.read()
 
         if not input_data:
-            print(json.dumps({"decision": "allow"}))
+            print(json.dumps({"decision": "approve"}))
             return
 
         event = json.loads(input_data)
@@ -50,7 +50,7 @@ def main() -> None:
                 "event_type": "hook_decision",
                 "handler": "stop",
                 "hook_event": event.get("hook_event_name", "Stop"),
-                "decision": "allow",
+                "decision": "approve",
                 "session_id": event.get("session_id"),
                 "audit": {
                     "transcript_path": event.get("transcript_path"),
@@ -59,10 +59,10 @@ def main() -> None:
             }
         )
 
-        print(json.dumps({"decision": "allow"}))
+        print(json.dumps({"decision": "approve"}))
 
     except Exception as e:
-        print(json.dumps({"decision": "allow", "error": str(e)}))
+        print(json.dumps({"decision": "approve", "error": str(e)}))
 
 
 if __name__ == "__main__":

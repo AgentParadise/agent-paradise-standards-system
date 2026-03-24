@@ -1,0 +1,273 @@
+// Code Topology and Coupling Analysis - Metrics Schema
+// EXP-V1-0001 | Version: 0.1.0
+//
+// This file defines the structure of metrics artifacts:
+// - .topology/metrics/functions.json
+// - .topology/metrics/files.json
+// - .topology/metrics/modules.json
+
+syntax = "proto3";
+
+package code_topology.v1;
+
+option java_package = "dev.agentparadise.topology.v1";
+option go_package = "github.com/AgentParadise/topology/v1;topologyv1";
+
+// ============================================================================
+// Function Metrics (.topology/metrics/functions.json)
+// ============================================================================
+
+// Container for all function metrics in a codebase.
+// Stored at: .topology/metrics/functions.json
+message FunctionsFile {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // All analyzed functions
+  repeated FunctionRecord functions = 2;
+}
+
+// A single function with its location and metrics.
+message FunctionRecord {
+  // Fully qualified identifier (e.g., "rust:auth::validator::validate_token")
+  string id = 1;
+
+  // Simple function name
+  string name = 2;
+
+  // File path relative to analysis root
+  string file = 3;
+
+  // Module this function belongs to
+  string module = 4;
+
+  // Source language
+  string language = 5;
+
+  // Source location
+  Location location = 6;
+
+  // Computed metrics
+  FunctionMetrics metrics = 7;
+}
+
+// Source code location
+message Location {
+  // Start line (1-indexed)
+  uint32 start_line = 1 [json_name = "start_line"];
+
+  // End line (1-indexed)
+  uint32 end_line = 2 [json_name = "end_line"];
+
+  // Start column (optional, 1-indexed)
+  optional uint32 start_column = 3 [json_name = "start_column"];
+
+  // End column (optional, 1-indexed)
+  optional uint32 end_column = 4 [json_name = "end_column"];
+}
+
+// Complexity metrics for a single function.
+message FunctionMetrics {
+  // Cyclomatic complexity (McCabe's metric)
+  // Minimum value is 1 (straight-line code)
+  uint32 cyclomatic_complexity = 1 [json_name = "cyclomatic_complexity"];
+
+  // Cognitive complexity (SonarSource's metric)
+  // Measures human understandability
+  uint32 cognitive_complexity = 2 [json_name = "cognitive_complexity"];
+
+  // Halstead complexity metrics
+  HalsteadMetrics halstead = 3;
+
+  // Lines of code (excluding blanks and comments)
+  uint32 lines_of_code = 4 [json_name = "lines_of_code"];
+
+  // Logical lines (statements)
+  uint32 logical_lines = 5 [json_name = "logical_lines"];
+
+  // Comment lines
+  uint32 comment_lines = 6 [json_name = "comment_lines"];
+
+  // Number of parameters
+  uint32 parameter_count = 7 [json_name = "parameter_count"];
+}
+
+// Halstead complexity metrics.
+// Based on counts of operators and operands.
+// See: Halstead, M.H. (1977). "Elements of Software Science"
+message HalsteadMetrics {
+  // Distinct operators (η₁)
+  uint32 vocabulary = 1;
+
+  // Program length (N = N₁ + N₂)
+  uint32 length = 2;
+
+  // Volume: N × log₂(η)
+  // Represents the "size" in bits
+  double volume = 3;
+
+  // Difficulty: (η₁/2) × (N₂/η₂)
+  // Measures error-proneness
+  double difficulty = 4;
+
+  // Effort: D × V
+  // Mental effort to understand
+  double effort = 5;
+
+  // Time to implement (seconds): E / 18
+  double time_to_implement = 6 [json_name = "time_to_implement"];
+
+  // Estimated bugs: V / 3000
+  double estimated_bugs = 7 [json_name = "estimated_bugs"];
+}
+
+// ============================================================================
+// File Metrics (.topology/metrics/files.json)
+// ============================================================================
+
+// Container for all file-level metrics.
+// Stored at: .topology/metrics/files.json
+message FilesFile {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // All analyzed files
+  repeated FileRecord files = 2;
+}
+
+// Aggregated metrics for a source file.
+message FileRecord {
+  // File path (serves as ID)
+  string id = 1;
+
+  // File path relative to analysis root
+  string path = 2;
+
+  // Module this file belongs to
+  string module = 3;
+
+  // Primary language of the file
+  string language = 4;
+
+  // Aggregated metrics
+  FileMetrics metrics = 5;
+}
+
+// Aggregated metrics for a file.
+message FileMetrics {
+  // Number of functions in this file
+  uint32 function_count = 1 [json_name = "function_count"];
+
+  // Total cyclomatic complexity of all functions
+  uint32 total_cyclomatic = 2 [json_name = "total_cyclomatic"];
+
+  // Average cyclomatic complexity
+  double avg_cyclomatic = 3 [json_name = "avg_cyclomatic"];
+
+  // Maximum cyclomatic complexity (hotspot indicator)
+  uint32 max_cyclomatic = 4 [json_name = "max_cyclomatic"];
+
+  // Total cognitive complexity
+  uint32 total_cognitive = 5 [json_name = "total_cognitive"];
+
+  // Average cognitive complexity
+  double avg_cognitive = 6 [json_name = "avg_cognitive"];
+
+  // Maximum cognitive complexity
+  uint32 max_cognitive = 7 [json_name = "max_cognitive"];
+
+  // Total lines of code
+  uint32 lines_of_code = 8 [json_name = "lines_of_code"];
+
+  // Comment lines
+  uint32 comment_lines = 9 [json_name = "comment_lines"];
+
+  // Maintainability Index (0-100, higher is better)
+  // Composite of Halstead, CC, and LOC
+  double maintainability_index = 10 [json_name = "maintainability_index"];
+}
+
+// ============================================================================
+// Module Metrics (.topology/metrics/modules.json)
+// ============================================================================
+
+// Container for all module-level metrics.
+// Stored at: .topology/metrics/modules.json
+message ModulesFile {
+  // Schema version
+  string schema_version = 1 [json_name = "schema_version"];
+
+  // All analyzed modules
+  repeated ModuleRecord modules = 2;
+}
+
+// Aggregated metrics for a module/package.
+message ModuleRecord {
+  // Module identifier
+  string id = 1;
+
+  // Module name
+  string name = 2;
+
+  // Path to the module directory
+  string path = 3;
+
+  // Languages present in this module
+  repeated string languages = 4;
+
+  // Aggregated metrics
+  ModuleMetrics metrics = 5;
+}
+
+// Aggregated metrics for a module, including Martin's coupling metrics.
+message ModuleMetrics {
+  // Number of files in this module
+  uint32 file_count = 1 [json_name = "file_count"];
+
+  // Number of functions in this module
+  uint32 function_count = 2 [json_name = "function_count"];
+
+  // Total cyclomatic complexity
+  uint32 total_cyclomatic = 3 [json_name = "total_cyclomatic"];
+
+  // Average cyclomatic complexity
+  double avg_cyclomatic = 4 [json_name = "avg_cyclomatic"];
+
+  // Total cognitive complexity
+  uint32 total_cognitive = 5 [json_name = "total_cognitive"];
+
+  // Average cognitive complexity
+  double avg_cognitive = 6 [json_name = "avg_cognitive"];
+
+  // Total lines of code
+  uint32 lines_of_code = 7 [json_name = "lines_of_code"];
+
+  // Martin's coupling metrics
+  MartinMetrics martin = 8;
+}
+
+// Martin's coupling metrics for package/module analysis.
+// See: Martin, R.C. (2003). "Agile Software Development"
+message MartinMetrics {
+  // Afferent Coupling (Ca): modules that depend on this module
+  // "Who depends on me?"
+  uint32 ca = 1;
+
+  // Efferent Coupling (Ce): modules this module depends on
+  // "Who do I depend on?"
+  uint32 ce = 2;
+
+  // Instability: Ce / (Ca + Ce)
+  // Range [0, 1]: 0 = stable, 1 = unstable
+  double instability = 3;
+
+  // Abstractness: abstract_types / total_types
+  // Range [0, 1]: 0 = concrete, 1 = abstract
+  double abstractness = 4;
+
+  // Distance from Main Sequence: |A + I - 1|
+  // Range [0, 1]: 0 = ideal, 1 = problematic
+  // High distance indicates Zone of Pain or Zone of Uselessness
+  double distance_from_main_sequence = 5 [json_name = "distance_from_main_sequence"];
+}
+
