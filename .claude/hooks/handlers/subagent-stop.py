@@ -40,7 +40,7 @@ def main() -> None:
             input_data = sys.stdin.read()
 
         if not input_data:
-            print(json.dumps({"decision": "allow"}))
+            print(json.dumps({"decision": "approve"}))
             return
 
         event = json.loads(input_data)
@@ -60,10 +60,10 @@ def main() -> None:
             }
         )
 
-        print(json.dumps({"decision": "allow"}))
+        print(json.dumps({"decision": "approve"}))
 
     except Exception as e:
-        print(json.dumps({"decision": "allow", "error": str(e)}))
+        print(json.dumps({"decision": "approve", "error": str(e)}))
 
 
 if __name__ == "__main__":

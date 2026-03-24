@@ -72,7 +72,7 @@ dependencies = [
 
 [[package]]
 name = "aps-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aps-core",
  "aps-v1-0000-meta",
@@ -82,6 +82,7 @@ dependencies = [
  "code-topology-3d",
  "code-topology-rust-adapter",
  "code-topology-viz",
+ "fitness-functions",
  "regex",
  "serde",
  "serde_json",
@@ -92,7 +93,7 @@ dependencies = [
 
 [[package]]
 name = "aps-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "handlebars",
  "serde",
@@ -114,10 +115,11 @@ dependencies = [
 
 [[package]]
 name = "aps-v1-0000-meta"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aps-core",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -483,6 +485,20 @@ name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844"
+
+[[package]]
+name = "fitness-functions"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "chrono",
+ "glob",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
 
 [[package]]
 name = "fnv"
