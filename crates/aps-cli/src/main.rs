@@ -2789,10 +2789,12 @@ fn get_slice_from_id(module_id: &str) -> String {
         return parts.first().unwrap_or(&module_id).to_string();
     }
 
-    // Handle dot-separated paths (Python style)
-    let parts: Vec<&str> = module_id.split('.').collect();
+    // Handle path-like IDs (containing '/') — split on '/' to avoid breaking
+    // Next.js catch-all routes like [[...slug]] where '.' is literal.
+    let separator = if module_id.contains('/') { "/" } else { "." };
+    let parts: Vec<&str> = module_id.split(separator).collect();
     if parts.len() >= 2 {
-        format!("{}.{}", parts[0], parts[1])
+        format!("{}{}{}", parts[0], separator, parts[1])
     } else {
         parts.first().unwrap_or(&module_id).to_string()
     }
