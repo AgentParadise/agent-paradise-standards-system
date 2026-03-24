@@ -3,7 +3,9 @@ title: Module Dependency Topology
 description: Interactive force-directed graph of module dependencies.
 ---
 
-import { TopologyDependencyGraph } from '@/components/diagrams/topology';
+{/* TopologyDependencyGraph is provided via useMDXComponents (see mdx-components.tsx)
+    with ssr: false — do NOT import it directly here or it will break SSR. */}
+
 import depData from '@/../.topology/graphs/dependencies.json';
 import modData from '@/../.topology/metrics/modules.json';
 

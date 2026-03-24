@@ -88,9 +88,11 @@ export function TopologyDependencyGraph({
   filterOptions,
   legendItems = DEFAULT_LEGEND,
 }: TopologyDependencyGraphProps) {
+  const filterKey = JSON.stringify(filterOptions ?? {});
   const { nodes, links } = useMemo(
     () => buildTopologyGraph(modules, dependencies, filterOptions),
-    [modules, dependencies, filterOptions],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filterKey is a stable serialization of filterOptions
+    [modules, dependencies, filterKey],
   );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -126,20 +128,20 @@ export function TopologyDependencyGraph({
     for (const l of simLinksRef.current) {
       const s = l.source as SimNode;
       const t = l.target as SimNode;
-      if (s.x == null || t.x == null) continue;
+      if (s.x == null || s.y == null || t.x == null || t.y == null) continue;
       ctx.beginPath();
-      ctx.moveTo(s.x, s.y!);
-      ctx.lineTo(t.x, t.y!);
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(t.x, t.y);
       ctx.strokeStyle = `rgba(255,255,255,${clamp(l.weight * 0.15, 0.03, 0.25)})`;
       ctx.lineWidth = 0.5;
       ctx.stroke();
     }
 
     for (const n of simNodesRef.current) {
-      if (n.x == null) continue;
+      if (n.x == null || n.y == null) continue;
       const r = nodeRadius(n.loc);
       ctx.beginPath();
-      ctx.arc(n.x, n.y!, r, 0, Math.PI * 2);
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
       ctx.fillStyle = n.color;
       ctx.globalAlpha = 0.85;
       ctx.fill();
@@ -185,15 +187,14 @@ export function TopologyDependencyGraph({
   /* ---------- resize ---------- */
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent) return;
     const ro = new ResizeObserver(() => {
-      const parent = canvas.parentElement!;
       canvas.width = parent.clientWidth;
       canvas.height = parent.clientHeight;
       draw();
     });
-    ro.observe(canvas.parentElement!);
-    const parent = canvas.parentElement!;
+    ro.observe(parent);
     canvas.width = parent.clientWidth;
     canvas.height = parent.clientHeight;
     return () => ro.disconnect();
@@ -201,7 +202,8 @@ export function TopologyDependencyGraph({
 
   /* ---------- interaction ---------- */
   const screenToWorld = useCallback((sx: number, sy: number) => {
-    const canvas = canvasRef.current!;
+    const canvas = canvasRef.current;
+    if (!canvas) return { wx: 0, wy: 0 };
     const { x: tx, y: ty, k } = transformRef.current;
     return {
       wx: (sx - tx - canvas.width / 2) / k,
@@ -213,10 +215,10 @@ export function TopologyDependencyGraph({
     (sx: number, sy: number): SimNode | null => {
       const { wx, wy } = screenToWorld(sx, sy);
       for (const n of simNodesRef.current) {
-        if (n.x == null) continue;
+        if (n.x == null || n.y == null) continue;
         const r = nodeRadius(n.loc);
         const dx = n.x - wx;
-        const dy = n.y! - wy;
+        const dy = n.y - wy;
         if (dx * dx + dy * dy <= r * r) return n;
       }
       return null;
@@ -224,15 +226,19 @@ export function TopologyDependencyGraph({
     [screenToWorld],
   );
 
-  const onWheel = useCallback(
-    (e: React.WheelEvent) => {
+  /* ---------- wheel (native, non-passive to allow preventDefault) ---------- */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 0.9 : 1.1;
       transformRef.current.k = clamp(transformRef.current.k * factor, 0.1, 8);
       draw();
-    },
-    [draw],
-  );
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [draw]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     dragRef.current = { active: true, lastX: e.clientX, lastY: e.clientY };
@@ -240,7 +246,8 @@ export function TopologyDependencyGraph({
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
-      const canvas = canvasRef.current!;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
@@ -274,7 +281,6 @@ export function TopologyDependencyGraph({
       <canvas
         ref={canvasRef}
         style={{ width: '100%', height: '100%', cursor: 'grab', display: 'block' }}
-        onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -306,13 +312,23 @@ export function TopologyDependencyGraph({
         </div>
       </div>
 
-      {/* Tooltip */}
-      {tooltip && (
+      {/* Tooltip — flip to left/above when near viewport edges */}
+      {tooltip && (() => {
+        const ttWidth = 320;
+        const ttHeight = 120;
+        const margin = 14;
+        const left = tooltip.x + margin + ttWidth > window.innerWidth
+          ? tooltip.x - margin - ttWidth
+          : tooltip.x + margin;
+        const top = tooltip.y - 10 + ttHeight > window.innerHeight
+          ? tooltip.y - 10 - ttHeight
+          : tooltip.y - 10;
+        return (
         <div
           style={{
             position: 'fixed',
-            left: tooltip.x + 14,
-            top: tooltip.y - 10,
+            left,
+            top,
             background: 'rgba(0,0,0,0.9)',
             border: `1px solid ${tooltip.node.color}`,
             borderRadius: 6,
@@ -321,7 +337,7 @@ export function TopologyDependencyGraph({
             color: '#eee',
             pointerEvents: 'none',
             zIndex: 100,
-            maxWidth: 320,
+            maxWidth: ttWidth,
           }}
         >
           <div style={{ fontWeight: 600, marginBottom: 4, color: tooltip.node.color }}>
@@ -333,7 +349,8 @@ export function TopologyDependencyGraph({
           <div>Instability: {tooltip.node.instability.toFixed(2)}</div>
           <div style={{ color: '#888', marginTop: 4, fontSize: 11 }}>{tooltip.node.id}</div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
