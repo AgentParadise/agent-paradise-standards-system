@@ -1,0 +1,356 @@
+'use client';
+
+/**
+ * VIZ01 — TopologyDependencyGraph
+ *
+ * A generic, reusable force-directed dependency graph rendered on a
+ * <canvas>. Accepts topology data as props — no hardcoded paths.
+ *
+ * Dependencies: react, d3-force
+ *
+ * Source: APS VIZ01 substandard
+ * https://github.com/AgentParadise/agent-paradise-standards-system
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  forceSimulation,
+  forceLink,
+  forceManyBody,
+  forceCenter,
+  forceCollide,
+  type SimulationNodeDatum,
+  type SimulationLinkDatum,
+} from 'd3-force';
+import type { DependencyEdge, ModuleMetric, TopoNode, TopoLink } from './shared/types';
+import { buildTopologyGraph, type FilterOptions } from './shared/filters';
+
+/* ------------------------------------------------------------------ */
+/*  Types for the simulation                                          */
+/* ------------------------------------------------------------------ */
+
+interface SimNode extends SimulationNodeDatum, TopoNode {}
+interface SimLink extends SimulationLinkDatum<SimNode> {
+  weight: number;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Props                                                             */
+/* ------------------------------------------------------------------ */
+
+export interface TopologyDependencyGraphProps {
+  /** Dependency edges from dependencies.json */
+  dependencies: DependencyEdge[];
+  /** Module metrics from modules.json */
+  modules: ModuleMetric[];
+  /** Container height in px (default 600) */
+  height?: number;
+  /** Extra CSS class on the wrapper div */
+  className?: string;
+  /** Filter options (min LOC, exclude prefixes, color overrides) */
+  filterOptions?: FilterOptions;
+  /** Custom legend items — if omitted, default legend is shown */
+  legendItems?: ReadonlyArray<readonly [label: string, color: string]>;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                           */
+/* ------------------------------------------------------------------ */
+
+function clamp(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function nodeRadius(loc: number): number {
+  return clamp(Math.sqrt(loc) * 0.35, 4, 28);
+}
+
+const DEFAULT_LEGEND: ReadonlyArray<readonly [string, string]> = [
+  ['Orchestration / Workflow', '#4D80FF'],
+  ['Session / Observability', '#1A80B3'],
+  ['GitHub', '#8C50DC'],
+  ['Artifact', '#22cc88'],
+  ['Agentic Primitives', '#ff8844'],
+  ['Event Sourcing Platform', '#44aaff'],
+  ['Cost / Token', '#ffcc44'],
+  ['Other', '#555'],
+];
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                         */
+/* ------------------------------------------------------------------ */
+
+export function TopologyDependencyGraph({
+  dependencies,
+  modules,
+  height = 600,
+  className,
+  filterOptions,
+  legendItems = DEFAULT_LEGEND,
+}: TopologyDependencyGraphProps) {
+  const filterKey = JSON.stringify(filterOptions ?? {});
+  const { nodes, links } = useMemo(
+    () => buildTopologyGraph(modules, dependencies, filterOptions),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filterKey is a stable serialization of filterOptions
+    [modules, dependencies, filterKey],
+  );
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    node: TopoNode;
+  } | null>(null);
+
+  const simNodesRef = useRef<SimNode[]>([]);
+  const simLinksRef = useRef<SimLink[]>([]);
+  const transformRef = useRef({ x: 0, y: 0, k: 1 });
+  const dragRef = useRef<{ active: boolean; lastX: number; lastY: number }>({
+    active: false,
+    lastX: 0,
+    lastY: 0,
+  });
+
+  /* ---------- draw ---------- */
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { width, height: h } = canvas;
+    const { x: tx, y: ty, k } = transformRef.current;
+
+    ctx.clearRect(0, 0, width, h);
+    ctx.save();
+    ctx.translate(tx + width / 2, ty + h / 2);
+    ctx.scale(k, k);
+
+    for (const l of simLinksRef.current) {
+      const s = l.source as SimNode;
+      const t = l.target as SimNode;
+      if (s.x == null || s.y == null || t.x == null || t.y == null) continue;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(t.x, t.y);
+      ctx.strokeStyle = `rgba(255,255,255,${clamp(l.weight * 0.15, 0.03, 0.25)})`;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+
+    for (const n of simNodesRef.current) {
+      if (n.x == null || n.y == null) continue;
+      const r = nodeRadius(n.loc);
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = n.color;
+      ctx.globalAlpha = 0.85;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+  }, []);
+
+  /* ---------- simulation ---------- */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || nodes.length === 0) return;
+
+    const simNodes: SimNode[] = nodes.map((n) => ({ ...n }));
+    const simLinks: SimLink[] = links.map((l) => ({
+      source: l.source,
+      target: l.target,
+      weight: l.weight,
+    }));
+    simNodesRef.current = simNodes;
+    simLinksRef.current = simLinks as SimLink[];
+
+    const sim = forceSimulation<SimNode>(simNodes)
+      .force(
+        'link',
+        forceLink<SimNode, SimLink>(simLinks)
+          .id((d) => d.id)
+          .distance(80)
+          .strength((l) => clamp(l.weight * 0.1, 0.01, 0.3)),
+      )
+      .force('charge', forceManyBody().strength(-60))
+      .force('center', forceCenter(0, 0))
+      .force('collide', forceCollide<SimNode>((d) => nodeRadius(d.loc) + 2))
+      .alphaDecay(0.02)
+      .on('tick', draw);
+
+    return () => {
+      sim.stop();
+    };
+  }, [nodes, links, draw]);
+
+  /* ---------- resize ---------- */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent) return;
+    const ro = new ResizeObserver(() => {
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientHeight;
+      draw();
+    });
+    ro.observe(parent);
+    canvas.width = parent.clientWidth;
+    canvas.height = parent.clientHeight;
+    return () => ro.disconnect();
+  }, [draw]);
+
+  /* ---------- interaction ---------- */
+  const screenToWorld = useCallback((sx: number, sy: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { wx: 0, wy: 0 };
+    const { x: tx, y: ty, k } = transformRef.current;
+    return {
+      wx: (sx - tx - canvas.width / 2) / k,
+      wy: (sy - ty - canvas.height / 2) / k,
+    };
+  }, []);
+
+  const hitTest = useCallback(
+    (sx: number, sy: number): SimNode | null => {
+      const { wx, wy } = screenToWorld(sx, sy);
+      for (const n of simNodesRef.current) {
+        if (n.x == null || n.y == null) continue;
+        const r = nodeRadius(n.loc);
+        const dx = n.x - wx;
+        const dy = n.y - wy;
+        if (dx * dx + dy * dy <= r * r) return n;
+      }
+      return null;
+    },
+    [screenToWorld],
+  );
+
+  /* ---------- wheel (native, non-passive to allow preventDefault) ---------- */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      transformRef.current.k = clamp(transformRef.current.k * factor, 0.1, 8);
+      draw();
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [draw]);
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    dragRef.current = { active: true, lastX: e.clientX, lastY: e.clientY };
+  }, []);
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+
+      if (dragRef.current.active) {
+        transformRef.current.x += e.clientX - dragRef.current.lastX;
+        transformRef.current.y += e.clientY - dragRef.current.lastY;
+        dragRef.current.lastX = e.clientX;
+        dragRef.current.lastY = e.clientY;
+        setTooltip(null);
+        draw();
+        return;
+      }
+
+      const hit = hitTest(sx, sy);
+      if (hit) {
+        setTooltip({ x: e.clientX, y: e.clientY, node: hit });
+      } else {
+        setTooltip(null);
+      }
+    },
+    [draw, hitTest],
+  );
+
+  const onPointerUp = useCallback(() => {
+    dragRef.current.active = false;
+  }, []);
+
+  return (
+    <div className={className} style={{ position: 'relative', width: '100%', height }}>
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: '100%', cursor: 'grab', display: 'block' }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerUp}
+      />
+
+      {/* Legend */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          background: 'rgba(0,0,0,0.75)',
+          borderRadius: 8,
+          padding: '8px 12px',
+          fontSize: 12,
+          color: '#ccc',
+          pointerEvents: 'none',
+        }}
+      >
+        {legendItems.map(([label, color]) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0 }} />
+            {label}
+          </div>
+        ))}
+        <div style={{ marginTop: 6, fontSize: 11, color: '#999' }}>
+          Node size = lines of code · Scroll to zoom · Drag to pan
+        </div>
+      </div>
+
+      {/* Tooltip — flip to left/above when near viewport edges */}
+      {tooltip && (() => {
+        const ttWidth = 320;
+        const ttHeight = 120;
+        const margin = 14;
+        const left = tooltip.x + margin + ttWidth > window.innerWidth
+          ? tooltip.x - margin - ttWidth
+          : tooltip.x + margin;
+        const top = tooltip.y - 10 + ttHeight > window.innerHeight
+          ? tooltip.y - 10 - ttHeight
+          : tooltip.y - 10;
+        return (
+        <div
+          style={{
+            position: 'fixed',
+            left,
+            top,
+            background: 'rgba(0,0,0,0.9)',
+            border: `1px solid ${tooltip.node.color}`,
+            borderRadius: 6,
+            padding: '8px 12px',
+            fontSize: 12,
+            color: '#eee',
+            pointerEvents: 'none',
+            zIndex: 100,
+            maxWidth: ttWidth,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4, color: tooltip.node.color }}>
+            {tooltip.node.name}
+          </div>
+          <div>LOC: {tooltip.node.loc}</div>
+          <div>Functions: {tooltip.node.functionCount}</div>
+          <div>Avg cyclomatic: {tooltip.node.avgCyclomatic.toFixed(1)}</div>
+          <div>Instability: {tooltip.node.instability.toFixed(2)}</div>
+          <div style={{ color: '#888', marginTop: 4, fontSize: 11 }}>{tooltip.node.id}</div>
+        </div>
+        );
+      })()}
+    </div>
+  );
+}
