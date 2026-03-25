@@ -1,5 +1,15 @@
 # Example fitness.toml — Architecture Fitness Functions
 # Evaluated against .topology/metrics/ artifacts produced by APS-V1-0001
+#
+# Recommended defaults based on industry standards:
+#   - Cognitive complexity: 15 (SonarQube default, flake8-cognitive-complexity uses 7)
+#   - Cyclomatic complexity: 10 (McCabe/NIST SP 500-235 gold standard)
+#   - File LOC: 500 (catches bloat without penalizing moderate files)
+#   - Fan-out: 20 (efferent coupling — catches tight coupling)
+#
+# File-level cognitive complexity is intentionally omitted — it sums per-function
+# scores, penalizing files with several moderate functions. Lean on LOC + fan-out
+# for file-level health; cognitive complexity is meaningful at function scope.
 
 [config]
 topology_dir = ".topology"
@@ -9,21 +19,21 @@ severity_default = "error"
 # --- Threshold Rules ---
 
 [[rules.threshold]]
-id = "max-cyclomatic"
-name = "Maximum Cyclomatic Complexity"
+id = "max-cognitive"
+name = "Maximum Cognitive Complexity (function)"
 source = "metrics/complexity.json"
-field = "cyclomatic_complexity"
+field = "cognitive_complexity"
 max = 15
 scope = "function"
 severity = "error"
 exclude = ["**/test_*", "**/tests/**"]
 
 [[rules.threshold]]
-id = "max-cognitive"
-name = "Maximum Cognitive Complexity"
+id = "max-cyclomatic"
+name = "Maximum Cyclomatic Complexity (function)"
 source = "metrics/complexity.json"
-field = "cognitive_complexity"
-max = 20
+field = "cyclomatic_complexity"
+max = 10
 scope = "function"
 severity = "error"
 exclude = ["**/test_*", "**/tests/**"]
