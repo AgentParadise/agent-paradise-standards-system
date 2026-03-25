@@ -3139,9 +3139,16 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                             if !vsa_cfg.is_context_allowed(&context) {
                                 return None;
                             }
-                            // Re-serialize with the correct slice name
+                            // Re-serialize with the correct slice and layer names
                             let mut val = serde_json::to_value(m).ok()?;
                             val["slice"] = serde_json::Value::String(context);
+                            // Override layer from directory structure instead of keyword matching
+                            if let Some(layer) = vsa_cfg
+                                .extract_layer(path)
+                                .or_else(|| vsa_cfg.extract_layer(id))
+                            {
+                                val["layer"] = serde_json::Value::String(layer);
+                            }
                             Some(val)
                         })
                         .collect();

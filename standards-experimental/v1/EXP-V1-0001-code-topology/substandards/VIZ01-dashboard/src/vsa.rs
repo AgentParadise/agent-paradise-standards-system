@@ -70,7 +70,7 @@ pub fn generate(modules_json: &str) -> String {
 
     <script>
         const MODULES = {modules_json};
-        const LAYERS = ['handlers', 'services', 'models', 'data', 'adapters', 'utils', 'core', 'examples', 'tests', 'other'];
+        const LAYERS = [...new Set(MODULES.map(m => m.layer))].sort();
 
         // Build slice × layer matrix
         const matrix = {{}};
