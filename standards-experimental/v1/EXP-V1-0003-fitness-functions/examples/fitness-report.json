@@ -20,7 +20,7 @@
           "entity": "src/orchestration/engine.py::execute",
           "field": "cyclomatic_complexity",
           "actual": 42.0,
-          "threshold": 15.0,
+          "threshold": 10.0,
           "direction": "max",
           "excepted": true
         },
@@ -28,7 +28,7 @@
           "entity": "src/orchestration/engine.py::setup_workspace",
           "field": "cyclomatic_complexity",
           "actual": 28.0,
-          "threshold": 15.0,
+          "threshold": 10.0,
           "direction": "max",
           "excepted": true
         },
@@ -36,7 +36,7 @@
           "entity": "src/api/routes.py::handle_request",
           "field": "cyclomatic_complexity",
           "actual": 22.0,
-          "threshold": 15.0,
+          "threshold": 10.0,
           "direction": "max",
           "excepted": false
         }
