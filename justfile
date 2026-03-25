@@ -254,21 +254,6 @@ aps-full:
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SUBPROJECTS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Run agentic-primitives QA
-[group('subprojects')]
-ap-check:
-    @echo '{{ YELLOW }}Running agentic-primitives QA...{{ NORMAL }}'
-    cd lib/agentic-primitives && just check
-
-# Run agentic-primitives QA with fixes
-[group('subprojects')]
-ap-check-fix:
-    @echo '{{ YELLOW }}Running agentic-primitives QA with fixes...{{ NORMAL }}'
-    cd lib/agentic-primitives && just check-fix
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # UTILITIES
 # ═══════════════════════════════════════════════════════════════════════════════
