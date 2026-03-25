@@ -1,7 +1,7 @@
 # Local
 docs/_reference/
 
-# Build artifacts from agentic-primitives
+# Build artifacts
 build/
 
 # Generated artifacts (derived, not canonical)
