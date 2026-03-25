@@ -250,6 +250,57 @@ impl VsaConfig {
         None
     }
 
+    /// Extract the architectural layer from a module path/ID.
+    ///
+    /// Returns the path component TWO positions after the root match
+    /// (root → context → **layer**).
+    ///
+    /// For the `domain` layer, drills one level deeper to distinguish
+    /// commands, events, queries, read_models, aggregates, and services.
+    /// Aggregate directories (`aggregate_*`) are normalized to `aggregates`.
+    ///
+    /// Examples (root = "packages/syn-domain/src/syn_domain/contexts"):
+    /// - `...orchestration.slices.execute_workflow.Handler` → "slices"
+    /// - `...orchestration.domain.commands.CreateWorkspace` → "commands"
+    /// - `...orchestration.domain.aggregate_execution.Agg` → "aggregates"
+    pub fn extract_layer(&self, module_path: &str) -> Option<String> {
+        let root_parts = self.root_components();
+        if root_parts.is_empty() {
+            return None;
+        }
+        let path_parts = Self::normalize_to_components(module_path);
+        let root_len = root_parts.len();
+
+        if path_parts.len() < root_len {
+            return None;
+        }
+
+        for start in 0..=path_parts.len() - root_len {
+            if path_parts[start..start + root_len] == root_parts[..] {
+                let layer_index = start + root_len + 1;
+                if let Some(&layer) = path_parts.get(layer_index) {
+                    if layer.is_empty() {
+                        return None;
+                    }
+                    // For "domain", drill one level deeper to get the sublayer
+                    if layer == "domain" {
+                        if let Some(&sublayer) = path_parts.get(layer_index + 1) {
+                            if sublayer.starts_with("aggregate_") {
+                                return Some("aggregates".to_string());
+                            }
+                            if !sublayer.is_empty() {
+                                return Some(sublayer.to_string());
+                            }
+                        }
+                    }
+                    return Some(layer.to_string());
+                }
+                return None;
+            }
+        }
+        None
+    }
+
     /// Check if a context name is allowed by this config.
     /// If contexts map is defined (v1), only listed contexts are allowed.
     /// If no contexts map (v2), all contexts under root are allowed.
@@ -440,6 +491,70 @@ root: src/syn_domain/contexts
         let config =
             VsaConfig::parse_str("root: ./src\ncontexts:\n  foo:\n    description: bar\n").unwrap();
         assert_eq!(config.version, 1);
+    }
+
+    #[test]
+    fn extract_layer_works() {
+        let config = VsaConfig::parse_str(
+            "version: 1\nroot: ./packages/syn-domain/src/syn_domain/contexts\ncontexts:\n  orchestration:\n    description: test\n  artifacts:\n    description: test\n",
+        )
+        .unwrap();
+
+        // Domain sublayers — drills into domain/ to get the specific sublayer
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration.domain.commands.CreateWorkspaceCommand"),
+            Some("commands".to_string())
+        );
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration.domain.events.WorkspaceCreatedEvent"),
+            Some("events".to_string())
+        );
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration.domain.read_models.workflow_detail"),
+            Some("read_models".to_string())
+        );
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration.domain.queries.GetWorkflowQuery"),
+            Some("queries".to_string())
+        );
+        // aggregate_* directories normalize to "aggregates"
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration.domain.aggregate_execution.WorkflowExecutionAggregate"),
+            Some("aggregates".to_string())
+        );
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.artifacts.domain.aggregate_artifact.ArtifactAggregate"),
+            Some("aggregates".to_string())
+        );
+        // Non-domain layers returned as-is
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration.slices.execute_workflow.ExecuteWorkflowHandler"),
+            Some("slices".to_string())
+        );
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.artifacts.ports.ArtifactRepositoryPort"),
+            Some("ports".to_string())
+        );
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration._shared.value_objects"),
+            Some("_shared".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_layer_too_short() {
+        let config = VsaConfig::parse_str(
+            "version: 1\nroot: ./packages/syn-domain/src/syn_domain/contexts\ncontexts:\n  orchestration:\n    description: test\n",
+        )
+        .unwrap();
+
+        // Only context, no layer component
+        assert_eq!(
+            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration"),
+            None
+        );
+        // Shorter than root
+        assert_eq!(config.extract_layer("packages.syn-domain"), None);
     }
 
     #[test]
