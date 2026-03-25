@@ -235,8 +235,13 @@ impl VsaConfig {
         let path_parts = Self::normalize_to_components(module_path);
         let root_len = root_parts.len();
 
+        // Module path shorter than root — can't possibly contain a context
+        if path_parts.len() < root_len {
+            return None;
+        }
+
         // Find the window matching root components, then take the next component
-        for start in 0..=path_parts.len().saturating_sub(root_len) {
+        for start in 0..=path_parts.len() - root_len {
             if path_parts[start..start + root_len] == root_parts[..] {
                 let context_index = start + root_len;
                 if let Some(&ctx) = path_parts.get(context_index) {
