@@ -80,7 +80,7 @@ agent-paradise-standards-system/
 │   ├── EXP-V1-0001-code-topology/    # Promoted → APS-V1-0001 (historical)
 │   ├── EXP-V1-0002-todo-tracker/     # TODO/FIXME tracking
 │   └── EXP-V1-0003-fitness-functions/ # Architecture fitness thresholds
-└── lib/agentic-primitives/            # Agent building blocks (submodule)
+└── crates/                            # Shared Rust crates (aps-core, aps-cli)
 ```
 
 ## Package Types
