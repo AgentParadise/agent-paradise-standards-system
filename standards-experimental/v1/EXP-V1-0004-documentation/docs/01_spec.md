@@ -19,14 +19,14 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## 1. Scope and Authority
 
-This document defines normative rules for documentation consistency and context engineering in projects adopting the APSS documentation standard.
+This standard defines a configurable structure for a project's technical documentation directory. The big unlock is **frontmatter-driven indexing**: every Markdown file carries YAML front matter, and the standard auto-generates `## Index` tables from that metadata. This makes docs structured, searchable, and machine-readable — enabling validators, generators, vectorization, and fast navigation for both humans and AI agents.
 
-The standard covers two enforcement domains:
+The documentation root defaults to `docs/` but is configurable. The standard enforces:
 
-- **DOC02**: README indexes and AI context files
-- **DOC03**: Root-level context files
+- **DOC02** — README indexes, frontmatter, and AI context files per directory
+- **DOC03** — Root-level context files so agents always find docs from a fresh start
 
-ADR enforcement is handled by the **ADR01 substandard** ([EXP-V1-0004.ADR01](../substandards/ADR01-architecture-decision-records/docs/01_spec.md)).
+Domain-specific rules (e.g., ADR enforcement) are handled by **substandards** that live inside the docs directory and inherit the parent's index format. See [Substandards](#7-substandards).
 
 ### 1.1 Relationship to APS-V1-0000
 
@@ -36,10 +36,10 @@ This standard complements APS-V1-0000's requirement for `docs/01_spec.md` by enf
 
 ## 2. Core Definitions
 
-- **ADR**: Architecture Decision Record — a document capturing a significant architectural decision, its context, rationale, and consequences.
-- **Front matter**: A YAML block delimited by `---` at the top of a Markdown file, containing structured metadata.
+- **Front matter**: A YAML block delimited by `---` at the top of a Markdown file, containing structured metadata. This is the foundation of the standard — front matter fields drive index generation, validation, and search.
 - **Index**: An auto-generated `## Index` section in README.md that lists documents in a directory with their front matter metadata.
-- **Context file**: `CLAUDE.md` or `AGENTS.md` — lightweight files providing AI agents with quick orientation.
+- **Context file**: `CLAUDE.md` or `AGENTS.md` — lightweight files providing AI agents with quick orientation to a directory's purpose and contents.
+- **Docs root**: The project's technical documentation directory (default: `docs/`), configurable via `docs.root`.
 
 ---
 
@@ -51,7 +51,7 @@ Project-level configuration MUST be located at `.apss/config.toml` relative to t
 
 ### 3.2 Default Behavior
 
-If `.apss/config.toml` does not exist, all defaults SHALL apply. The validator MUST NOT error on a missing config file.
+If `.apss/config.toml` does not exist, all defaults SHALL apply. The validator MUST NOT error on a missing config file. Zero-config works — all defaults are sensible.
 
 ### 3.3 Schema
 
@@ -64,41 +64,73 @@ root = "docs"                     # Documentation root directory
 
 [docs.index]
 enabled = true                    # Enforce ## Index in README.md
-auto_generate = true              # Allow index auto-generation
-frontmatter_fields = ["name", "description"]
+auto_generate = true              # Allow index auto-generation via CLI
+frontmatter_fields = ["name", "description"]  # Fields rendered in index tables
 
 [docs.context_files]
 require_claude_md = true          # Warn on missing CLAUDE.md per directory
 require_agents_md = true          # Warn on missing AGENTS.md per directory
 
-[docs.adr]
-enabled = true
-directory = "adrs"                # Relative to docs root
-naming_pattern = "ADR-\\d{3,}-[a-zA-Z0-9-]+\\.md"
-required_adr_keywords = []        # e.g., ["security", "testing"]
-backlinking = true
-
 [docs.readme]
 enabled = true
-max_depth = -1                    # -1 = unlimited
+max_depth = -1                    # -1 = unlimited depth traversal
 exclude_dirs = ["node_modules", ".git", "target", "vendor", ".topology"]
 
 [docs.root_context]
 enabled = true
-docs_reference_pattern = "docs/"
+docs_reference_pattern = "docs/"  # Pattern to check in root CLAUDE.md
 ```
 
----
-
-## 4. ADR Enforcement
-
-ADR rules are defined and enforced by the **ADR01 substandard** ([EXP-V1-0004.ADR01](../substandards/ADR01-architecture-decision-records/docs/01_spec.md)).
-
-The parent standard provides shared configuration (`docs.adr.*` in `.apss/config.toml`) and the front matter parser. The substandard implements all ADR-specific validation: naming conventions (`ADR-XXX-<name>.md`), front matter requirements, keyword-based required ADRs, and backlinking.
+Substandards may define additional config sections under `[docs.*]`. For example, the ADR substandard uses `[docs.adr]` — see the [ADR01 substandard spec](../substandards/ADR01-architecture-decision-records/docs/01_spec.md#9-configuration) for its schema.
 
 ---
 
-## 5. README/Index Enforcement (DOC02)
+## 4. Frontmatter and Indexing
+
+### 4.1 Frontmatter Requirement
+
+Every `.md` file under the docs root SHOULD contain a YAML front matter block with at least the fields listed in `docs.index.frontmatter_fields` (default: `name` and `description`).
+
+```yaml
+---
+name: "API Authentication Guide"
+description: "How authentication works across all service boundaries"
+---
+```
+
+Front matter makes each document self-describing. Tooling reads these fields to generate indexes, power search, and provide agents with structured context about what each document covers without reading the full content.
+
+### 4.2 Index Generation
+
+When `docs.index.enabled` is `true`, every `README.md` SHOULD contain a `## Index` section. The index is a Markdown table auto-generated from the front matter of `.md` files in the same directory:
+
+```markdown
+## Index
+
+| Document | Description |
+|----------|-------------|
+| [API Authentication Guide](api-auth.md) | How authentication works across all service boundaries |
+| [Deployment Runbook](deployment.md) | Step-by-step production deployment procedure |
+```
+
+The columns rendered in the table are controlled by `docs.index.frontmatter_fields`. The first field becomes the link text; remaining fields become additional columns.
+
+**Error codes**: `MISSING_INDEX`, `STALE_INDEX`
+
+### 4.3 Index Auto-Generation
+
+When `docs.index.auto_generate` is `true`, the CLI can write indexes directly into README.md files:
+
+```bash
+aps run docs index [path]          # Preview generated indexes (dry run)
+aps run docs index [path] --write  # Write indexes into README.md files
+```
+
+The generator inserts or replaces the `## Index` section. Content outside this section is preserved.
+
+---
+
+## 5. README and Context Files (DOC02)
 
 ### 5.1 DOC02-001: README.md Per Directory
 
@@ -106,30 +138,14 @@ Every directory under the docs root (respecting `max_depth` and `exclude_dirs`) 
 
 **Error code**: `MISSING_README`
 
-### 5.2 DOC02-002: Index Section
-
-README.md files SHOULD contain a `## Index` section auto-generated from front matter of `.md` files in the same directory.
-
-The index is a Markdown table:
-
-```markdown
-## Index
-
-| Document | Description |
-|----------|-------------|
-| [Initial Architecture](ADR-001-initial-architecture.md) | Defines system architecture |
-```
-
-**Error codes**: `MISSING_INDEX`, `STALE_INDEX`
-
-### 5.3 DOC02-003: Context Files
+### 5.2 DOC02-002: Context Files
 
 Directories SHOULD contain:
 
 - `CLAUDE.md` — AI context pointer
 - `AGENTS.md` — Agent operational context pointer
 
-Both serve as lightweight pointers:
+Both serve as lightweight pointers that give agents immediate orientation:
 
 ```markdown
 ---
@@ -161,23 +177,33 @@ The repository root MUST contain an `AGENTS.md` file.
 
 ### 6.3 DOC03-003: Documentation Reference
 
-Root `CLAUDE.md` SHOULD reference the documentation location so agents can find it from a fresh start.
+Root `CLAUDE.md` SHOULD reference the documentation location (matching `docs.root_context.docs_reference_pattern`) so agents can find docs from a fresh start.
 
 **Severity**: Warning
 **Error code**: `MISSING_DOCS_REFERENCE`
 
 ---
 
-## 7. CLI Interface
+## 7. Substandards
 
-### 7.1 Validation
+Domain-specific documentation rules are implemented as **substandards** that live inside the docs directory. Substandards inherit the parent's frontmatter format and index generation — they add domain-specific validation on top.
+
+### 7.1 ADR Enforcement (EXP-V1-0004.ADR01)
+
+Architecture Decision Records are enforced by the [ADR01 substandard](../substandards/ADR01-architecture-decision-records/docs/01_spec.md). It validates naming conventions, required front matter (including lifecycle status), keyword-based required topics, and dead reference detection. Configuration lives under `[docs.adr]` in `.apss/config.toml`.
+
+---
+
+## 8. CLI Interface
+
+### 8.1 Validation
 
 ```bash
 aps run docs validate [path]       # Validate all documentation rules
 aps run docs validate [path] --json # JSON output for CI
 ```
 
-### 7.2 Index Generation
+### 8.2 Index Generation
 
 ```bash
 aps run docs index [path]          # Preview generated indexes (dry run)
@@ -186,7 +212,7 @@ aps run docs index [path] --write  # Write indexes into README.md files
 
 ---
 
-## 8. Error Codes
+## 9. Error Codes
 
 | Code | Severity | Domain | Description |
 |------|----------|--------|-------------|
@@ -200,19 +226,16 @@ aps run docs index [path] --write  # Write indexes into README.md files
 | `MISSING_DOCS_REFERENCE` | Warning | DOC03 | Root CLAUDE.md missing docs reference |
 | `INVALID_CONFIG` | Error | Config | .apss/config.toml is invalid |
 
-ADR error codes (`ADR01-001` through `ADR01-012`) are defined in the [ADR01 substandard spec](../substandards/ADR01-architecture-decision-records/docs/01_spec.md#10-error-codes).
+Substandard error codes are defined in their respective specs. ADR codes (`ADR01-001` through `ADR01-012`) are in the [ADR01 spec](../substandards/ADR01-architecture-decision-records/docs/01_spec.md#10-error-codes).
 
 ---
 
 ## Appendix A: Validation Checklist
 
 - [ ] `.apss/config.toml` valid (or absent for defaults)
-- [ ] ADR directory exists at configured path
-- [ ] All ADR files match naming convention
-- [ ] All ADR files have `name` and `description` front matter
-- [ ] All required ADRs present
 - [ ] Every docs directory has `README.md`
-- [ ] README.md files have `## Index` section
+- [ ] `.md` files have front matter with configured fields
+- [ ] README.md files have `## Index` section matching actual contents
 - [ ] `CLAUDE.md` and `AGENTS.md` present per directory
 - [ ] Root `CLAUDE.md` and `AGENTS.md` exist
 - [ ] Root `CLAUDE.md` references documentation location
