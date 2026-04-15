@@ -230,6 +230,12 @@ fn main() -> ExitCode {
                 );
                 println!("    Commands: validate");
                 println!();
+                println!("  docs (EXP-V1-0004) v0.1.0");
+                println!(
+                    "    Documentation and Context Engineering - ADR enforcement, README indexes"
+                );
+                println!("    Commands: validate, index");
+                println!();
                 println!("Use 'aps run <slug> --help' for command details.");
                 return ExitCode::SUCCESS;
             }
@@ -689,6 +695,12 @@ fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
             name: "Architecture Fitness Functions",
             version: "0.1.0",
         }),
+        "docs" | "documentation" | "doc" | "exp-v1-0004" => Some(StandardCliInfo {
+            id: "EXP-V1-0004",
+            slug: "docs",
+            name: "Documentation and Context Engineering",
+            version: "0.1.0",
+        }),
         _ => None,
     }
 }
@@ -706,6 +718,7 @@ fn dispatch_standard_cli(
     match info.slug {
         "topology" => dispatch_topology(command, cmd_args, repo_root, verbose),
         "fitness" => dispatch_fitness(command, cmd_args, repo_root, verbose),
+        "docs" => dispatch_docs(command, cmd_args, repo_root, verbose),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -1002,6 +1015,173 @@ fn dispatch_fitness(
         other => {
             eprintln!("Error: Unknown fitness command '{other}'");
             eprintln!("Use 'aps run fitness --help' for available commands.");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Dispatch documentation standard commands.
+fn dispatch_docs(
+    command: &str,
+    args: &[String],
+    repo_root: &std::path::Path,
+    _verbose: bool,
+) -> ExitCode {
+    match command {
+        "--help" | "-h" | "help" => {
+            println!("Documentation and Context Engineering (EXP-V1-0004) v0.1.0");
+            println!();
+            println!("USAGE:");
+            println!("    aps run docs <COMMAND> [OPTIONS]");
+            println!();
+            println!("COMMANDS:");
+            println!("    validate [path]    Validate documentation structure, ADRs, and indexes");
+            println!("    index [path]       Generate or check README indexes from front matter");
+            println!();
+            println!("OPTIONS:");
+            println!("    --config <file>    Path to .apss/config.toml (default: <path>/.apss/config.toml)");
+            println!("    --write            Write generated indexes into README.md files (index only)");
+            println!("    --json             Output validation results as JSON");
+            println!("    --help             Show this help message");
+            ExitCode::SUCCESS
+        }
+        "validate" => {
+            let mut positional_path: Option<&str> = None;
+            let mut json_output = false;
+            let mut i = 0;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--json" => {
+                        json_output = true;
+                        i += 1;
+                    }
+                    arg if !arg.starts_with('-') && positional_path.is_none() => {
+                        positional_path = Some(arg);
+                        i += 1;
+                    }
+                    _ => {
+                        i += 1;
+                    }
+                }
+            }
+            let path = positional_path.unwrap_or(".");
+            let target = if std::path::Path::new(path).is_absolute() {
+                std::path::PathBuf::from(path)
+            } else {
+                repo_root.join(path)
+            };
+
+            let validator = match documentation::DocValidator::load(&target) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            let mut diagnostics = validator.validate();
+
+            // ADR substandard (EXP-V1-0004.ADR01)
+            let adr_validator = match documentation_adr::AdrValidator::load(&target) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Error loading ADR validator: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+            diagnostics.merge(adr_validator.validate());
+
+            if json_output {
+                match diagnostics.to_json() {
+                    Ok(json) => println!("{json}"),
+                    Err(e) => {
+                        eprintln!("Error serializing JSON: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                if diagnostics.is_empty() {
+                    println!("Documentation validation passed.");
+                } else {
+                    println!("{diagnostics}");
+                }
+            }
+
+            match diagnostics.exit_code() {
+                0 => ExitCode::SUCCESS,
+                _ => ExitCode::FAILURE,
+            }
+        }
+        "index" => {
+            let mut positional_path: Option<&str> = None;
+            let mut write_mode = false;
+            let mut i = 0;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--write" => {
+                        write_mode = true;
+                        i += 1;
+                    }
+                    arg if !arg.starts_with('-') && positional_path.is_none() => {
+                        positional_path = Some(arg);
+                        i += 1;
+                    }
+                    _ => {
+                        i += 1;
+                    }
+                }
+            }
+            let path = positional_path.unwrap_or(".");
+            let target = if std::path::Path::new(path).is_absolute() {
+                std::path::PathBuf::from(path)
+            } else {
+                repo_root.join(path)
+            };
+
+            let validator = match documentation::DocValidator::load(&target) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            if write_mode {
+                match validator.write_indexes() {
+                    Ok(count) => {
+                        println!("Updated {count} README.md file(s) with generated indexes.");
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("Error writing indexes: {e}");
+                        ExitCode::FAILURE
+                    }
+                }
+            } else {
+                match validator.generate_indexes() {
+                    Ok(indexes) => {
+                        if indexes.is_empty() {
+                            println!("No documents with front matter found.");
+                        } else {
+                            for idx in &indexes {
+                                println!("--- {} ---", idx.dir.display());
+                                println!("{}", idx.markdown);
+                            }
+                            println!("{} directory index(es) generated (dry run).", indexes.len());
+                            println!("Use --write to update README.md files.");
+                        }
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("Error generating indexes: {e}");
+                        ExitCode::FAILURE
+                    }
+                }
+            }
+        }
+        other => {
+            eprintln!("Error: Unknown docs command '{other}'");
+            eprintln!("Use 'aps run docs --help' for available commands.");
             ExitCode::FAILURE
         }
     }

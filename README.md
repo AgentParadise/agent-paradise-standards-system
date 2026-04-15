@@ -19,6 +19,7 @@
 |----------|-------------|-----|
 | [EXP-V1-0002 TODO Tracker](standards-experimental/v1/EXP-V1-0002-todo-tracker/docs/00_overview.md) | Scans TODO/FIXME comments, enforces issue references | `aps run todos scan` |
 | [EXP-V1-0003 Fitness Functions](standards-experimental/v1/EXP-V1-0003-fitness-functions/docs/00_overview.md) | Declarative architecture fitness thresholds against topology artifacts | `aps run fitness validate .` |
+| [EXP-V1-0004 Documentation](standards-experimental/v1/EXP-V1-0004-documentation/docs/00_overview.md) | Documentation consistency: ADR enforcement, README indexes, agent context | `aps run docs validate .` |
 
 ### Governance
 
@@ -79,7 +80,8 @@ agent-paradise-standards-system/
 ├── standards-experimental/v1/
 │   ├── EXP-V1-0001-code-topology/    # Promoted → APS-V1-0001 (historical)
 │   ├── EXP-V1-0002-todo-tracker/     # TODO/FIXME tracking
-│   └── EXP-V1-0003-fitness-functions/ # Architecture fitness thresholds
+│   ├── EXP-V1-0003-fitness-functions/ # Architecture fitness thresholds
+│   └── EXP-V1-0004-documentation/    # Documentation and context engineering
 └── crates/                            # Shared Rust crates (aps-core, aps-cli)
 ```
 
