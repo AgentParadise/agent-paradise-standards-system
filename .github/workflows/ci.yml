@@ -42,10 +42,16 @@ jobs:
         run: cargo build -p aps-cli --release
       - name: Validate all V1 standards
         run: cargo run -p aps-cli --release -- v1 validate repo
+      - name: Validate distribution compliance (DI01 - advisory)
+        run: cargo run -p aps-cli --release -- v1 validate distribution || true
       - name: Run self-validation tests
         run: cargo test -p aps-cli --release -- self_validation
       - name: Run backwards compatibility tests
         run: cargo test -p aps-cli --release -- backwards_compat
+      - name: Run CF01 config validation tests
+        run: cargo test -p apss-project-config --release
+      - name: Run DI01 distribution tests
+        run: cargo test -p apss-distribution --release
 
   clippy:
     name: Clippy

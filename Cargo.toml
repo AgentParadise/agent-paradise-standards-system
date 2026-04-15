@@ -3,9 +3,12 @@ resolver = "2"
 members = [
     "crates/aps-core",
     "crates/aps-cli",
+    "crates/apss-bootstrap",
     "standards/v1/APS-V1-0000-meta",
     "standards/v1/APS-V1-0000-meta/substandards/SS01-substandard-structure",
     "standards/v1/APS-V1-0000-meta/substandards/CL01-cli-contract",
+    "standards/v1/APS-V1-0000-meta/substandards/CF01-project-config",
+    "standards/v1/APS-V1-0000-meta/substandards/DI01-distribution",
     # Official standards
     "standards/v1/APS-V1-0001-code-topology",
     "standards/v1/APS-V1-0001-code-topology/substandards/3D01-force-directed",
@@ -52,6 +55,9 @@ glob = "0.3"
 
 # Templates
 handlebars = "6.3"
+
+# Version resolution
+semver = "1.0"
 
 # Internal crates
 aps-core = { path = "crates/aps-core" }

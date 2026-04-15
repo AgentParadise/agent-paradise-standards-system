@@ -163,7 +163,7 @@ clean:
 
 # CI pipeline (strict checks)
 [group('ci')]
-ci: format lint typecheck test build-release
+ci: format lint typecheck test build-release aps-validate
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
     @echo '{{ GREEN }}✓ CI pipeline passed!{{ NORMAL }}'
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
@@ -241,7 +241,21 @@ aps-test:
     cargo test -p aps-cli -- --test-threads=1 workflow_test
     @echo '{{ GREEN }}✓ APS tests passed{{ NORMAL }}'
 
-# Full APS validation suite (validates repo + runs all APS tests)
+# Validate distribution compliance for all standard crates (DI01)
+[group('aps')]
+aps-validate-distribution:
+    @echo '{{ YELLOW }}Validating distribution compliance (DI01)...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 validate distribution
+    @echo '{{ GREEN }}✓ Distribution validation complete{{ NORMAL }}'
+
+# Validate an apss.toml project configuration file (CF01)
+[group('aps')]
+aps-validate-config path="apss.toml":
+    @echo '{{ YELLOW }}Validating project config (CF01): {{ path }}...{{ NORMAL }}'
+    cargo run -p aps-cli -- v1 validate config {{ path }}
+    @echo '{{ GREEN }}✓ Config validation complete{{ NORMAL }}'
+
+# Full APS validation suite (validates repo + distribution + runs all APS tests)
 [group('aps')]
 aps-full:
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
@@ -249,6 +263,8 @@ aps-full:
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
     just aps-validate
     just aps-test
+    @echo '{{ YELLOW }}Running DI01 distribution checks (advisory)...{{ NORMAL }}'
+    -just aps-validate-distribution
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
     @echo '{{ GREEN }}✓ APS Full Suite Passed!{{ NORMAL }}'
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
