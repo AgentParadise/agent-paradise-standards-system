@@ -200,7 +200,7 @@ aps run docs index [path] --write  # Write indexes into README.md files
 | `MISSING_DOCS_REFERENCE` | Warning | DOC03 | Root CLAUDE.md missing docs reference |
 | `INVALID_CONFIG` | Error | Config | .apss/config.toml is invalid |
 
-ADR error codes (`ADR01-001` through `ADR01-010`) are defined in the [ADR01 substandard spec](../substandards/ADR01-architecture-decision-records/docs/01_spec.md#10-error-codes).
+ADR error codes (`ADR01-001` through `ADR01-012`) are defined in the [ADR01 substandard spec](../substandards/ADR01-architecture-decision-records/docs/01_spec.md#10-error-codes).
 
 ---
 

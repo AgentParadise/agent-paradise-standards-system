@@ -1,6 +1,7 @@
 ---
 name: "Initial Architecture"
 description: "Foundational system design decisions and technology choices"
+status: accepted
 ---
 
 # ADR-001: Initial Architecture

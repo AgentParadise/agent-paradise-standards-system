@@ -44,6 +44,9 @@ Every ADR file MUST contain a YAML front matter block with:
 |-------|----------|-------------|
 | `name` | YES | Human-readable ADR title |
 | `description` | YES | One-line summary of the decision |
+| `status` | YES | Lifecycle status: `proposed`, `accepted`, `deprecated`, or `superseded` |
+
+ADRs should not be revised — they should be superseded by a new ADR. The `status` field enables agents and tooling to skip superseded decisions and focus on active ones.
 
 **Example:**
 
@@ -51,6 +54,7 @@ Every ADR file MUST contain a YAML front matter block with:
 ---
 name: "Security Architecture"
 description: "Defines authentication, authorization, and data protection patterns"
+status: accepted
 ---
 ```
 
@@ -162,9 +166,11 @@ backlinking = true                                 # Enforce backlinks in implem
 | ADR01-002 | error | File does not match naming pattern |
 | ADR01-003 | error | Missing or incomplete front matter |
 | ADR01-004 | error | Required ADR keyword not satisfied |
-| ADR01-005 | warning | Implementation file missing ADR backlink |
+| ADR01-005 | — | Reserved (backlink enforcement not feasible as forward scan) |
 | ADR01-006 | error | Invalid naming regex in configuration |
 | ADR01-007 | error | ADR directory missing CLAUDE.md or AGENTS.md |
 | ADR01-008 | warning | ADR context file lacks ADR referencing guidance |
 | ADR01-009 | warning | Source file references non-existent ADR (dead reference) |
 | ADR01-010 | warning | ADR file missing required section header |
+| ADR01-011 | error | ADR missing or invalid `status` field |
+| ADR01-012 | warning | Source file references a superseded or deprecated ADR |

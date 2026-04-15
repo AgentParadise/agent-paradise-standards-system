@@ -1,27 +1,27 @@
 ---
 name: "Documentation and Context Engineering"
-description: "Enforces documentation consistency: ADR naming/structure, README indexes, and AI context files"
+description: "Context engineering for technical docs: structured indexes, agent context files, and ADR enforcement"
 ---
 
 # EXP-V1-0004 — Documentation and Context Engineering
 
-A consistency and context engineering standard that ensures projects maintain structured, searchable documentation with auto-generated indexes optimized for both human developers and AI agents.
+A configurable standard for context engineering within a project's technical documentation directory. Enforces structured, searchable docs with auto-generated indexes optimized for both human developers and AI agents — enabling generators, validators, vectorization, and fast navigation.
 
 ## Problem
 
-- Projects lack a single source of truth for architectural decisions, leading to redundant work and conflicting implementations.
-- Developers and AI agents struggle to understand the "why" behind existing code, especially as teams and systems evolve.
+- Technical documentation lacks structure, making it hard for agents and developers to find the right document quickly.
 - Documentation drifts out of sync with actual file contents, making indexes unreliable.
+- Architectural decisions are scattered or undocumented, leading to redundant work and conflicting implementations.
 
 ## Solution
 
-Three enforcement domains:
+The standard defines a configurable `docs/` directory structure with two enforcement domains and one substandard:
 
-1. **ADR Enforcement (EXP-V1-0004.ADR01)** — Standardized Architecture Decision Records with enforced naming (`ADR-XXX-<adr-name>.md`), required front matter (`name`, `description`), and configurable required ADRs.
+1. **README/Index Enforcement (DOC02)** — Every directory under `docs/` has a `README.md` with an auto-generated `## Index` section built from YAML front matter of `.md` files. `CLAUDE.md` and `AGENTS.md` in each directory serve as lightweight context pointers for AI agents.
 
-2. **README/Index Enforcement (DOC02)** — Every directory under `docs/` has a `README.md` with an auto-generated `## Index` section built from front matter of `.md` files. `CLAUDE.md` and `AGENTS.md` serve as lightweight pointers for AI context.
+2. **Root Context (DOC03)** — Repository root has `CLAUDE.md` and `AGENTS.md` that reference the documentation location, ensuring agents always have context from a fresh start.
 
-3. **Root Context (DOC03)** — Repository root must have `CLAUDE.md` and `AGENTS.md` that reference the documentation location, ensuring agents always have context from a fresh start.
+3. **ADR Enforcement (EXP-V1-0004.ADR01)** — A substandard for Architecture Decision Records that live inside the docs directory. Enforces `ADR-XXX-<name>.md` naming, required front matter (`name`, `description`, `status`), configurable required topics, and dead reference detection. ADRs follow the Fowler lifecycle: proposed, accepted, deprecated, superseded — they are never revised, only superseded.
 
 ## Configuration
 

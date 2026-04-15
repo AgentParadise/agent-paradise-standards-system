@@ -1,6 +1,7 @@
 ---
 name: "Init"
 description: "Initial decision"
+status: accepted
 ---
 
 # ADR-001: Init

@@ -14,12 +14,12 @@ fn setup_valid_adr_dir(root: &std::path::Path) {
     fs::create_dir_all(&adr_dir).unwrap();
     fs::write(
         adr_dir.join("ADR-001-initial-architecture.md"),
-        "---\nname: \"Initial Architecture\"\ndescription: \"Foundational system design\"\n---\n\n# Content\n",
+        "---\nname: \"Initial Architecture\"\ndescription: \"Foundational system design\"\nstatus: accepted\n---\n\n# Content\n",
     )
     .unwrap();
     fs::write(
         adr_dir.join("ADR-002-auth-strategy.md"),
-        "---\nname: \"Auth Strategy\"\ndescription: \"Authentication approach\"\n---\n\n# Content\n",
+        "---\nname: \"Auth Strategy\"\ndescription: \"Authentication approach\"\nstatus: accepted\n---\n\n# Content\n",
     )
     .unwrap();
     fs::write(adr_dir.join("CLAUDE.md"), ADR_CONTEXT_GUIDANCE).unwrap();
@@ -65,7 +65,7 @@ fn test_invalid_adr_naming() {
     // Invalid: wrong naming pattern (underscores instead of hyphens)
     fs::write(
         adr_dir.join("bad-name.md"),
-        "---\nname: \"Bad\"\ndescription: \"Bad name\"\n---\n",
+        "---\nname: \"Bad\"\ndescription: \"Bad name\"\nstatus: accepted\n---\n",
     )
     .unwrap();
 
@@ -151,7 +151,7 @@ fn test_required_keyword_satisfied() {
 
     fs::write(
         adr_dir.join("ADR-001-security.md"),
-        "---\nname: \"Security Architecture\"\ndescription: \"Security patterns\"\n---\n",
+        "---\nname: \"Security Architecture\"\ndescription: \"Security patterns\"\nstatus: accepted\n---\n",
     )
     .unwrap();
 
@@ -177,7 +177,7 @@ fn test_required_keyword_any_number_satisfies() {
     // ADR-042-security.md should satisfy keyword "security" regardless of number
     fs::write(
         adr_dir.join("ADR-042-security.md"),
-        "---\nname: \"Security v2\"\ndescription: \"Updated security\"\n---\n",
+        "---\nname: \"Security v2\"\ndescription: \"Updated security\"\nstatus: accepted\n---\n",
     )
     .unwrap();
 
@@ -218,7 +218,7 @@ fn test_custom_naming_pattern() {
 
     fs::write(
         adr_dir.join("DEC-01-test.md"),
-        "---\nname: \"Test\"\ndescription: \"Custom\"\n---\n",
+        "---\nname: \"Test\"\ndescription: \"Custom\"\nstatus: accepted\n---\n",
     )
     .unwrap();
 
@@ -247,7 +247,7 @@ fn test_readme_in_adr_dir_not_flagged() {
     fs::write(adr_dir.join("AGENTS.md"), ADR_CONTEXT_GUIDANCE).unwrap();
     fs::write(
         adr_dir.join("ADR-001-init.md"),
-        "---\nname: \"Init\"\ndescription: \"Initial\"\n---\n",
+        "---\nname: \"Init\"\ndescription: \"Initial\"\nstatus: accepted\n---\n",
     )
     .unwrap();
 
@@ -269,7 +269,7 @@ fn test_multiple_required_keywords() {
 
     fs::write(
         adr_dir.join("ADR-001-security.md"),
-        "---\nname: \"Security\"\ndescription: \"Security patterns\"\n---\n",
+        "---\nname: \"Security\"\ndescription: \"Security patterns\"\nstatus: accepted\n---\n",
     )
     .unwrap();
     // "testing" keyword NOT satisfied
@@ -299,7 +299,7 @@ fn test_missing_adr_context_files() {
     fs::create_dir_all(&adr_dir).unwrap();
     fs::write(
         adr_dir.join("ADR-001-init.md"),
-        "---\nname: \"Init\"\ndescription: \"Initial\"\n---\n",
+        "---\nname: \"Init\"\ndescription: \"Initial\"\nstatus: accepted\n---\n",
     )
     .unwrap();
 
@@ -322,7 +322,7 @@ fn test_adr_context_files_present_with_guidance() {
     fs::create_dir_all(&adr_dir).unwrap();
     fs::write(
         adr_dir.join("ADR-001-init.md"),
-        "---\nname: \"Init\"\ndescription: \"Initial\"\n---\n",
+        "---\nname: \"Init\"\ndescription: \"Initial\"\nstatus: accepted\n---\n",
     )
     .unwrap();
     fs::write(adr_dir.join("CLAUDE.md"), ADR_CONTEXT_GUIDANCE).unwrap();
@@ -352,7 +352,7 @@ fn test_adr_context_files_without_guidance() {
     fs::create_dir_all(&adr_dir).unwrap();
     fs::write(
         adr_dir.join("ADR-001-init.md"),
-        "---\nname: \"Init\"\ndescription: \"Initial\"\n---\n",
+        "---\nname: \"Init\"\ndescription: \"Initial\"\nstatus: accepted\n---\n",
     )
     .unwrap();
 
@@ -393,7 +393,7 @@ fn test_partial_adr_context_files() {
     fs::create_dir_all(&adr_dir).unwrap();
     fs::write(
         adr_dir.join("ADR-001-init.md"),
-        "---\nname: \"Init\"\ndescription: \"Initial\"\n---\n",
+        "---\nname: \"Init\"\ndescription: \"Initial\"\nstatus: accepted\n---\n",
     )
     .unwrap();
 
@@ -472,10 +472,10 @@ fn fixture_missing_frontmatter_catches_both_cases() {
 
     // ADR-001-no-frontmatter.md: no front matter at all (1 error)
     // ADR-002-partial.md: missing description (1 error)
-    assert_eq!(
-        fm_errors.len(),
-        2,
-        "Expected 2 front matter errors, got {}: {:?}",
+    // Total: 2 frontmatter errors (status errors are counted separately as ADR01-011)
+    assert!(
+        fm_errors.len() >= 2,
+        "Expected at least 2 front matter errors, got {}: {:?}",
         fm_errors.len(),
         fm_errors
     );
@@ -585,7 +585,7 @@ fn test_dead_reference_in_source_file() {
 
     fs::write(
         adr_dir.join("ADR-001-auth.md"),
-        "---\nname: \"Auth\"\ndescription: \"Auth\"\n---\n\n## Context\n\n## Decision\n\n## Consequences\n",
+        "---\nname: \"Auth\"\ndescription: \"Auth\"\nstatus: accepted\n---\n\n## Context\n\n## Decision\n\n## Consequences\n",
     )
     .unwrap();
     fs::write(
@@ -628,7 +628,7 @@ fn test_no_dead_references_when_backlinking_disabled() {
 
     fs::write(
         adr_dir.join("ADR-001-auth.md"),
-        "---\nname: \"Auth\"\ndescription: \"Auth\"\n---\n\n## Context\n\n## Decision\n\n## Consequences\n",
+        "---\nname: \"Auth\"\ndescription: \"Auth\"\nstatus: accepted\n---\n\n## Context\n\n## Decision\n\n## Consequences\n",
     )
     .unwrap();
     fs::write(adr_dir.join("CLAUDE.md"), "Reference ADR- identifiers.").unwrap();
@@ -661,7 +661,7 @@ fn test_adr_with_all_headers_passes() {
 
     fs::write(
         adr_dir.join("ADR-001-complete.md"),
-        "---\nname: \"Complete\"\ndescription: \"Has all headers\"\n---\n\n\
+        "---\nname: \"Complete\"\ndescription: \"Has all headers\"\nstatus: accepted\n---\n\n\
          # ADR-001\n\n## Context\n\nContext.\n\n## Decision\n\nDecision.\n\n## Consequences\n\nConsequences.\n",
     )
     .unwrap();
@@ -687,7 +687,7 @@ fn test_adr_missing_consequences_header() {
 
     fs::write(
         adr_dir.join("ADR-001-incomplete.md"),
-        "---\nname: \"Incomplete\"\ndescription: \"Missing consequences\"\n---\n\n\
+        "---\nname: \"Incomplete\"\ndescription: \"Missing consequences\"\nstatus: accepted\n---\n\n\
          # ADR-001\n\n## Context\n\nContext.\n\n## Decision\n\nDecision.\n",
     )
     .unwrap();

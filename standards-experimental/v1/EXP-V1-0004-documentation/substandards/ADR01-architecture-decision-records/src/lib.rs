@@ -7,7 +7,7 @@
 use aps_core::{Diagnostic, Diagnostics};
 use documentation::config::{self, DocsConfig};
 use regex::Regex;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -25,6 +25,8 @@ pub mod error_codes {
     pub const ADR_CONTEXT_MISSING_GUIDANCE: &str = "ADR01-008";
     pub const DEAD_ADR_REFERENCE: &str = "ADR01-009";
     pub const MISSING_ADR_HEADER: &str = "ADR01-010";
+    pub const INVALID_ADR_STATUS: &str = "ADR01-011";
+    pub const SUPERSEDED_ADR_REFERENCE: &str = "ADR01-012";
 }
 
 /// ADR validator that loads config and runs all ADR checks.
@@ -135,6 +137,9 @@ impl AdrValidator {
     }
 }
 
+/// Valid ADR status values per the Fowler ADR lifecycle.
+const VALID_ADR_STATUSES: &[&str] = &["proposed", "accepted", "deprecated", "superseded"];
+
 /// Collect `.md` filenames from the ADR directory (non-recursive).
 fn collect_adr_files(adr_dir: &Path) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(adr_dir) else {
@@ -189,7 +194,7 @@ fn validate_naming(
     }
 }
 
-/// ADR01-003: Each ADR file must have front matter with `name` and `description`.
+/// ADR01-003/011: Each ADR file must have front matter with `name`, `description`, and `status`.
 fn validate_frontmatter(adr_dir: &Path, adr_files: &[String], diagnostics: &mut Diagnostics) {
     for filename in adr_files {
         let lower = filename.to_lowercase();
@@ -220,6 +225,38 @@ fn validate_frontmatter(adr_dir: &Path, adr_files: &[String], diagnostics: &mut 
                         .with_path(&path),
                     );
                 }
+                // ADR01-011: status must exist and be a valid lifecycle value
+                match fm.get("status") {
+                    None | Some("") => {
+                        diagnostics.push(
+                            Diagnostic::error(
+                                error_codes::INVALID_ADR_STATUS,
+                                format!("ADR '{filename}' is missing required front matter field: status"),
+                            )
+                            .with_path(&path)
+                            .with_hint(format!(
+                                "Add a 'status' field with one of: {}",
+                                VALID_ADR_STATUSES.join(", ")
+                            )),
+                        );
+                    }
+                    Some(status) => {
+                        let normalized = status.to_lowercase();
+                        if !VALID_ADR_STATUSES.contains(&normalized.as_str()) {
+                            diagnostics.push(
+                                Diagnostic::error(
+                                    error_codes::INVALID_ADR_STATUS,
+                                    format!("ADR '{filename}' has invalid status '{status}'"),
+                                )
+                                .with_path(&path)
+                                .with_hint(format!(
+                                    "Valid statuses: {}",
+                                    VALID_ADR_STATUSES.join(", ")
+                                )),
+                            );
+                        }
+                    }
+                }
             }
             Ok(None) => {
                 diagnostics.push(
@@ -229,7 +266,7 @@ fn validate_frontmatter(adr_dir: &Path, adr_files: &[String], diagnostics: &mut 
                     )
                     .with_path(&path)
                     .with_hint(
-                        "Add a --- delimited YAML block with 'name' and 'description' fields",
+                        "Add a --- delimited YAML block with 'name', 'description', and 'status' fields",
                     ),
                 );
             }
@@ -355,14 +392,36 @@ fn adr_stems(adr_files: &[String]) -> HashSet<String> {
         .collect()
 }
 
+/// Build a map of ADR stem → status (lowercase) by reading frontmatter.
+fn adr_statuses(adr_dir: &Path, adr_files: &[String]) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    for filename in adr_files {
+        let lower = filename.to_lowercase();
+        if lower == "readme.md" || lower == "claude.md" || lower == "agents.md" {
+            continue;
+        }
+        let Some(stem) = filename.strip_suffix(".md") else {
+            continue;
+        };
+        let path = adr_dir.join(filename);
+        if let Ok(Some(fm)) = documentation::frontmatter::parse_frontmatter_from_file(&path) {
+            if let Some(status) = fm.get("status") {
+                map.insert(stem.to_string(), status.to_lowercase());
+            }
+        }
+    }
+    map
+}
+
 /// File extensions to scan for ADR references.
 const SOURCE_EXTENSIONS: &[&str] = &[
     "rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "kt", "rb", "sh", "yaml", "yml", "toml",
     "json", "md",
 ];
 
-/// ADR01-009: Scan source files for ADR-XXX-name references and flag any
-/// that don't correspond to an actual ADR file.
+/// ADR01-009/012: Scan source files for ADR-XXX-name references and flag any
+/// that don't correspond to an actual ADR file (009), or reference a
+/// superseded/deprecated ADR (012).
 fn validate_adr_references(
     repo_root: &Path,
     adr_dir: &Path,
@@ -375,6 +434,7 @@ fn validate_adr_references(
         return;
     }
 
+    let statuses = adr_statuses(adr_dir, adr_files);
     let exclude: HashSet<&str> = config
         .readme
         .exclude_dirs
@@ -433,6 +493,21 @@ fn validate_adr_references(
                         adr_dir.display()
                     )),
                 );
+            } else if let Some(status) = statuses.get(&adr_ref) {
+                if status == "superseded" || status == "deprecated" {
+                    diagnostics.push(
+                        Diagnostic::warning(
+                            error_codes::SUPERSEDED_ADR_REFERENCE,
+                            format!(
+                                "Reference to '{adr_ref}' points to a {status} ADR"
+                            ),
+                        )
+                        .with_path(path)
+                        .with_hint(format!(
+                            "ADR '{adr_ref}.md' has status '{status}'. Update this reference to the current ADR.",
+                        )),
+                    );
+                }
             }
         }
     }
@@ -510,6 +585,8 @@ mod tests {
             error_codes::ADR_CONTEXT_MISSING_GUIDANCE,
             error_codes::DEAD_ADR_REFERENCE,
             error_codes::MISSING_ADR_HEADER,
+            error_codes::INVALID_ADR_STATUS,
+            error_codes::SUPERSEDED_ADR_REFERENCE,
         ];
         let unique: HashSet<_> = codes.iter().collect();
         assert_eq!(codes.len(), unique.len(), "error codes must be unique");
@@ -587,5 +664,22 @@ mod tests {
     fn contains_header_rejects_wrong_level() {
         let content = "### Context\n\nWrong heading level.";
         assert!(!contains_header(content, "## Context"));
+    }
+
+    #[test]
+    fn valid_statuses_accepted() {
+        for status in VALID_ADR_STATUSES {
+            assert!(
+                VALID_ADR_STATUSES.contains(status),
+                "'{status}' should be valid"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_status_rejected() {
+        assert!(!VALID_ADR_STATUSES.contains(&"draft"));
+        assert!(!VALID_ADR_STATUSES.contains(&"approved"));
+        assert!(!VALID_ADR_STATUSES.contains(&""));
     }
 }

@@ -1,6 +1,7 @@
 ---
 name: "Security Architecture"
 description: "Authentication, authorization, and data protection patterns"
+status: accepted
 ---
 
 # ADR-002: Security Architecture

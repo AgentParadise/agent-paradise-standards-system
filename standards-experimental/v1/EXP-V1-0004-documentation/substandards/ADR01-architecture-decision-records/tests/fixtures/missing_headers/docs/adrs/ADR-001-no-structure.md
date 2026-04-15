@@ -1,6 +1,7 @@
 ---
 name: "No Structure"
 description: "This ADR has frontmatter but no required section headers"
+status: accepted
 ---
 
 # ADR-001: No Structure

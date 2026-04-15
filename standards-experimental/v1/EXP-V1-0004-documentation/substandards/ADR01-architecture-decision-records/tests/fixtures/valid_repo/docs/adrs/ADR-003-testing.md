@@ -1,6 +1,7 @@
 ---
 name: "Testing Strategy"
 description: "Test pyramid, coverage requirements, and CI integration"
+status: accepted
 ---
 
 # ADR-003: Testing Strategy
