@@ -17,7 +17,7 @@ A consistency and context engineering standard that ensures projects maintain st
 
 Three enforcement domains:
 
-1. **ADR Enforcement (DOC01)** — Standardized Architecture Decision Records with enforced naming (`ADR_XXX_<adr-name>.md`), required front matter (`name`, `description`), and configurable required ADRs.
+1. **ADR Enforcement (EXP-V1-0004.ADR01)** — Standardized Architecture Decision Records with enforced naming (`ADR-XXX-<adr-name>.md`), required front matter (`name`, `description`), and configurable required ADRs.
 
 2. **README/Index Enforcement (DOC02)** — Every directory under `docs/` has a `README.md` with an auto-generated `## Index` section built from front matter of `.md` files. `CLAUDE.md` and `AGENTS.md` serve as lightweight pointers for AI context.
 

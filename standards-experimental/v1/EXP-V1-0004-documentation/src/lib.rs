@@ -112,8 +112,13 @@ impl DocValidator {
 
     /// Write auto-generated indexes into README.md files.
     ///
-    /// Returns the number of files updated.
+    /// Returns the number of files updated. Respects `docs.index.auto_generate`
+    /// — returns 0 without writing if auto-generation is disabled.
     pub fn write_indexes(&self) -> Result<usize, DocError> {
+        if !self.docs_config.index.auto_generate {
+            return Ok(0);
+        }
+
         let docs_root = config::resolve_docs_root(&self.repo_root, &self.docs_config);
         if !docs_root.is_dir() {
             return Ok(0);

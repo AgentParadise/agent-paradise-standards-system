@@ -40,8 +40,15 @@ pub fn validate_readmes(
 
     let exclude_set: HashSet<&str> = readme_config.exclude_dirs.iter().map(|s| s.as_str()).collect();
 
-    let walker = WalkDir::new(&docs_root)
-        .follow_links(false)
+    let mut walkdir = WalkDir::new(&docs_root).follow_links(false);
+    // Use WalkDir's max_depth to prune traversal early.
+    // max_depth == -1 means unlimited; WalkDir depth 0 == docs_root itself,
+    // so we add 1 to translate from "directory nesting levels" to WalkDir depth.
+    if readme_config.max_depth >= 0 {
+        walkdir = walkdir.max_depth(readme_config.max_depth as usize + 1);
+    }
+
+    let walker = walkdir
         .into_iter()
         .filter_entry(|entry| {
             if !entry.file_type().is_dir() {
@@ -59,17 +66,6 @@ pub fn validate_readmes(
         }
 
         let dir = entry.path();
-
-        // Check max_depth
-        if readme_config.max_depth >= 0 {
-            let depth = dir
-                .strip_prefix(&docs_root)
-                .map(|p| p.components().count())
-                .unwrap_or(0);
-            if depth > readme_config.max_depth as usize {
-                continue;
-            }
-        }
 
         // DOC02-001: README.md must exist
         let readme_path = dir.join("README.md");

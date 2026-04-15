@@ -84,20 +84,52 @@ pub fn generate_index(dir: &Path, config: &IndexConfig) -> Result<GeneratedIndex
 }
 
 /// Render index entries as a Markdown table.
-fn render_index_table(entries: &[IndexEntry], _config: &IndexConfig) -> String {
+fn render_index_table(entries: &[IndexEntry], config: &IndexConfig) -> String {
     if entries.is_empty() {
         return "## Index\n\n_No documents found._\n".to_string();
     }
 
+    // Build header row from configured frontmatter fields
+    let fields = &config.frontmatter_fields;
     let mut out = String::from("## Index\n\n");
-    out.push_str("| Document | Description |\n");
-    out.push_str("|----------|-------------|\n");
 
-    for entry in entries {
-        out.push_str(&format!(
-            "| [{}]({}) | {} |\n",
-            entry.name, entry.filename, entry.description
-        ));
+    if fields.len() == 2 && fields[0] == "name" && fields[1] == "description" {
+        // Default: two-column table with name as link text
+        out.push_str("| Document | Description |\n");
+        out.push_str("|----------|-------------|\n");
+        for entry in entries {
+            out.push_str(&format!(
+                "| [{}]({}) | {} |\n",
+                entry.name, entry.filename, entry.description
+            ));
+        }
+    } else {
+        // Custom fields: always start with a linked name column, then remaining fields
+        out.push_str("| Document |");
+        for field in fields.iter().filter(|f| f.as_str() != "name") {
+            let title = capitalize(field);
+            out.push_str(&format!(" {title} |"));
+        }
+        out.push('\n');
+
+        out.push_str("|----------|");
+        for _ in fields.iter().filter(|f| f.as_str() != "name") {
+            out.push_str("-------------|");
+        }
+        out.push('\n');
+
+        for entry in entries {
+            out.push_str(&format!("| [{}]({})", entry.name, entry.filename));
+            for field in fields.iter().filter(|f| f.as_str() != "name") {
+                let val = if field == "description" {
+                    &entry.description
+                } else {
+                    ""
+                };
+                out.push_str(&format!(" | {val}"));
+            }
+            out.push_str(" |\n");
+        }
     }
 
     out
@@ -106,15 +138,35 @@ fn render_index_table(entries: &[IndexEntry], _config: &IndexConfig) -> String {
 /// Extract the `## Index` section from a README's content.
 ///
 /// Returns the byte range `(start, end)` of the section, or `None` if missing.
+/// Uses line-based matching so `## Indexing` is not a false positive.
 pub fn find_index_section(content: &str) -> Option<(usize, usize)> {
-    let start = content.find("## Index")?;
+    let mut offset = 0usize;
+    let mut start = None;
+    let mut after_header = content.len();
 
-    // Find the next `## ` header after the index, or end of file
-    let after_header = start + "## Index".len();
-    let end = content[after_header..]
-        .find("\n## ")
-        .map(|pos| after_header + pos)
-        .unwrap_or(content.len());
+    for line in content.split_inclusive('\n') {
+        let trimmed = line.trim_end_matches(['\r', '\n']);
+        if trimmed == "## Index" {
+            start = Some(offset);
+            after_header = offset + line.len();
+            break;
+        }
+        offset += line.len();
+    }
+
+    let start = start?;
+
+    // Find the next `## ` heading or end of file
+    let mut end = content.len();
+    let mut search_offset = after_header;
+    for line in content[after_header..].split_inclusive('\n') {
+        let trimmed = line.trim_end_matches(['\r', '\n']);
+        if trimmed.starts_with("## ") {
+            end = search_offset;
+            break;
+        }
+        search_offset += line.len();
+    }
 
     Some((start, end))
 }
@@ -158,7 +210,7 @@ pub fn validate_index(
 
 /// Update the `## Index` section in a README file in-place.
 pub fn update_readme_index(readme_path: &Path, dir: &Path, config: &IndexConfig) -> Result<(), IndexError> {
-    let content = std::fs::read_to_string(readme_path).map_err(|e| IndexError::ReadDir {
+    let content = std::fs::read_to_string(readme_path).map_err(|e| IndexError::ReadFile {
         path: readme_path.to_path_buf(),
         source: e,
     })?;
@@ -216,9 +268,23 @@ pub enum IndexError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error("failed to read file {path}: {source}")]
+    ReadFile {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
     #[error("failed to write file {path}: {source}")]
     WriteError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+}
+
+/// Capitalize the first letter of a string.
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().to_string() + c.as_str(),
+    }
 }

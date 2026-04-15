@@ -56,7 +56,7 @@ impl AdrValidator {
     pub fn validate(&self) -> Diagnostics {
         let mut diagnostics = Diagnostics::new();
 
-        if !self.config.adr.enabled {
+        if !self.config.enabled || !self.config.adr.enabled {
             return diagnostics;
         }
 
@@ -245,17 +245,11 @@ fn validate_required_keywords(
     diagnostics: &mut Diagnostics,
 ) {
     for keyword in &config.adr.required_adr_keywords {
-        let pattern = format!(r"^ADR-\d+-{keyword}\.md$");
+        let escaped = regex::escape(keyword);
+        let pattern = format!(r"^ADR-\d+-{escaped}\.md$");
         let re = match Regex::new(&pattern) {
             Ok(re) => re,
-            Err(_) => {
-                // Keyword contains regex-unsafe characters — try case-insensitive literal match
-                let escaped = regex::escape(keyword);
-                match Regex::new(&format!(r"(?i)^ADR-\d+-{escaped}\.md$")) {
-                    Ok(re) => re,
-                    Err(_) => continue,
-                }
-            }
+            Err(_) => continue,
         };
 
         let exists = adr_files.iter().any(|f| re.is_match(f));

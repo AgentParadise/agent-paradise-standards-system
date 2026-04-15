@@ -1020,6 +1020,22 @@ fn dispatch_fitness(
     }
 }
 
+/// Load docs config from a custom path (for `--config` flag).
+fn load_docs_config(
+    path: &str,
+) -> Result<documentation::config::ApssConfig, documentation::config::ConfigError> {
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        documentation::config::ConfigError::ReadError {
+            path: std::path::PathBuf::from(path),
+            source: e,
+        }
+    })?;
+    toml::from_str(&content).map_err(|e| documentation::config::ConfigError::ParseError {
+        path: std::path::PathBuf::from(path),
+        source: e,
+    })
+}
+
 /// Dispatch documentation standard commands.
 fn dispatch_docs(
     command: &str,
@@ -1048,12 +1064,17 @@ fn dispatch_docs(
         "validate" => {
             let mut positional_path: Option<&str> = None;
             let mut json_output = false;
+            let mut config_path: Option<&str> = None;
             let mut i = 0;
             while i < args.len() {
                 match args[i].as_str() {
                     "--json" => {
                         json_output = true;
                         i += 1;
+                    }
+                    "--config" if i + 1 < args.len() => {
+                        config_path = Some(&args[i + 1]);
+                        i += 2;
                     }
                     arg if !arg.starts_with('-') && positional_path.is_none() => {
                         positional_path = Some(arg);
@@ -1071,22 +1092,42 @@ fn dispatch_docs(
                 repo_root.join(path)
             };
 
-            let validator = match documentation::DocValidator::load(&target) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    return ExitCode::FAILURE;
+            let (validator, docs_config) = if let Some(cfg) = config_path {
+                match load_docs_config(cfg) {
+                    Ok(config) => {
+                        let dc = config.docs.clone();
+                        (documentation::DocValidator::with_config(&target, config.docs), dc)
+                    }
+                    Err(e) => {
+                        eprintln!("Error loading config: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                match documentation::DocValidator::load(&target) {
+                    Ok(v) => {
+                        let dc = v.config().clone();
+                        (v, dc)
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        return ExitCode::FAILURE;
+                    }
                 }
             };
 
             let mut diagnostics = validator.validate();
 
             // ADR substandard (EXP-V1-0004.ADR01)
-            let adr_validator = match documentation_adr::AdrValidator::load(&target) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("Error loading ADR validator: {e}");
-                    return ExitCode::FAILURE;
+            let adr_validator = if config_path.is_some() {
+                documentation_adr::AdrValidator::with_config(&target, docs_config)
+            } else {
+                match documentation_adr::AdrValidator::load(&target) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error loading ADR validator: {e}");
+                        return ExitCode::FAILURE;
+                    }
                 }
             };
             diagnostics.merge(adr_validator.validate());
@@ -1099,12 +1140,10 @@ fn dispatch_docs(
                         return ExitCode::FAILURE;
                     }
                 }
+            } else if diagnostics.is_empty() {
+                println!("Documentation validation passed.");
             } else {
-                if diagnostics.is_empty() {
-                    println!("Documentation validation passed.");
-                } else {
-                    println!("{diagnostics}");
-                }
+                println!("{diagnostics}");
             }
 
             match diagnostics.exit_code() {
@@ -1115,12 +1154,17 @@ fn dispatch_docs(
         "index" => {
             let mut positional_path: Option<&str> = None;
             let mut write_mode = false;
+            let mut config_path: Option<&str> = None;
             let mut i = 0;
             while i < args.len() {
                 match args[i].as_str() {
                     "--write" => {
                         write_mode = true;
                         i += 1;
+                    }
+                    "--config" if i + 1 < args.len() => {
+                        config_path = Some(&args[i + 1]);
+                        i += 2;
                     }
                     arg if !arg.starts_with('-') && positional_path.is_none() => {
                         positional_path = Some(arg);
@@ -1138,11 +1182,21 @@ fn dispatch_docs(
                 repo_root.join(path)
             };
 
-            let validator = match documentation::DocValidator::load(&target) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    return ExitCode::FAILURE;
+            let validator = if let Some(cfg) = config_path {
+                match load_docs_config(cfg) {
+                    Ok(config) => documentation::DocValidator::with_config(&target, config.docs),
+                    Err(e) => {
+                        eprintln!("Error loading config: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                match documentation::DocValidator::load(&target) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        return ExitCode::FAILURE;
+                    }
                 }
             };
 
