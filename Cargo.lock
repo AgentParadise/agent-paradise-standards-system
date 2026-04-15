@@ -82,6 +82,8 @@ dependencies = [
  "code-topology-3d",
  "code-topology-rust-adapter",
  "code-topology-viz",
+ "documentation",
+ "documentation-adr",
  "fitness-functions",
  "regex",
  "serde",
@@ -448,6 +450,31 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "documentation"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
+name = "documentation-adr"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "documentation",
+ "regex",
+ "tempfile",
+ "walkdir",
 ]
 
 [[package]]
