@@ -44,7 +44,7 @@ pub fn run(args: InitArgs) -> i32 {
         for spec in &args.standards {
             let (slug, version) = parse_standard_spec(spec);
             content.push_str(&format!("\n[standards.{slug}]\n"));
-            content.push_str("id = \"APS-V1-0000\"  # TODO: set correct standard ID\n");
+            content.push_str("id = \"APS-V1-XXXX\"  # FIXME: Replace with correct standard ID (e.g. APS-V1-0001)\n");
             content.push_str(&format!("version = \"{version}\"\n"));
         }
     }

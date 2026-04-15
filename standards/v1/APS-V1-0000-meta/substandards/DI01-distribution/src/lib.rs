@@ -39,6 +39,12 @@ pub mod error_codes {
     /// Standard crate doesn't depend on `aps-core`.
     pub const DI_MISSING_APS_CORE_DEP: &str = "DI_MISSING_APS_CORE_DEP";
 
+    /// Cargo.toml is missing from the crate directory.
+    pub const DI_MISSING_CARGO_TOML: &str = "DI_MISSING_CARGO_TOML";
+
+    /// Cargo.toml failed to parse.
+    pub const DI_CARGO_TOML_PARSE_ERROR: &str = "DI_CARGO_TOML_PARSE_ERROR";
+
     /// Checksum in `apss.lock` doesn't match crate tarball.
     pub const DI_LOCKFILE_INTEGRITY: &str = "DI_LOCKFILE_INTEGRITY";
 
@@ -98,7 +104,7 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
     if !cargo_path.exists() {
         diags.push(
             Diagnostic::error(
-                error_codes::DI_MISSING_APS_CORE_DEP,
+                error_codes::DI_MISSING_CARGO_TOML,
                 "No Cargo.toml found in standard crate",
             )
             .with_path(crate_path),
@@ -111,7 +117,7 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
         Err(e) => {
             diags.push(
                 Diagnostic::error(
-                    error_codes::DI_MISSING_APS_CORE_DEP,
+                    error_codes::DI_MISSING_CARGO_TOML,
                     format!("Failed to read Cargo.toml: {e}"),
                 )
                 .with_path(&cargo_path),
@@ -125,7 +131,7 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
         Err(e) => {
             diags.push(
                 Diagnostic::error(
-                    error_codes::DI_MISSING_APS_CORE_DEP,
+                    error_codes::DI_CARGO_TOML_PARSE_ERROR,
                     format!("Failed to parse Cargo.toml: {e}"),
                 )
                 .with_path(&cargo_path),
@@ -140,9 +146,9 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
         .and_then(|p| p.get("name"))
         .and_then(|n| n.as_str())
     {
-        if !name.starts_with(CRATE_PREFIX) && name != "aps-core" && name != "apss" {
+        if !is_exempt_crate_name(name) && !is_valid_standard_crate_name(name) {
             diags.push(
-                Diagnostic::warning(
+                Diagnostic::error(
                     error_codes::DI_INVALID_CRATE_NAME,
                     format!(
                         "Crate name '{name}' doesn't follow the '{CRATE_PREFIX}NNNN-slug' convention"
@@ -177,9 +183,9 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
         if let Ok(content) = std::fs::read_to_string(&lib_path) {
             if !content.contains("pub fn register") {
                 diags.push(
-                    Diagnostic::warning(
+                    Diagnostic::error(
                         error_codes::DI_MISSING_REGISTER_FN,
-                        "Standard crate should export a `pub fn register(registry: &mut dyn StandardRegistry)` function",
+                        "Standard crate must export a `pub fn register(registry: &mut dyn StandardRegistry)` function",
                     )
                     .with_path(&lib_path)
                     .with_hint("Add a register() function for CLI composition"),
@@ -372,7 +378,7 @@ pub fn validate_installation(project_root: &Path) -> Diagnostics {
     // Check build dir exists
     if !build_dir.exists() {
         diags.push(
-            Diagnostic::warning(
+            Diagnostic::error(
                 error_codes::DI_BUILD_DIR_MISSING,
                 "Build directory missing. Run 'apss install' to regenerate",
             )
@@ -399,6 +405,34 @@ pub fn validate_installation(project_root: &Path) -> Diagnostics {
     }
 
     diags
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/// Check if a crate name follows the `apss-v1-NNNN-slug` pattern.
+fn is_valid_standard_crate_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix(CRATE_PREFIX) else {
+        return false;
+    };
+    // Must have at least 4-digit ID + hyphen + slug
+    if rest.len() < 6 {
+        return false;
+    }
+    let (digits, after_digits) = rest.split_at(4);
+    digits.chars().all(|c| c.is_ascii_digit())
+        && after_digits.starts_with('-')
+        && after_digits.len() > 1
+}
+
+/// Check if a crate name is exempt from the standard naming convention.
+/// Ecosystem crates (core, bootstrap, meta substandards) use their own names.
+fn is_exempt_crate_name(name: &str) -> bool {
+    matches!(
+        name,
+        "aps-core" | "apss" | "apss-project-config" | "apss-distribution"
+    ) || name.starts_with("aps-v1-0000")
 }
 
 #[cfg(test)]
@@ -438,6 +472,33 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let diags = validate_publishable_standard(temp.path());
         assert!(diags.has_errors());
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code == error_codes::DI_MISSING_CARGO_TOML)
+        );
+    }
+
+    #[test]
+    fn test_is_valid_standard_crate_name() {
+        assert!(is_valid_standard_crate_name("apss-v1-0001-code-topology"));
+        assert!(is_valid_standard_crate_name("apss-v1-0003-fitness"));
+        assert!(!is_valid_standard_crate_name("apss-v1-topology")); // no 4-digit ID
+        assert!(!is_valid_standard_crate_name("apss-v1-0001")); // no slug
+        assert!(!is_valid_standard_crate_name("aps-core")); // not a standard
+    }
+
+    #[test]
+    fn test_is_exempt_crate_name() {
+        assert!(is_exempt_crate_name("aps-core"));
+        assert!(is_exempt_crate_name("apss"));
+        assert!(is_exempt_crate_name("apss-project-config"));
+        assert!(is_exempt_crate_name("apss-distribution"));
+        assert!(is_exempt_crate_name("aps-v1-0000-meta"));
+        assert!(is_exempt_crate_name(
+            "aps-v1-0000-ss01-substandard-structure"
+        ));
+        assert!(!is_exempt_crate_name("apss-v1-0001-code-topology"));
     }
 
     #[test]
@@ -471,5 +532,123 @@ pub fn register(registry: &mut dyn aps_core::StandardRegistry) {
 
         let diags = validate_publishable_standard(temp.path());
         assert!(!diags.has_errors(), "Unexpected errors: {diags}");
+    }
+
+    #[test]
+    fn test_validate_publishable_wrong_name_is_error() {
+        let temp = tempfile::tempdir().unwrap();
+        let src = temp.path().join("src");
+        std::fs::create_dir_all(&src).unwrap();
+
+        std::fs::write(
+            temp.path().join("Cargo.toml"),
+            r#"
+[package]
+name = "bad-name"
+version = "1.0.0"
+
+[dependencies]
+aps-core = "0.1.0"
+"#,
+        )
+        .unwrap();
+        std::fs::write(src.join("lib.rs"), "pub fn register() {}").unwrap();
+
+        let diags = validate_publishable_standard(temp.path());
+        let name_diag = diags
+            .iter()
+            .find(|d| d.code == error_codes::DI_INVALID_CRATE_NAME)
+            .expect("expected DI_INVALID_CRATE_NAME diagnostic");
+        assert!(
+            name_diag.severity == aps_core::Severity::Error,
+            "DI_INVALID_CRATE_NAME should be error severity"
+        );
+    }
+
+    #[test]
+    fn test_validate_publishable_no_register_is_error() {
+        let temp = tempfile::tempdir().unwrap();
+        let src = temp.path().join("src");
+        std::fs::create_dir_all(&src).unwrap();
+
+        std::fs::write(
+            temp.path().join("Cargo.toml"),
+            r#"
+[package]
+name = "apss-v1-0001-code-topology"
+version = "1.0.0"
+
+[dependencies]
+aps-core = "0.1.0"
+"#,
+        )
+        .unwrap();
+        std::fs::write(src.join("lib.rs"), "// no register function").unwrap();
+
+        let diags = validate_publishable_standard(temp.path());
+        let reg_diag = diags
+            .iter()
+            .find(|d| d.code == error_codes::DI_MISSING_REGISTER_FN)
+            .expect("expected DI_MISSING_REGISTER_FN diagnostic");
+        assert!(
+            reg_diag.severity == aps_core::Severity::Error,
+            "DI_MISSING_REGISTER_FN should be error severity"
+        );
+    }
+
+    #[test]
+    fn test_validate_publishable_unreadable_cargo_uses_cargo_error() {
+        let temp = tempfile::tempdir().unwrap();
+        // No Cargo.toml at all → DI_MISSING_CARGO_TOML
+        let diags = validate_publishable_standard(temp.path());
+        let cargo_diag = diags
+            .iter()
+            .find(|d| d.code == error_codes::DI_MISSING_CARGO_TOML)
+            .expect("expected DI_MISSING_CARGO_TOML diagnostic");
+        assert!(
+            cargo_diag.severity == aps_core::Severity::Error,
+            "DI_MISSING_CARGO_TOML should be error severity"
+        );
+    }
+
+    #[test]
+    fn test_validate_publishable_bad_toml_uses_parse_error() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("Cargo.toml"), "not valid [[[ toml").unwrap();
+
+        let diags = validate_publishable_standard(temp.path());
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code == error_codes::DI_CARGO_TOML_PARSE_ERROR),
+            "expected DI_CARGO_TOML_PARSE_ERROR for malformed Cargo.toml"
+        );
+    }
+
+    #[test]
+    fn test_validate_build_dir_missing_is_error() {
+        let temp = tempfile::tempdir().unwrap();
+
+        // Create lockfile + binary but no build dir
+        let lockfile = aps_core::lockfile::Lockfile::new("0.1.0".to_string());
+        aps_core::lockfile::write_lockfile(
+            &temp.path().join(aps_core::lockfile::LOCKFILE_FILENAME),
+            &lockfile,
+        )
+        .unwrap();
+
+        let bin_dir = temp.path().join(BIN_DIR);
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join(BIN_NAME), "fake binary").unwrap();
+
+        let diags = validate_installation(temp.path());
+        let build_diag = diags
+            .iter()
+            .find(|d| d.code == error_codes::DI_BUILD_DIR_MISSING)
+            .expect("expected DI_BUILD_DIR_MISSING diagnostic");
+        assert!(
+            build_diag.severity == aps_core::Severity::Error,
+            "DI_BUILD_DIR_MISSING should be error severity"
+        );
     }
 }

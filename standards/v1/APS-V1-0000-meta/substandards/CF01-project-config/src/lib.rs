@@ -123,12 +123,27 @@ pub mod error_codes {
 /// - Standard entries (IDs, versions, substandard codes)
 /// - Lockfile presence and staleness
 pub fn validate_project_config(path: &Path) -> Diagnostics {
+    let mut diags = validate_config_fields(path);
+
+    // Check lockfile (only for root configs, not children)
+    validate_lockfile(path, &mut diags);
+
+    diags
+}
+
+/// Parse and validate config fields (schema, project, standards) without lockfile checks.
+///
+/// Used by both `validate_project_config` (adds lockfile) and `validate_child_config`
+/// (skips lockfile — in a workspace, the lockfile lives at the root).
+fn validate_config_fields(path: &Path) -> Diagnostics {
     let mut diags = Diagnostics::new();
 
     // Parse the config file
     let config = match config::parse_project_config(path) {
         Ok(c) => c,
-        Err(config::ConfigError::Io { .. }) => {
+        Err(config::ConfigError::Io { source, .. })
+            if source.kind() == std::io::ErrorKind::NotFound =>
+        {
             diags.push(
                 Diagnostic::error(
                     error_codes::CF_FILE_NOT_FOUND,
@@ -138,6 +153,16 @@ pub fn validate_project_config(path: &Path) -> Diagnostics {
                 .with_hint(format!(
                     "Create an {CONFIG_FILENAME} file or run 'apss init'"
                 )),
+            );
+            return diags;
+        }
+        Err(config::ConfigError::Io { source, .. }) => {
+            diags.push(
+                Diagnostic::error(
+                    error_codes::CF_PARSE_ERROR,
+                    format!("Failed to read configuration: {source}"),
+                )
+                .with_path(path),
             );
             return diags;
         }
@@ -168,15 +193,14 @@ pub fn validate_project_config(path: &Path) -> Diagnostics {
     // Validate standard entries
     validate_standards(&config, path, &mut diags);
 
-    // Check lockfile
-    validate_lockfile(path, &mut diags);
-
     diags
 }
 
 /// Validate a child `apss.toml` in a workspace context.
 pub fn validate_child_config(child_path: &Path, root_config: &ProjectConfig) -> Diagnostics {
-    let mut diags = validate_project_config(child_path);
+    // Use validate_config_fields (not validate_project_config) to skip lockfile
+    // checks — in a workspace, the lockfile lives at the root, not in each child.
+    let mut diags = validate_config_fields(child_path);
 
     let child_config = match config::parse_project_config(child_path) {
         Ok(c) => c,
@@ -296,19 +320,21 @@ fn validate_standards(config: &ProjectConfig, path: &Path, diags: &mut Diagnosti
             );
         }
 
-        // Check for duplicate IDs
-        if let Some(prev_slug) = seen_ids.insert(&entry.id, slug.as_str()) {
-            diags.push(
-                Diagnostic::error(
-                    error_codes::CF_DUPLICATE_STANDARD_ID,
-                    format!(
-                        "Standard ID '{}' is declared under both '{}' and '{}'",
-                        entry.id, prev_slug, slug
-                    ),
-                )
-                .with_path(path)
-                .with_hint("Each standard ID must map to exactly one slug"),
-            );
+        // Check for duplicate IDs (skip if ID is empty — already reported above)
+        if !entry.id.is_empty() {
+            if let Some(prev_slug) = seen_ids.insert(&entry.id, slug.as_str()) {
+                diags.push(
+                    Diagnostic::error(
+                        error_codes::CF_DUPLICATE_STANDARD_ID,
+                        format!(
+                            "Standard ID '{}' is declared under both '{}' and '{}'",
+                            entry.id, prev_slug, slug
+                        ),
+                    )
+                    .with_path(path)
+                    .with_hint("Each standard ID must map to exactly one slug"),
+                );
+            }
         }
 
         // Validate version requirement
@@ -686,6 +712,94 @@ members = ["sub/*"]
             diags
                 .iter()
                 .any(|d| d.code == error_codes::CF_WORKSPACE_IN_CHILD)
+        );
+    }
+
+    #[test]
+    fn test_validate_two_empty_ids_no_duplicate_error() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join("apss.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "test"
+apss_version = "v1"
+
+[standards.alpha]
+id = ""
+version = ">=1.0.0"
+
+[standards.beta]
+id = ""
+version = ">=1.0.0"
+"#,
+        )
+        .unwrap();
+
+        let diags = validate_project_config(&config_path);
+        // Should get 2x CF_MISSING_STANDARD_ID, 0x CF_DUPLICATE_STANDARD_ID
+        let missing_count = diags
+            .iter()
+            .filter(|d| d.code == error_codes::CF_MISSING_STANDARD_ID)
+            .count();
+        let dup_count = diags
+            .iter()
+            .filter(|d| d.code == error_codes::CF_DUPLICATE_STANDARD_ID)
+            .count();
+        assert_eq!(
+            missing_count, 2,
+            "expected 2 missing-ID errors, got {missing_count}"
+        );
+        assert_eq!(
+            dup_count, 0,
+            "expected 0 duplicate-ID errors, got {dup_count}"
+        );
+    }
+
+    #[test]
+    fn test_validate_child_no_lockfile_warning() {
+        let temp = tempfile::tempdir().unwrap();
+
+        let root_path = temp.path().join("apss.toml");
+        std::fs::write(
+            &root_path,
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "root"
+apss_version = "v1"
+[workspace]
+members = ["packages/*"]
+"#,
+        )
+        .unwrap();
+
+        let child_dir = temp.path().join("packages/a");
+        std::fs::create_dir_all(&child_dir).unwrap();
+        let child_path = child_dir.join("apss.toml");
+        std::fs::write(
+            &child_path,
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "child"
+apss_version = "v1"
+"#,
+        )
+        .unwrap();
+
+        let root_config = config::parse_project_config(&root_path).unwrap();
+        let diags = validate_child_config(&child_path, &root_config);
+        // Child should NOT get CF_NO_LOCKFILE — lockfile lives at root
+        let lockfile_warnings = diags
+            .iter()
+            .filter(|d| d.code == error_codes::CF_NO_LOCKFILE)
+            .count();
+        assert_eq!(
+            lockfile_warnings, 0,
+            "child config should not warn about missing lockfile"
         );
     }
 }

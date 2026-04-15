@@ -175,7 +175,7 @@ enum ValidateTarget {
     },
     /// Validate an apss.toml project configuration file (CF01)
     Config {
-        /// Path to apss.toml (default: search upward from current dir)
+        /// Path to apss.toml (default: ./apss.toml)
         #[arg(default_value = "apss.toml")]
         path: PathBuf,
     },

@@ -374,7 +374,7 @@ pub trait StandardCli: Send + Sync {
     ///
     /// The default implementation ignores configuration. Override this to
     /// accept project-specific settings.
-    fn configure(&mut self, config: serde_json::Value) -> Result<(), String> {
+    fn configure(&mut self, config: toml::Value) -> Result<(), String> {
         let _ = config;
         Ok(())
     }

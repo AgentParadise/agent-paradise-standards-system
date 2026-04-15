@@ -34,6 +34,13 @@ pub enum LockfileError {
     /// Failed to serialize the lockfile.
     #[error("failed to serialize lockfile: {0}")]
     Serialize(#[from] toml::ser::Error),
+
+    /// Schema field doesn't match expected value.
+    #[error("invalid lockfile schema: expected '{expected}', got '{actual}'")]
+    InvalidSchema {
+        expected: &'static str,
+        actual: String,
+    },
 }
 
 // ============================================================================
@@ -135,9 +142,18 @@ impl Lockfile {
 }
 
 /// Parse a lockfile from a file path.
+///
+/// Returns an error if the schema field doesn't match [`LOCKFILE_SCHEMA`].
 pub fn parse_lockfile(path: &Path) -> Result<Lockfile, LockfileError> {
     let content = std::fs::read_to_string(path)?;
-    Ok(toml::from_str(&content)?)
+    let lockfile: Lockfile = toml::from_str(&content)?;
+    if lockfile.schema != LOCKFILE_SCHEMA {
+        return Err(LockfileError::InvalidSchema {
+            expected: LOCKFILE_SCHEMA,
+            actual: lockfile.schema,
+        });
+    }
+    Ok(lockfile)
 }
 
 /// Write a lockfile to a file path.
@@ -250,5 +266,30 @@ mod tests {
         // Verify header comment
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.starts_with("# apss.lock"));
+    }
+
+    #[test]
+    fn test_parse_lockfile_rejects_wrong_schema() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join(LOCKFILE_FILENAME);
+
+        std::fs::write(
+            &path,
+            r#"
+schema = "apss.lock/v99"
+
+[core]
+version = "0.1.0"
+checksum = ""
+"#,
+        )
+        .unwrap();
+
+        let err = parse_lockfile(&path).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("invalid lockfile schema"),
+            "expected schema error, got: {msg}"
+        );
     }
 }

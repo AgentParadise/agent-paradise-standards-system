@@ -8,19 +8,12 @@ use clap::Args;
 use std::path::Path;
 use std::process::Command;
 
+// TODO: add --update <slug> and --update-all flags when registry resolution is implemented
 #[derive(Args)]
 pub struct InstallArgs {
     /// Fail if lockfile would change (for CI).
     #[arg(long)]
     locked: bool,
-
-    /// Update a specific standard to latest compatible version.
-    #[arg(long)]
-    update: Option<String>,
-
-    /// Update all standards to latest compatible versions.
-    #[arg(long)]
-    update_all: bool,
 
     /// Use only cached crates (no network).
     #[arg(long)]
@@ -77,11 +70,11 @@ pub fn run(args: InstallArgs) -> i32 {
             }
         };
 
-        // Compare package lists
-        let existing_ids: Vec<&str> = existing.packages.iter().map(|p| p.id.as_str()).collect();
-        let new_ids: Vec<&str> = lockfile.packages.iter().map(|p| p.id.as_str()).collect();
+        // Compare full lockfile content (not just IDs — catch version/checksum/source changes)
+        let existing_serialized = toml::to_string_pretty(&existing).unwrap_or_default();
+        let new_serialized = toml::to_string_pretty(&lockfile).unwrap_or_default();
 
-        if existing_ids != new_ids {
+        if existing_serialized != new_serialized {
             eprintln!("Lockfile would change but --locked was specified.");
             eprintln!("Run 'apss install' without --locked to update.");
             return 1;
@@ -96,7 +89,7 @@ pub fn run(args: InstallArgs) -> i32 {
 
     // 4. Generate build crate
     let build_dir = project_root.join(apss_distribution::BUILD_DIR);
-    match codegen::generate_build_crate(&resolved, &build_dir) {
+    match codegen::generate_build_crate(&resolved, Some(&lockfile), &build_dir) {
         Ok(files) => {
             println!("Generated {} files in {}", files.len(), build_dir.display());
         }
@@ -173,6 +166,7 @@ pub fn run(args: InstallArgs) -> i32 {
 }
 
 fn generate_lockfile(config: &resolution::ResolvedProjectConfig) -> Lockfile {
+    // TODO(DI01): Use aps-core version, not bootstrap version
     let mut lockfile = Lockfile::new(env!("CARGO_PKG_VERSION").to_string());
 
     for (slug, standard) in &config.standards {
@@ -180,12 +174,13 @@ fn generate_lockfile(config: &resolution::ResolvedProjectConfig) -> Lockfile {
             continue;
         }
 
+        // TODO: resolve exact version from registry index instead of using sentinel
         lockfile.packages.push(LockedPackage {
             id: standard.id.clone(),
             slug: slug.clone(),
             crate_name: standard.crate_name.clone(),
-            version: standard.version_req.clone(), // placeholder until real resolution
-            checksum: String::new(),               // populated during actual resolution
+            version: "0.0.0-unresolved".to_string(),
+            checksum: String::new(), // TODO: compute SHA-256 from downloaded crate tarball
             source: format!("registry+{}", config.tool.registry),
             substandards: vec![],
         });

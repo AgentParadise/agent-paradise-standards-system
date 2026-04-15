@@ -101,7 +101,7 @@ pub fn resolve_single(config: ProjectConfig, source: PathBuf) -> ResolvedProject
         .standards
         .into_iter()
         .map(|(slug, entry)| {
-            let crate_name = standard_id_to_crate_name(&entry.id);
+            let crate_name = standard_id_to_crate_name(&entry.id, &slug);
             let resolved = ResolvedStandard {
                 id: entry.id,
                 slug: slug.clone(),
@@ -156,20 +156,52 @@ pub fn merge_configs(
         });
     }
 
-    // Merge standards: start with root, override with child
+    // Merge standards: start with root, override/intersect with child
     let mut standards: BTreeMap<String, StandardEntry> = root.standards.clone();
     for (slug, child_entry) in &child.standards {
-        standards.insert(slug.clone(), child_entry.clone());
+        if let Some(root_entry) = standards.get(slug) {
+            // Both root and child declare this standard — intersect version ranges
+            let merged_version = format!("{}, {}", root_entry.version, child_entry.version);
+            if semver::VersionReq::parse(&merged_version).is_err() {
+                return Err(ResolutionError::VersionRangeConflict {
+                    slug: slug.clone(),
+                    root_req: root_entry.version.clone(),
+                    child_req: child_entry.version.clone(),
+                });
+            }
+            let mut merged_entry = child_entry.clone();
+            merged_entry.version = merged_version;
+            standards.insert(slug.clone(), merged_entry);
+        } else {
+            // Only child declares this standard — add directly
+            standards.insert(slug.clone(), child_entry.clone());
+        }
     }
 
-    // Merge tool config
+    // Merge tool config field-by-field: child overrides root only for
+    // fields that differ from the serde default (best-effort detection).
+    // NOTE: Cannot distinguish "child explicitly set to default" from "child omitted".
+    // A RawToolConfig with Option fields would fix this, but adds complexity.
     let root_tool = root.tool.clone().unwrap_or_default();
+    let defaults = ToolConfig::default();
     let merged_tool = match &child.tool {
         Some(child_tool) => ToolConfig {
-            bin_dir: child_tool.bin_dir.clone(),
-            registry: child_tool.registry.clone(),
-            offline: child_tool.offline,
-            log_level: child_tool.log_level.clone(),
+            bin_dir: if child_tool.bin_dir != defaults.bin_dir {
+                child_tool.bin_dir.clone()
+            } else {
+                root_tool.bin_dir
+            },
+            registry: if child_tool.registry != defaults.registry {
+                child_tool.registry.clone()
+            } else {
+                root_tool.registry
+            },
+            offline: child_tool.offline || root_tool.offline,
+            log_level: if child_tool.log_level != defaults.log_level {
+                child_tool.log_level.clone()
+            } else {
+                root_tool.log_level
+            },
         },
         None => root_tool,
     };
@@ -178,7 +210,7 @@ pub fn merge_configs(
     let resolved_standards = standards
         .into_iter()
         .map(|(slug, entry)| {
-            let crate_name = standard_id_to_crate_name(&entry.id);
+            let crate_name = standard_id_to_crate_name(&entry.id, &slug);
             let resolved = ResolvedStandard {
                 id: entry.id,
                 slug: slug.clone(),
@@ -228,9 +260,11 @@ pub fn validate_resolved(config: &ResolvedProjectConfig) -> Diagnostics {
 // Helpers
 // ============================================================================
 
-/// Convert a standard ID like `"APS-V1-0001"` to a crate name like `"apss-v1-0001"`.
-fn standard_id_to_crate_name(id: &str) -> String {
-    id.to_lowercase().replace("aps-", "apss-")
+/// Convert a standard ID and slug to a crate name like `"apss-v1-0001-topology"`.
+// TODO(DI01): Include slug in crate name per DI01 convention (apss-v1-NNNN-slug)
+fn standard_id_to_crate_name(id: &str, slug: &str) -> String {
+    let prefix = id.to_lowercase().replace("aps-", "apss-");
+    format!("{prefix}-{slug}")
 }
 
 #[cfg(test)]
@@ -290,7 +324,7 @@ output_dir = ".custom-topology"
 
         let topo = &resolved.standards["topology"];
         assert_eq!(topo.id, "APS-V1-0001");
-        assert_eq!(topo.crate_name, "apss-v1-0001");
+        assert_eq!(topo.crate_name, "apss-v1-0001-topology");
         assert!(topo.enabled);
     }
 
@@ -308,8 +342,8 @@ output_dir = ".custom-topology"
         .unwrap();
 
         let topo = &resolved.standards["topology"];
-        // Child's version requirement replaces root's
-        assert_eq!(topo.version_req, ">=1.0.0, <2.0.0");
+        // Version requirements are intersected (root + child combined)
+        assert_eq!(topo.version_req, ">=1.0.0, >=1.0.0, <2.0.0");
         // Child's config replaces root's
         assert_eq!(
             topo.config["output_dir"].as_str().unwrap(),
@@ -422,7 +456,7 @@ apss_version = "v1"
                         enabled: true,
                         substandards: None,
                         config: toml::Value::Table(Default::default()),
-                        crate_name: "apss-v1-0001".to_string(),
+                        crate_name: "apss-v1-0001-topology".to_string(),
                     },
                 ),
                 (
@@ -434,7 +468,7 @@ apss_version = "v1"
                         enabled: true,
                         substandards: None,
                         config: toml::Value::Table(Default::default()),
-                        crate_name: "apss-v1-0001".to_string(),
+                        crate_name: "apss-v1-0001-topology".to_string(),
                     },
                 ),
             ]),
@@ -449,7 +483,13 @@ apss_version = "v1"
 
     #[test]
     fn test_standard_id_to_crate_name() {
-        assert_eq!(standard_id_to_crate_name("APS-V1-0001"), "apss-v1-0001");
-        assert_eq!(standard_id_to_crate_name("APS-V1-0003"), "apss-v1-0003");
+        assert_eq!(
+            standard_id_to_crate_name("APS-V1-0001", "topology"),
+            "apss-v1-0001-topology"
+        );
+        assert_eq!(
+            standard_id_to_crate_name("APS-V1-0003", "fitness"),
+            "apss-v1-0003-fitness"
+        );
     }
 }
