@@ -131,7 +131,7 @@ The lockfile MUST be at `apss.lock` in the project root, next to `apss.toml`.
 schema = "apss.lock/v1"
 
 [core]
-version = "0.1.2"
+version = "1.0.0"
 checksum = "sha256:..."
 
 [[package]]
@@ -197,7 +197,104 @@ And SHOULD commit:
 
 ---
 
-## 8. Error Codes
+## 8. Versioning Model
+
+### 8.1 Version Tiers
+
+The system has two independent version tracks:
+
+| Tier | Scope | Pattern | Source of truth |
+|------|-------|---------|-----------------|
+| **System** | `aps-core`, `aps-cli`, `apss` bootstrap | `1.x.y` | `[workspace.package].version` in root `Cargo.toml` |
+| **Standard** | Each standard/substandard independently | SemVer | `standard.toml` / `substandard.toml` version field |
+
+The system version MUST track `1.x.y` to align with `APS-V1`. It is bumped on
+any change to system crates (`aps-core`, `aps-cli`, `apss`).
+
+Standard and substandard versions are independent — a standard MAY be at `3.0.0`
+while the system is at `1.2.0`. Consumer projects pin standard versions in
+`apss.toml` via semver ranges.
+
+### 8.2 Version Consistency
+
+For each standard/substandard/experiment:
+
+- The version in `Cargo.toml` MUST match the version in the metadata file
+  (`standard.toml`, `substandard.toml`, or `experiment.toml`)
+- Standards using `version.workspace = true` in `Cargo.toml` are exempt
+  (workspace version is managed centrally)
+- The `DI_VERSION_MISMATCH` error is raised if these diverge
+
+### 8.3 Version Bump Enforcement
+
+When merging from `main` to `release`:
+
+- If any file within a standard's directory has changed since the last release,
+  the standard's version MUST have been bumped
+- If any system crate (`crates/aps-core`, `crates/aps-cli`, `crates/apss-bootstrap`)
+  has changed, the workspace version MUST have been bumped
+- The release gate MUST fail if a version bump is missing
+
+### 8.4 Backward Compatibility
+
+Published crate versions MUST follow SemVer:
+
+- A consumer project using `apss-v1-0001 = ">=1.0, <2.0"` MUST continue to
+  work with any `1.x.y` release of that standard
+- System crate updates (e.g., `aps-core` `1.1.0` → `1.2.0`) MUST NOT break
+  previously published standards — the `aps-core` API is a stability contract
+
+---
+
+## 9. Release Pipeline
+
+### 9.1 Release Flow
+
+```
+main ──PR──► release branch
+               │
+               ├── release-gate (required checks)
+               └── on merge → release-create
+```
+
+### 9.2 Release Gate (PR to release)
+
+The release gate MUST validate:
+
+1. `just ci` passes (format, lint, typecheck, test, build, aps-validate)
+2. `aps v1 validate distribution` passes (hard gate, not advisory)
+3. Version bump detected for every changed standard/substandard
+4. System version bumped if any system crate changed
+5. `cargo audit` passes (supply chain security)
+6. PR body contains a changelog section
+
+### 9.3 Release Creation (merge to release)
+
+On merge to `release`:
+
+1. Manual approval via GitHub Environment (`release-publish`)
+2. Create git tags:
+   - System tag: `v1.x.y` (if system version changed)
+   - Per-standard tags: `APS-V1-NNNN-vX.Y.Z` (for each bumped standard)
+   - Per-substandard tags: `APS-V1-NNNN.PP01-vX.Y.Z` (for each bumped substandard)
+3. Create GitHub Release with changelog from PR body
+4. Publish to crates.io (only changed crates, in dependency order):
+   - Tier 1: `aps-core` (if changed)
+   - Tier 2: meta substandard crates — CF01, DI01, CL01, SS01 (if changed)
+   - Tier 3: standard crates (if changed)
+   - Tier 4: `apss` bootstrap binary (if changed)
+5. Previously published versions remain available — consumers are not forced
+   to upgrade
+
+### 9.4 Publish Scope
+
+Only crates with a version bump since the last release tag are published. The
+system MUST work with any combination of previously published standard versions
+within their declared semver compatibility ranges.
+
+---
+
+## 10. Error Codes
 
 | Code | Severity | Rule |
 |------|----------|------|
@@ -209,3 +306,6 @@ And SHOULD commit:
 | `DI_BUILD_DIR_MISSING` | Error | Build dir missing |
 | `DI_BINARY_STALE` | Warning | Binary older than lockfile |
 | `DI_BINARY_MISSING` | Warning | Lockfile exists, no binary |
+| `DI_VERSION_MISMATCH` | Error | Cargo.toml vs metadata version |
+| `DI_MISSING_PUBLISH_METADATA` | Warning | Missing description/license/repository |
+| `DI_PUBLISH_DISABLED` | Warning | `publish = false` on distributable crate |

@@ -72,7 +72,7 @@ dependencies = [
 
 [[package]]
 name = "aps-cli"
-version = "0.1.2"
+version = "1.0.0"
 dependencies = [
  "aps-core",
  "aps-v1-0000-meta",
@@ -96,7 +96,7 @@ dependencies = [
 
 [[package]]
 name = "aps-core"
-version = "0.1.2"
+version = "1.0.0"
 dependencies = [
  "handlebars",
  "semver",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "apss"
-version = "0.1.2"
+version = "1.0.0"
 dependencies = [
  "aps-core",
  "apss-distribution",

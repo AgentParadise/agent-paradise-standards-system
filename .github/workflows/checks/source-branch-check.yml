@@ -1,0 +1,29 @@
+# =============================================================================
+# Source Branch Check — ensures release PRs come from main
+# =============================================================================
+
+name: Source Branch Check
+
+on:
+  workflow_call:
+
+jobs:
+  source-branch:
+    name: Check source branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR is from main
+        run: |
+          set -euo pipefail
+
+          SOURCE="${{ github.event.pull_request.head.ref }}"
+
+          if [ "$SOURCE" != "main" ]; then
+            echo "::error::Release PRs must come from the 'main' branch, not '${SOURCE}'"
+            echo ""
+            echo "The release branch only accepts merge commits from main."
+            echo "Please merge your changes into main first, then create a PR from main to release."
+            exit 1
+          fi
+
+          echo "Source branch is 'main'"

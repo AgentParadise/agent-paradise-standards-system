@@ -1,0 +1,125 @@
+# =============================================================================
+# Version Bump Check — ensures changed standards have version bumps
+# =============================================================================
+#
+# Detects which standards/substandards/experiments changed and verifies that
+# their metadata version was bumped. Also checks the system version if any
+# system crate changed.
+
+name: Version Bump Check
+
+on:
+  workflow_call:
+
+jobs:
+  version-bump:
+    name: Check version bumps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes and verify version bumps
+        run: |
+          set -euo pipefail
+
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          CHANGED_FILES=$(git diff --name-only "$BASE" "$HEAD")
+          FAILED=0
+
+          echo "=== Changed files ==="
+          echo "$CHANGED_FILES"
+          echo ""
+
+          # --- System version check ---
+          SYSTEM_CHANGED=false
+          for prefix in "crates/aps-core/" "crates/aps-cli/" "crates/apss-bootstrap/"; do
+            if echo "$CHANGED_FILES" | grep -q "^${prefix}"; then
+              SYSTEM_CHANGED=true
+              break
+            fi
+          done
+
+          if [ "$SYSTEM_CHANGED" = "true" ]; then
+            OLD_SYS_VER=$(git show "$BASE":Cargo.toml | grep -A1 '^\[workspace.package\]' | grep 'version' | sed 's/.*= *"\(.*\)"/\1/')
+            NEW_SYS_VER=$(grep -A1 '^\[workspace.package\]' Cargo.toml | grep 'version' | sed 's/.*= *"\(.*\)"/\1/')
+            if [ "$OLD_SYS_VER" = "$NEW_SYS_VER" ]; then
+              echo "::error::System crates changed but workspace version not bumped (still $OLD_SYS_VER)"
+              FAILED=1
+            else
+              echo "✓ System version bumped: $OLD_SYS_VER → $NEW_SYS_VER"
+            fi
+          fi
+
+          # --- Standard/substandard/experiment version checks ---
+          check_package_version() {
+            local pkg_dir="$1"
+            local meta_file="$2"
+            local version_field="$3"
+
+            # Skip if metadata file doesn't exist
+            if [ ! -f "$pkg_dir/$meta_file" ]; then
+              return
+            fi
+
+            # Check if any file in this package changed
+            if ! echo "$CHANGED_FILES" | grep -q "^${pkg_dir}/"; then
+              return
+            fi
+
+            # Skip if only docs changed (doc-only changes don't require bumps)
+            NON_DOC_CHANGES=$(echo "$CHANGED_FILES" | grep "^${pkg_dir}/" | grep -v "^${pkg_dir}/docs/" || true)
+            if [ -z "$NON_DOC_CHANGES" ]; then
+              echo "· $pkg_dir — docs-only change, skipping version check"
+              return
+            fi
+
+            # Get old and new versions
+            OLD_VER=$(git show "$BASE":"$pkg_dir/$meta_file" 2>/dev/null | grep "^version" | head -1 | sed 's/.*= *"\(.*\)"/\1/' || echo "")
+            NEW_VER=$(grep "^version" "$pkg_dir/$meta_file" | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+
+            if [ -z "$OLD_VER" ]; then
+              echo "✓ $pkg_dir — new package ($NEW_VER)"
+              return
+            fi
+
+            if [ "$OLD_VER" = "$NEW_VER" ]; then
+              echo "::error::$pkg_dir changed but version not bumped (still $OLD_VER)"
+              FAILED=1
+            else
+              echo "✓ $pkg_dir version bumped: $OLD_VER → $NEW_VER"
+            fi
+          }
+
+          # Check all standards
+          for dir in standards/v1/APS-V1-*; do
+            [ -d "$dir" ] || continue
+            check_package_version "$dir" "standard.toml" "version"
+
+            # Check substandards
+            if [ -d "$dir/substandards" ]; then
+              for sub in "$dir"/substandards/*/; do
+                [ -d "$sub" ] || continue
+                sub="${sub%/}"
+                check_package_version "$sub" "substandard.toml" "version"
+              done
+            fi
+          done
+
+          # Check experiments
+          for dir in standards-experimental/v1/*/; do
+            [ -d "$dir" ] || continue
+            dir="${dir%/}"
+            check_package_version "$dir" "experiment.toml" "version"
+          done
+
+          if [ "$FAILED" = "1" ]; then
+            echo ""
+            echo "::error::Version bump check failed. Bump versions for all changed packages before merging to release."
+            exit 1
+          fi
+
+          echo ""
+          echo "All version checks passed."
