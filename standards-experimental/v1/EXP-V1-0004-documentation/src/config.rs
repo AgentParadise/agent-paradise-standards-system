@@ -202,16 +202,14 @@ pub fn load_config(repo_root: &Path) -> Result<ApssConfig, ConfigError> {
     if !config_path.exists() {
         return Ok(ApssConfig::default());
     }
-    let content =
-        std::fs::read_to_string(&config_path).map_err(|e| ConfigError::ReadError {
-            path: config_path.clone(),
-            source: e,
-        })?;
-    let config: ApssConfig =
-        toml::from_str(&content).map_err(|e| ConfigError::ParseError {
-            path: config_path,
-            source: e,
-        })?;
+    let content = std::fs::read_to_string(&config_path).map_err(|e| ConfigError::ReadError {
+        path: config_path.clone(),
+        source: e,
+    })?;
+    let config: ApssConfig = toml::from_str(&content).map_err(|e| ConfigError::ParseError {
+        path: config_path,
+        source: e,
+    })?;
     Ok(config)
 }
 

@@ -4,8 +4,8 @@
 //! required front matter, keyword-based required ADRs, and backlinking from
 //! implementation files back to governing ADRs.
 
-use documentation::config::{self, DocsConfig};
 use aps_core::{Diagnostic, Diagnostics};
+use documentation::config::{self, DocsConfig};
 use regex::Regex;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -62,8 +62,6 @@ impl AdrValidator {
 
         let adr_dir = config::resolve_adr_dir(&self.repo_root, &self.config);
 
-
-
         // ADR01-001: ADR directory must exist
         if !adr_dir.is_dir() {
             diagnostics.push(
@@ -102,7 +100,13 @@ impl AdrValidator {
         let adr_files = collect_adr_files(&adr_dir);
 
         // ADR01-002: Validate naming convention
-        validate_naming(&adr_dir, &adr_files, &naming_regex, &self.config, &mut diagnostics);
+        validate_naming(
+            &adr_dir,
+            &adr_files,
+            &naming_regex,
+            &self.config,
+            &mut diagnostics,
+        );
 
         // ADR01-003: Validate front matter
         validate_frontmatter(&adr_dir, &adr_files, &mut diagnostics);
@@ -115,7 +119,13 @@ impl AdrValidator {
 
         // ADR01-009: Scan source files for dead ADR references
         if self.config.adr.backlinking {
-            validate_adr_references(&self.repo_root, &adr_dir, &adr_files, &self.config, &mut diagnostics);
+            validate_adr_references(
+                &self.repo_root,
+                &adr_dir,
+                &adr_files,
+                &self.config,
+                &mut diagnostics,
+            );
         }
 
         // ADR01-010: Required headers in ADR files
@@ -180,11 +190,7 @@ fn validate_naming(
 }
 
 /// ADR01-003: Each ADR file must have front matter with `name` and `description`.
-fn validate_frontmatter(
-    adr_dir: &Path,
-    adr_files: &[String],
-    diagnostics: &mut Diagnostics,
-) {
+fn validate_frontmatter(adr_dir: &Path, adr_files: &[String], diagnostics: &mut Diagnostics) {
     for filename in adr_files {
         let lower = filename.to_lowercase();
         if lower == "readme.md" || lower == "claude.md" || lower == "agents.md" {
@@ -198,7 +204,9 @@ fn validate_frontmatter(
                     diagnostics.push(
                         Diagnostic::error(
                             error_codes::MISSING_ADR_FRONTMATTER,
-                            format!("ADR '{filename}' is missing required front matter field: name"),
+                            format!(
+                                "ADR '{filename}' is missing required front matter field: name"
+                            ),
                         )
                         .with_path(&path),
                     );
@@ -220,7 +228,9 @@ fn validate_frontmatter(
                         format!("ADR '{filename}' has no front matter block"),
                     )
                     .with_path(&path)
-                    .with_hint("Add a --- delimited YAML block with 'name' and 'description' fields"),
+                    .with_hint(
+                        "Add a --- delimited YAML block with 'name' and 'description' fields",
+                    ),
                 );
             }
             Err(e) => {
@@ -306,9 +316,7 @@ fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
             continue;
         };
 
-        let has_guidance = ADR_REFERENCE_KEYWORDS
-            .iter()
-            .any(|kw| content.contains(kw));
+        let has_guidance = ADR_REFERENCE_KEYWORDS.iter().any(|kw| content.contains(kw));
 
         if !has_guidance {
             diagnostics.push(
@@ -349,8 +357,8 @@ fn adr_stems(adr_files: &[String]) -> HashSet<String> {
 
 /// File extensions to scan for ADR references.
 const SOURCE_EXTENSIONS: &[&str] = &[
-    "rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "kt", "rb", "sh",
-    "yaml", "yml", "toml", "json", "md",
+    "rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "kt", "rb", "sh", "yaml", "yml", "toml",
+    "json", "md",
 ];
 
 /// ADR01-009: Scan source files for ADR-XXX-name references and flag any
@@ -367,18 +375,24 @@ fn validate_adr_references(
         return;
     }
 
-    let exclude: HashSet<&str> = config.readme.exclude_dirs.iter().map(|s| s.as_str()).collect();
+    let exclude: HashSet<&str> = config
+        .readme
+        .exclude_dirs
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
 
     // Canonicalize the ADR dir for reliable comparison (handles macOS /var -> /private/var)
-    let canonical_adr_dir = adr_dir.canonicalize().unwrap_or_else(|_| adr_dir.to_path_buf());
+    let canonical_adr_dir = adr_dir
+        .canonicalize()
+        .unwrap_or_else(|_| adr_dir.to_path_buf());
 
     for entry in WalkDir::new(repo_root)
         .into_iter()
         .filter_entry(|e| {
             if e.file_type().is_dir() && e.depth() > 0 {
                 let name = e.file_name().to_string_lossy();
-                return !name.starts_with('.')
-                    && !exclude.contains(name.as_ref());
+                return !name.starts_with('.') && !exclude.contains(name.as_ref());
             }
             true
         })
@@ -390,10 +404,7 @@ fn validate_adr_references(
         }
 
         // Only scan known source extensions
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         if !SOURCE_EXTENSIONS.contains(&ext) {
             continue;
         }
@@ -430,18 +441,10 @@ fn validate_adr_references(
 // ─── Required ADR headers (ADR01-010) ────────────────────────────────────
 
 /// Headers that every ADR file MUST contain.
-const REQUIRED_ADR_HEADERS: &[&str] = &[
-    "## Context",
-    "## Decision",
-    "## Consequences",
-];
+const REQUIRED_ADR_HEADERS: &[&str] = &["## Context", "## Decision", "## Consequences"];
 
 /// ADR01-010: Each ADR file must contain required section headers.
-fn validate_adr_headers(
-    adr_dir: &Path,
-    adr_files: &[String],
-    diagnostics: &mut Diagnostics,
-) {
+fn validate_adr_headers(adr_dir: &Path, adr_files: &[String], diagnostics: &mut Diagnostics) {
     for filename in adr_files {
         let lower = filename.to_lowercase();
         if lower == "readme.md" || lower == "claude.md" || lower == "agents.md" {

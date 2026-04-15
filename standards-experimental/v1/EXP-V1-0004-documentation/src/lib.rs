@@ -12,7 +12,7 @@ pub mod frontmatter;
 pub mod index;
 pub mod readme;
 
-use config::{load_config, DocsConfig};
+use config::{DocsConfig, load_config};
 use std::path::{Path, PathBuf};
 
 // ─── Error Codes ────────────────────────────────────────────────────────────
@@ -151,8 +151,12 @@ fn collect_indexes_recursive(
         return Ok(());
     };
 
-    let exclude_set: std::collections::HashSet<&str> =
-        config.readme.exclude_dirs.iter().map(|s| s.as_str()).collect();
+    let exclude_set: std::collections::HashSet<&str> = config
+        .readme
+        .exclude_dirs
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
 
     for entry in entries.filter_map(|e| e.ok()) {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -184,8 +188,12 @@ fn write_indexes_recursive(
         return Ok(());
     };
 
-    let exclude_set: std::collections::HashSet<&str> =
-        config.readme.exclude_dirs.iter().map(|s| s.as_str()).collect();
+    let exclude_set: std::collections::HashSet<&str> = config
+        .readme
+        .exclude_dirs
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
 
     for entry in entries.filter_map(|e| e.ok()) {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {

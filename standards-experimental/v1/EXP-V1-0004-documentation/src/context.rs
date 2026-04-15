@@ -28,11 +28,17 @@ pub fn validate_root_context(
                 "Missing CLAUDE.md at repository root",
             )
             .with_path(repo_root)
-            .with_hint("Create a CLAUDE.md that provides AI context and references documentation location"),
+            .with_hint(
+                "Create a CLAUDE.md that provides AI context and references documentation location",
+            ),
         );
     } else {
         // DOC03-003: Should reference docs location
-        validate_docs_reference(&claude_path, &root_config.docs_reference_pattern, diagnostics);
+        validate_docs_reference(
+            &claude_path,
+            &root_config.docs_reference_pattern,
+            diagnostics,
+        );
     }
 
     // DOC03-002: Root AGENTS.md must exist
@@ -50,11 +56,7 @@ pub fn validate_root_context(
 }
 
 /// Check that a file contains a reference to the docs location.
-fn validate_docs_reference(
-    file_path: &Path,
-    pattern: &str,
-    diagnostics: &mut Diagnostics,
-) {
+fn validate_docs_reference(file_path: &Path, pattern: &str, diagnostics: &mut Diagnostics) {
     let Ok(content) = std::fs::read_to_string(file_path) else {
         return;
     };

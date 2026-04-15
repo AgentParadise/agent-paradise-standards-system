@@ -1055,8 +1055,12 @@ fn dispatch_docs(
             println!("    index [path]       Generate or check README indexes from front matter");
             println!();
             println!("OPTIONS:");
-            println!("    --config <file>    Path to .apss/config.toml (default: <path>/.apss/config.toml)");
-            println!("    --write            Write generated indexes into README.md files (index only)");
+            println!(
+                "    --config <file>    Path to .apss/config.toml (default: <path>/.apss/config.toml)"
+            );
+            println!(
+                "    --write            Write generated indexes into README.md files (index only)"
+            );
             println!("    --json             Output validation results as JSON");
             println!("    --help             Show this help message");
             ExitCode::SUCCESS
@@ -1096,7 +1100,10 @@ fn dispatch_docs(
                 match load_docs_config(cfg) {
                     Ok(config) => {
                         let dc = config.docs.clone();
-                        (documentation::DocValidator::with_config(&target, config.docs), dc)
+                        (
+                            documentation::DocValidator::with_config(&target, config.docs),
+                            dc,
+                        )
                     }
                     Err(e) => {
                         eprintln!("Error loading config: {e}");

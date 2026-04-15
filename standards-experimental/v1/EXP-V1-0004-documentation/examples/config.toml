@@ -1,0 +1,35 @@
+# Example .apss/config.toml for EXP-V1-0004 documentation standard.
+#
+# Copy this file to your project's .apss/config.toml and customize.
+# All fields are optional — omitted values use sensible defaults.
+
+schema = "apss.config/v1"
+
+[docs]
+enabled = true
+root = "docs"
+
+[docs.index]
+enabled = true
+auto_generate = true
+frontmatter_fields = ["name", "description"]
+
+[docs.context_files]
+require_claude_md = true
+require_agents_md = true
+
+[docs.adr]
+enabled = true
+directory = "adrs"
+naming_pattern = "ADR-\\d{3,}-[a-zA-Z0-9-]+\\.md"
+required_adr_keywords = ["security", "testing"]
+backlinking = true
+
+[docs.readme]
+enabled = true
+max_depth = -1
+exclude_dirs = ["node_modules", ".git", "target", "vendor", ".topology"]
+
+[docs.root_context]
+enabled = true
+docs_reference_pattern = "docs/"

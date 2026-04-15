@@ -12,11 +12,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 /// Validate README, CLAUDE.md, AGENTS.md presence and index freshness.
-pub fn validate_readmes(
-    repo_root: &Path,
-    docs_config: &DocsConfig,
-    diagnostics: &mut Diagnostics,
-) {
+pub fn validate_readmes(repo_root: &Path, docs_config: &DocsConfig, diagnostics: &mut Diagnostics) {
     let readme_config = &docs_config.readme;
     if !readme_config.enabled {
         return;
@@ -38,7 +34,11 @@ pub fn validate_readmes(
         return;
     }
 
-    let exclude_set: HashSet<&str> = readme_config.exclude_dirs.iter().map(|s| s.as_str()).collect();
+    let exclude_set: HashSet<&str> = readme_config
+        .exclude_dirs
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
 
     let mut walkdir = WalkDir::new(&docs_root).follow_links(false);
     // Use WalkDir's max_depth to prune traversal early.
@@ -48,16 +48,14 @@ pub fn validate_readmes(
         walkdir = walkdir.max_depth(readme_config.max_depth as usize + 1);
     }
 
-    let walker = walkdir
-        .into_iter()
-        .filter_entry(|entry| {
-            if !entry.file_type().is_dir() {
-                return true;
-            }
-            let name = entry.file_name().to_string_lossy();
-            // Skip hidden directories and excluded dirs
-            !name.starts_with('.') && !exclude_set.contains(name.as_ref())
-        });
+    let walker = walkdir.into_iter().filter_entry(|entry| {
+        if !entry.file_type().is_dir() {
+            return true;
+        }
+        let name = entry.file_name().to_string_lossy();
+        // Skip hidden directories and excluded dirs
+        !name.starts_with('.') && !exclude_set.contains(name.as_ref())
+    });
 
     for entry in walker {
         let Ok(entry) = entry else { continue };

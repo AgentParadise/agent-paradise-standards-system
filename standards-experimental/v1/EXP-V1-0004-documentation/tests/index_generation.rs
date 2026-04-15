@@ -1,6 +1,6 @@
 use documentation::config::IndexConfig;
 use documentation::index::{
-    find_index_section, generate_index, update_readme_index, validate_index, IndexIssue,
+    IndexIssue, find_index_section, generate_index, update_readme_index, validate_index,
 };
 use std::fs;
 use tempfile::tempdir;

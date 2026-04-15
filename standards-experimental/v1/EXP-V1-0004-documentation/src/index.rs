@@ -209,7 +209,11 @@ pub fn validate_index(
 }
 
 /// Update the `## Index` section in a README file in-place.
-pub fn update_readme_index(readme_path: &Path, dir: &Path, config: &IndexConfig) -> Result<(), IndexError> {
+pub fn update_readme_index(
+    readme_path: &Path,
+    dir: &Path,
+    config: &IndexConfig,
+) -> Result<(), IndexError> {
     let content = std::fs::read_to_string(readme_path).map_err(|e| IndexError::ReadFile {
         path: readme_path.to_path_buf(),
         source: e,

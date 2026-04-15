@@ -1,4 +1,4 @@
-use documentation::config::{load_config, ApssConfig};
+use documentation::config::{ApssConfig, load_config};
 use std::fs;
 use tempfile::tempdir;
 
@@ -52,10 +52,7 @@ docs_reference_pattern = "documentation/"
 
     assert_eq!(config.docs.root, "documentation");
     assert_eq!(config.docs.adr.directory, "decisions");
-    assert_eq!(
-        config.docs.adr.naming_pattern,
-        "DEC_\\d{3}_[a-z]+\\.md"
-    );
+    assert_eq!(config.docs.adr.naming_pattern, "DEC_\\d{3}_[a-z]+\\.md");
     assert_eq!(config.docs.adr.required_adr_keywords, vec!["init"]);
     assert!(!config.docs.adr.backlinking);
     assert!(!config.docs.readme.enabled);

@@ -1,6 +1,6 @@
 use documentation::config::DocsConfig;
-use documentation_adr::error_codes;
 use documentation_adr::AdrValidator;
+use documentation_adr::error_codes;
 use std::fs;
 use tempfile::tempdir;
 
@@ -49,9 +49,11 @@ fn test_missing_adr_directory() {
     let diagnostics = validator.validate();
 
     assert!(diagnostics.has_errors());
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_ADR_DIR));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_ADR_DIR)
+    );
 }
 
 #[test]
@@ -70,9 +72,11 @@ fn test_invalid_adr_naming() {
     let validator = AdrValidator::with_config(dir.path(), DocsConfig::default());
     let diagnostics = validator.validate();
 
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::INVALID_ADR_NAMING));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::INVALID_ADR_NAMING)
+    );
 }
 
 #[test]
@@ -90,9 +94,11 @@ fn test_missing_frontmatter() {
     let validator = AdrValidator::with_config(dir.path(), DocsConfig::default());
     let diagnostics = validator.validate();
 
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_ADR_FRONTMATTER));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_ADR_FRONTMATTER)
+    );
 }
 
 #[test]
@@ -111,9 +117,11 @@ fn test_incomplete_frontmatter() {
     let validator = AdrValidator::with_config(dir.path(), DocsConfig::default());
     let diagnostics = validator.validate();
 
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_ADR_FRONTMATTER));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_ADR_FRONTMATTER)
+    );
 }
 
 #[test]
@@ -128,9 +136,11 @@ fn test_required_keyword_missing() {
     let validator = AdrValidator::with_config(dir.path(), config);
     let diagnostics = validator.validate();
 
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_REQUIRED_ADR));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_REQUIRED_ADR)
+    );
 }
 
 #[test]
@@ -151,9 +161,11 @@ fn test_required_keyword_satisfied() {
     let validator = AdrValidator::with_config(dir.path(), config);
     let diagnostics = validator.validate();
 
-    assert!(!diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_REQUIRED_ADR));
+    assert!(
+        !diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_REQUIRED_ADR)
+    );
 }
 
 #[test]
@@ -175,9 +187,11 @@ fn test_required_keyword_any_number_satisfies() {
     let validator = AdrValidator::with_config(dir.path(), config);
     let diagnostics = validator.validate();
 
-    assert!(!diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_REQUIRED_ADR));
+    assert!(
+        !diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_REQUIRED_ADR)
+    );
 }
 
 #[test]
@@ -214,9 +228,11 @@ fn test_custom_naming_pattern() {
     let validator = AdrValidator::with_config(dir.path(), config);
     let diagnostics = validator.validate();
 
-    assert!(!diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::INVALID_ADR_NAMING));
+    assert!(
+        !diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::INVALID_ADR_NAMING)
+    );
 }
 
 #[test]
@@ -341,8 +357,16 @@ fn test_adr_context_files_without_guidance() {
     .unwrap();
 
     // Files exist but contain no ADR referencing guidance
-    fs::write(adr_dir.join("CLAUDE.md"), "# ADR Context\n\nSome generic text.").unwrap();
-    fs::write(adr_dir.join("AGENTS.md"), "# ADR Agents\n\nSome generic text.").unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "# ADR Context\n\nSome generic text.",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "# ADR Agents\n\nSome generic text.",
+    )
+    .unwrap();
 
     let validator = AdrValidator::with_config(dir.path(), DocsConfig::default());
     let diagnostics = validator.validate();
@@ -474,8 +498,7 @@ fn fixture_missing_context_files() {
 
 #[test]
 fn fixture_no_guidance_warns() {
-    let validator =
-        AdrValidator::with_config(&fixture_path("no_guidance"), DocsConfig::default());
+    let validator = AdrValidator::with_config(&fixture_path("no_guidance"), DocsConfig::default());
     let diagnostics = validator.validate();
 
     // Files exist so no missing-file errors
@@ -517,8 +540,7 @@ fn fixture_dead_adr_references() {
 
 #[test]
 fn fixture_valid_repo_no_dead_references() {
-    let validator =
-        AdrValidator::with_config(&fixture_path("valid_repo"), DocsConfig::default());
+    let validator = AdrValidator::with_config(&fixture_path("valid_repo"), DocsConfig::default());
     let diagnostics = validator.validate();
 
     assert!(
@@ -566,8 +588,16 @@ fn test_dead_reference_in_source_file() {
         "---\nname: \"Auth\"\ndescription: \"Auth\"\n---\n\n## Context\n\n## Decision\n\n## Consequences\n",
     )
     .unwrap();
-    fs::write(adr_dir.join("CLAUDE.md"), "Reference ADR- identifiers in comment blocks.").unwrap();
-    fs::write(adr_dir.join("AGENTS.md"), "Reference ADR- identifiers in comment blocks.").unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
 
     // Source file referencing valid + invalid ADR
     fs::write(

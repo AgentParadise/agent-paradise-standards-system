@@ -1,9 +1,9 @@
+use aps_core::Diagnostics;
+use documentation::DocValidator;
 use documentation::config::DocsConfig;
 use documentation::context::validate_root_context;
 use documentation::error_codes;
 use documentation::readme::validate_readmes;
-use documentation::DocValidator;
-use aps_core::Diagnostics;
 use std::fs;
 use tempfile::tempdir;
 
@@ -18,9 +18,11 @@ fn test_missing_readme_in_docs_dir() {
     let mut diagnostics = Diagnostics::new();
     validate_readmes(dir.path(), &config, &mut diagnostics);
 
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_README));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_README)
+    );
 }
 
 #[test]
@@ -56,9 +58,11 @@ fn test_missing_claude_md_warning() {
     let mut diagnostics = Diagnostics::new();
     validate_readmes(dir.path(), &config, &mut diagnostics);
 
-    assert!(diagnostics
-        .warnings()
-        .any(|d| d.code == error_codes::MISSING_CLAUDE_MD));
+    assert!(
+        diagnostics
+            .warnings()
+            .any(|d| d.code == error_codes::MISSING_CLAUDE_MD)
+    );
 }
 
 #[test]
@@ -74,9 +78,11 @@ fn test_missing_agents_md_warning() {
     let mut diagnostics = Diagnostics::new();
     validate_readmes(dir.path(), &config, &mut diagnostics);
 
-    assert!(diagnostics
-        .warnings()
-        .any(|d| d.code == error_codes::MISSING_AGENTS_MD));
+    assert!(
+        diagnostics
+            .warnings()
+            .any(|d| d.code == error_codes::MISSING_AGENTS_MD)
+    );
 }
 
 #[test]
@@ -94,10 +100,11 @@ fn test_subdirectory_readme_enforcement() {
     let mut diagnostics = Diagnostics::new();
     validate_readmes(dir.path(), &config, &mut diagnostics);
 
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_README
-            && d.message.contains("guides")));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_README && d.message.contains("guides"))
+    );
 }
 
 #[test]
@@ -116,9 +123,11 @@ fn test_exclude_dirs_respected() {
     validate_readmes(dir.path(), &config, &mut diagnostics);
 
     // Should NOT report missing README for node_modules
-    assert!(!diagnostics
-        .errors()
-        .any(|d| d.message.contains("node_modules")));
+    assert!(
+        !diagnostics
+            .errors()
+            .any(|d| d.message.contains("node_modules"))
+    );
 }
 
 #[test]
@@ -148,9 +157,11 @@ fn test_root_context_missing_claude() {
     let mut diagnostics = Diagnostics::new();
     validate_root_context(dir.path(), &config, &mut diagnostics);
 
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_ROOT_CLAUDE_MD));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_ROOT_CLAUDE_MD)
+    );
 }
 
 #[test]
@@ -162,24 +173,32 @@ fn test_root_context_missing_agents() {
     let mut diagnostics = Diagnostics::new();
     validate_root_context(dir.path(), &config, &mut diagnostics);
 
-    assert!(diagnostics
-        .errors()
-        .any(|d| d.code == error_codes::MISSING_ROOT_AGENTS_MD));
+    assert!(
+        diagnostics
+            .errors()
+            .any(|d| d.code == error_codes::MISSING_ROOT_AGENTS_MD)
+    );
 }
 
 #[test]
 fn test_root_context_missing_docs_reference() {
     let dir = tempdir().unwrap();
-    fs::write(dir.path().join("CLAUDE.md"), "# Claude\n\nNo reference here.").unwrap();
+    fs::write(
+        dir.path().join("CLAUDE.md"),
+        "# Claude\n\nNo reference here.",
+    )
+    .unwrap();
     fs::write(dir.path().join("AGENTS.md"), "# Agents").unwrap();
 
     let config = DocsConfig::default();
     let mut diagnostics = Diagnostics::new();
     validate_root_context(dir.path(), &config, &mut diagnostics);
 
-    assert!(diagnostics
-        .warnings()
-        .any(|d| d.code == error_codes::MISSING_DOCS_REFERENCE));
+    assert!(
+        diagnostics
+            .warnings()
+            .any(|d| d.code == error_codes::MISSING_DOCS_REFERENCE)
+    );
 }
 
 #[test]
