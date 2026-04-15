@@ -218,18 +218,13 @@ fn main() -> ExitCode {
             list,
         } => {
             if list {
-                // List available standards
                 println!("Available Standards:\n");
-                println!("  topology (EXP-V1-0001) v0.1.0");
-                println!("    Code Topology - architectural metrics and visualization");
-                println!("    Commands: analyze, validate, diff, report, viz");
-                println!();
-                println!("  fitness (EXP-V1-0003) v0.1.0");
-                println!(
-                    "    Architecture Fitness Functions - declarative architectural assertions"
-                );
-                println!("    Commands: validate");
-                println!();
+                for s in all_standards() {
+                    println!("  {} ({}) v{}", s.slug, s.id, s.version);
+                    println!("    {} - {}", s.name, s.description);
+                    println!("    Commands: {}", s.commands);
+                    println!();
+                }
                 println!("Use 'aps run <slug> --help' for command details.");
                 return ExitCode::SUCCESS;
             }
@@ -244,7 +239,7 @@ fn main() -> ExitCode {
 
             // Dispatch to standard CLI
             match resolve_standard(&slug) {
-                Some(info) => dispatch_standard_cli(&info, &args, &repo_root, cli.verbose),
+                Some(info) => dispatch_standard_cli(info, &args, &repo_root, cli.verbose),
                 None => {
                     eprintln!("Error: Unknown standard '{slug}'");
                     eprintln!("Use 'aps run --list' to see available standards.");
@@ -671,26 +666,51 @@ struct StandardCliInfo {
     id: &'static str,
     slug: &'static str,
     name: &'static str,
+    description: &'static str,
+    commands: &'static str,
     version: &'static str,
+    aliases: &'static [&'static str],
 }
 
-/// Resolve a slug to standard info.
-fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
-    match slug.to_lowercase().as_str() {
-        "topology" | "topo" | "code-topology" | "exp-v1-0001" => Some(StandardCliInfo {
+/// Central registry of all available standards.
+fn all_standards() -> &'static [StandardCliInfo] {
+    &[
+        StandardCliInfo {
             id: "EXP-V1-0001",
             slug: "topology",
             name: "Code Topology",
+            description: "Architectural metrics and visualization",
+            commands: "analyze, validate, diff, report, viz",
             version: "0.1.0",
-        }),
-        "fitness" | "fitness-functions" | "exp-v1-0003" => Some(StandardCliInfo {
+            aliases: &["topo", "code-topology", "exp-v1-0001"],
+        },
+        StandardCliInfo {
             id: "EXP-V1-0003",
             slug: "fitness",
             name: "Architecture Fitness Functions",
+            description: "Declarative architectural assertions",
+            commands: "validate",
             version: "0.1.0",
-        }),
-        _ => None,
-    }
+            aliases: &["fitness-functions", "exp-v1-0003"],
+        },
+        StandardCliInfo {
+            id: "EXP-V1-0004",
+            slug: "docs",
+            name: "Documentation and Context Engineering",
+            description: "Structured docs with frontmatter-driven indexing for automation and AI agents",
+            commands: "validate, index",
+            version: "0.1.0",
+            aliases: &["documentation", "doc", "exp-v1-0004"],
+        },
+    ]
+}
+
+/// Resolve a slug to standard info.
+fn resolve_standard(slug: &str) -> Option<&'static StandardCliInfo> {
+    let lower = slug.to_lowercase();
+    all_standards()
+        .iter()
+        .find(|s| s.slug == lower || s.aliases.iter().any(|a| *a == lower))
 }
 
 /// Dispatch to a standard's CLI.
@@ -706,6 +726,7 @@ fn dispatch_standard_cli(
     match info.slug {
         "topology" => dispatch_topology(command, cmd_args, repo_root, verbose),
         "fitness" => dispatch_fitness(command, cmd_args, repo_root, verbose),
+        "docs" => dispatch_docs(command, cmd_args, repo_root, verbose),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -1002,6 +1023,245 @@ fn dispatch_fitness(
         other => {
             eprintln!("Error: Unknown fitness command '{other}'");
             eprintln!("Use 'aps run fitness --help' for available commands.");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Load docs config from a custom path (for `--config` flag).
+fn load_docs_config(
+    path: &str,
+) -> Result<documentation::config::ApssConfig, documentation::config::ConfigError> {
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        documentation::config::ConfigError::ReadError {
+            path: std::path::PathBuf::from(path),
+            source: e,
+        }
+    })?;
+    toml::from_str(&content).map_err(|e| documentation::config::ConfigError::ParseError {
+        path: std::path::PathBuf::from(path),
+        source: e,
+    })
+}
+
+/// Dispatch documentation standard commands.
+fn dispatch_docs(
+    command: &str,
+    args: &[String],
+    repo_root: &std::path::Path,
+    _verbose: bool,
+) -> ExitCode {
+    match command {
+        "--help" | "-h" | "help" => {
+            println!("Documentation and Context Engineering (EXP-V1-0004) v0.1.0");
+            println!();
+            println!("USAGE:");
+            println!("    aps run docs <COMMAND> [OPTIONS]");
+            println!();
+            println!("COMMANDS:");
+            println!("    validate [path]    Validate documentation structure, ADRs, and indexes");
+            println!("    index [path]       Generate or check README indexes from front matter");
+            println!();
+            println!("OPTIONS:");
+            println!(
+                "    --config <file>    Path to .apss/config.toml (default: <path>/.apss/config.toml)"
+            );
+            println!(
+                "    --write            Write generated indexes into README.md files (index only)"
+            );
+            println!("    --json             Output validation results as JSON");
+            println!("    --help             Show this help message");
+            ExitCode::SUCCESS
+        }
+        "validate" => {
+            let mut positional_path: Option<&str> = None;
+            let mut json_output = false;
+            let mut config_path: Option<&str> = None;
+            let mut i = 0;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--json" => {
+                        json_output = true;
+                        i += 1;
+                    }
+                    "--config" if i + 1 < args.len() => {
+                        config_path = Some(&args[i + 1]);
+                        i += 2;
+                    }
+                    arg if !arg.starts_with('-') && positional_path.is_none() => {
+                        positional_path = Some(arg);
+                        i += 1;
+                    }
+                    _ => {
+                        i += 1;
+                    }
+                }
+            }
+            let path = positional_path.unwrap_or(".");
+            let target = if std::path::Path::new(path).is_absolute() {
+                std::path::PathBuf::from(path)
+            } else {
+                repo_root.join(path)
+            };
+
+            let (validator, docs_config) = if let Some(cfg) = config_path {
+                // Resolve relative --config paths against the target directory
+                let cfg_path = if std::path::Path::new(cfg).is_absolute() {
+                    std::path::PathBuf::from(cfg)
+                } else {
+                    target.join(cfg)
+                };
+                match load_docs_config(cfg_path.to_str().unwrap_or(cfg)) {
+                    Ok(config) => {
+                        let dc = config.docs.clone();
+                        (
+                            documentation::DocValidator::with_config(&target, config.docs),
+                            dc,
+                        )
+                    }
+                    Err(e) => {
+                        eprintln!("Error loading config: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                match documentation::DocValidator::load(&target) {
+                    Ok(v) => {
+                        let dc = v.config().clone();
+                        (v, dc)
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            };
+
+            let mut diagnostics = validator.validate();
+
+            // ADR substandard (EXP-V1-0004.ADR01)
+            let adr_validator = if config_path.is_some() {
+                documentation_adr::AdrValidator::with_config(&target, docs_config)
+            } else {
+                match documentation_adr::AdrValidator::load(&target) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error loading ADR validator: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            };
+            diagnostics.merge(adr_validator.validate());
+
+            if json_output {
+                match diagnostics.to_json() {
+                    Ok(json) => println!("{json}"),
+                    Err(e) => {
+                        eprintln!("Error serializing JSON: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else if diagnostics.is_empty() {
+                println!("Documentation validation passed.");
+            } else {
+                println!("{diagnostics}");
+            }
+
+            match diagnostics.exit_code() {
+                0 => ExitCode::SUCCESS,
+                _ => ExitCode::FAILURE,
+            }
+        }
+        "index" => {
+            let mut positional_path: Option<&str> = None;
+            let mut write_mode = false;
+            let mut config_path: Option<&str> = None;
+            let mut i = 0;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--write" => {
+                        write_mode = true;
+                        i += 1;
+                    }
+                    "--config" if i + 1 < args.len() => {
+                        config_path = Some(&args[i + 1]);
+                        i += 2;
+                    }
+                    arg if !arg.starts_with('-') && positional_path.is_none() => {
+                        positional_path = Some(arg);
+                        i += 1;
+                    }
+                    _ => {
+                        i += 1;
+                    }
+                }
+            }
+            let path = positional_path.unwrap_or(".");
+            let target = if std::path::Path::new(path).is_absolute() {
+                std::path::PathBuf::from(path)
+            } else {
+                repo_root.join(path)
+            };
+
+            let validator = if let Some(cfg) = config_path {
+                let cfg_path = if std::path::Path::new(cfg).is_absolute() {
+                    std::path::PathBuf::from(cfg)
+                } else {
+                    target.join(cfg)
+                };
+                match load_docs_config(cfg_path.to_str().unwrap_or(cfg)) {
+                    Ok(config) => documentation::DocValidator::with_config(&target, config.docs),
+                    Err(e) => {
+                        eprintln!("Error loading config: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                match documentation::DocValidator::load(&target) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            };
+
+            if write_mode {
+                match validator.write_indexes() {
+                    Ok(count) => {
+                        println!("Updated {count} README.md file(s) with generated indexes.");
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("Error writing indexes: {e}");
+                        ExitCode::FAILURE
+                    }
+                }
+            } else {
+                match validator.generate_indexes() {
+                    Ok(indexes) => {
+                        if indexes.is_empty() {
+                            println!("No documents with front matter found.");
+                        } else {
+                            for idx in &indexes {
+                                println!("--- {} ---", idx.dir.display());
+                                println!("{}", idx.markdown);
+                            }
+                            println!("{} directory index(es) generated (dry run).", indexes.len());
+                            println!("Use --write to update README.md files.");
+                        }
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("Error generating indexes: {e}");
+                        ExitCode::FAILURE
+                    }
+                }
+            }
+        }
+        other => {
+            eprintln!("Error: Unknown docs command '{other}'");
+            eprintln!("Use 'aps run docs --help' for available commands.");
             ExitCode::FAILURE
         }
     }

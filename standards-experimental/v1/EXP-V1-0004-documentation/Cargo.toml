@@ -1,0 +1,20 @@
+[package]
+name = "documentation"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Documentation and Context Engineering — ADR enforcement, README/index validation, agent context (Experimental)"
+
+[dependencies]
+aps-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+walkdir.workspace = true
+thiserror.workspace = true
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3.14"
