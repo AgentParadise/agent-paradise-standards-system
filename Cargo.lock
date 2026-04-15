@@ -72,10 +72,12 @@ dependencies = [
 
 [[package]]
 name = "aps-cli"
-version = "0.1.2"
+version = "1.0.0"
 dependencies = [
  "aps-core",
  "aps-v1-0000-meta",
+ "apss-distribution",
+ "apss-project-config",
  "chrono",
  "clap",
  "code-topology",
@@ -94,9 +96,10 @@ dependencies = [
 
 [[package]]
 name = "aps-core"
-version = "0.1.2"
+version = "1.0.0"
 dependencies = [
  "handlebars",
+ "semver",
  "serde",
  "serde_json",
  "tempfile",
@@ -107,16 +110,17 @@ dependencies = [
 
 [[package]]
 name = "aps-v1-0000-cli01-cli-contract"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "toml",
 ]
 
 [[package]]
 name = "aps-v1-0000-meta"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "aps-core",
  "tempfile",
@@ -129,6 +133,45 @@ version = "1.0.0"
 dependencies = [
  "aps-core",
  "regex",
+]
+
+[[package]]
+name = "apss"
+version = "1.0.0"
+dependencies = [
+ "aps-core",
+ "apss-distribution",
+ "apss-project-config",
+ "clap",
+ "semver",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "apss-distribution"
+version = "1.0.0"
+dependencies = [
+ "aps-core",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "apss-project-config"
+version = "1.0.0"
+dependencies = [
+ "aps-core",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -1386,6 +1429,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "semver"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
 name = "serde"

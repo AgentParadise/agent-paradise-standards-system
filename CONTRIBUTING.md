@@ -132,6 +132,30 @@ Before submitting:
 - [ ] Added/updated relevant documentation
 - [ ] Added tests for new functionality
 
+## Release Process
+
+Releases follow the `main` -> `release` branch pattern:
+
+1. **Develop on `main`** — PRs are merged into `main` with CI checks
+2. **Create release PR** — Open a PR from `main` to `release` with a `## Changelog` section in the body
+3. **Release gate** — Automated checks verify:
+   - PR comes from `main` (no other source branches)
+   - All changed standards/substandards have version bumps
+   - System version bumped if core crates changed
+   - Full QA passes (format, lint, test, build)
+   - APS standards validation passes (hard gate)
+   - `cargo audit` passes
+4. **Merge** — Use a **merge commit** (not squash/rebase) into `release`
+5. **Auto-publish** — On merge, the pipeline creates git tags and publishes changed crates to crates.io after manual approval
+
+### Version Bumps
+
+- **Standards/substandards**: Bump the version in `standard.toml` / `substandard.toml` and `Cargo.toml`
+- **System crates** (`aps-core`, `aps-cli`, `apss`): Bump `[workspace.package].version` in root `Cargo.toml`
+- Docs-only changes are exempt from version bumps
+
+For first-time setup, see [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md).
+
 ## For AI Agents
 
 See [AGENTS.md](AGENTS.md) for the RIPER-5 operational protocol designed for AI coding assistants.

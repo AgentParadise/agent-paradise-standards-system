@@ -363,6 +363,21 @@ pub trait StandardCli: Send + Sync {
     fn aliases(&self) -> Vec<&str> {
         vec![self.slug()]
     }
+
+    /// Receive project-specific configuration from `apss.toml`.
+    ///
+    /// Called before `execute()` when running in a project context.
+    /// The `config` value corresponds to `[standards.<slug>.config]` from `apss.toml`,
+    /// already validated against the standard's `StandardConfig` type.
+    ///
+    /// # Default
+    ///
+    /// The default implementation ignores configuration. Override this to
+    /// accept project-specific settings.
+    fn configure(&mut self, config: toml::Value) -> Result<(), String> {
+        let _ = config;
+        Ok(())
+    }
 }
 
 // ============================================================================

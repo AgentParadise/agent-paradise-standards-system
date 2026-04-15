@@ -1,0 +1,18 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0000.CF01"
+name = "Project Configuration"
+slug = "project-config"
+version = "1.0.0"
+parent_id = "APS-V1-0000"
+parent_major = "1"
+category = "governance"
+backwards_compat = true
+
+[ownership]
+maintainers = ["AgentParadise"]
+
+[metadata]
+description = "Defines the apss.toml project configuration schema, cascading monorepo configs, and typed standard configuration validation."
+keywords = ["config", "apss", "project", "monorepo", "validation"]

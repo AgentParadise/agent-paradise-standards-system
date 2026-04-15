@@ -1,0 +1,334 @@
+# =============================================================================
+# Release Create — Tag + publish on merge to release
+# =============================================================================
+#
+# Triggered when a PR merges into `release`. Creates git tags and publishes
+# changed crates to crates.io in dependency order.
+#
+# Flow:
+#   1. Detect which crates had version bumps since last release tag
+#   2. Create git tags (system + per-standard/substandard)
+#   3. Create GitHub Release with changelog from merge commit
+#   4. Publish changed crates to crates.io (with approval gate)
+#
+# Publishing order (respects dependency graph):
+#   Tier 1: aps-core
+#   Tier 2: meta substandard crates (CF01, DI01, CL01, SS01)
+#   Tier 3: standard + substandard crates
+#   Tier 4: apss bootstrap binary
+# =============================================================================
+
+name: Release Create
+
+on:
+  push:
+    branches: [release]
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Detect version changes
+  # ---------------------------------------------------------------------------
+  detect-changes:
+    name: Detect version changes
+    runs-on: ubuntu-latest
+    outputs:
+      system_changed: ${{ steps.detect.outputs.system_changed }}
+      system_version: ${{ steps.detect.outputs.system_version }}
+      changed_crates: ${{ steps.detect.outputs.changed_crates }}
+      tag_list: ${{ steps.detect.outputs.tag_list }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed versions since last release
+        id: detect
+        run: |
+          set -euo pipefail
+
+          # Find the previous release tag (most recent v1.x.y tag)
+          LAST_TAG=$(git tag -l 'v1.*' --sort=-v:refname | head -1 || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous release tag found — treating all crates as new"
+            BASE=$(git rev-list --max-parents=0 HEAD)
+          else
+            echo "Last release tag: $LAST_TAG"
+            BASE="$LAST_TAG"
+          fi
+
+          CHANGED_CRATES="[]"
+          TAG_LIST=""
+          SYSTEM_CHANGED="false"
+          HAS_CHANGES="false"
+
+          # --- System version check ---
+          SYSTEM_VERSION=$(grep -A1 '^\[workspace.package\]' Cargo.toml | grep 'version' | sed 's/.*= *"\(.*\)"/\1/')
+          echo "Current system version: $SYSTEM_VERSION"
+
+          SYSTEM_CRATE_DIRS=("crates/aps-core" "crates/aps-cli" "crates/apss-bootstrap")
+          for dir in "${SYSTEM_CRATE_DIRS[@]}"; do
+            if [ -d "$dir" ] && ! git diff --quiet "$BASE" HEAD -- "$dir" 2>/dev/null; then
+              SYSTEM_CHANGED="true"
+              HAS_CHANGES="true"
+              break
+            fi
+          done
+
+          if [ "$SYSTEM_CHANGED" = "true" ]; then
+            TAG_LIST="v${SYSTEM_VERSION}"
+            echo "System changed — will tag v${SYSTEM_VERSION}"
+          fi
+
+          # --- Standard version detection ---
+          detect_crate() {
+            local dir="$1"
+            local meta_file="$2"
+            local tag_prefix="$3"
+            local crate_name="$4"
+            local tier="$5"
+
+            if ! git diff --quiet "$BASE" HEAD -- "$dir" 2>/dev/null; then
+              # Skip docs-only changes
+              NON_DOC=$(git diff --name-only "$BASE" HEAD -- "$dir" | grep -v "^${dir}/docs/" || true)
+              if [ -z "$NON_DOC" ]; then
+                return
+              fi
+
+              local version=""
+              if [ -f "$dir/$meta_file" ]; then
+                version=$(grep "^version" "$dir/$meta_file" | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+              fi
+
+              if [ -n "$version" ]; then
+                local tag="${tag_prefix}-v${version}"
+                echo "  Changed: $crate_name @ $version → tag $tag (tier $tier)"
+
+                # Append to JSON array
+                CHANGED_CRATES=$(echo "$CHANGED_CRATES" | jq --arg name "$crate_name" --arg ver "$version" --arg t "$tier" --arg d "$dir" \
+                  '. + [{"name": $name, "version": $ver, "tier": ($t | tonumber), "dir": $d}]')
+
+                if [ -n "$TAG_LIST" ]; then
+                  TAG_LIST="${TAG_LIST},${tag}"
+                else
+                  TAG_LIST="${tag}"
+                fi
+                HAS_CHANGES="true"
+              fi
+            fi
+          }
+
+          echo ""
+          echo "=== Scanning standards ==="
+
+          # Standards
+          for dir in standards/v1/APS-V1-*; do
+            [ -d "$dir" ] || continue
+            id=$(basename "$dir" | sed 's/-.*//' | sed 's/APS-V1-//')
+            slug=$(basename "$dir" | sed 's/^APS-V1-[0-9]*-//')
+            crate_name="apss-v1-${id}-${slug}"
+            tag_prefix="APS-V1-${id}"
+
+            # Check if this is a meta substandard parent (tier 2) or regular (tier 3)
+            if [ "$id" = "0000" ]; then
+              detect_crate "$dir" "standard.toml" "$tag_prefix" "apss-v1-0000-meta" "2"
+            else
+              detect_crate "$dir" "standard.toml" "$tag_prefix" "$crate_name" "3"
+            fi
+
+            # Substandards
+            if [ -d "$dir/substandards" ]; then
+              for sub in "$dir"/substandards/*/; do
+                [ -d "$sub" ] || continue
+                sub="${sub%/}"
+                profile=$(basename "$sub" | sed 's/-.*//')
+                sub_slug=$(basename "$sub" | sed 's/^[A-Z]*[0-9]*-//')
+                sub_crate="apss-${profile,,}-${sub_slug}"
+
+                if [ "$id" = "0000" ]; then
+                  detect_crate "$sub" "substandard.toml" "${tag_prefix}.${profile}" "$sub_crate" "2"
+                else
+                  detect_crate "$sub" "substandard.toml" "${tag_prefix}.${profile}" "$sub_crate" "3"
+                fi
+              done
+            fi
+          done
+
+          # Experiments
+          for dir in standards-experimental/v1/*/; do
+            [ -d "$dir" ] || continue
+            dir="${dir%/}"
+            exp_name=$(basename "$dir")
+            detect_crate "$dir" "experiment.toml" "$exp_name" "$exp_name" "3"
+          done
+
+          # Bootstrap binary
+          if [ -d "crates/apss-bootstrap" ] && ! git diff --quiet "$BASE" HEAD -- "crates/apss-bootstrap" 2>/dev/null; then
+            BOOT_VER=$(grep '^version' crates/apss-bootstrap/Cargo.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+            if [ -n "$BOOT_VER" ]; then
+              echo "  Changed: apss (bootstrap) @ $BOOT_VER (tier 4)"
+              CHANGED_CRATES=$(echo "$CHANGED_CRATES" | jq --arg ver "$BOOT_VER" \
+                '. + [{"name": "apss", "version": $ver, "tier": 4, "dir": "crates/apss-bootstrap"}]')
+              HAS_CHANGES="true"
+            fi
+          fi
+
+          echo ""
+          echo "=== Summary ==="
+          echo "System changed: $SYSTEM_CHANGED"
+          echo "Tags: $TAG_LIST"
+          echo "Changed crates: $(echo "$CHANGED_CRATES" | jq -c '.')"
+
+          # Set outputs
+          echo "system_changed=$SYSTEM_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "system_version=$SYSTEM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "changed_crates=$CHANGED_CRATES" >> "$GITHUB_OUTPUT"
+          echo "tag_list=$TAG_LIST" >> "$GITHUB_OUTPUT"
+          echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Create git tags + GitHub Release
+  # ---------------------------------------------------------------------------
+  create-release:
+    name: Create release
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create tags
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra TAGS <<< "${{ needs.detect-changes.outputs.tag_list }}"
+          for tag in "${TAGS[@]}"; do
+            if [ -n "$tag" ]; then
+              echo "Creating tag: $tag"
+              git tag -a "$tag" -m "Release $tag"
+            fi
+          done
+          git push origin --tags
+
+      - name: Extract changelog from merge commit
+        id: changelog
+        run: |
+          set -euo pipefail
+
+          # Get the merge commit message (which contains the PR body)
+          MERGE_MSG=$(git log -1 --pretty=%B)
+
+          # Try to extract changelog section
+          CHANGELOG=$(echo "$MERGE_MSG" | sed -n '/^## \(Changelog\|Release Notes\|What.*Changed\|Changes\)/I,/^## [^C]/p' | head -n -1 || echo "$MERGE_MSG")
+
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG="$MERGE_MSG"
+          fi
+
+          # Write to file for the release body
+          echo "$CHANGELOG" > /tmp/release-notes.md
+
+          # Add version summary
+          {
+            echo ""
+            echo "---"
+            echo "### Versions"
+            if [ "${{ needs.detect-changes.outputs.system_changed }}" = "true" ]; then
+              echo "- **System**: v${{ needs.detect-changes.outputs.system_version }}"
+            fi
+            echo '${{ needs.detect-changes.outputs.changed_crates }}' | jq -r '.[] | "- **\(.name)**: \(.version)"'
+          } >> /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Use system version tag as the release tag, or first standard tag
+          if [ "${{ needs.detect-changes.outputs.system_changed }}" = "true" ]; then
+            RELEASE_TAG="v${{ needs.detect-changes.outputs.system_version }}"
+          else
+            RELEASE_TAG=$(echo "${{ needs.detect-changes.outputs.tag_list }}" | cut -d',' -f1)
+          fi
+
+          gh release create "$RELEASE_TAG" \
+            --title "Release $RELEASE_TAG" \
+            --notes-file /tmp/release-notes.md \
+            --latest
+
+  # ---------------------------------------------------------------------------
+  # Publish to crates.io (with approval gate)
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to crates.io
+    needs: [detect-changes, create-release]
+    if: needs.detect-changes.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    environment: release-publish
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Publish crates in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          CHANGED='${{ needs.detect-changes.outputs.changed_crates }}'
+
+          publish_tier() {
+            local tier=$1
+            local crates
+            crates=$(echo "$CHANGED" | jq -r --argjson t "$tier" '.[] | select(.tier == $t) | .dir')
+
+            if [ -z "$crates" ]; then
+              echo "Tier $tier: no crates to publish"
+              return
+            fi
+
+            echo "=== Publishing tier $tier ==="
+            while IFS= read -r dir; do
+              if [ -z "$dir" ]; then continue; fi
+              local name
+              name=$(echo "$CHANGED" | jq -r --arg d "$dir" '.[] | select(.dir == $d) | .name')
+              local ver
+              ver=$(echo "$CHANGED" | jq -r --arg d "$dir" '.[] | select(.dir == $d) | .version')
+
+              echo "Publishing $name@$ver from $dir..."
+
+              # Check if already published (idempotency)
+              if cargo search "$name" 2>/dev/null | grep -q "^${name} = \"${ver}\""; then
+                echo "  Already published — skipping"
+                continue
+              fi
+
+              cargo publish --manifest-path "$dir/Cargo.toml" --allow-dirty
+              echo "  Published $name@$ver"
+
+              # Wait for crates.io index to update before next tier
+              sleep 30
+            done <<< "$crates"
+          }
+
+          # Publish in dependency order
+          publish_tier 1  # aps-core
+          publish_tier 2  # meta substandards (CF01, DI01, CL01, SS01)
+          publish_tier 3  # standards + substandards
+          publish_tier 4  # apss bootstrap binary
+
+          echo ""
+          echo "All crates published successfully."

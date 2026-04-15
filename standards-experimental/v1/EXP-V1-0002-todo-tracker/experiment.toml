@@ -19,3 +19,24 @@ maintainers = ["AgentParadise"]
 # promoted_to = "APS-V1-XXXX"
 # promoted_at = "YYYY-MM-DD"
 
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "regex"
+rationale = "Pattern matching for TODO/FIXME scanning in source files"
+
+[[dependencies.allowed_external]]
+crate = "chrono"
+rationale = "Timestamps for tracker entries and staleness detection"
+
+[[dependencies.allowed_external]]
+crate = "sha2"
+rationale = "Content hashing for deduplication and change detection"
+
+[[dependencies.allowed_external]]
+crate = "hex"
+rationale = "Hex encoding for sha2 digest display"
+
+[[dependencies.allowed_external]]
+crate = "reqwest"
+rationale = "GitHub API integration for issue sync (optional feature)"
+

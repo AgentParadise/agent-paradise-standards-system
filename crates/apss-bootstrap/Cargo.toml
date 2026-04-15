@@ -1,0 +1,22 @@
+[package]
+name = "apss"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "APSS — Agent Paradise Standards System bootstrap CLI"
+
+[[bin]]
+name = "apss"
+path = "src/main.rs"
+
+[dependencies]
+aps-core.workspace = true
+apss-project-config = { path = "../../standards/v1/APS-V1-0000-meta/substandards/CF01-project-config" }
+apss-distribution = { path = "../../standards/v1/APS-V1-0000-meta/substandards/DI01-distribution" }
+clap.workspace = true
+toml.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+semver.workspace = true

@@ -28,8 +28,8 @@ mod vsa_config;
 use aps_core::discovery::{PackageType, count_packages, discover_v1_packages, find_package_by_id};
 use aps_core::versioning::BumpPart;
 use aps_core::{
-    StandardContext, TemplateEngine, bump_version, generate_all_views, get_version,
-    promote_experiment,
+    Diagnostic, Diagnostics, StandardContext, TemplateEngine, bump_version, generate_all_views,
+    get_version, promote_experiment,
 };
 use aps_v1_0000_meta::{MetaStandard, Standard};
 use clap::Parser;
@@ -173,6 +173,14 @@ enum ValidateTarget {
         /// Experiment ID (e.g., EXP-V1-0001)
         id: String,
     },
+    /// Validate an apss.toml project configuration file (CF01)
+    Config {
+        /// Path to apss.toml (default: ./apss.toml)
+        #[arg(default_value = "apss.toml")]
+        path: PathBuf,
+    },
+    /// Validate standard crates for distribution compliance (DI01)
+    Distribution,
 }
 
 #[derive(clap::Subcommand)]
@@ -287,6 +295,33 @@ fn main() -> ExitCode {
                             eprintln!("Error: Experiment '{id}' not found");
                             return ExitCode::FAILURE;
                         }
+                    }
+                    ValidateTarget::Config { path } => {
+                        println!("Validating project config: {}", path.display());
+                        apss_project_config::validate_project_config(&path)
+                    }
+                    ValidateTarget::Distribution => {
+                        println!(
+                            "Validating distribution compliance for all standards in: {}",
+                            repo_root.display()
+                        );
+                        let packages = discover_v1_packages(&repo_root);
+                        let mut all_diags = Diagnostics::new();
+                        for package in &packages {
+                            let mut pkg_diags =
+                                apss_distribution::validate_publishable_standard(&package.path);
+                            pkg_diags.merge(apss_distribution::validate_release_readiness(
+                                &package.path,
+                            ));
+                            if !pkg_diags.is_empty() {
+                                all_diags.push(Diagnostic::info(
+                                    "DI_CHECKING",
+                                    format!("Checking: {}", package.path.display()),
+                                ));
+                                all_diags.merge(pkg_diags);
+                            }
+                        }
+                        all_diags
                     }
                 };
 

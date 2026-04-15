@@ -19,3 +19,8 @@ maintainers = ["AgentParadise"]
 [promotion]
 promoted_from = "EXP-V1-0001"
 promoted_at = "2026-03-10"
+
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "streaming-iterator"
+rationale = "Required by tree-sitter API for traversing syntax tree nodes"

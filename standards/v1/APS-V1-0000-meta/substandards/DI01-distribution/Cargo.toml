@@ -1,16 +1,18 @@
 [package]
-name = "code-topology-3d"
-version = "0.1.0"
+name = "apss-distribution"
+version = "1.0.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "3D Force-Directed Coupling Visualization for Code Topology"
+description = "APSS Distribution & Installation (APS-V1-0000.DI01) — packaging, bootstrap, and CLI composition"
 
 [dependencies]
-code-topology = { path = "../.." }
+aps-core.workspace = true
+toml.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+semver.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

@@ -19,3 +19,8 @@ maintainers = ["AgentParadise"]
 # promoted_to = "APS-V1-XXXX"
 # promoted_at = "YYYY-MM-DD"
 
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "chrono"
+rationale = "Timestamps for fitness function evaluation results and trend tracking"
+
