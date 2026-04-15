@@ -218,24 +218,13 @@ fn main() -> ExitCode {
             list,
         } => {
             if list {
-                // List available standards
                 println!("Available Standards:\n");
-                println!("  topology (EXP-V1-0001) v0.1.0");
-                println!("    Code Topology - architectural metrics and visualization");
-                println!("    Commands: analyze, validate, diff, report, viz");
-                println!();
-                println!("  fitness (EXP-V1-0003) v0.1.0");
-                println!(
-                    "    Architecture Fitness Functions - declarative architectural assertions"
-                );
-                println!("    Commands: validate");
-                println!();
-                println!("  docs (EXP-V1-0004) v0.1.0");
-                println!(
-                    "    Documentation and Context Engineering - ADR enforcement, README indexes"
-                );
-                println!("    Commands: validate, index");
-                println!();
+                for s in all_standards() {
+                    println!("  {} ({}) v{}", s.slug, s.id, s.version);
+                    println!("    {} - {}", s.name, s.description);
+                    println!("    Commands: {}", s.commands);
+                    println!();
+                }
                 println!("Use 'aps run <slug> --help' for command details.");
                 return ExitCode::SUCCESS;
             }
@@ -250,7 +239,7 @@ fn main() -> ExitCode {
 
             // Dispatch to standard CLI
             match resolve_standard(&slug) {
-                Some(info) => dispatch_standard_cli(&info, &args, &repo_root, cli.verbose),
+                Some(info) => dispatch_standard_cli(info, &args, &repo_root, cli.verbose),
                 None => {
                     eprintln!("Error: Unknown standard '{slug}'");
                     eprintln!("Use 'aps run --list' to see available standards.");
@@ -677,32 +666,51 @@ struct StandardCliInfo {
     id: &'static str,
     slug: &'static str,
     name: &'static str,
+    description: &'static str,
+    commands: &'static str,
     version: &'static str,
+    aliases: &'static [&'static str],
 }
 
-/// Resolve a slug to standard info.
-fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
-    match slug.to_lowercase().as_str() {
-        "topology" | "topo" | "code-topology" | "exp-v1-0001" => Some(StandardCliInfo {
+/// Central registry of all available standards.
+fn all_standards() -> &'static [StandardCliInfo] {
+    &[
+        StandardCliInfo {
             id: "EXP-V1-0001",
             slug: "topology",
             name: "Code Topology",
+            description: "Architectural metrics and visualization",
+            commands: "analyze, validate, diff, report, viz",
             version: "0.1.0",
-        }),
-        "fitness" | "fitness-functions" | "exp-v1-0003" => Some(StandardCliInfo {
+            aliases: &["topo", "code-topology", "exp-v1-0001"],
+        },
+        StandardCliInfo {
             id: "EXP-V1-0003",
             slug: "fitness",
             name: "Architecture Fitness Functions",
+            description: "Declarative architectural assertions",
+            commands: "validate",
             version: "0.1.0",
-        }),
-        "docs" | "documentation" | "doc" | "exp-v1-0004" => Some(StandardCliInfo {
+            aliases: &["fitness-functions", "exp-v1-0003"],
+        },
+        StandardCliInfo {
             id: "EXP-V1-0004",
             slug: "docs",
             name: "Documentation and Context Engineering",
+            description: "Structured docs with frontmatter-driven indexing for automation and AI agents",
+            commands: "validate, index",
             version: "0.1.0",
-        }),
-        _ => None,
-    }
+            aliases: &["documentation", "doc", "exp-v1-0004"],
+        },
+    ]
+}
+
+/// Resolve a slug to standard info.
+fn resolve_standard(slug: &str) -> Option<&'static StandardCliInfo> {
+    let lower = slug.to_lowercase();
+    all_standards()
+        .iter()
+        .find(|s| s.slug == lower || s.aliases.iter().any(|a| *a == lower))
 }
 
 /// Dispatch to a standard's CLI.

@@ -38,10 +38,6 @@ pub mod error_codes {
     pub const MISSING_ROOT_AGENTS_MD: &str = "MISSING_ROOT_AGENTS_MD";
     /// Root CLAUDE.md does not reference documentation location.
     pub const MISSING_DOCS_REFERENCE: &str = "MISSING_DOCS_REFERENCE";
-
-    // Config
-    /// Config file is invalid.
-    pub const INVALID_CONFIG: &str = "INVALID_CONFIG";
 }
 
 // ─── DocValidator ──────────────────────────────────────────────────────────
@@ -222,7 +218,6 @@ mod tests {
             error_codes::MISSING_ROOT_CLAUDE_MD,
             error_codes::MISSING_ROOT_AGENTS_MD,
             error_codes::MISSING_DOCS_REFERENCE,
-            error_codes::INVALID_CONFIG,
         ];
         let unique: std::collections::HashSet<_> = codes.iter().collect();
         assert_eq!(codes.len(), unique.len(), "error codes must be unique");
