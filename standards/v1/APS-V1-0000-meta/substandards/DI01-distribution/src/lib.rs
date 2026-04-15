@@ -53,6 +53,15 @@ pub mod error_codes {
 
     /// Lockfile exists but `.apss/bin/apss` doesn't.
     pub const DI_BINARY_MISSING: &str = "DI_BINARY_MISSING";
+
+    /// Cargo.toml version doesn't match standard/substandard/experiment.toml version.
+    pub const DI_VERSION_MISMATCH: &str = "DI_VERSION_MISMATCH";
+
+    /// Crate is missing required metadata for publishing.
+    pub const DI_MISSING_PUBLISH_METADATA: &str = "DI_MISSING_PUBLISH_METADATA";
+
+    /// Crate uses `publish = false` but is expected to be publishable.
+    pub const DI_PUBLISH_DISABLED: &str = "DI_PUBLISH_DISABLED";
 }
 
 // ============================================================================
@@ -176,6 +185,145 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
                     .with_hint("Add a register() function for CLI composition"),
                 );
             }
+        }
+    }
+
+    diags
+}
+
+/// Validate version consistency and publish-readiness for a standard crate.
+///
+/// Checks:
+/// - Cargo.toml version matches metadata (standard/substandard/experiment.toml)
+/// - Required publish metadata fields are present (description, license, repository)
+/// - Crate is not marked `publish = false`
+pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
+    let mut diags = Diagnostics::new();
+
+    let cargo_path = crate_path.join("Cargo.toml");
+    let cargo_content = match std::fs::read_to_string(&cargo_path) {
+        Ok(c) => c,
+        Err(_) => return diags,
+    };
+
+    let cargo_toml: toml::Value = match cargo_content.parse() {
+        Ok(v) => v,
+        Err(_) => return diags,
+    };
+
+    let package = match cargo_toml.get("package").and_then(|p| p.as_table()) {
+        Some(p) => p,
+        None => return diags,
+    };
+
+    // --- Version consistency ---
+    let cargo_version = package
+        .get("version")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    // Skip workspace-inherited versions — they're managed centrally
+    let is_workspace_version = package
+        .get("version")
+        .and_then(|v| v.as_table())
+        .and_then(|t| t.get("workspace"))
+        .and_then(|w| w.as_bool())
+        .unwrap_or(false);
+
+    if !is_workspace_version {
+        if let Some(cargo_ver) = &cargo_version {
+            // Find the metadata version
+            let metadata_version = if crate_path.join("standard.toml").exists() {
+                aps_core::metadata::parse_standard_metadata(&crate_path.join("standard.toml"))
+                    .ok()
+                    .map(|m| m.standard.version)
+            } else if crate_path.join("substandard.toml").exists() {
+                aps_core::metadata::parse_substandard_metadata(&crate_path.join("substandard.toml"))
+                    .ok()
+                    .map(|m| m.substandard.version)
+            } else if crate_path.join("experiment.toml").exists() {
+                aps_core::metadata::parse_experiment_metadata(&crate_path.join("experiment.toml"))
+                    .ok()
+                    .map(|m| m.experiment.version)
+            } else {
+                None
+            };
+
+            if let Some(meta_ver) = metadata_version {
+                if *cargo_ver != meta_ver {
+                    diags.push(
+                        Diagnostic::error(
+                            error_codes::DI_VERSION_MISMATCH,
+                            format!(
+                                "Cargo.toml version '{cargo_ver}' doesn't match metadata version '{meta_ver}'"
+                            ),
+                        )
+                        .with_path(&cargo_path)
+                        .with_hint("Keep Cargo.toml and standard/substandard/experiment.toml versions in sync"),
+                    );
+                }
+            }
+        }
+    }
+
+    // --- Publish metadata ---
+    let has_description = package.get("description").is_some();
+    let has_license = package.get("license").is_some();
+    let has_repository = package.get("repository").is_some();
+
+    // Check for workspace-inherited fields too
+    let has_license_ws = package
+        .get("license")
+        .and_then(|v| v.as_table())
+        .and_then(|t| t.get("workspace"))
+        .is_some();
+    let has_repo_ws = package
+        .get("repository")
+        .and_then(|v| v.as_table())
+        .and_then(|t| t.get("workspace"))
+        .is_some();
+
+    if !has_description {
+        diags.push(
+            Diagnostic::warning(
+                error_codes::DI_MISSING_PUBLISH_METADATA,
+                "Missing 'description' in Cargo.toml — required for crates.io publishing",
+            )
+            .with_path(&cargo_path),
+        );
+    }
+
+    if !has_license && !has_license_ws {
+        diags.push(
+            Diagnostic::warning(
+                error_codes::DI_MISSING_PUBLISH_METADATA,
+                "Missing 'license' in Cargo.toml — required for crates.io publishing",
+            )
+            .with_path(&cargo_path),
+        );
+    }
+
+    if !has_repository && !has_repo_ws {
+        diags.push(
+            Diagnostic::warning(
+                error_codes::DI_MISSING_PUBLISH_METADATA,
+                "Missing 'repository' in Cargo.toml — required for crates.io publishing",
+            )
+            .with_path(&cargo_path),
+        );
+    }
+
+    // --- Publish flag ---
+    if let Some(publish) = package.get("publish").and_then(|v| v.as_bool()) {
+        if !publish {
+            diags.push(
+                Diagnostic::warning(
+                    error_codes::DI_PUBLISH_DISABLED,
+                    "Crate has 'publish = false' — it won't be publishable to crates.io",
+                )
+                .with_path(&cargo_path)
+                .with_hint("Remove 'publish = false' if this crate should be distributed"),
+            );
         }
     }
 

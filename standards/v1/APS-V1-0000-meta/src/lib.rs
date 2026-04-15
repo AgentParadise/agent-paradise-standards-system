@@ -8,7 +8,7 @@
 
 use aps_core::discovery::{DiscoveredPackage, discover_v1_packages};
 use aps_core::metadata::{
-    parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata,
+    self, parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata,
 };
 use aps_core::{Diagnostic, Diagnostics};
 use std::path::Path;
@@ -47,6 +47,10 @@ pub mod error_codes {
 
     // Package validation summary
     pub const PACKAGE_VALIDATION_FAILED: &str = "PACKAGE_VALIDATION_FAILED";
+
+    // Dependency policy errors
+    pub const UNAPPROVED_EXTERNAL_DEP: &str = "UNAPPROVED_EXTERNAL_DEP";
+    pub const DEP_NOT_WORKSPACE_INHERITED: &str = "DEP_NOT_WORKSPACE_INHERITED";
 }
 
 /// Required directories for standards and experiments (§5.1).
@@ -390,6 +394,98 @@ impl MetaStandard {
         }
     }
 
+    /// Validate dependency policy for a package.
+    ///
+    /// Standards MUST only depend on `aps-core` and workspace-inherited crates.
+    /// Any external dependency requires explicit approval in the package's
+    /// metadata file (`standard.toml`, `substandard.toml`, or `experiment.toml`)
+    /// with a documented rationale.
+    fn validate_dependencies(
+        &self,
+        path: &Path,
+        allowed_external: &[metadata::AllowedDependency],
+        diagnostics: &mut Diagnostics,
+    ) {
+        use error_codes::*;
+
+        let cargo_path = path.join("Cargo.toml");
+        if !cargo_path.exists() {
+            return;
+        }
+
+        let content = match std::fs::read_to_string(&cargo_path) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+
+        let cargo_toml: toml::Value = match content.parse() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let deps = match cargo_toml.get("dependencies").and_then(|d| d.as_table()) {
+            Some(d) => d,
+            None => return,
+        };
+
+        let allowed_names: Vec<&str> = allowed_external
+            .iter()
+            .map(|d| d.crate_name.as_str())
+            .collect();
+
+        for (dep_name, dep_value) in deps {
+            // Workspace-inherited deps are fine — they're controlled at the workspace root
+            let is_workspace = dep_value
+                .as_table()
+                .and_then(|t| t.get("workspace"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            if is_workspace {
+                continue;
+            }
+
+            // Path deps (workspace-internal crates) are fine
+            let is_path = dep_value.as_table().and_then(|t| t.get("path")).is_some();
+
+            if is_path {
+                continue;
+            }
+
+            // aps-core is always allowed
+            if dep_name == "aps-core" {
+                continue;
+            }
+
+            // Check if it's in the allowlist
+            if allowed_names.contains(&dep_name.as_str()) {
+                continue;
+            }
+
+            // Check if it's a dev-dependency that leaked into [dependencies]
+            // (dev-deps are checked separately and are more lenient)
+            diagnostics.push(
+                Diagnostic::error(
+                    UNAPPROVED_EXTERNAL_DEP,
+                    format!(
+                        "External dependency '{dep_name}' is not in the approved allowlist"
+                    ),
+                )
+                .with_path(&cargo_path)
+                .with_hint(format!(
+                    "Add to [dependencies] in {}: [[dependencies.allowed_external]]\ncrate = \"{dep_name}\"\nrationale = \"<why this dep is needed>\"",
+                    if path.join("standard.toml").exists() {
+                        "standard.toml"
+                    } else if path.join("substandard.toml").exists() {
+                        "substandard.toml"
+                    } else {
+                        "experiment.toml"
+                    }
+                )),
+            );
+        }
+    }
+
     /// Validate a single discovered package.
     fn validate_discovered_package(
         &self,
@@ -429,14 +525,29 @@ impl Standard for MetaStandard {
         // Validate structure
         self.validate_structure(path, &mut diagnostics);
 
-        // Validate metadata based on package type
+        // Validate metadata and extract dependency policy
+        let dep_policy;
         if path.join("standard.toml").exists() {
             self.validate_standard_metadata(path, &mut diagnostics);
+            dep_policy = metadata::parse_standard_metadata(&path.join("standard.toml"))
+                .map(|m| m.dependencies)
+                .unwrap_or_default();
         } else if path.join("substandard.toml").exists() {
             self.validate_substandard_metadata(path, &mut diagnostics);
+            dep_policy = metadata::parse_substandard_metadata(&path.join("substandard.toml"))
+                .map(|m| m.dependencies)
+                .unwrap_or_default();
         } else if path.join("experiment.toml").exists() {
             self.validate_experiment_metadata(path, &mut diagnostics);
+            dep_policy = metadata::parse_experiment_metadata(&path.join("experiment.toml"))
+                .map(|m| m.dependencies)
+                .unwrap_or_default();
+        } else {
+            dep_policy = metadata::DependencyPolicy::default();
         }
+
+        // Validate dependency policy
+        self.validate_dependencies(path, &dep_policy.allowed_external, &mut diagnostics);
 
         diagnostics
     }

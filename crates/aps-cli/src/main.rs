@@ -308,14 +308,17 @@ fn main() -> ExitCode {
                         let packages = discover_v1_packages(&repo_root);
                         let mut all_diags = Diagnostics::new();
                         for package in &packages {
-                            let diags =
+                            let mut pkg_diags =
                                 apss_distribution::validate_publishable_standard(&package.path);
-                            if !diags.is_empty() {
+                            pkg_diags.merge(apss_distribution::validate_release_readiness(
+                                &package.path,
+                            ));
+                            if !pkg_diags.is_empty() {
                                 all_diags.push(Diagnostic::info(
                                     "DI_CHECKING",
                                     format!("Checking: {}", package.path.display()),
                                 ));
-                                all_diags.merge(diags);
+                                all_diags.merge(pkg_diags);
                             }
                         }
                         all_diags

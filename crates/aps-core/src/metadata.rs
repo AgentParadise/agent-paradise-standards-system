@@ -22,6 +22,9 @@ pub struct StandardMetadata {
     pub aps: ApsFields,
     /// Ownership information.
     pub ownership: OwnershipFields,
+    /// Dependency policy — external deps must be explicitly allowed.
+    #[serde(default)]
+    pub dependencies: DependencyPolicy,
 }
 
 /// Core fields for a standard.
@@ -54,6 +57,9 @@ pub struct SubstandardMetadata {
     pub substandard: SubstandardFields,
     /// Ownership information.
     pub ownership: OwnershipFields,
+    /// Dependency policy — external deps must be explicitly allowed.
+    #[serde(default)]
+    pub dependencies: DependencyPolicy,
 }
 
 /// Core fields for a substandard.
@@ -90,6 +96,9 @@ pub struct ExperimentMetadata {
     pub ownership: OwnershipFields,
     /// Promotion information (added after promotion).
     pub promotion: Option<PromotionFields>,
+    /// Dependency policy — external deps must be explicitly allowed.
+    #[serde(default)]
+    pub dependencies: DependencyPolicy,
 }
 
 /// Core fields for an experiment.
@@ -127,6 +136,27 @@ pub struct ApsFields {
 pub struct OwnershipFields {
     /// List of maintainers.
     pub maintainers: Vec<String>,
+}
+
+/// Dependency policy for a standard/substandard/experiment.
+///
+/// By default, packages may only depend on `aps-core` and workspace-internal
+/// crates. Any external dependency must be explicitly exempted with a rationale.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct DependencyPolicy {
+    /// Explicitly allowed external crate dependencies.
+    #[serde(default)]
+    pub allowed_external: Vec<AllowedDependency>,
+}
+
+/// An exempted external dependency with a rationale.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AllowedDependency {
+    /// Crate name on crates.io (e.g., "tree-sitter").
+    #[serde(rename = "crate")]
+    pub crate_name: String,
+    /// Why this dependency is needed — reviewed during security audit.
+    pub rationale: String,
 }
 
 /// Promotion information for experiments.

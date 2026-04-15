@@ -425,6 +425,68 @@ The `validate()` method handles semantic validation beyond what the type system 
 
 Type-level validation (required fields, correct types) is handled automatically by serde deserialization.
 
+### 8.4 Dependency Policy
+
+Standards and substandards MUST minimize external dependencies to reduce supply
+chain risk and keep the ecosystem lightweight.
+
+#### 8.4.1 Allowed Dependencies
+
+By default, a standard crate MAY only depend on:
+
+- `aps-core` (always allowed)
+- Workspace-internal crates (via `path` dependencies)
+- Workspace-inherited crates (via `.workspace = true` in `Cargo.toml`)
+
+Any other external dependency MUST be explicitly approved in the package's
+metadata file (`standard.toml`, `substandard.toml`, or `experiment.toml`).
+
+#### 8.4.2 Dependency Allowlist
+
+To exempt an external dependency, add it to the `[dependencies]` section of the
+metadata file with a rationale:
+
+```toml
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "syn"
+rationale = "Rust source code parsing for topology extraction"
+```
+
+The rationale is reviewed during security audits and MUST explain why the
+dependency is necessary (not just what it does).
+
+#### 8.4.3 Validation
+
+The meta standard validator (`aps v1 validate repo`) checks each package's
+`Cargo.toml` against its allowlist. Unapproved external dependencies produce
+`UNAPPROVED_EXTERNAL_DEP` errors.
+
+### 8.5 Deployment Structure
+
+Standards that are published for distribution MUST follow DI01's deployment
+requirements (see `APS-V1-0000.DI01`).
+
+#### 8.5.1 Version Consistency
+
+The version in `Cargo.toml` MUST match the version in the package's metadata
+file (`standard.toml`, `substandard.toml`, or `experiment.toml`). Standards
+using `version.workspace = true` in `Cargo.toml` are exempt (workspace version
+is managed centrally).
+
+#### 8.5.2 Publish Metadata
+
+Publishable crates MUST include in `Cargo.toml`:
+
+- `description` — what the crate does
+- `license` — SPDX identifier (or `.workspace = true`)
+- `repository` — source code URL (or `.workspace = true`)
+
+#### 8.5.3 Crate Naming
+
+Standard crates SHOULD follow the `apss-v1-NNNN-slug` naming convention.
+Substandard crates SHOULD follow `apss-v1-NNNN-profile-slug`.
+
 ---
 
 ## 9. Protobuf Contracts (Technical Standards)
