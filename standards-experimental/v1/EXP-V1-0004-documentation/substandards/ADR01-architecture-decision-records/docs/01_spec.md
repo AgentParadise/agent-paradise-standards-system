@@ -23,7 +23,7 @@ The docs root (default `docs/`) MUST contain an ADR directory (default `adrs/`).
 
 Every `.md` file in the ADR directory (excluding `README.md`, `CLAUDE.md`, `AGENTS.md`) MUST match the configured naming pattern.
 
-**Default pattern:** `ADR-\d{3,}-[a-zA-Z0-9-]+\.md`
+**Default pattern:** `ADR-\d{3,5}-[a-zA-Z0-9-]+\.md`
 
 **Examples:**
 - `ADR-001-initial-architecture.md`
@@ -32,7 +32,7 @@ Every `.md` file in the ADR directory (excluding `README.md`, `CLAUDE.md`, `AGEN
 
 **Format:** `ADR-<number>-<kebab-case-name>.md`
 
-- The number MUST be zero-padded to at least 3 digits
+- The number MUST be zero-padded to at least 3 digits (maximum 5 digits)
 - The name MUST use kebab-case (lowercase letters, digits, hyphens)
 - Configurable via `docs.adr.naming_pattern` in `.apss/config.toml`
 
@@ -67,7 +67,7 @@ Projects MAY configure required ADR topics via `docs.adr.required_adr_keywords`:
 required_adr_keywords = ["security", "testing", "deployment"]
 ```
 
-For each keyword, at least one file matching `ADR-\d+-<keyword>\.md` MUST exist. The number prefix is flexible — only the keyword suffix is enforced.
+For each keyword, at least one file matching `ADR-\d{3,5}-<keyword>\.md` MUST exist. The number prefix is flexible — only the keyword suffix is enforced.
 
 **Example:** With `required_adr_keywords = ["security"]`, any of these satisfy the requirement:
 - `ADR-001-security.md`
@@ -153,12 +153,28 @@ Use `grep ADR-001-security` to find all files implementing a given ADR.
 [docs.adr]
 enabled = true                                    # Enable/disable ADR validation
 directory = "adrs"                                # ADR directory name under docs root
-naming_pattern = "ADR-\\d{3,}-[a-zA-Z0-9-]+\\.md" # File naming regex
+naming_pattern = "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md" # File naming regex
 required_adr_keywords = []                         # Required topic keywords
 backlinking = true                                 # Enforce backlinks in implementation files
 ```
 
-## 10. Error Codes
+## 10. ADR Template
+
+The standard provides a default ADR template with the required front matter fields and section headers. Tooling MAY use this template to scaffold new ADRs:
+
+```bash
+aps run docs new adr <name>     # Scaffold a new ADR from template (future CLI)
+```
+
+The template includes:
+- Front matter with `name`, `description`, and `status: proposed`
+- Required sections: `## Context`, `## Decision`, `## Consequences`
+
+Projects MAY customize the template. An example template is provided in the standard's `examples/adr-template.md`.
+
+---
+
+## 11. Error Codes
 
 | Code | Severity | Description |
 |------|----------|-------------|

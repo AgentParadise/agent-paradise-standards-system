@@ -23,7 +23,7 @@ The standard enforces structure and frontmatter-driven indexing across the docs 
 
 Domain-specific rules live in **substandards** that inherit the parent's index format:
 
-3. **ADR Enforcement ([EXP-V1-0004.ADR01](substandards/ADR01-architecture-decision-records/docs/00_overview.md))** — Architecture Decision Records inside the docs directory with enforced naming, lifecycle status, required topics, and dead reference detection.
+3. **ADR Enforcement ([EXP-V1-0004.ADR01](../substandards/ADR01-architecture-decision-records/docs/00_overview.md))** — Architecture Decision Records inside the docs directory with enforced naming, lifecycle status, required topics, and dead reference detection.
 
 ## Configuration
 
@@ -39,4 +39,4 @@ aps run docs index [path] --write    # Write indexes into README.md files
 
 ## Category
 
-Governance — this is about consistency and process, not code analysis.
+Governance — consistency and process, enabling automated validation, index generation, vectorization of any docs directory, and structured context engineering for AI agents.

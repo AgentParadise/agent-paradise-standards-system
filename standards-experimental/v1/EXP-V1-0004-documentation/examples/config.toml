@@ -21,7 +21,7 @@ require_agents_md = true
 [docs.adr]
 enabled = true
 directory = "adrs"
-naming_pattern = "ADR-\\d{3,}-[a-zA-Z0-9-]+\\.md"
+naming_pattern = "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 required_adr_keywords = ["security", "testing"]
 backlinking = true
 

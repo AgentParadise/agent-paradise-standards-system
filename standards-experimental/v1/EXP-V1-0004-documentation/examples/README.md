@@ -48,11 +48,11 @@ my-project/
 ---
 name: "Initial Architecture"
 description: "Defines the foundational system architecture and key technology choices"
+status: accepted
 ---
 
 # ADR-001: Initial Architecture
 
-**Status:** Accepted
 **Date:** 2026-01-15
 
 ## Context

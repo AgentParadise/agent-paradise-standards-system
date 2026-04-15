@@ -9,6 +9,7 @@ use documentation::config::{self, DocsConfig};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use walkdir::WalkDir;
 
 /// Error codes emitted by the ADR substandard.
@@ -284,7 +285,7 @@ fn validate_frontmatter(adr_dir: &Path, adr_files: &[String], diagnostics: &mut 
 }
 
 /// ADR01-004: For each keyword in `required_adr_keywords`, at least one file
-/// matching `ADR-\d+-<keyword>\.md` must exist.
+/// matching `ADR-\d{3,5}-<keyword>\.md` must exist.
 fn validate_required_keywords(
     adr_dir: &Path,
     adr_files: &[String],
@@ -292,8 +293,7 @@ fn validate_required_keywords(
     diagnostics: &mut Diagnostics,
 ) {
     for keyword in &config.adr.required_adr_keywords {
-        let escaped = regex::escape(keyword);
-        let pattern = format!(r"^ADR-\d+-{escaped}\.md$");
+        let pattern = config::adr_keyword_filename_pattern(keyword);
         let re = match Regex::new(&pattern) {
             Ok(re) => re,
             Err(_) => continue,
@@ -375,11 +375,16 @@ fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
 
 // ─── Dead ADR reference scanning (ADR01-009) ─────────────────────────────
 
+/// Regex for extracting ADR identifiers from text (compiled once).
+/// Derives from the single source of truth in the parent config module.
+static ADR_REFERENCE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(documentation::config::ADR_STEM_PATTERN).unwrap());
+
 /// Extract ADR identifiers from text. Matches patterns like `ADR-001-security`
 /// (the filename stem without `.md`).
 fn extract_adr_references(content: &str) -> Vec<String> {
-    let re = Regex::new(r"ADR-\d{3,}-[a-zA-Z0-9-]+").unwrap();
-    re.find_iter(content)
+    ADR_REFERENCE_RE
+        .find_iter(content)
         .map(|m| m.as_str().to_string())
         .collect()
 }
@@ -442,12 +447,15 @@ fn validate_adr_references(
         .map(|s| s.as_str())
         .collect();
 
-    // Canonicalize the ADR dir for reliable comparison (handles macOS /var -> /private/var)
+    // Canonicalize roots once for reliable comparison (handles macOS /var -> /private/var)
+    let canonical_repo = repo_root
+        .canonicalize()
+        .unwrap_or_else(|_| repo_root.to_path_buf());
     let canonical_adr_dir = adr_dir
         .canonicalize()
         .unwrap_or_else(|_| adr_dir.to_path_buf());
 
-    for entry in WalkDir::new(repo_root)
+    for entry in WalkDir::new(&canonical_repo)
         .into_iter()
         .filter_entry(|e| {
             if e.file_type().is_dir() && e.depth() > 0 {
@@ -469,9 +477,9 @@ fn validate_adr_references(
             continue;
         }
 
-        // Skip files inside the ADR directory (they reference themselves)
-        let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        if canonical_path.starts_with(&canonical_adr_dir) {
+        // Skip files inside the ADR directory (they reference themselves).
+        // Walking from canonical_repo means paths are already canonical — no per-file canonicalize.
+        if path.starts_with(&canonical_adr_dir) {
             continue;
         }
 
@@ -681,5 +689,19 @@ mod tests {
         assert!(!VALID_ADR_STATUSES.contains(&"draft"));
         assert!(!VALID_ADR_STATUSES.contains(&"approved"));
         assert!(!VALID_ADR_STATUSES.contains(&""));
+    }
+
+    #[test]
+    fn extract_adr_references_accepts_five_digit_numbers() {
+        let content = "// ADR-99999-max-digits";
+        let refs = extract_adr_references(content);
+        assert_eq!(refs, vec!["ADR-99999-max-digits"]);
+    }
+
+    #[test]
+    fn extract_adr_references_rejects_six_digit_numbers() {
+        let content = "// ADR-123456-too-long";
+        let refs = extract_adr_references(content);
+        assert!(refs.is_empty());
     }
 }

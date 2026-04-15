@@ -142,9 +142,7 @@ fn collect_indexes_recursive(
     indexes: &mut Vec<index::GeneratedIndex>,
 ) -> Result<(), DocError> {
     let generated = index::generate_index(dir, &config.index)?;
-    if !generated.entries.is_empty() {
-        indexes.push(generated);
-    }
+    indexes.push(generated);
 
     // Recurse into subdirectories
     let Ok(entries) = std::fs::read_dir(dir) else {

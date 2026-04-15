@@ -40,7 +40,9 @@ pub fn generate_index(dir: &Path, config: &IndexConfig) -> Result<GeneratedIndex
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
             let name = entry.file_name().to_string_lossy().to_lowercase();
-            name.ends_with(".md") && !structural_files.contains(&name.as_str())
+            name.ends_with(".md")
+                && !structural_files.contains(&name.as_str())
+                && entry.path().is_file()
         })
         .collect();
 
@@ -223,9 +225,16 @@ pub fn update_readme_index(
     let new_content = match find_index_section(&content) {
         Some((start, end)) => {
             let mut result = String::with_capacity(content.len());
+            let trailing_content = &content[end..];
             result.push_str(&content[..start]);
-            result.push_str(generated.markdown.trim_end());
-            result.push_str(&content[end..]);
+            result.push_str(&generated.markdown);
+            if !generated.markdown.ends_with('\n')
+                && !trailing_content.is_empty()
+                && !trailing_content.starts_with('\n')
+            {
+                result.push('\n');
+            }
+            result.push_str(trailing_content);
             result
         }
         None => {

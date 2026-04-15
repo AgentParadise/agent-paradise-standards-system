@@ -95,7 +95,7 @@ pub struct AdrConfig {
     #[serde(default = "default_adr_naming_pattern")]
     pub naming_pattern: String,
     /// Required ADR keyword names (e.g., `["security", "testing"]`).
-    /// For each keyword, at least one file matching `ADR-\d+-<keyword>\.md` must exist.
+    /// For each keyword, at least one file matching `ADR-\d{3,5}-<keyword>\.md` must exist.
     #[serde(default)]
     pub required_adr_keywords: Vec<String>,
     #[serde(default = "default_true")]
@@ -153,6 +153,27 @@ impl Default for RootContextConfig {
     }
 }
 
+// ─── ADR pattern constants ────────────────────────────────────────────────
+
+/// Single source of truth for the ADR identifier pattern (stem without `.md`).
+///
+/// Matches: `ADR-001-security`, `ADR-99999-long-name`
+/// Rejects: `ADR-01-short` (too few digits), `ADR-123456-six` (too many)
+pub const ADR_STEM_PATTERN: &str = r"ADR-\d{3,5}-[a-zA-Z0-9-]+";
+
+/// Default filename pattern for ADR files (stem + `.md` extension).
+/// Used as the default value for `docs.adr.naming_pattern` in config.
+pub fn default_adr_filename_pattern() -> String {
+    format!(r"{ADR_STEM_PATTERN}\.md")
+}
+
+/// Build a regex pattern that matches an ADR filename ending with a specific keyword.
+/// Used by required-keyword validation (ADR01-004).
+pub fn adr_keyword_filename_pattern(keyword: &str) -> String {
+    let escaped = regex::escape(keyword);
+    format!(r"^ADR-\d{{3,5}}-{escaped}\.md$")
+}
+
 // ─── Default value functions ───────────────────────────────────────────────
 
 fn default_true() -> bool {
@@ -172,7 +193,7 @@ fn default_adr_directory() -> String {
 }
 
 fn default_adr_naming_pattern() -> String {
-    r"ADR-\d{3,}-[a-zA-Z0-9-]+\.md".to_string()
+    default_adr_filename_pattern()
 }
 
 fn default_max_depth() -> i32 {
@@ -239,4 +260,41 @@ pub enum ConfigError {
         path: PathBuf,
         source: toml::de::Error,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stem_pattern_compiles() {
+        regex::Regex::new(ADR_STEM_PATTERN).expect("ADR_STEM_PATTERN must be valid regex");
+    }
+
+    #[test]
+    fn default_filename_pattern_matches_expected() {
+        let re = regex::Regex::new(&format!("^{}$", default_adr_filename_pattern())).unwrap();
+        assert!(re.is_match("ADR-001-security.md"));
+        assert!(re.is_match("ADR-99999-long-name.md"));
+        assert!(!re.is_match("ADR-01-short.md")); // too few digits
+        assert!(!re.is_match("ADR-123456-six.md")); // too many digits
+        assert!(!re.is_match("ADR-001-security")); // no .md
+    }
+
+    #[test]
+    fn keyword_pattern_matches_expected() {
+        let re = regex::Regex::new(&adr_keyword_filename_pattern("security")).unwrap();
+        assert!(re.is_match("ADR-001-security.md"));
+        assert!(re.is_match("ADR-99999-security.md"));
+        assert!(!re.is_match("ADR-001-testing.md")); // wrong keyword
+        assert!(!re.is_match("ADR-01-security.md")); // too few digits
+        assert!(!re.is_match("ADR-123456-security.md")); // too many digits
+    }
+
+    #[test]
+    fn keyword_pattern_escapes_metacharacters() {
+        let re = regex::Regex::new(&adr_keyword_filename_pattern("c++")).unwrap();
+        assert!(re.is_match("ADR-001-c++.md"));
+        assert!(!re.is_match("ADR-001-cpp.md"));
+    }
 }

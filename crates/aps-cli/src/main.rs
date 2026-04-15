@@ -1097,7 +1097,13 @@ fn dispatch_docs(
             };
 
             let (validator, docs_config) = if let Some(cfg) = config_path {
-                match load_docs_config(cfg) {
+                // Resolve relative --config paths against the target directory
+                let cfg_path = if std::path::Path::new(cfg).is_absolute() {
+                    std::path::PathBuf::from(cfg)
+                } else {
+                    target.join(cfg)
+                };
+                match load_docs_config(cfg_path.to_str().unwrap_or(cfg)) {
                     Ok(config) => {
                         let dc = config.docs.clone();
                         (
@@ -1190,7 +1196,12 @@ fn dispatch_docs(
             };
 
             let validator = if let Some(cfg) = config_path {
-                match load_docs_config(cfg) {
+                let cfg_path = if std::path::Path::new(cfg).is_absolute() {
+                    std::path::PathBuf::from(cfg)
+                } else {
+                    target.join(cfg)
+                };
+                match load_docs_config(cfg_path.to_str().unwrap_or(cfg)) {
                     Ok(config) => documentation::DocValidator::with_config(&target, config.docs),
                     Err(e) => {
                         eprintln!("Error loading config: {e}");

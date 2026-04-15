@@ -40,9 +40,12 @@ pub fn parse_frontmatter(content: &str) -> Result<Option<FrontMatter>, FrontMatt
         return Ok(None);
     }
 
-    // Find the closing `---`
+    // Find the closing `---` (handle both LF and CRLF line endings)
     let after_open = &trimmed[3..];
-    let close_pos = after_open.find("\n---").ok_or(FrontMatterError::Unclosed)?;
+    let close_pos = after_open
+        .find("\n---")
+        .or_else(|| after_open.find("\r\n---"))
+        .ok_or(FrontMatterError::Unclosed)?;
 
     let yaml_block = &after_open[..close_pos].trim();
     if yaml_block.is_empty() {
