@@ -1,0 +1,12 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "EXP-V1-0004.ADR01"
+name = "Architecture Decision Records"
+slug = "architecture-decision-records"
+version = "0.1.0"
+parent_id = "EXP-V1-0004"
+parent_major = "0"
+
+[ownership]
+maintainers = ["AgentParadise"]

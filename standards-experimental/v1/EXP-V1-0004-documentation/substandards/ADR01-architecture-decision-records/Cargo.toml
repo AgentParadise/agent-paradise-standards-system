@@ -1,0 +1,17 @@
+[package]
+name = "documentation-adr"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "ADR enforcement substandard — naming conventions, front matter, required keywords, backlinking"
+
+[dependencies]
+documentation = { path = "../.." }
+aps-core.workspace = true
+regex = "1"
+walkdir.workspace = true
+
+[dev-dependencies]
+tempfile = "3.14"
