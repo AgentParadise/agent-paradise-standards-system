@@ -269,10 +269,7 @@ to = { path = "**/repositories/**" }
     assert_eq!(config.system_fitness.weights["MT01"], 0.25);
 
     // Threshold rule with dimension
-    assert_eq!(
-        config.rules.threshold[0].dimension.as_deref(),
-        Some("MT01")
-    );
+    assert_eq!(config.rules.threshold[0].dimension.as_deref(), Some("MT01"));
 
     // Dependency rule with dimension
     assert_eq!(
@@ -389,56 +386,16 @@ MD01 = 0.5
 }
 
 #[test]
-fn parse_adapter_config() {
-    let toml_str = r#"
-[config]
-topology_dir = ".topology"
-
-[[adapters]]
-id = "cargo-audit"
-dimension = "SC01"
-command = "cargo audit --json"
-output = "adapters/sc01/vulnerabilities.json"
-normalizer = "builtin:cargo-audit"
-
-[[adapters]]
-id = "vsa"
-dimension = "MD01"
-input = ".vsa/analysis.json"
-output = "adapters/md01/vsa-slices.json"
-normalizer = "builtin:vsa"
-"#;
-    let config: FitnessConfig = toml::from_str(toml_str).unwrap();
-
-    assert_eq!(config.adapters.len(), 2);
-    assert_eq!(config.adapters[0].id, "cargo-audit");
-    assert_eq!(config.adapters[0].dimension, "SC01");
-    assert_eq!(
-        config.adapters[0].command.as_deref(),
-        Some("cargo audit --json")
-    );
-    assert!(config.adapters[0].input.is_none());
-    assert_eq!(config.adapters[0].normalizer, "builtin:cargo-audit");
-
-    assert_eq!(config.adapters[1].id, "vsa");
-    assert!(config.adapters[1].command.is_none());
-    assert_eq!(
-        config.adapters[1].input.as_deref(),
-        Some(".vsa/analysis.json")
-    );
-}
-
-#[test]
 fn dimension_code_properties() {
     assert!(DimensionCode::MT01.is_default_enabled());
     assert!(!DimensionCode::AC01.is_default_enabled());
     assert_eq!(DimensionCode::MT01.name(), "Maintainability");
     assert_eq!(DimensionCode::MT01.as_str(), "MT01");
-    assert_eq!(DimensionCode::from_str("MT01"), Some(DimensionCode::MT01));
-    assert_eq!(DimensionCode::from_str("INVALID"), None);
+    assert_eq!(DimensionCode::parse("MT01"), Some(DimensionCode::MT01));
+    assert_eq!(DimensionCode::parse("INVALID"), None);
 }
 
-// ─── Wave 6: Structural + Adapter Tests ────────────────────────────────────
+// ─── Wave 6: Structural Tests ──────────────────────────────────────────────
 
 #[test]
 fn structural_rules_skip_gracefully() {
@@ -467,7 +424,10 @@ to = { path = "**/repositories/**" }
     let report = validator.validate().unwrap();
 
     assert_eq!(report.results.len(), 1);
-    assert_eq!(report.results[0].status, architecture_fitness::RuleStatus::Skip);
+    assert_eq!(
+        report.results[0].status,
+        architecture_fitness::RuleStatus::Skip
+    );
     assert_eq!(report.results[0].dimension.as_deref(), Some("ST01"));
 }
 
@@ -486,68 +446,4 @@ pattern = "some_pattern"
     assert_eq!(config.rules.structural.len(), 1);
     assert_eq!(config.rules.structural[0].dimension, None);
     // The dimension defaults to ST01 during evaluation, not parsing
-}
-
-#[test]
-fn unknown_normalizer_rejected() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path();
-
-    fs::create_dir_all(root.join(".topology")).unwrap();
-    fs::write(
-        root.join("fitness.toml"),
-        r#"
-[config]
-topology_dir = ".topology"
-
-[[adapters]]
-id = "bad-adapter"
-dimension = "SC01"
-command = "some-command"
-output = "adapters/sc01/output.json"
-normalizer = "invalid:format"
-"#,
-    )
-    .unwrap();
-
-    let result = FitnessValidator::load(root, None);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("normalizer"),
-        "error should mention normalizer: {err}"
-    );
-}
-
-#[test]
-fn valid_normalizer_accepted() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path();
-
-    fs::create_dir_all(root.join(".topology")).unwrap();
-    fs::write(
-        root.join("fitness.toml"),
-        r#"
-[config]
-topology_dir = ".topology"
-
-[[adapters]]
-id = "cargo-audit"
-dimension = "SC01"
-command = "cargo audit --json"
-output = "adapters/sc01/vulnerabilities.json"
-normalizer = "builtin:cargo-audit"
-
-[[adapters]]
-id = "custom"
-dimension = "LG01"
-input = "raw/licenses.json"
-output = "adapters/lg01/licenses.json"
-normalizer = "script:./normalize_licenses.py"
-"#,
-    )
-    .unwrap();
-
-    let result = FitnessValidator::load(root, None);
-    assert!(result.is_ok());
 }

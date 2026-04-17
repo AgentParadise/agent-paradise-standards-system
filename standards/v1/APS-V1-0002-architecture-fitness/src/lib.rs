@@ -46,10 +46,6 @@ pub mod error_codes {
     pub const DIMENSION_DISABLED_NO_REASON: &str = "DIMENSION_DISABLED_NO_REASON";
     /// System-level score below configured minimum.
     pub const SYSTEM_FITNESS_BELOW_THRESHOLD: &str = "SYSTEM_FITNESS_BELOW_THRESHOLD";
-    /// Referenced adapter normalizer not available.
-    pub const ADAPTER_NOT_FOUND: &str = "ADAPTER_NOT_FOUND";
-    /// Adapter failed to normalize external tool output.
-    pub const ADAPTER_NORMALIZATION_FAILED: &str = "ADAPTER_NORMALIZATION_FAILED";
     /// Structural rule references unknown pattern.
     pub const INVALID_STRUCTURAL_PATTERN: &str = "INVALID_STRUCTURAL_PATTERN";
     /// System fitness weights do not sum to 1.0.
@@ -140,7 +136,7 @@ impl DimensionCode {
     }
 
     /// Parse from string.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "MT01" => Some(DimensionCode::MT01),
             "MD01" => Some(DimensionCode::MD01),
@@ -153,6 +149,40 @@ impl DimensionCode {
             _ => None,
         }
     }
+
+    /// Promotion status per §3.4 and Appendix D.
+    ///
+    /// Source of truth for strict-artifact enforcement: when a rule's
+    /// dimension is `Active`, a missing source artifact produces a failing
+    /// rule result with `PROMOTION_REQUIREMENT_UNMET` (§12). When
+    /// `Incubating`, a missing artifact is a `Skip` (advisory).
+    ///
+    /// This mapping MUST agree with the table in Appendix D of the spec.
+    pub const fn promotion_status(self) -> PromotionStatus {
+        match self {
+            DimensionCode::MT01 => PromotionStatus::Active,
+            DimensionCode::MD01 => PromotionStatus::Active,
+            DimensionCode::ST01 => PromotionStatus::Incubating,
+            DimensionCode::SC01 => PromotionStatus::Incubating,
+            DimensionCode::LG01 => PromotionStatus::Incubating,
+            DimensionCode::AC01 => PromotionStatus::Incubating,
+            DimensionCode::PF01 => PromotionStatus::Incubating,
+            DimensionCode::AV01 => PromotionStatus::Incubating,
+        }
+    }
+}
+
+/// Promotion status of a dimension per APS-V1-0002 §3.4.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PromotionStatus {
+    /// All R1–R5 requirements satisfied; rules are strictly enforced.
+    Active,
+    /// Partial implementation; rule severities downgraded to warning;
+    /// missing artifacts silently skip rather than fail.
+    Incubating,
+    /// Scheduled for removal; emit warnings about usage.
+    Deprecated,
 }
 
 impl std::fmt::Display for DimensionCode {
@@ -277,8 +307,6 @@ pub struct FitnessConfig {
     pub dimensions: DimensionsConfig,
     #[serde(default)]
     pub system_fitness: SystemFitnessConfig,
-    #[serde(default)]
-    pub adapters: Vec<AdapterConfig>,
 }
 
 /// The `[config]` section.
@@ -384,22 +412,6 @@ pub struct StructuralRule {
     pub from: Option<PathMatcher>,
     pub to: Option<PathMatcher>,
     pub severity: Option<Severity>,
-}
-
-/// Adapter configuration for normalizing external tool output.
-#[derive(Debug, Clone, Deserialize)]
-pub struct AdapterConfig {
-    pub id: String,
-    /// Which dimension this adapter serves.
-    pub dimension: String,
-    /// Shell command to produce raw output (mutually exclusive with `input`).
-    pub command: Option<String>,
-    /// Path to pre-existing raw output (mutually exclusive with `command`).
-    pub input: Option<String>,
-    /// Path where normalized output is written.
-    pub output: String,
-    /// Normalizer identifier: "builtin:<name>" or "script:<path>".
-    pub normalizer: String,
 }
 
 // ─── Exception Set (fitness-exceptions.toml) ────────────────────────────────
@@ -653,12 +665,6 @@ pub enum FitnessError {
     #[error("system fitness weights invalid: {0}")]
     InvalidWeights(String),
 
-    #[error("adapter normalizer not found: {0}")]
-    AdapterNotFound(String),
-
-    #[error("adapter normalization failed for {0}: {1}")]
-    AdapterNormalizationFailed(String, String),
-
     #[error("structural pattern not found: {0}")]
     InvalidStructuralPattern(String),
 
@@ -706,18 +712,6 @@ impl FitnessValidator {
 
         // Validate system fitness weights
         config.system_fitness.validate()?;
-
-        // Validate adapter normalizer references
-        for adapter in &config.adapters {
-            if !adapter.normalizer.starts_with("builtin:")
-                && !adapter.normalizer.starts_with("script:")
-            {
-                return Err(FitnessError::AdapterNotFound(format!(
-                    "adapter '{}': normalizer '{}' must start with 'builtin:' or 'script:'",
-                    adapter.id, adapter.normalizer
-                )));
-            }
-        }
 
         let topology_dir = repo_root.join(&config.config.topology_dir);
         if !topology_dir.exists() {
@@ -860,15 +854,44 @@ impl FitnessValidator {
             .join(&self.config.config.topology_dir)
             .join(&rule.source);
 
-        // If artifact doesn't exist, skip
+        // Strict-artifact enforcement (§3.3 R3, §12 PROMOTION_REQUIREMENT_UNMET):
+        // When the rule belongs to an `active` dimension, a missing source
+        // artifact is a hard failure — the dimension promised this data exists.
+        // When `incubating`, the rule silently skips.
         if !artifact_path.exists() {
+            let promotion = rule
+                .dimension
+                .as_deref()
+                .and_then(DimensionCode::parse)
+                .map(DimensionCode::promotion_status)
+                .unwrap_or(PromotionStatus::Incubating);
+
+            let status = if promotion == PromotionStatus::Active {
+                RuleStatus::Fail
+            } else {
+                RuleStatus::Skip
+            };
+
+            let violations = if status == RuleStatus::Fail {
+                vec![Violation {
+                    entity: rule.source.clone(),
+                    field: rule.field.clone(),
+                    actual: 0.0,
+                    threshold: 0.0,
+                    direction: ThresholdDirection::Max,
+                    excepted: false,
+                }]
+            } else {
+                vec![]
+            };
+
             return Ok((
                 RuleResult {
                     rule_id: rule.id.clone(),
                     rule_name: rule.name.clone(),
                     dimension: rule.dimension.clone(),
-                    status: RuleStatus::Skip,
-                    violations: vec![],
+                    status,
+                    violations,
                     exceptions_used: 0,
                     total_entities: None,
                 },
@@ -1035,7 +1058,7 @@ impl FitnessValidator {
                 rule.from
                     .path_not
                     .as_ref()
-                    .map_or(true, |pn| !glob_matches(n, pn))
+                    .is_none_or(|pn| !glob_matches(n, pn))
             })
             .map(|s| s.as_str())
             .collect();
@@ -1047,7 +1070,7 @@ impl FitnessValidator {
                 rule.to
                     .path_not
                     .as_ref()
-                    .map_or(true, |pn| !glob_matches(n, pn))
+                    .is_none_or(|pn| !glob_matches(n, pn))
             })
             .map(|s| s.as_str())
             .collect();
@@ -1065,11 +1088,13 @@ impl FitnessValidator {
             "forbidden" => {
                 if rule.circular {
                     // Use Tarjan SCC to detect cycles
-                    let relevant_nodes: HashSet<&str> =
-                        from_set.union(&to_set).copied().collect();
+                    let relevant_nodes: HashSet<&str> = from_set.union(&to_set).copied().collect();
                     let relevant_edges: Vec<(&str, &str)> = edges
                         .iter()
-                        .filter(|(a, b)| relevant_nodes.contains(a.as_str()) && relevant_nodes.contains(b.as_str()))
+                        .filter(|(a, b)| {
+                            relevant_nodes.contains(a.as_str())
+                                && relevant_nodes.contains(b.as_str())
+                        })
                         .map(|(a, b)| (a.as_str(), b.as_str()))
                         .collect();
 
@@ -1152,7 +1177,7 @@ impl FitnessValidator {
 
         // Detect stale exceptions for dependency rules
         if let Some(rule_exceptions) = self.exceptions.rules.get(&rule.id) {
-            for (entity, _exc) in rule_exceptions {
+            for entity in rule_exceptions.keys() {
                 let was_matched = matched_exception_entities.contains(entity.as_str());
                 if !was_matched {
                     // Check if entity is even in the graph
@@ -1175,9 +1200,7 @@ impl FitnessValidator {
         }
 
         let has_unexcepted = violations.iter().any(|v| !v.excepted);
-        let severity = rule
-            .severity
-            .unwrap_or(self.config.config.severity_default);
+        let severity = rule.severity.unwrap_or(self.config.config.severity_default);
         let status = if !has_unexcepted {
             RuleStatus::Pass
         } else {
@@ -1262,8 +1285,10 @@ impl FitnessValidator {
         let (weights_used, weights_note) = if configured_weights.is_empty() {
             // Equal weights for active dimensions
             let w = 1.0 / active.len() as f64;
-            let weights: HashMap<String, f64> =
-                active.iter().map(|(code, _)| (code.to_string(), w)).collect();
+            let weights: HashMap<String, f64> = active
+                .iter()
+                .map(|(code, _)| (code.to_string(), w))
+                .collect();
             (weights, None)
         } else {
             // Redistribute configured weights among active dimensions only
@@ -1350,9 +1375,7 @@ impl FitnessValidator {
         // Per-dimension deltas
         let mut dimension_deltas = HashMap::new();
         for (code, current) in current_dimensions {
-            if let (Some(cur_score), Some(prev_dim)) =
-                (current.score, prev.dimensions.get(code))
-            {
+            if let (Some(cur_score), Some(prev_dim)) = (current.score, prev.dimensions.get(code)) {
                 if let Some(prev_score) = prev_dim.score {
                     let d = cur_score - prev_score;
                     // Round to 2 decimal places
@@ -1370,7 +1393,10 @@ impl FitnessValidator {
     }
 
     /// Compute per-dimension scoring results from evaluated rule results.
-    fn compute_dimension_results(&self, results: &[RuleResult]) -> HashMap<String, DimensionResult> {
+    fn compute_dimension_results(
+        &self,
+        results: &[RuleResult],
+    ) -> HashMap<String, DimensionResult> {
         let mut dimensions: HashMap<String, DimensionResult> = HashMap::new();
 
         // Initialize all enabled dimensions
@@ -1487,10 +1513,7 @@ impl FitnessValidator {
     /// Returns true if any error-severity rules failed or system fitness is below threshold.
     pub fn has_failures(report: &FitnessReport) -> bool {
         let rule_failures = report.results.iter().any(|r| r.status == RuleStatus::Fail);
-        let system_failure = report
-            .system_fitness
-            .as_ref()
-            .is_some_and(|sf| !sf.passing);
+        let system_failure = report.system_fitness.as_ref().is_some_and(|sf| !sf.passing);
         rule_failures || system_failure
     }
 
@@ -1637,10 +1660,7 @@ fn load_dependency_graph(graph: &serde_json::Value) -> (Vec<String>, Vec<(String
 ///
 /// Returns all SCCs (including single-node ones). Caller should filter for
 /// `scc.len() > 1` to find actual cycles.
-fn tarjan_scc<'a>(
-    nodes: &HashSet<&'a str>,
-    edges: &[(&'a str, &'a str)],
-) -> Vec<Vec<String>> {
+fn tarjan_scc<'a>(nodes: &HashSet<&'a str>, edges: &[(&'a str, &'a str)]) -> Vec<Vec<String>> {
     // Build adjacency list
     let mut adj: HashMap<&str, Vec<&str>> = HashMap::new();
     for node in nodes {
@@ -1657,6 +1677,7 @@ fn tarjan_scc<'a>(
     let mut lowlinks: HashMap<&str, usize> = HashMap::new();
     let mut result: Vec<Vec<String>> = Vec::new();
 
+    #[allow(clippy::too_many_arguments)]
     fn strongconnect<'b>(
         v: &'b str,
         adj: &HashMap<&str, Vec<&'b str>>,
@@ -1676,7 +1697,16 @@ fn tarjan_scc<'a>(
         if let Some(neighbors) = adj.get(v) {
             for &w in neighbors {
                 if !indices.contains_key(w) {
-                    strongconnect(w, adj, index_counter, stack, on_stack, indices, lowlinks, result);
+                    strongconnect(
+                        w,
+                        adj,
+                        index_counter,
+                        stack,
+                        on_stack,
+                        indices,
+                        lowlinks,
+                        result,
+                    );
                     let w_low = lowlinks[w];
                     let v_low = lowlinks[v];
                     lowlinks.insert(v, v_low.min(w_low));

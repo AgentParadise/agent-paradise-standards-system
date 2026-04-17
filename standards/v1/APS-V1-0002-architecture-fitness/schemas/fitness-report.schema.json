@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:apss:schema:aps-v1-0002:fitness-report:1.0.0",
+  "title": "Fitness Report",
+  "description": "Schema for fitness-report.json — output of `aps run fitness validate` per APS-V1-0002 §7.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "timestamp",
+    "summary",
+    "dimensions",
+    "results"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "summary": { "$ref": "#/$defs/Summary" },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/DimensionResult" }
+    },
+    "system_fitness": { "$ref": "#/$defs/SystemFitness" },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/RuleResult" }
+    },
+    "stale_exceptions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/StaleException" }
+    }
+  },
+  "$defs": {
+    "Summary": {
+      "type": "object",
+      "required": [
+        "total_rules",
+        "passed",
+        "failed",
+        "warned",
+        "skipped",
+        "total_violations",
+        "excepted_violations",
+        "stale_exceptions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "total_rules": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "warned": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "total_violations": { "type": "integer", "minimum": 0 },
+        "excepted_violations": { "type": "integer", "minimum": 0 },
+        "stale_exceptions": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "DimensionResult": {
+      "type": "object",
+      "required": [
+        "name",
+        "runtime_status",
+        "promotion_status",
+        "enforcement",
+        "score",
+        "rules_evaluated",
+        "rules_passed",
+        "rules_failed",
+        "rules_warned",
+        "rules_downgraded",
+        "total_violations",
+        "excepted_violations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "runtime_status": {
+          "type": "string",
+          "enum": ["evaluated", "skipped", "disabled"],
+          "description": "Whether the dimension ran. 'skipped' means required artifacts were missing; 'disabled' means opted out via config."
+        },
+        "promotion_status": {
+          "type": "string",
+          "enum": ["active", "incubating", "deprecated"],
+          "description": "Enforcement posture per §3.4. Source of truth: substandard manifest cross-checked against Appendix D."
+        },
+        "enforcement": {
+          "type": "string",
+          "enum": ["enforced", "advisory"],
+          "description": "'enforced' when promotion_status = 'active'; 'advisory' when 'incubating' (severities downgraded to warning per §3.4)."
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rules_evaluated": { "type": "integer", "minimum": 0 },
+        "rules_passed": { "type": "integer", "minimum": 0 },
+        "rules_failed": { "type": "integer", "minimum": 0 },
+        "rules_warned": { "type": "integer", "minimum": 0 },
+        "rules_downgraded": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Rules whose configured error severity was downgraded to warning due to incubating status. Emits INCUBATING_DIMENSION_ERROR_DOWNGRADED per rule."
+        },
+        "total_violations": { "type": "integer", "minimum": 0 },
+        "excepted_violations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "SystemFitness": {
+      "type": "object",
+      "required": ["score", "min_score", "passing", "weights_used"],
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "passing": { "type": "boolean" },
+        "weights_used": {
+          "type": "object",
+          "description": "Actual weights used after redistribution for skipped dimensions.",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "trend": { "$ref": "#/$defs/Trend" }
+      }
+    },
+    "Trend": {
+      "type": "object",
+      "required": ["previous_score", "delta", "direction"],
+      "additionalProperties": false,
+      "properties": {
+        "previous_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "delta": { "type": "number" },
+        "direction": {
+          "type": "string",
+          "enum": ["improving", "declining", "stable"]
+        },
+        "dimension_deltas": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        }
+      }
+    },
+    "RuleResult": {
+      "type": "object",
+      "required": ["rule_id", "rule_name", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": { "type": "string" },
+        "rule_name": { "type": "string" },
+        "dimension": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "warn", "skip"]
+        },
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Violation" }
+        },
+        "exceptions_used": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Violation": {
+      "type": "object",
+      "required": ["entity", "excepted"],
+      "additionalProperties": false,
+      "properties": {
+        "entity": { "type": "string" },
+        "field": { "type": "string" },
+        "actual": { "type": "number" },
+        "threshold": { "type": "number" },
+        "direction": {
+          "type": "string",
+          "enum": ["max", "min"]
+        },
+        "excepted": { "type": "boolean" },
+        "message": { "type": "string" }
+      }
+    },
+    "StaleException": {
+      "type": "object",
+      "required": ["rule_id", "entity", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": { "type": "string" },
+        "entity": { "type": "string" },
+        "reason": {
+          "type": "string",
+          "description": "Why the exception is stale (e.g., 'entity not found', 'value now within threshold')."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "1.0.0",
+      "timestamp": "2026-04-15T10:30:00Z",
+      "summary": {
+        "total_rules": 5,
+        "passed": 4,
+        "failed": 0,
+        "warned": 1,
+        "skipped": 0,
+        "total_violations": 3,
+        "excepted_violations": 2,
+        "stale_exceptions": 0
+      },
+      "dimensions": {
+        "MT01": {
+          "name": "Maintainability",
+          "runtime_status": "evaluated",
+          "promotion_status": "active",
+          "enforcement": "enforced",
+          "score": 0.92,
+          "rules_evaluated": 3,
+          "rules_passed": 3,
+          "rules_failed": 0,
+          "rules_warned": 0,
+          "rules_downgraded": 0,
+          "total_violations": 2,
+          "excepted_violations": 2
+        },
+        "MD01": {
+          "name": "Modularity",
+          "runtime_status": "evaluated",
+          "promotion_status": "active",
+          "enforcement": "enforced",
+          "score": 0.88,
+          "rules_evaluated": 2,
+          "rules_passed": 1,
+          "rules_failed": 0,
+          "rules_warned": 1,
+          "rules_downgraded": 0,
+          "total_violations": 1,
+          "excepted_violations": 0
+        }
+      },
+      "system_fitness": {
+        "score": 0.90,
+        "min_score": 0.7,
+        "passing": true,
+        "weights_used": {
+          "MT01": 0.5,
+          "MD01": 0.5
+        }
+      },
+      "results": [
+        {
+          "rule_id": "max-efferent-coupling",
+          "rule_name": "Maximum Efferent Coupling",
+          "dimension": "MD01",
+          "status": "warn",
+          "violations": [
+            {
+              "entity": "src/core",
+              "field": "efferent_coupling",
+              "actual": 24,
+              "threshold": 20,
+              "direction": "max",
+              "excepted": false
+            }
+          ],
+          "exceptions_used": 0
+        }
+      ],
+      "stale_exceptions": []
+    }
+  ]
+}

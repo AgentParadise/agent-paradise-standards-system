@@ -73,7 +73,11 @@ scope = "function"
     // 5 active dimensions (MT01=0.5, MD01=1.0, ST01=1.0, SC01=1.0, LG01=1.0)
     // Equal weight = 0.2 each
     // Score = 0.2*0.5 + 0.2*1.0*4 = 0.1 + 0.8 = 0.9
-    assert!((sf.score - 0.9).abs() < 0.01, "expected ~0.9, got {}", sf.score);
+    assert!(
+        (sf.score - 0.9).abs() < 0.01,
+        "expected ~0.9, got {}",
+        sf.score
+    );
     assert!(sf.passing); // 0.9 >= 0.7
     assert_eq!(sf.weights_used.len(), 5);
     assert!(sf.weights_note.is_none());
@@ -123,7 +127,11 @@ scope = "function"
 
     let sf = report.system_fitness.as_ref().unwrap();
     // Score = 0.4*0.5 + 0.3*1.0 + 0.1*1.0 + 0.1*1.0 + 0.1*1.0 = 0.2 + 0.3 + 0.3 = 0.8
-    assert!((sf.score - 0.8).abs() < 0.02, "expected ~0.8, got {}", sf.score);
+    assert!(
+        (sf.score - 0.8).abs() < 0.02,
+        "expected ~0.8, got {}",
+        sf.score
+    );
     // Floating point: score might be 0.7999... so just check it's close to passing
     assert!(sf.score >= 0.79, "score should be at or near threshold");
     assert_eq!(sf.weights_used["MT01"], 0.4);

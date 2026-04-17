@@ -5,11 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 /// Create a test fixture with a dependency graph and optional threshold artifacts.
-fn setup_dep_fixture(
-    rules_toml: &str,
-    exceptions_toml: Option<&str>,
-    graph_json: &str,
-) -> TempDir {
+fn setup_dep_fixture(rules_toml: &str, exceptions_toml: Option<&str>, graph_json: &str) -> TempDir {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
 

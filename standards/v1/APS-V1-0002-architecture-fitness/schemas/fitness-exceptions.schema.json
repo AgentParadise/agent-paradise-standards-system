@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:apss:schema:aps-v1-0002:fitness-exceptions:1.0.0",
+  "title": "Fitness Exceptions",
+  "description": "Schema for fitness-exceptions.toml — ratchet-style exceptions to fitness rules per APS-V1-0002 §5. Top-level keys are rule IDs; nested keys are entity paths.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "description": "Map from entity path (e.g., 'src/module.py::function') to exception entry. The key MUST identify an entity the target rule evaluates.",
+    "additionalProperties": { "$ref": "#/$defs/Exception" }
+  },
+  "$defs": {
+    "Exception": {
+      "type": "object",
+      "required": ["issue"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number",
+          "description": "Current metric value at time of exception. Acts as the ratchet budget: when the actual value exceeds this, the exception is insufficient and the violation is reported as unexcepted. Ratcheting MUST be monotonically tightening."
+        },
+        "targets": {
+          "type": "array",
+          "description": "For dependency rules: specific import targets excepted.",
+          "items": { "type": "string" }
+        },
+        "issue": {
+          "type": "string",
+          "description": "GitHub issue reference (e.g., '#138', 'org/repo#42'). REQUIRED — exceptions without issue references MUST cause a validation error (MISSING_ISSUE_REF).",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "max-cyclomatic": {
+        "src/orchestration/engine.py::execute": {
+          "value": 42,
+          "issue": "#138"
+        },
+        "src/setup.py::configure_workspace": {
+          "value": 28,
+          "issue": "#185"
+        }
+      },
+      "no-circular-deps": {
+        "src/auth/session.py": {
+          "targets": ["src/auth/user.py"],
+          "issue": "org/repo#42"
+        }
+      }
+    }
+  ]
+}

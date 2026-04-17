@@ -84,7 +84,10 @@ scope = "file"
     assert_eq!(mt01.excepted_violations, 0);
     // score = 1.0 - 1/3 (1 unexcepted violation, 3 total entities across both rules)
     let score = mt01.score.unwrap();
-    assert!((score - 0.6667).abs() < 0.01, "expected ~0.667, got {score}");
+    assert!(
+        (score - 0.6667).abs() < 0.01,
+        "expected ~0.667, got {score}"
+    );
 }
 
 #[test]
@@ -150,7 +153,42 @@ AV01 = false
 }
 
 #[test]
-fn skipped_dimension_when_all_artifacts_missing() {
+fn skipped_dimension_when_incubating_and_artifacts_missing() {
+    // Incubating dimensions (like ST01) skip silently when source artifacts are
+    // missing — the dimension is advisory, not enforced. Contrast with active
+    // dimensions, which fail with PROMOTION_REQUIREMENT_UNMET (§12).
+    let dir = setup_fixture(
+        r#"
+[config]
+topology_dir = ".topology"
+
+[[rules.threshold]]
+id = "max-something"
+name = "Max Something"
+dimension = "ST01"
+source = "metrics/nonexistent.json"
+field = "something"
+max = 15
+scope = "module"
+"#,
+        None,
+        &[],
+    );
+
+    let validator = FitnessValidator::load(dir.path(), None).unwrap();
+    let report = validator.validate().unwrap();
+
+    let st01 = &report.dimensions["ST01"];
+    assert_eq!(st01.status, DimensionStatus::Skipped);
+    assert_eq!(st01.score, None);
+    assert_eq!(st01.rules_evaluated, 0);
+}
+
+#[test]
+fn active_dimension_fails_when_artifact_missing() {
+    // Per §3.3 R3 and §12 PROMOTION_REQUIREMENT_UNMET: when a rule belongs to
+    // an active dimension, a missing source artifact is a hard failure rather
+    // than a silent skip.
     let dir = setup_fixture(
         r#"
 [config]
@@ -161,8 +199,8 @@ id = "max-cc"
 name = "Max CC"
 dimension = "MT01"
 source = "metrics/nonexistent.json"
-field = "cyclomatic_complexity"
-max = 15
+field = "metrics.cyclomatic"
+max = 10
 scope = "function"
 "#,
         None,
@@ -172,10 +210,14 @@ scope = "function"
     let validator = FitnessValidator::load(dir.path(), None).unwrap();
     let report = validator.validate().unwrap();
 
-    let mt01 = &report.dimensions["MT01"];
-    assert_eq!(mt01.status, DimensionStatus::Skipped);
-    assert_eq!(mt01.score, None);
-    assert_eq!(mt01.rules_evaluated, 0);
+    let rule = report
+        .results
+        .iter()
+        .find(|r| r.rule_id == "max-cc")
+        .expect("rule result present");
+    assert_eq!(rule.status, architecture_fitness::RuleStatus::Fail);
+    assert_eq!(rule.violations.len(), 1);
+    assert_eq!(rule.violations[0].entity, "metrics/nonexistent.json");
 }
 
 #[test]
@@ -315,8 +357,14 @@ scope = "function"
 
     // Serialize to JSON and verify dimensions appear
     let json = serde_json::to_string_pretty(&report).unwrap();
-    assert!(json.contains("\"MT01\""), "JSON should contain MT01 dimension");
-    assert!(json.contains("\"Maintainability\""), "JSON should contain dimension name");
+    assert!(
+        json.contains("\"MT01\""),
+        "JSON should contain MT01 dimension"
+    );
+    assert!(
+        json.contains("\"Maintainability\""),
+        "JSON should contain dimension name"
+    );
 
     // Roundtrip
     let parsed: architecture_fitness::FitnessReport = serde_json::from_str(&json).unwrap();

@@ -73,8 +73,8 @@ Each dimension has two orthogonal classifications:
 
 | Substandard | Dimension | Status | Default | Notes |
 |-------------|-----------|--------|---------|-------|
-| APS-V1-0002.MT01 | Maintainability | incubating | default-enabled | Metrics computed by APS-V1-0001; awaits artifact schemas + reference impl (Tier 1) |
-| APS-V1-0002.MD01 | Modularity & Coupling | incubating | default-enabled | Martin metrics computed by APS-V1-0001; awaits `coupling.json` producer + schemas + reference impl (Tier 1) |
+| APS-V1-0002.MT01 | Maintainability | active | default-enabled | Function-level McCabe / SonarSource / Halstead metrics from `functions.json` (APS-V1-0001) |
+| APS-V1-0002.MD01 | Modularity & Coupling | active | default-enabled | Martin package metrics (Ca, Ce, I, A, D) from `coupling.json` (APS-V1-0001) |
 | APS-V1-0002.ST01 | Structural Integrity | incubating | default-enabled | Structural patterns implementable now; CK metrics require class-level analyzer |
 | APS-V1-0002.SC01 | Security | incubating | default-enabled | Awaits adapter framework + `builtin:cargo-audit` |
 | APS-V1-0002.LG01 | Legality | incubating | default-enabled | Awaits adapter framework + `builtin:cargo-deny` |
@@ -82,7 +82,7 @@ Each dimension has two orthogonal classifications:
 | APS-V1-0002.PF01 | Performance | incubating | opt-in | Awaits adapter framework |
 | APS-V1-0002.AV01 | Availability | incubating | opt-in | Awaits adapter framework |
 
-**No dimension is currently `active`.** Current implementation status per dimension is disclosed in [Appendix D](#appendix-d-current-implementation-status). Promotion to `active` is gated on R1–R5 (§3.3) including the schema requirement (§3.5).
+**MT01 and MD01 are `active`** and strictly enforced: missing source artifacts for their rules produce `PROMOTION_REQUIREMENT_UNMET` (§12) rather than silent skips. All other dimensions are `incubating` — their rule severities are downgraded to warning and missing artifacts skip silently. Implementation status per dimension is disclosed in [Appendix D](#appendix-d-current-implementation-status). Promotion to `active` is gated on R1–R5 (§3.3).
 
 ### 1.5 Promotion Lineage
 
@@ -162,8 +162,8 @@ Every dimension is identified by a 4-character code and governed by a substandar
 
 | Code | Dimension | Characteristics Protected | Data Source | Status | Default |
 |------|-----------|--------------------------|-------------|--------|---------|
-| MT01 | Maintainability | Readability, testability, complexity | `.topology/metrics/` | incubating | default-enabled |
-| MD01 | Modularity & Coupling | Separation of concerns, dependency structure | `.topology/metrics/` | incubating | default-enabled |
+| MT01 | Maintainability | Readability, testability, complexity | `.topology/metrics/functions.json` | active | default-enabled |
+| MD01 | Modularity & Coupling | Separation of concerns, dependency structure | `.topology/metrics/coupling.json` | active | default-enabled |
 | ST01 | Structural Integrity | Design patterns, class design, layer enforcement | AST analysis, structural checks | incubating | default-enabled |
 | SC01 | Security | Vulnerability freedom, supply chain safety | Security scanner output | incubating | default-enabled |
 | LG01 | Legality | License compliance, IP safety | License scanner output | incubating | default-enabled |
@@ -237,13 +237,13 @@ Canonical examples (load-bearing for this standard):
 
 | Artifact | Canonical schema path | Owner |
 |----------|----------------------|-------|
-| `.topology/metrics/coupling.json` | `APS-V1-0001-code-topology/schemas/coupling.schema.json` | APS-V1-0001 |
-| `.topology/metrics/complexity.json` | `APS-V1-0001-code-topology/schemas/complexity.schema.json` | APS-V1-0001 |
 | `.topology/metrics/modules.json` | `APS-V1-0001-code-topology/schemas/modules.schema.json` | APS-V1-0001 |
+| `.topology/metrics/functions.json` | `APS-V1-0001-code-topology/schemas/functions.schema.json` | APS-V1-0001 |
+| `.topology/metrics/coupling.json` | `APS-V1-0001-code-topology/schemas/coupling.schema.json` | APS-V1-0001 |
 | `fitness.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-config.schema.json` | APS-V1-0002 |
 | `fitness-exceptions.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-exceptions.schema.json` | APS-V1-0002 |
 | `fitness-report.json` | `APS-V1-0002-architecture-fitness/schemas/fitness-report.schema.json` | APS-V1-0002 |
-| Adapter-normalized output | `APS-V1-0002-architecture-fitness/schemas/adapter-output.schema.json` | APS-V1-0002 |
+| Adapter-normalized output (Tier 3) | `APS-V1-0002-architecture-fitness/schemas/adapter-output.schema.json` | APS-V1-0002 — deferred |
 
 #### 3.5.3 Schema Requirements
 
@@ -253,7 +253,7 @@ Every schema MUST declare:
 - `"$id"` — stable URI identifying the artifact
 - `"title"` and `"description"` — human-readable
 - `"type"` and `"properties"` — strongly typed; `"additionalProperties": false` at the root unless the schema explicitly documents forward-compatible extension points
-- A top-level `"version"` property on the artifact itself, matching SemVer
+- A required `"schema_version"` property on the artifact itself, matching SemVer (the established APSS convention — already used by APS-V1-0001 topology artifacts)
 
 Schemas SHOULD include examples (`"examples"`) and reference the source spec section.
 
@@ -262,7 +262,7 @@ Schemas SHOULD include examples (`"examples"`) and reference the source spec sec
 - Schemas follow SemVer independently from the owning standard
 - A **minor** or **patch** bump MUST remain backward-compatible (additive only; no field removals, no type narrowing, no enum shrinking)
 - A **major** bump MAY break compatibility and MUST ship alongside an ADR describing migration
-- Artifacts MUST carry a `"version"` field so validators can select the correct schema
+- Artifacts MUST carry a `"schema_version"` field so validators can select the correct schema
 - Consumers MUST validate artifacts against the schema version recorded in the artifact, not against an assumed version
 
 #### 3.5.5 Validation and CI
@@ -968,8 +968,6 @@ aps run fitness report <path> --format human|json
 | `INVALID_DIMENSION` | Unknown dimension code in configuration |
 | `DIMENSION_DISABLED_NO_REASON` | Default-enabled dimension disabled without reason |
 | `SYSTEM_FITNESS_BELOW_THRESHOLD` | System-level score below configured minimum |
-| `ADAPTER_NOT_FOUND` | Referenced adapter normalizer not available |
-| `ADAPTER_NORMALIZATION_FAILED` | Adapter failed to normalize external tool output |
 | `INVALID_STRUCTURAL_PATTERN` | Structural rule references unknown pattern |
 | `INVALID_WEIGHTS` | System fitness weights do not sum to 1.0 |
 | `DEPENDENCY_CYCLE_DETECTED` | Circular dependency found (forbidden) |
@@ -1028,8 +1026,8 @@ Legend: ✓ met · ✗ unmet · ◐ partial
 
 | Dim | Status | R1 Metric | R2 Algorithm | R3 Schema file | R4 Defaults | R5 Reference impl | Producer / Blocker |
 |-----|--------|-----------|--------------|----------------|-------------|-------------------|--------------------|
-| MT01 | incubating | ✓ Cyclomatic, cognitive, Halstead, MI | ✓ APS-V1-0001 `complexity.json` | ✗ `complexity.schema.json` not yet published | ✓ cited in catalog §2 | ✗ stub crate | Tier 1: schema file + non-stub MT01 crate |
-| MD01 | incubating | ✓ Ca, Ce, I, A, D | ◐ APS-V1-0001 `MartinMetrics::calculate()` exists; `coupling.json` producer not yet written | ✗ `coupling.schema.json` not yet published | ✓ cited (Martin 1994) | ✗ stub crate | Tier 1: flat `coupling.json` producer + schema + non-stub MD01 crate |
+| MT01 | **active** | ✓ Cyclomatic, cognitive, Halstead | ✓ APS-V1-0001 `metrics/functions.json` | ✓ `functions.schema.json` published | ✓ McCabe 1976, SonarSource 2017, Halstead 1977 | ✓ `architecture-fitness-mt01` crate | — |
+| MD01 | **active** | ✓ Ca, Ce, I, A, D | ✓ APS-V1-0001 `metrics/coupling.json` (LANG01-rust writer) | ✓ `coupling.schema.json` published | ✓ Martin 1994, 2003 | ✓ `architecture-fitness-md01` crate | — |
 | ST01 | incubating | ◐ Structural patterns ✓ · CK metrics ✗ | ◐ Structural ✓ · CK metrics need class-level AST (no producer) | ✗ no structural-rule or CK schemas published | ◐ Structural ✓ · CK ✗ | ✗ stub crate | CK metrics (DIT, CBO, LCOM) blocked on class-level analyzer. Structural subset can promote independently after schemas + non-stub crate. |
 | SC01 | incubating | ✓ CVSS severity, vulnerability count | ✗ Adapter framework declared but not invoked; no normalizers implemented | ✗ `adapter-output.schema.json` not published | ✓ CVSS thresholds cited | ✗ stub crate | Requires (a) adapter runner in engine, (b) `builtin:cargo-audit` normalizer, (c) adapter-output schema |
 | LG01 | incubating | ✓ License category (permissive/weak-copyleft/etc.) | ✗ Adapter framework not implemented | ✗ no adapter schema | ✓ category policy defaults | ✗ stub crate | Requires adapter runner + `builtin:cargo-deny` + schema |

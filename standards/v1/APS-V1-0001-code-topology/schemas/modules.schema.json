@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:apss:schema:aps-v1-0001:modules:1.0.0",
+  "title": "Topology Modules Artifact",
+  "description": "Per-module topology metrics produced by APS-V1-0001 Code Topology. Written to .topology/metrics/modules.json. Includes aggregate complexity and Martin package metrics (Ca/Ce/I/A/D).",
+  "type": "object",
+  "required": ["schema_version", "modules"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "SemVer of this artifact format. Consumers MUST select the matching schema version.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "modules": {
+      "type": "array",
+      "description": "All modules discovered by topology analysis.",
+      "items": { "$ref": "#/$defs/Module" }
+    }
+  },
+  "$defs": {
+    "Module": {
+      "type": "object",
+      "required": ["id", "name", "path", "languages", "metrics"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable unique module identifier (e.g. 'auth', 'crypto'). Used as entity key in fitness rules with scope='module'."
+        },
+        "name": {
+          "type": "string",
+          "description": "Simple module name, typically the final path segment."
+        },
+        "path": {
+          "type": "string",
+          "description": "File or directory path, relative to the analysis root."
+        },
+        "languages": {
+          "type": "array",
+          "description": "Languages represented in this module. Multiple values indicate polyglot modules.",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "metrics": { "$ref": "#/$defs/ModuleMetrics" }
+      }
+    },
+    "ModuleMetrics": {
+      "type": "object",
+      "required": [
+        "file_count",
+        "function_count",
+        "total_cyclomatic",
+        "avg_cyclomatic",
+        "total_cognitive",
+        "avg_cognitive",
+        "lines_of_code",
+        "martin"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "file_count": { "type": "integer", "minimum": 0 },
+        "function_count": { "type": "integer", "minimum": 0 },
+        "total_cyclomatic": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of per-function McCabe cyclomatic complexity within this module."
+        },
+        "avg_cyclomatic": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Arithmetic mean of per-function cyclomatic complexity. Zero when function_count == 0."
+        },
+        "total_cognitive": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sum of per-function SonarSource cognitive complexity."
+        },
+        "avg_cognitive": {
+          "type": "number",
+          "minimum": 0
+        },
+        "lines_of_code": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Physical lines of code in the module (all functions and top-level)."
+        },
+        "martin": { "$ref": "#/$defs/MartinMetrics" }
+      }
+    },
+    "MartinMetrics": {
+      "type": "object",
+      "description": "Martin's package-level dependency metrics (Martin 1994 / 2003). Ca and Ce are module-level counts; I, A, D are derived and bounded to [0,1].",
+      "required": ["ca", "ce", "instability", "abstractness", "distance_from_main_sequence"],
+      "additionalProperties": false,
+      "properties": {
+        "ca": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Afferent coupling: number of modules that depend on this module."
+        },
+        "ce": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Efferent coupling: number of modules this module depends on."
+        },
+        "instability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "I = Ce / (Ca + Ce). 0 = maximally stable, 1 = maximally unstable. Defaults to 0.5 when Ca+Ce=0."
+        },
+        "abstractness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "A = abstract_types / total_types. 0 = fully concrete, 1 = fully abstract. Defaults to 0 when total_types=0."
+        },
+        "distance_from_main_sequence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "D = |A + I - 1|. 0 = on the main sequence (balanced), 1 = zone of pain or zone of uselessness."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "1.0.0",
+      "modules": [
+        {
+          "id": "auth",
+          "name": "auth",
+          "path": "src/auth/",
+          "languages": ["rust"],
+          "metrics": {
+            "file_count": 1,
+            "function_count": 2,
+            "total_cyclomatic": 11,
+            "avg_cyclomatic": 5.5,
+            "total_cognitive": 16,
+            "avg_cognitive": 8.0,
+            "lines_of_code": 51,
+            "martin": {
+              "ca": 2,
+              "ce": 2,
+              "instability": 0.5,
+              "abstractness": 0.1,
+              "distance_from_main_sequence": 0.4
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,8 +1,7 @@
 # Example fitness.toml — Architecture Fitness Functions (APS-V1-0002)
 #
 # Multi-dimensional architectural governance configuration.
-# Evaluated against .topology/metrics/ artifacts produced by APS-V1-0001
-# and external tool output via adapters.
+# Evaluated against .topology/metrics/ artifacts produced by APS-V1-0001.
 #
 # Recommended defaults based on industry standards:
 #   - Cognitive complexity: 15 (SonarQube default)
@@ -42,8 +41,8 @@ LG01 = 0.15             # Legality
 id = "max-cognitive"
 name = "Maximum Cognitive Complexity (function)"
 dimension = "MT01"
-source = "metrics/complexity.json"
-field = "cognitive_complexity"
+source = "metrics/functions.json"
+field = "metrics.cognitive"
 max = 15
 scope = "function"
 severity = "error"
@@ -53,29 +52,19 @@ exclude = ["**/test_*", "**/tests/**"]
 id = "max-cyclomatic"
 name = "Maximum Cyclomatic Complexity (function)"
 dimension = "MT01"
-source = "metrics/complexity.json"
-field = "cyclomatic_complexity"
+source = "metrics/functions.json"
+field = "metrics.cyclomatic"
 max = 10
 scope = "function"
 severity = "error"
 exclude = ["**/test_*", "**/tests/**"]
 
 [[rules.threshold]]
-id = "max-loc"
-name = "Maximum Lines of Code per File"
-dimension = "MT01"
-source = "metrics/file_metrics.json"
-field = "lines_of_code"
-max = 500
-scope = "file"
-severity = "warning"
-
-[[rules.threshold]]
 id = "max-halstead-volume"
 name = "Maximum Halstead Volume (function)"
 dimension = "MT01"
-source = "metrics/complexity.json"
-field = "halstead_volume"
+source = "metrics/functions.json"
+field = "metrics.halstead.volume"
 max = 1000
 scope = "function"
 severity = "warning"
@@ -127,18 +116,3 @@ to = { path = "src/**" }
 circular = true
 severity = "error"
 
-# --- Adapters (uncomment when tools are available) ---
-
-# [[adapters]]
-# id = "cargo-audit"
-# dimension = "SC01"
-# command = "cargo audit --json"
-# output = "adapters/sc01/vulnerabilities.json"
-# normalizer = "builtin:cargo-audit"
-
-# [[adapters]]
-# id = "vsa"
-# dimension = "MD01"
-# input = ".vsa/analysis.json"
-# output = "adapters/md01/vsa-slices.json"
-# normalizer = "builtin:vsa"

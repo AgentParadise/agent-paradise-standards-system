@@ -537,11 +537,15 @@ root: src/syn_domain/contexts
             Some("slices".to_string())
         );
         assert_eq!(
-            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.artifacts.ports.ArtifactRepositoryPort"),
+            config.extract_layer(
+                "packages.syn-domain.src.syn_domain.contexts.artifacts.ports.ArtifactRepositoryPort"
+            ),
             Some("ports".to_string())
         );
         assert_eq!(
-            config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration._shared.value_objects"),
+            config.extract_layer(
+                "packages.syn-domain.src.syn_domain.contexts.orchestration._shared.value_objects"
+            ),
             Some("_shared".to_string())
         );
     }

@@ -930,19 +930,17 @@ fn dispatch_fitness_v2(
                 repo_root.join(path)
             };
 
-            let config_path =
-                config_path.map(|p| if p.is_absolute() { p } else { target.join(p) });
+            let config_path = config_path.map(|p| if p.is_absolute() { p } else { target.join(p) });
 
-            let validator = match architecture_fitness::FitnessValidator::load(
-                &target,
-                config_path.as_deref(),
-            ) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    return ExitCode::FAILURE;
-                }
-            };
+            let validator =
+                match architecture_fitness::FitnessValidator::load(&target, config_path.as_deref())
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                };
 
             // Attach previous report for trend comparison
             let validator = if let Some(prev_path) = previous_report_path {
@@ -1010,16 +1008,11 @@ fn dispatch_fitness_v2(
                         architecture_fitness::DimensionStatus::Active => {
                             let score = dim.score.unwrap_or(0.0);
                             let bar_len = (score * 20.0).round() as usize;
-                            let bar: String =
-                                "#".repeat(bar_len) + &"-".repeat(20 - bar_len);
+                            let bar: String = "#".repeat(bar_len) + &"-".repeat(20 - bar_len);
                             format!("[{bar}] {score:.0}%", score = score * 100.0)
                         }
-                        architecture_fitness::DimensionStatus::Skipped => {
-                            "skipped".to_string()
-                        }
-                        architecture_fitness::DimensionStatus::Disabled => {
-                            "disabled".to_string()
-                        }
+                        architecture_fitness::DimensionStatus::Skipped => "skipped".to_string(),
+                        architecture_fitness::DimensionStatus::Disabled => "disabled".to_string(),
                     };
                     println!("  {code} ({name}): {status}", name = dim.name);
                 }
@@ -1683,6 +1676,47 @@ total_dependencies = {}
     fs::write(
         output_path.join("metrics/modules.json"),
         serde_json::to_string_pretty(&modules_json).unwrap(),
+    )?;
+
+    // Write coupling.json — flat per-module Martin projection optimized for
+    // APS-V1-0002 fitness consumers (MD01). Schema:
+    // standards/v1/APS-V1-0001-code-topology/schemas/coupling.schema.json
+    let coupling_modules: Vec<serde_json::Value> = modules
+        .iter()
+        .map(|(module_id, _funcs)| {
+            let ca = afferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
+            let ce = efferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
+            let instability = if ca + ce > 0 {
+                ce as f64 / (ca + ce) as f64
+            } else {
+                0.5
+            };
+            let (abstract_count, total_types) =
+                module_types.get(module_id).copied().unwrap_or((0, 0));
+            let abstractness = if total_types > 0 {
+                abstract_count as f64 / total_types as f64
+            } else {
+                0.0
+            };
+            let distance = (instability + abstractness - 1.0).abs();
+            serde_json::json!({
+                "id": module_id,
+                "path": format!("{}/", module_id.replace("::", "/")),
+                "afferent_coupling": ca,
+                "efferent_coupling": ce,
+                "instability": instability,
+                "abstractness": abstractness,
+                "distance_from_main_sequence": distance,
+            })
+        })
+        .collect();
+    let coupling_json = serde_json::json!({
+        "schema_version": "1.0.0",
+        "modules": coupling_modules,
+    });
+    fs::write(
+        output_path.join("metrics/coupling.json"),
+        serde_json::to_string_pretty(&coupling_json).unwrap(),
     )?;
 
     // =========================================================================
