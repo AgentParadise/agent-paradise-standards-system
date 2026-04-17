@@ -73,16 +73,16 @@ Each dimension has two orthogonal classifications:
 
 | Substandard | Dimension | Status | Default | Notes |
 |-------------|-----------|--------|---------|-------|
-| APS-V1-0002.MT01 | Maintainability | active | default-enabled | Consumes APS-V1-0001 topology metrics |
-| APS-V1-0002.MD01 | Modularity & Coupling | active | default-enabled | Consumes APS-V1-0001 Martin metrics |
-| APS-V1-0002.ST01 | Structural Integrity | incubating | default-enabled | Structural patterns active; CK metrics require class-level analyzer |
+| APS-V1-0002.MT01 | Maintainability | incubating | default-enabled | Metrics computed by APS-V1-0001; awaits artifact schemas + reference impl (Tier 1) |
+| APS-V1-0002.MD01 | Modularity & Coupling | incubating | default-enabled | Martin metrics computed by APS-V1-0001; awaits `coupling.json` producer + schemas + reference impl (Tier 1) |
+| APS-V1-0002.ST01 | Structural Integrity | incubating | default-enabled | Structural patterns implementable now; CK metrics require class-level analyzer |
 | APS-V1-0002.SC01 | Security | incubating | default-enabled | Awaits adapter framework + `builtin:cargo-audit` |
 | APS-V1-0002.LG01 | Legality | incubating | default-enabled | Awaits adapter framework + `builtin:cargo-deny` |
 | APS-V1-0002.AC01 | Accessibility | incubating | opt-in | Awaits adapter framework |
 | APS-V1-0002.PF01 | Performance | incubating | opt-in | Awaits adapter framework |
 | APS-V1-0002.AV01 | Availability | incubating | opt-in | Awaits adapter framework |
 
-Current implementation status per dimension is disclosed in [Appendix D](#appendix-d-current-implementation-status).
+**No dimension is currently `active`.** Current implementation status per dimension is disclosed in [Appendix D](#appendix-d-current-implementation-status). Promotion to `active` is gated on R1–R5 (§3.3) including the schema requirement (§3.5).
 
 ### 1.5 Promotion Lineage
 
@@ -162,8 +162,8 @@ Every dimension is identified by a 4-character code and governed by a substandar
 
 | Code | Dimension | Characteristics Protected | Data Source | Status | Default |
 |------|-----------|--------------------------|-------------|--------|---------|
-| MT01 | Maintainability | Readability, testability, complexity | `.topology/metrics/` | active | default-enabled |
-| MD01 | Modularity & Coupling | Separation of concerns, dependency structure | `.topology/metrics/` | active | default-enabled |
+| MT01 | Maintainability | Readability, testability, complexity | `.topology/metrics/` | incubating | default-enabled |
+| MD01 | Modularity & Coupling | Separation of concerns, dependency structure | `.topology/metrics/` | incubating | default-enabled |
 | ST01 | Structural Integrity | Design patterns, class design, layer enforcement | AST analysis, structural checks | incubating | default-enabled |
 | SC01 | Security | Vulnerability freedom, supply chain safety | Security scanner output | incubating | default-enabled |
 | LG01 | Legality | License compliance, IP safety | License scanner output | incubating | default-enabled |
@@ -190,7 +190,7 @@ A dimension MUST NOT be declared `active` in this standard unless **all five** o
 |---|-------------|-------------|
 | **R1** | **Objective metric definition** | Every rule enforced by the dimension MUST target a metric with a formal, unambiguous definition (mathematical formula or algorithmic specification) documented in [`02_metrics-catalog.md`](./02_metrics-catalog.md). Free-text "good design" criteria are NOT acceptable. |
 | **R2** | **Computable algorithm** | A concrete, deterministic, automated producer MUST exist for every metric the dimension enforces. The producer MUST be one of: (a) a native APS standard (e.g., APS-V1-0001 topology), or (b) a registered adapter with an implemented normalizer. Human judgment calls are not acceptable inputs. |
-| **R3** | **Artifact schema** | The JSON artifact(s) the dimension consumes MUST have a documented schema under the substandard's `schemas/` directory. The schema MUST specify the scope (function/file/module/class/slice), the metric field names, and their value domains. |
+| **R3** | **Artifact schema** | Every JSON artifact the dimension **consumes or produces** MUST be described by a [JSON Schema](https://json-schema.org/) file on disk, published alongside the producing standard. See §3.5 for canonical paths, versioning, and compatibility rules. A prose description in the spec is NOT sufficient — the schema MUST be machine-readable so external tools can validate, transform, or visualize artifacts without reading APSS source code. |
 | **R4** | **Recommended default thresholds with citations** | The substandard MUST publish recommended default values for every enforced metric, each with a citation to its source (original author, industry benchmark, or explicit APSS consensus). Defaults without rationale are NOT acceptable. |
 | **R5** | **Reference implementation** | The substandard crate MUST contain non-stub Rust code that registers its default rules, validates its config, and verifies that its required artifacts exist. A substandard whose `src/lib.rs` is a `Phase 2` stub MUST NOT be declared `active`. |
 
@@ -207,6 +207,75 @@ Each dimension version follows SemVer independently. The status field is normati
 | `deprecated` | Scheduled for removal in a future major version. | Rules continue to run but produce a deprecation warning. New projects SHOULD NOT adopt deprecated dimensions. |
 
 Implementers MUST emit the diagnostic code `INCUBATING_DIMENSION_ERROR_DOWNGRADED` (§12) for every rule whose configured severity was downgraded due to incubating status. This makes the soft enforcement visible rather than silent — users know exactly which assertions are advisory and why.
+
+### 3.5 Artifact Contracts
+
+Artifacts are the public contract of an APS standard. A standard is only as useful as the artifacts it produces, and an artifact is only durable as a contract if it has a machine-readable schema. This section specifies how schemas are authored, located, versioned, and enforced.
+
+#### 3.5.1 Scope
+
+Every JSON artifact read or written by a standard or substandard — topology metrics, fitness reports, adapter outputs, exception files — MUST have a corresponding [JSON Schema](https://json-schema.org/) file (Draft 2020-12 or later). This includes:
+
+- **Input artifacts** the standard consumes from upstream producers
+- **Output artifacts** the standard emits for downstream consumers
+- **Intermediate artifacts** (e.g., normalized adapter output) passed between substandards
+
+A standard MAY reuse a schema published by an upstream standard rather than duplicate it. The reuse MUST be explicit via JSON Schema `$ref`.
+
+#### 3.5.2 Canonical Paths
+
+Schemas MUST live under the owning standard's or substandard's `schemas/` directory:
+
+```
+standards/v1/APS-V1-NNNN-<slug>/schemas/<artifact>.schema.json
+standards/v1/APS-V1-NNNN-<slug>/substandards/NNNN-XXNN-<slug>/schemas/<artifact>.schema.json
+```
+
+Schema files MUST be discoverable by glob (`**/schemas/*.schema.json`). Tool authors can rely on this convention to auto-load every contract in the repository.
+
+Canonical examples (load-bearing for this standard):
+
+| Artifact | Canonical schema path | Owner |
+|----------|----------------------|-------|
+| `.topology/metrics/coupling.json` | `APS-V1-0001-code-topology/schemas/coupling.schema.json` | APS-V1-0001 |
+| `.topology/metrics/complexity.json` | `APS-V1-0001-code-topology/schemas/complexity.schema.json` | APS-V1-0001 |
+| `.topology/metrics/modules.json` | `APS-V1-0001-code-topology/schemas/modules.schema.json` | APS-V1-0001 |
+| `fitness.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-config.schema.json` | APS-V1-0002 |
+| `fitness-exceptions.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-exceptions.schema.json` | APS-V1-0002 |
+| `fitness-report.json` | `APS-V1-0002-architecture-fitness/schemas/fitness-report.schema.json` | APS-V1-0002 |
+| Adapter-normalized output | `APS-V1-0002-architecture-fitness/schemas/adapter-output.schema.json` | APS-V1-0002 |
+
+#### 3.5.3 Schema Requirements
+
+Every schema MUST declare:
+
+- `"$schema"` — explicit JSON Schema dialect
+- `"$id"` — stable URI identifying the artifact
+- `"title"` and `"description"` — human-readable
+- `"type"` and `"properties"` — strongly typed; `"additionalProperties": false` at the root unless the schema explicitly documents forward-compatible extension points
+- A top-level `"version"` property on the artifact itself, matching SemVer
+
+Schemas SHOULD include examples (`"examples"`) and reference the source spec section.
+
+#### 3.5.4 Versioning and Compatibility
+
+- Schemas follow SemVer independently from the owning standard
+- A **minor** or **patch** bump MUST remain backward-compatible (additive only; no field removals, no type narrowing, no enum shrinking)
+- A **major** bump MAY break compatibility and MUST ship alongside an ADR describing migration
+- Artifacts MUST carry a `"version"` field so validators can select the correct schema
+- Consumers MUST validate artifacts against the schema version recorded in the artifact, not against an assumed version
+
+#### 3.5.5 Validation and CI
+
+Producers MUST validate every artifact they write against its schema before emitting it. Failure to validate MUST abort the write and surface the error. This prevents a broken producer from poisoning downstream consumers.
+
+The APSS repository SHOULD include a CI check that, for every `*.schema.json` under `**/schemas/`, parses the file and validates it against JSON Schema Draft 2020-12 meta-schema. Orphaned artifacts (a producer that writes a file with no matching schema) are a build failure.
+
+#### 3.5.6 Why this is normative, not a style preference
+
+Schemas are the mechanism that converts an APS standard from "a Rust crate with opinions" into **a tool-neutral contract that any ecosystem can consume**. A Grafana dashboard, an IDE plugin, a Python reporting script, a GitHub Action, or a different language's adapter can all build against the schemas without coupling to APSS internals or reading Rust source code. This is what makes centralized architectural governance (the stated goal of this standard) practical rather than theoretical.
+
+Without schemas, each consumer reverse-engineers the artifact shape from examples; shapes drift; contracts rot silently. With schemas, the contract is explicit, versioned, and enforceable. This is why R3 (§3.3) is non-negotiable for active dimensions.
 
 ---
 
@@ -957,27 +1026,39 @@ This appendix is **normative disclosure**. It documents exactly which promotion 
 
 Legend: ✓ met · ✗ unmet · ◐ partial
 
-| Dim | Status | R1 Metric | R2 Algorithm | R3 Schema | R4 Defaults | R5 Reference impl | Producer / Blocker |
-|-----|--------|-----------|--------------|-----------|-------------|-------------------|--------------------|
-| MT01 | active | ✓ Cyclomatic, cognitive, Halstead, MI | ✓ APS-V1-0001 `complexity.json` | ✓ topology artifact schema | ✓ cited in catalog §2 | ✓ rules crate wires to topology | Consumes APS-V1-0001 |
-| MD01 | active | ✓ Ca, Ce, I, A, D | ✓ APS-V1-0001 `MartinMetrics::calculate()` | ✓ topology artifact schema | ✓ cited (Martin 1994) | ✓ rules crate wires to topology | Consumes APS-V1-0001 coupling output |
-| ST01 | incubating | ◐ Structural patterns ✓ · CK metrics ✗ | ◐ Structural ✓ · CK needs class-level AST (no producer) | ◐ Structural ✓ · CK ✗ | ◐ Structural ✓ · CK ✗ | ✗ stub crate | CK metrics (DIT, CBO, LCOM) require language-specific class analyzer — not yet produced |
-| SC01 | incubating | ✓ CVSS severity, vulnerability count | ✗ Adapter framework declared but not invoked; no normalizers implemented | ✓ documented adapter schema | ✓ CVSS thresholds cited | ✗ stub crate | Requires (a) adapter runner in engine, (b) `builtin:cargo-audit` normalizer |
-| LG01 | incubating | ✓ License category (permissive/weak-copyleft/etc.) | ✗ Adapter framework not implemented | ✓ documented adapter schema | ✓ category policy defaults | ✗ stub crate | Requires adapter runner + `builtin:cargo-deny` normalizer |
-| AC01 | incubating | ✓ WCAG level (A/AA/AAA), violation count | ✗ Adapter framework not implemented | ✓ documented adapter schema | ✓ WCAG 2.1 AA defaults | ✗ stub crate | Requires adapter runner + axe-core / pa11y normalizer |
-| PF01 | incubating | ✓ Latency (p50/p95/p99), throughput | ✗ Adapter framework not implemented | ✓ documented adapter schema | ◐ Defaults are project-specific; no universal citation | ✗ stub crate | Requires adapter runner + k6 / Criterion normalizer |
-| AV01 | incubating | ✓ SLO, error budget, MTTR | ✗ Adapter framework not implemented | ✓ documented adapter schema | ◐ SLO targets are project-specific | ✗ stub crate | Requires adapter runner + monitor-output normalizer |
+| Dim | Status | R1 Metric | R2 Algorithm | R3 Schema file | R4 Defaults | R5 Reference impl | Producer / Blocker |
+|-----|--------|-----------|--------------|----------------|-------------|-------------------|--------------------|
+| MT01 | incubating | ✓ Cyclomatic, cognitive, Halstead, MI | ✓ APS-V1-0001 `complexity.json` | ✗ `complexity.schema.json` not yet published | ✓ cited in catalog §2 | ✗ stub crate | Tier 1: schema file + non-stub MT01 crate |
+| MD01 | incubating | ✓ Ca, Ce, I, A, D | ◐ APS-V1-0001 `MartinMetrics::calculate()` exists; `coupling.json` producer not yet written | ✗ `coupling.schema.json` not yet published | ✓ cited (Martin 1994) | ✗ stub crate | Tier 1: flat `coupling.json` producer + schema + non-stub MD01 crate |
+| ST01 | incubating | ◐ Structural patterns ✓ · CK metrics ✗ | ◐ Structural ✓ · CK metrics need class-level AST (no producer) | ✗ no structural-rule or CK schemas published | ◐ Structural ✓ · CK ✗ | ✗ stub crate | CK metrics (DIT, CBO, LCOM) blocked on class-level analyzer. Structural subset can promote independently after schemas + non-stub crate. |
+| SC01 | incubating | ✓ CVSS severity, vulnerability count | ✗ Adapter framework declared but not invoked; no normalizers implemented | ✗ `adapter-output.schema.json` not published | ✓ CVSS thresholds cited | ✗ stub crate | Requires (a) adapter runner in engine, (b) `builtin:cargo-audit` normalizer, (c) adapter-output schema |
+| LG01 | incubating | ✓ License category (permissive/weak-copyleft/etc.) | ✗ Adapter framework not implemented | ✗ no adapter schema | ✓ category policy defaults | ✗ stub crate | Requires adapter runner + `builtin:cargo-deny` + schema |
+| AC01 | incubating | ✓ WCAG level (A/AA/AAA), violation count | ✗ Adapter framework not implemented | ✗ no adapter schema | ✓ WCAG 2.1 AA defaults | ✗ stub crate | Requires adapter runner + axe-core / pa11y normalizer + schema |
+| PF01 | incubating | ✓ Latency (p50/p95/p99), throughput | ✗ Adapter framework not implemented | ✗ no adapter schema | ◐ Defaults are project-specific; no universal citation | ✗ stub crate | Requires adapter runner + k6 / Criterion normalizer + schema |
+| AV01 | incubating | ✓ SLO, error budget, MTTR | ✗ Adapter framework not implemented | ✗ no adapter schema | ◐ SLO targets are project-specific | ✗ stub crate | Requires adapter runner + monitor-output normalizer + schema |
 
 ### D.1 Promotion Roadmap
 
-The ordering below reflects the shortest path to expanding enforceable governance:
+The ordering below reflects the shortest path to expanding enforceable governance. Every promotion to `active` MUST satisfy all of R1–R5, including a published JSON Schema file (§3.5) for every artifact the dimension consumes or produces.
 
-1. **MT01, MD01 → confirm active** — both are wired to APS-V1-0001 outputs. Verify end-to-end with an example project and freeze.
-2. **ST01 structural patterns → split the dimension** — structural rules (forbidden_import, required_import, layer_enforcement) independently satisfy R1–R5 and should be promoted to `active` as a scoped subset. The CK metrics portion remains `incubating`.
-3. **Adapter framework → implement** — the one-time infrastructure cost that unblocks SC01, LG01, AC01, PF01, AV01. Requires: `run_adapters()` invocation in the engine, normalizer registry, failure path when `ADAPTER_NOT_FOUND`.
-4. **SC01 → promote after `builtin:cargo-audit`** — highest security value, concrete CVSS thresholds, established tool. First adapter-backed dimension to reach `active`.
-5. **LG01 → promote after `builtin:cargo-deny`** — piggybacks on the same tool family as SC01.
-6. **AC01 / PF01 / AV01 → project-by-project** — remain `incubating` as defaults. Promotion to `active` requires either a per-project ADR (for project-specific defaults) or an industry-wide citation for the normalizer's output.
+1. **Tier 1 — Promote MT01 and MD01** (shortest path from incubating → active)
+   - In APS-V1-0001: publish `schemas/coupling.schema.json`, `schemas/complexity.schema.json`, `schemas/modules.schema.json`
+   - In APS-V1-0001 LANG01-rust: add a flat `coupling.json` writer conforming to the new schema (Martin metrics are already computed)
+   - In APS-V1-0002: publish `schemas/fitness-config.schema.json`, `schemas/fitness-exceptions.schema.json`, `schemas/fitness-report.schema.json`
+   - Replace MT01 and MD01 stub crates with reference implementations that register default rules and validate artifact presence
+   - Wire strict-artifact enforcement in the engine: when an `active` dimension's required artifact is missing, emit `PROMOTION_REQUIREMENT_UNMET` rather than silent `Skip`
+   - Ship `INTEGRATION.md` showing end-to-end pipeline (topology → fitness → CI)
+   - Flip MT01 and MD01 to `active` in §1.4, §3.1, and Appendix D. Require an ADR documenting R1–R5 satisfaction.
+
+2. **Tier 2 — Promote ST01 structural subset** — structural rules (forbidden_import, required_import, layer_enforcement) independently satisfy R1–R5 once their schema and reference implementation ship. Promote as a scoped subset; CK metrics remain `incubating`.
+
+3. **Tier 3 — Adapter framework** — one-time infrastructure that unblocks SC01, LG01, AC01, PF01, AV01. Requires: `run_adapters()` invocation in the engine, normalizer registry, `ADAPTER_NOT_FOUND` failure path, and `adapter-output.schema.json` published under APS-V1-0002.
+
+4. **Tier 4 — Promote SC01** — after `builtin:cargo-audit` normalizer ships. Highest security value; concrete CVSS thresholds; established tool. First adapter-backed dimension to reach `active`.
+
+5. **Tier 5 — Promote LG01** — after `builtin:cargo-deny`. Piggybacks on the same tool family as SC01.
+
+6. **Tier 6 — AC01 / PF01 / AV01** — project-by-project. Promotion to `active` requires either a per-project ADR (for project-specific defaults) or an industry-wide citation for the normalizer's output.
 
 ### D.2 Auditing This Appendix
 
