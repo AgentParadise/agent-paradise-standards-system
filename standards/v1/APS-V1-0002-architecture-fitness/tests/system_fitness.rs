@@ -1,8 +1,8 @@
 //! Tests for system-level fitness scoring, weight redistribution, and trend tracking.
 
 use architecture_fitness::{
-    DimensionResult, DimensionStatus, FitnessReport, FitnessValidator, ReportSummary,
-    SystemFitnessResult, TrendDirection,
+    DimensionResult, DimensionStatus, Enforcement, FitnessReport, FitnessValidator,
+    PromotionStatus, ReportSummary, SystemFitnessResult, TrendDirection,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -402,12 +402,15 @@ fn build_mock_report(system_score: f64, dim_scores: &[(&str, f64)]) -> FitnessRe
             code.to_string(),
             DimensionResult {
                 name: code.to_string(),
-                status: DimensionStatus::Active,
+                runtime_status: DimensionStatus::Evaluated,
+                promotion_status: PromotionStatus::Active,
+                enforcement: Enforcement::Enforced,
                 score: Some(score),
                 rules_evaluated: 1,
                 rules_passed: 1,
                 rules_failed: 0,
                 rules_warned: 0,
+                rules_downgraded: 0,
                 total_violations: 0,
                 excepted_violations: 0,
             },
@@ -415,7 +418,7 @@ fn build_mock_report(system_score: f64, dim_scores: &[(&str, f64)]) -> FitnessRe
     }
 
     FitnessReport {
-        version: "1.0.0".to_string(),
+        schema_version: "1.0.0".to_string(),
         timestamp: "2026-04-14T00:00:00Z".to_string(),
         summary: ReportSummary::default(),
         dimensions,

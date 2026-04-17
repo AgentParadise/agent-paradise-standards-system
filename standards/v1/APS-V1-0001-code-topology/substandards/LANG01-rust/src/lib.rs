@@ -26,6 +26,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{self, Expr, Item, Stmt};
 use thiserror::Error;
@@ -438,7 +439,7 @@ impl RustAdapter {
             name,
             module: module_path.to_string(),
             file: file_path.to_path_buf(),
-            line: 0, // Would need span info
+            line: func.sig.fn_token.span().start().line.max(1),
             cyclomatic: visitor.cyclomatic,
             cognitive: visitor.cognitive,
             halstead,
@@ -469,7 +470,7 @@ impl RustAdapter {
             name,
             module: module_path.to_string(),
             file: file_path.to_path_buf(),
-            line: 0,
+            line: method.sig.fn_token.span().start().line.max(1),
             cyclomatic: visitor.cyclomatic,
             cognitive: visitor.cognitive,
             halstead,

@@ -1004,8 +1004,8 @@ fn dispatch_fitness_v2(
                 let mut dims: Vec<_> = report.dimensions.iter().collect();
                 dims.sort_by_key(|(k, _)| (*k).clone());
                 for (code, dim) in &dims {
-                    let status = match dim.status {
-                        architecture_fitness::DimensionStatus::Active => {
+                    let status = match dim.runtime_status {
+                        architecture_fitness::DimensionStatus::Evaluated => {
                             let score = dim.score.unwrap_or(0.0);
                             let bar_len = (score * 20.0).round() as usize;
                             let bar: String = "#".repeat(bar_len) + &"-".repeat(20 - bar_len);

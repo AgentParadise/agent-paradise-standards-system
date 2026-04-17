@@ -76,7 +76,7 @@ scope = "file"
     let report = validator.validate().unwrap();
 
     let mt01 = &report.dimensions["MT01"];
-    assert_eq!(mt01.status, DimensionStatus::Active);
+    assert_eq!(mt01.runtime_status, DimensionStatus::Evaluated);
     assert_eq!(mt01.rules_evaluated, 2);
     assert_eq!(mt01.rules_passed, 1); // max-loc passes
     assert_eq!(mt01.rules_failed, 1); // max-cc fails
@@ -143,12 +143,12 @@ AV01 = false
 
     // AC01 is disabled (opt-in, no reason needed)
     let ac01 = &report.dimensions["AC01"];
-    assert_eq!(ac01.status, DimensionStatus::Disabled);
+    assert_eq!(ac01.runtime_status, DimensionStatus::Disabled);
     assert_eq!(ac01.score, None);
 
     // MT01 is enabled by default, no rules → active with score 1.0
     let mt01 = &report.dimensions["MT01"];
-    assert_eq!(mt01.status, DimensionStatus::Active);
+    assert_eq!(mt01.runtime_status, DimensionStatus::Evaluated);
     assert_eq!(mt01.score, Some(1.0));
 }
 
@@ -179,7 +179,7 @@ scope = "module"
     let report = validator.validate().unwrap();
 
     let st01 = &report.dimensions["ST01"];
-    assert_eq!(st01.status, DimensionStatus::Skipped);
+    assert_eq!(st01.runtime_status, DimensionStatus::Skipped);
     assert_eq!(st01.score, None);
     assert_eq!(st01.rules_evaluated, 0);
 }
@@ -281,7 +281,10 @@ scope = "function"
     assert_eq!(report.results[0].dimension, None);
 
     // Default-enabled dimensions are active (no rules assigned, so score=1.0)
-    assert_eq!(report.dimensions["MT01"].status, DimensionStatus::Active);
+    assert_eq!(
+        report.dimensions["MT01"].runtime_status,
+        DimensionStatus::Evaluated
+    );
     assert_eq!(report.dimensions["MT01"].score, Some(1.0));
 
     // Summary includes skipped count
@@ -368,6 +371,9 @@ scope = "function"
 
     // Roundtrip
     let parsed: architecture_fitness::FitnessReport = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed.dimensions["MT01"].status, DimensionStatus::Active);
+    assert_eq!(
+        parsed.dimensions["MT01"].runtime_status,
+        DimensionStatus::Evaluated
+    );
     assert_eq!(parsed.dimensions["MT01"].score, Some(1.0));
 }

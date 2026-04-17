@@ -478,7 +478,7 @@ pub struct Exception {
 /// Fitness validation report.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FitnessReport {
-    pub version: String,
+    pub schema_version: String,
     pub timestamp: String,
     pub summary: ReportSummary,
     /// Per-dimension scoring results.
@@ -567,28 +567,55 @@ pub enum StaleReason {
 
 // ─── Dimension Results ─────────────────────────────────────────────────────
 
-/// Status of a dimension in the report.
+/// Runtime status of a dimension in the report.
+///
+/// Distinct from promotion status (§3.4): runtime describes what happened
+/// during *this run*, promotion describes the dimension's enforcement posture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DimensionStatus {
     /// Dimension is enabled and has evaluated rules or no rules needed.
-    Active,
+    Evaluated,
     /// Dimension is enabled but all rules were skipped (missing artifacts).
     Skipped,
     /// Dimension is disabled in config.
     Disabled,
 }
 
+/// Whether a dimension's rules are strictly enforced or advisory-only.
+///
+/// Derived from promotion status: `Active` → `Enforced`, `Incubating`/
+/// `Deprecated` → `Advisory` (error severities downgraded to warning per §3.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Enforcement {
+    Enforced,
+    Advisory,
+}
+
+impl From<PromotionStatus> for Enforcement {
+    fn from(p: PromotionStatus) -> Self {
+        match p {
+            PromotionStatus::Active => Enforcement::Enforced,
+            PromotionStatus::Incubating | PromotionStatus::Deprecated => Enforcement::Advisory,
+        }
+    }
+}
+
 /// Per-dimension scoring result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DimensionResult {
     pub name: String,
-    pub status: DimensionStatus,
+    pub runtime_status: DimensionStatus,
+    pub promotion_status: PromotionStatus,
+    pub enforcement: Enforcement,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,
     pub rules_evaluated: usize,
     pub rules_passed: usize,
     pub rules_failed: usize,
     pub rules_warned: usize,
+    pub rules_downgraded: usize,
     pub total_violations: usize,
     pub excepted_violations: usize,
 }
@@ -829,7 +856,7 @@ impl FitnessValidator {
         let system_fitness = self.compute_system_fitness(&dimensions);
 
         Ok(FitnessReport {
-            version: "1.0.0".to_string(),
+            schema_version: "1.0.0".to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
             summary,
             dimensions,
@@ -1273,7 +1300,7 @@ impl FitnessValidator {
         // Collect active dimensions with scores
         let active: Vec<(&str, f64)> = dimensions
             .iter()
-            .filter(|(_, d)| d.status == DimensionStatus::Active)
+            .filter(|(_, d)| d.runtime_status == DimensionStatus::Evaluated)
             .filter_map(|(code, d)| d.score.map(|s| (code.as_str(), s)))
             .collect();
 
@@ -1311,10 +1338,23 @@ impl FitnessValidator {
                 return None;
             }
 
-            let weights: HashMap<String, f64> = active_weights
-                .iter()
-                .map(|(code, w)| (code.to_string(), w / sum))
-                .collect();
+            // Skip division when nothing was redistributed: dividing by a sum
+            // that is arithmetically 1.0 but numerically drifted (e.g. 0.4 +
+            // 0.3 + 0.1 + 0.1 + 0.1 = 0.9999…) produces weights like
+            // 0.4000000000000001, making reports depend on HashMap iteration
+            // order. When every configured dimension is active, use the raw
+            // configured weights verbatim.
+            let weights: HashMap<String, f64> = if skipped_codes.is_empty() {
+                active_weights
+                    .iter()
+                    .map(|(code, w)| (code.to_string(), *w))
+                    .collect()
+            } else {
+                active_weights
+                    .iter()
+                    .map(|(code, w)| (code.to_string(), w / sum))
+                    .collect()
+            };
 
             let note = if !skipped_codes.is_empty() {
                 Some(format!(
@@ -1401,17 +1441,23 @@ impl FitnessValidator {
 
         // Initialize all enabled dimensions
         for &code in DimensionCode::ALL {
+            let promotion = code.promotion_status();
+            let enforcement = Enforcement::from(promotion);
+
             if !self.config.dimensions.is_enabled(code) {
                 dimensions.insert(
                     code.as_str().to_string(),
                     DimensionResult {
                         name: code.name().to_string(),
-                        status: DimensionStatus::Disabled,
+                        runtime_status: DimensionStatus::Disabled,
+                        promotion_status: promotion,
+                        enforcement,
                         score: None,
                         rules_evaluated: 0,
                         rules_passed: 0,
                         rules_failed: 0,
                         rules_warned: 0,
+                        rules_downgraded: 0,
                         total_violations: 0,
                         excepted_violations: 0,
                     },
@@ -1426,17 +1472,20 @@ impl FitnessValidator {
                 .collect();
 
             if dim_results.is_empty() {
-                // Enabled but no rules — active with perfect score
+                // Enabled but no rules — evaluated with perfect score
                 dimensions.insert(
                     code.as_str().to_string(),
                     DimensionResult {
                         name: code.name().to_string(),
-                        status: DimensionStatus::Active,
+                        runtime_status: DimensionStatus::Evaluated,
+                        promotion_status: promotion,
+                        enforcement,
                         score: Some(1.0),
                         rules_evaluated: 0,
                         rules_passed: 0,
                         rules_failed: 0,
                         rules_warned: 0,
+                        rules_downgraded: 0,
                         total_violations: 0,
                         excepted_violations: 0,
                     },
@@ -1485,22 +1534,25 @@ impl FitnessValidator {
                 }
             };
 
-            let status = if all_skipped {
+            let runtime_status = if all_skipped {
                 DimensionStatus::Skipped
             } else {
-                DimensionStatus::Active
+                DimensionStatus::Evaluated
             };
 
             dimensions.insert(
                 code.as_str().to_string(),
                 DimensionResult {
                     name: code.name().to_string(),
-                    status,
+                    runtime_status,
+                    promotion_status: promotion,
+                    enforcement,
                     score,
                     rules_evaluated,
                     rules_passed,
                     rules_failed,
                     rules_warned,
+                    rules_downgraded: 0,
                     total_violations,
                     excepted_violations,
                 },

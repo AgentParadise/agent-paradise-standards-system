@@ -68,7 +68,6 @@
         "runtime_status",
         "promotion_status",
         "enforcement",
-        "score",
         "rules_evaluated",
         "rules_passed",
         "rules_failed",
@@ -77,6 +76,7 @@
         "total_violations",
         "excepted_violations"
       ],
+      "description": "Per-dimension result. `score` is omitted when runtime_status is 'disabled' (or 'skipped' with no evaluable rules) — no denominator exists.",
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string" },
@@ -178,7 +178,12 @@
           "type": "array",
           "items": { "$ref": "#/$defs/Violation" }
         },
-        "exceptions_used": { "type": "integer", "minimum": 0 }
+        "exceptions_used": { "type": "integer", "minimum": 0 },
+        "total_entities": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of entities evaluated by this rule — denominator for dimension scoring. Omitted when the rule was skipped before any entity scan."
+        }
       }
     },
     "Violation": {
