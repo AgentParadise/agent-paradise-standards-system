@@ -1,0 +1,20 @@
+[package]
+name = "architecture-fitness"
+version = "1.0.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Architecture Fitness Functions — comprehensive architectural governance framework"
+
+[dependencies]
+aps-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+glob.workspace = true
+thiserror.workspace = true
+chrono = "0.4"
+
+[dev-dependencies]
+tempfile = "3.14"

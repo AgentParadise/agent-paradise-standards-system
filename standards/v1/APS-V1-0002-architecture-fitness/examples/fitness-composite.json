@@ -1,0 +1,42 @@
+{
+  "_comment": "Example system-level fitness composite — shows how dimension scores aggregate into a single architectural health assessment",
+  "system_fitness": {
+    "score": 0.78,
+    "min_score": 0.70,
+    "passing": true,
+    "weights_used": {
+      "MT01": 0.25,
+      "MD01": 0.25,
+      "ST01": 0.20,
+      "SC01": 0.15,
+      "LG01": 0.15
+    },
+    "calculation": {
+      "MT01": { "score": 0.92, "weight": 0.25, "contribution": 0.230 },
+      "MD01": { "score": 0.71, "weight": 0.25, "contribution": 0.178 },
+      "ST01": { "score": 0.85, "weight": 0.20, "contribution": 0.170 },
+      "SC01": { "score": 0.60, "weight": 0.15, "contribution": 0.090 },
+      "LG01": { "score": 0.95, "weight": 0.15, "contribution": 0.143 }
+    },
+    "trend": {
+      "previous_score": 0.81,
+      "delta": -0.03,
+      "direction": "declining",
+      "dimension_deltas": {
+        "MT01": { "previous": 0.89, "current": 0.92, "delta": 0.03, "direction": "improving" },
+        "MD01": { "previous": 0.76, "current": 0.71, "delta": -0.05, "direction": "declining" },
+        "ST01": { "previous": 0.85, "current": 0.85, "delta": 0.00, "direction": "stable" },
+        "SC01": { "previous": 0.60, "current": 0.60, "delta": 0.00, "direction": "stable" },
+        "LG01": { "previous": 0.95, "current": 0.95, "delta": 0.00, "direction": "stable" }
+      }
+    },
+    "tradeoff_analysis": {
+      "insight": "Maintainability improved (+0.03) likely due to complexity refactoring, but modularity regressed (-0.05) — new dependencies added between modules. Security remains the weakest dimension at 0.60. Net system score declined by 0.03.",
+      "recommendations": [
+        "Investigate MD01 regression — check coupling changes in recent commits",
+        "SC01 at 0.60 is below healthy threshold — prioritize dependency vulnerability resolution",
+        "MT01 improvement validates recent refactoring effort"
+      ]
+    }
+  }
+}

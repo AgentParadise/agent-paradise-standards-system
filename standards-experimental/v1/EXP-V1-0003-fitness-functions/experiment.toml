@@ -15,7 +15,7 @@ aps_major = "v1"
 maintainers = ["AgentParadise"]
 
 # Promotion metadata (added after promotion, do not edit manually)
-# [promotion]
-# promoted_to = "APS-V1-XXXX"
-# promoted_at = "YYYY-MM-DD"
+[promotion]
+promoted_to = "APS-V1-0002"
+promoted_at = "2026-04-15"
 

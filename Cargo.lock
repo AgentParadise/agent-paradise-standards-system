@@ -76,6 +76,7 @@ version = "0.1.2"
 dependencies = [
  "aps-core",
  "aps-v1-0000-meta",
+ "architecture-fitness",
  "chrono",
  "clap",
  "code-topology",
@@ -129,6 +130,100 @@ version = "1.0.0"
 dependencies = [
  "aps-core",
  "regex",
+]
+
+[[package]]
+name = "architecture-fitness"
+version = "1.0.0"
+dependencies = [
+ "aps-core",
+ "chrono",
+ "glob",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "architecture-fitness-ac01"
+version = "1.0.0"
+dependencies = [
+ "architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "architecture-fitness-av01"
+version = "1.0.0"
+dependencies = [
+ "architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "architecture-fitness-lg01"
+version = "1.0.0"
+dependencies = [
+ "architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "architecture-fitness-md01"
+version = "1.0.0"
+dependencies = [
+ "architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "architecture-fitness-mt01"
+version = "1.0.0"
+dependencies = [
+ "architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "architecture-fitness-pf01"
+version = "1.0.0"
+dependencies = [
+ "architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "architecture-fitness-sc01"
+version = "1.0.0"
+dependencies = [
+ "architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "architecture-fitness-st01"
+version = "1.0.0"
+dependencies = [
+ "architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

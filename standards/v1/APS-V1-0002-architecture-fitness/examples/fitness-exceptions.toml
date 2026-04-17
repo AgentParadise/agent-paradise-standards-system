@@ -1,0 +1,34 @@
+# Example fitness-exceptions.toml — Tracked Violations
+#
+# Each exception represents acknowledged technical debt with a mandatory
+# issue reference. Exception budgets can only shrink over time (ratchet).
+#
+# Structure: [rule-id."entity-path"]
+
+# --- MT01: Maintainability Exceptions ---
+
+[max-cyclomatic."src/orchestration/engine.py::execute"]
+value = 42
+issue = "#138"
+
+[max-cyclomatic."src/setup.py::configure_workspace"]
+value = 28
+issue = "#185"
+
+[max-cognitive."src/orchestration/engine.py::execute"]
+value = 35
+issue = "#138"
+
+[max-loc."src/setup.py"]
+value = 2284
+issue = "#185"
+
+# --- MD01: Modularity Exceptions ---
+
+[max-fan-out."packages.orchestration"]
+value = 25
+issue = "#201"
+
+[max-main-sequence-distance."packages.core-utils"]
+value = 0.82
+issue = "#215"

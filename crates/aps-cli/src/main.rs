@@ -683,10 +683,16 @@ fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
             name: "Code Topology",
             version: "0.1.0",
         }),
-        "fitness" | "fitness-functions" | "exp-v1-0003" => Some(StandardCliInfo {
-            id: "EXP-V1-0003",
+        "fitness" | "architecture-fitness" | "aps-v1-0002" => Some(StandardCliInfo {
+            id: "APS-V1-0002",
             slug: "fitness",
             name: "Architecture Fitness Functions",
+            version: "1.0.0",
+        }),
+        "fitness-functions" | "exp-v1-0003" => Some(StandardCliInfo {
+            id: "EXP-V1-0003",
+            slug: "fitness-legacy",
+            name: "Architecture Fitness Functions (Experimental)",
             version: "0.1.0",
         }),
         _ => None,
@@ -705,7 +711,8 @@ fn dispatch_standard_cli(
 
     match info.slug {
         "topology" => dispatch_topology(command, cmd_args, repo_root, verbose),
-        "fitness" => dispatch_fitness(command, cmd_args, repo_root, verbose),
+        "fitness" => dispatch_fitness_v2(command, cmd_args, repo_root, verbose),
+        "fitness-legacy" => dispatch_fitness(command, cmd_args, repo_root, verbose),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -862,7 +869,240 @@ fn dispatch_topology(
     }
 }
 
-/// Dispatch fitness function commands.
+/// Dispatch fitness function commands (APS-V1-0002).
+fn dispatch_fitness_v2(
+    command: &str,
+    args: &[String],
+    repo_root: &std::path::Path,
+    _verbose: bool,
+) -> ExitCode {
+    match command {
+        "--help" | "-h" | "help" => {
+            println!("Architecture Fitness Functions (APS-V1-0002) v1.0.0");
+            println!();
+            println!("USAGE:");
+            println!("    aps run fitness <COMMAND> [OPTIONS]");
+            println!();
+            println!("COMMANDS:");
+            println!("    validate <path>    Validate fitness rules against topology artifacts");
+            println!();
+            println!("OPTIONS:");
+            println!("    --config <file>         Path to fitness.toml (default: ./fitness.toml)");
+            println!("    --report <file>         Write JSON report to file");
+            println!("    --previous-report <file> Previous report for trend comparison");
+            println!("    --help                  Show this help message");
+            ExitCode::SUCCESS
+        }
+        "validate" => {
+            let mut positional_path: Option<&str> = None;
+            let mut config_path: Option<std::path::PathBuf> = None;
+            let mut report_path: Option<&String> = None;
+            let mut previous_report_path: Option<&String> = None;
+            let mut i = 0;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--config" => {
+                        config_path = args.get(i + 1).map(std::path::PathBuf::from);
+                        i += 2;
+                    }
+                    "--report" => {
+                        report_path = args.get(i + 1);
+                        i += 2;
+                    }
+                    "--previous-report" => {
+                        previous_report_path = args.get(i + 1);
+                        i += 2;
+                    }
+                    arg if !arg.starts_with('-') && positional_path.is_none() => {
+                        positional_path = Some(arg);
+                        i += 1;
+                    }
+                    _ => {
+                        i += 1;
+                    }
+                }
+            }
+            let path = positional_path.unwrap_or(".");
+
+            let target = if std::path::Path::new(path).is_absolute() {
+                std::path::PathBuf::from(path)
+            } else {
+                repo_root.join(path)
+            };
+
+            let config_path =
+                config_path.map(|p| if p.is_absolute() { p } else { target.join(p) });
+
+            let validator = match architecture_fitness::FitnessValidator::load(
+                &target,
+                config_path.as_deref(),
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            // Attach previous report for trend comparison
+            let validator = if let Some(prev_path) = previous_report_path {
+                match std::fs::read_to_string(prev_path)
+                    .map_err(|e| e.to_string())
+                    .and_then(|s| {
+                        serde_json::from_str::<architecture_fitness::FitnessReport>(&s)
+                            .map_err(|e| e.to_string())
+                    }) {
+                    Ok(prev) => validator.with_previous_report(prev),
+                    Err(e) => {
+                        eprintln!("Warning: Could not load previous report: {e}");
+                        validator
+                    }
+                }
+            } else {
+                validator
+            };
+
+            let report = match validator.validate() {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("Error during validation: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
+
+            // Print human-readable summary
+            println!("Architecture Fitness Report (APS-V1-0002)");
+            println!("==========================================\n");
+
+            // Rule results
+            for result in &report.results {
+                let status_icon = match result.status {
+                    architecture_fitness::RuleStatus::Pass => "PASS",
+                    architecture_fitness::RuleStatus::Fail => "FAIL",
+                    architecture_fitness::RuleStatus::Warn => "WARN",
+                    architecture_fitness::RuleStatus::Skip => "SKIP",
+                };
+                let dim_tag = result
+                    .dimension
+                    .as_deref()
+                    .map(|d| format!(" [{d}]"))
+                    .unwrap_or_default();
+                println!(
+                    "  [{status_icon}] {} ({}){dim_tag}",
+                    result.rule_name, result.rule_id
+                );
+                for v in &result.violations {
+                    let exc = if v.excepted { " (excepted)" } else { "" };
+                    println!(
+                        "         {} = {} (threshold: {} {:?}){exc}",
+                        v.entity, v.actual, v.threshold, v.direction
+                    );
+                }
+            }
+
+            // Dimension scores
+            if !report.dimensions.is_empty() {
+                println!("\nDimension Scores:");
+                let mut dims: Vec<_> = report.dimensions.iter().collect();
+                dims.sort_by_key(|(k, _)| (*k).clone());
+                for (code, dim) in &dims {
+                    let status = match dim.status {
+                        architecture_fitness::DimensionStatus::Active => {
+                            let score = dim.score.unwrap_or(0.0);
+                            let bar_len = (score * 20.0).round() as usize;
+                            let bar: String =
+                                "#".repeat(bar_len) + &"-".repeat(20 - bar_len);
+                            format!("[{bar}] {score:.0}%", score = score * 100.0)
+                        }
+                        architecture_fitness::DimensionStatus::Skipped => {
+                            "skipped".to_string()
+                        }
+                        architecture_fitness::DimensionStatus::Disabled => {
+                            "disabled".to_string()
+                        }
+                    };
+                    println!("  {code} ({name}): {status}", name = dim.name);
+                }
+            }
+
+            // System fitness
+            if let Some(sf) = &report.system_fitness {
+                println!("\nSystem Fitness:");
+                let pass_label = if sf.passing { "PASS" } else { "FAIL" };
+                println!(
+                    "  Score: {:.1}% (min: {:.1}%) [{pass_label}]",
+                    sf.score * 100.0,
+                    sf.min_score * 100.0,
+                );
+                if let Some(note) = &sf.weights_note {
+                    println!("  Note: {note}");
+                }
+                if let Some(trend) = &sf.trend {
+                    let dir = match trend.direction {
+                        architecture_fitness::TrendDirection::Improving => "improving",
+                        architecture_fitness::TrendDirection::Declining => "declining",
+                        architecture_fitness::TrendDirection::Stable => "stable",
+                    };
+                    let sign = if trend.delta >= 0.0 { "+" } else { "" };
+                    println!(
+                        "  Trend: {dir} ({sign}{:.1}% from previous {:.1}%)",
+                        trend.delta * 100.0,
+                        trend.previous_score * 100.0,
+                    );
+                }
+            }
+
+            // Stale exceptions
+            if !report.stale_exceptions.is_empty() {
+                println!("\nStale Exceptions:");
+                for s in &report.stale_exceptions {
+                    println!("  {} [{}]: {:?}", s.entity, s.rule_id, s.reason);
+                }
+            }
+
+            println!(
+                "\nSummary: {} passed, {} failed, {} warned, {} skipped, {} violations ({} excepted), {} stale exceptions",
+                report.summary.passed,
+                report.summary.failed,
+                report.summary.warned,
+                report.summary.skipped,
+                report.summary.total_violations,
+                report.summary.excepted_violations,
+                report.summary.stale_exceptions,
+            );
+
+            // Write JSON report if requested
+            if let Some(report_file) = report_path {
+                match serde_json::to_string_pretty(&report) {
+                    Ok(json) => {
+                        if let Err(e) = std::fs::write(report_file, json) {
+                            eprintln!("Error writing report: {e}");
+                        } else {
+                            println!("\nReport written to: {report_file}");
+                        }
+                    }
+                    Err(e) => eprintln!("Error serializing report: {e}"),
+                }
+            }
+
+            // Exit codes: 1 = failures, 2 = warnings only, 0 = clean
+            if architecture_fitness::FitnessValidator::has_failures(&report) {
+                ExitCode::FAILURE
+            } else if architecture_fitness::FitnessValidator::has_warnings(&report) {
+                ExitCode::from(2)
+            } else {
+                ExitCode::SUCCESS
+            }
+        }
+        other => {
+            eprintln!("Error: Unknown fitness command '{other}'");
+            eprintln!("Use 'aps run fitness --help' for available commands.");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Dispatch fitness function commands (legacy EXP-V1-0003).
 fn dispatch_fitness(
     command: &str,
     args: &[String],
