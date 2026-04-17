@@ -1678,41 +1678,28 @@ total_dependencies = {}
         serde_json::to_string_pretty(&modules_json).unwrap(),
     )?;
 
-    // Write coupling.json — flat per-module Martin projection optimized for
-    // APS-V1-0002 fitness consumers (MD01). Schema:
+    // Write coupling.json — flat per-module Martin projection for APS-V1-0002
+    // MD01 consumers. Shape computation lives in code_topology::coupling so
+    // LANG01-rust and the CLI can't drift. Schema:
     // standards/v1/APS-V1-0001-code-topology/schemas/coupling.schema.json
-    let coupling_modules: Vec<serde_json::Value> = modules
-        .iter()
-        .map(|(module_id, _funcs)| {
-            let ca = afferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
-            let ce = efferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32;
-            let instability = if ca + ce > 0 {
-                ce as f64 / (ca + ce) as f64
-            } else {
-                0.5
-            };
-            let (abstract_count, total_types) =
-                module_types.get(module_id).copied().unwrap_or((0, 0));
-            let abstractness = if total_types > 0 {
-                abstract_count as f64 / total_types as f64
-            } else {
-                0.0
-            };
-            let distance = (instability + abstractness - 1.0).abs();
-            serde_json::json!({
-                "id": module_id,
-                "path": format!("{}/", module_id.replace("::", "/")),
-                "afferent_coupling": ca,
-                "efferent_coupling": ce,
-                "instability": instability,
-                "abstractness": abstractness,
-                "distance_from_main_sequence": distance,
-            })
+    let coupling_inputs: Vec<code_topology::coupling::ModuleCouplingInput<'_>> = modules
+        .keys()
+        .map(|module_id| {
+            let (abs_types, total) = module_types.get(module_id).copied().unwrap_or((0, 0));
+            code_topology::coupling::ModuleCouplingInput {
+                id: module_id.as_str(),
+                path: format!("{}/", module_id.replace("::", "/")),
+                afferent: afferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32,
+                efferent: efferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32,
+                abstract_types: abs_types,
+                total_types: total,
+            }
         })
         .collect();
+    let coupling_records = code_topology::coupling::compute_coupling_records(&coupling_inputs);
     let coupling_json = serde_json::json!({
         "schema_version": "1.0.0",
-        "modules": coupling_modules,
+        "modules": coupling_records,
     });
     fs::write(
         output_path.join("metrics/coupling.json"),

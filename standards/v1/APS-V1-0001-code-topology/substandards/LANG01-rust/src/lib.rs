@@ -32,6 +32,7 @@ use thiserror::Error;
 use walkdir::WalkDir;
 
 use code_topology::HalsteadMetrics;
+use code_topology::coupling::{ModuleCouplingInput, compute_coupling_records};
 
 // ============================================================================
 // Error Types
@@ -1031,58 +1032,29 @@ exclude_paths = ["target", ".git"]
 
     fn write_coupling(&self, output_dir: &Path) -> Result<(), RustAdapterError> {
         #[derive(Serialize)]
-        struct CouplingFile {
-            schema_version: String,
-            modules: Vec<ModuleCouplingRecord>,
+        struct CouplingFile<'a> {
+            schema_version: &'static str,
+            modules: &'a [code_topology::coupling::CouplingRecord],
         }
 
-        #[derive(Serialize)]
-        struct ModuleCouplingRecord {
-            id: String,
-            path: String,
-            afferent_coupling: u32,
-            efferent_coupling: u32,
-            instability: f64,
-            abstractness: f64,
-            distance_from_main_sequence: f64,
-        }
-
-        let modules: Vec<ModuleCouplingRecord> = self
+        let inputs: Vec<ModuleCouplingInput<'_>> = self
             .modules
             .iter()
-            .map(|m| {
-                let ca = m.ca;
-                let ce = m.ce;
-                let instability = if ca + ce > 0 {
-                    ce as f64 / (ca + ce) as f64
-                } else {
-                    0.5
-                };
-                let total_types = m.abstract_count + m.concrete_count;
-                let abstractness = if total_types > 0 {
-                    m.abstract_count as f64 / total_types as f64
-                } else {
-                    0.0
-                };
-                let distance = (abstractness + instability - 1.0).abs();
-
-                ModuleCouplingRecord {
-                    id: m.id.clone(),
-                    path: m.path.to_string_lossy().to_string(),
-                    afferent_coupling: ca,
-                    efferent_coupling: ce,
-                    instability,
-                    abstractness,
-                    distance_from_main_sequence: distance,
-                }
+            .map(|m| ModuleCouplingInput {
+                id: &m.id,
+                path: m.path.to_string_lossy().to_string(),
+                afferent: m.ca,
+                efferent: m.ce,
+                abstract_types: m.abstract_count,
+                total_types: m.abstract_count + m.concrete_count,
             })
             .collect();
+        let records = compute_coupling_records(&inputs);
 
         let file = CouplingFile {
-            schema_version: "1.0.0".into(),
-            modules,
+            schema_version: "1.0.0",
+            modules: &records,
         };
-
         let content = serde_json::to_string_pretty(&file)?;
         fs::write(output_dir.join("metrics/coupling.json"), content)?;
         Ok(())
