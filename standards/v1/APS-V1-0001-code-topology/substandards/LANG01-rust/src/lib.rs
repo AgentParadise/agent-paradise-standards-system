@@ -26,12 +26,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{self, Expr, Item, Stmt};
 use thiserror::Error;
 use walkdir::WalkDir;
 
 use code_topology::HalsteadMetrics;
+use code_topology::coupling::{ModuleCouplingInput, compute_coupling_records};
 
 // ============================================================================
 // Error Types
@@ -437,7 +439,7 @@ impl RustAdapter {
             name,
             module: module_path.to_string(),
             file: file_path.to_path_buf(),
-            line: 0, // Would need span info
+            line: func.sig.fn_token.span().start().line.max(1),
             cyclomatic: visitor.cyclomatic,
             cognitive: visitor.cognitive,
             halstead,
@@ -468,7 +470,7 @@ impl RustAdapter {
             name,
             module: module_path.to_string(),
             file: file_path.to_path_buf(),
-            line: 0,
+            line: method.sig.fn_token.span().start().line.max(1),
             cyclomatic: visitor.cyclomatic,
             cognitive: visitor.cognitive,
             halstead,
@@ -814,6 +816,7 @@ impl AnalysisResult {
         // Write metrics
         self.write_function_metrics(output_dir)?;
         self.write_module_metrics(output_dir)?;
+        self.write_coupling(output_dir)?;
 
         // Write graphs
         self.write_coupling_matrix(output_dir)?;
@@ -1025,6 +1028,36 @@ exclude_paths = ["target", ".git"]
 
         let content = serde_json::to_string_pretty(&file)?;
         fs::write(output_dir.join("metrics/modules.json"), content)?;
+        Ok(())
+    }
+
+    fn write_coupling(&self, output_dir: &Path) -> Result<(), RustAdapterError> {
+        #[derive(Serialize)]
+        struct CouplingFile<'a> {
+            schema_version: &'static str,
+            modules: &'a [code_topology::coupling::CouplingRecord],
+        }
+
+        let inputs: Vec<ModuleCouplingInput<'_>> = self
+            .modules
+            .iter()
+            .map(|m| ModuleCouplingInput {
+                id: &m.id,
+                path: m.path.to_string_lossy().to_string(),
+                afferent: m.ca,
+                efferent: m.ce,
+                abstract_types: m.abstract_count,
+                total_types: m.abstract_count + m.concrete_count,
+            })
+            .collect();
+        let records = compute_coupling_records(&inputs);
+
+        let file = CouplingFile {
+            schema_version: "1.0.0",
+            modules: &records,
+        };
+        let content = serde_json::to_string_pretty(&file)?;
+        fs::write(output_dir.join("metrics/coupling.json"), content)?;
         Ok(())
     }
 

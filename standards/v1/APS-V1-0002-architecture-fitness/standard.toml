@@ -1,0 +1,21 @@
+schema = "aps.standard/v1"
+
+[standard]
+id = "APS-V1-0002"
+name = "Architecture Fitness Functions"
+slug = "architecture-fitness"
+version = "1.0.0"
+category = "technical"
+status = "active"
+
+[aps]
+aps_major = "v1"
+backwards_compatible_major_required = true
+
+[ownership]
+maintainers = ["AgentParadise"]
+
+# Promotion metadata
+[promotion]
+promoted_from = "EXP-V1-0003"
+promoted_at = "2026-04-15"

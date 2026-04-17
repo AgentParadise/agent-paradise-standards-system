@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:apss:schema:aps-v1-0001:coupling:1.0.0",
+  "title": "Topology Coupling Artifact",
+  "description": "Flat per-module view of Martin's package metrics, optimized for fitness-rule consumption. Written to .topology/metrics/coupling.json. This is a denormalized projection of the martin block in modules.json — the same data, flat at the module level, with explicit long-form field names. Consumers that want the full module record should read modules.json; consumers that only need coupling governance read coupling.json.",
+  "type": "object",
+  "required": ["schema_version", "modules"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "modules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ModuleCoupling" }
+    }
+  },
+  "$defs": {
+    "ModuleCoupling": {
+      "type": "object",
+      "required": [
+        "id",
+        "path",
+        "afferent_coupling",
+        "efferent_coupling",
+        "instability",
+        "abstractness",
+        "distance_from_main_sequence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable unique module identifier, matching Module.id in modules.json."
+        },
+        "path": {
+          "type": "string",
+          "description": "File or directory path, relative to the analysis root. Included so fitness rules can filter by path glob without a join against modules.json."
+        },
+        "afferent_coupling": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Ca: number of modules that depend on this module. Martin (1994). Lower is more independent."
+        },
+        "efferent_coupling": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Ce: number of modules this module depends on. Martin (1994). Higher means more fan-out / more things can break this module."
+        },
+        "instability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "I = Ce / (Ca + Ce). 0 = maximally stable (few reasons to change), 1 = maximally unstable. Defaults to 0.5 when Ca+Ce=0."
+        },
+        "abstractness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "A = abstract_types / total_types. Defaults to 0 when total_types=0."
+        },
+        "distance_from_main_sequence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "D = |A + I - 1|. 0 = on the main sequence (A + I = 1, balanced between abstract-and-stable or concrete-and-unstable). 1 = zone of pain (concrete and stable, hard to change) or zone of uselessness (abstract and unstable, nobody uses it)."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "1.0.0",
+      "modules": [
+        {
+          "id": "auth",
+          "path": "src/auth/",
+          "afferent_coupling": 2,
+          "efferent_coupling": 2,
+          "instability": 0.5,
+          "abstractness": 0.1,
+          "distance_from_main_sequence": 0.4
+        },
+        {
+          "id": "utils",
+          "path": "src/utils/",
+          "afferent_coupling": 3,
+          "efferent_coupling": 0,
+          "instability": 0.0,
+          "abstractness": 0.0,
+          "distance_from_main_sequence": 1.0
+        }
+      ]
+    }
+  ]
+}

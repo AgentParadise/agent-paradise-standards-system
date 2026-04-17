@@ -1,0 +1,12 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0002.AC01"
+name = "Accessibility Dimension"
+slug = "accessibility"
+version = "1.0.0"
+parent_id = "APS-V1-0002"
+parent_major = "1"
+
+[ownership]
+maintainers = ["AgentParadise"]

@@ -1,0 +1,118 @@
+# Example fitness.toml — Architecture Fitness Functions (APS-V1-0002)
+#
+# Multi-dimensional architectural governance configuration.
+# Evaluated against .topology/metrics/ artifacts produced by APS-V1-0001.
+#
+# Recommended defaults based on industry standards:
+#   - Cognitive complexity: 15 (SonarQube default)
+#   - Cyclomatic complexity: 10 (McCabe/NIST SP 500-235)
+#   - File LOC: 500 (catches bloat without penalizing moderate files)
+#   - Fan-out (Ce): 20 (efferent coupling — catches tight coupling)
+#   - Distance from Main Sequence: 0.7 (catches Zone of Pain / Uselessness)
+
+[config]
+topology_dir = ".topology"
+exceptions = "fitness-exceptions.toml"
+severity_default = "error"
+
+# --- Dimensions ---
+# Default-enabled: MT01, MD01, ST01, SC01, LG01
+# Opt-in: AC01, PF01, AV01
+[dimensions]
+AC01 = false            # No web frontend in this project
+PF01 = false            # No load test infrastructure yet
+AV01 = false            # No chaos engineering infrastructure yet
+
+# --- System-Level Fitness Function ---
+[system_fitness]
+enabled = true
+min_score = 0.7
+
+[system_fitness.weights]
+MT01 = 0.25             # Maintainability
+MD01 = 0.25             # Modularity
+ST01 = 0.20             # Structural Integrity
+SC01 = 0.15             # Security
+LG01 = 0.15             # Legality
+
+# --- MT01: Maintainability Rules ---
+
+[[rules.threshold]]
+id = "max-cognitive"
+name = "Maximum Cognitive Complexity (function)"
+dimension = "MT01"
+source = "metrics/functions.json"
+field = "metrics.cognitive"
+max = 15
+scope = "function"
+severity = "error"
+exclude = ["**/test_*", "**/tests/**"]
+
+[[rules.threshold]]
+id = "max-cyclomatic"
+name = "Maximum Cyclomatic Complexity (function)"
+dimension = "MT01"
+source = "metrics/functions.json"
+field = "metrics.cyclomatic"
+max = 10
+scope = "function"
+severity = "error"
+exclude = ["**/test_*", "**/tests/**"]
+
+[[rules.threshold]]
+id = "max-halstead-volume"
+name = "Maximum Halstead Volume (function)"
+dimension = "MT01"
+source = "metrics/functions.json"
+field = "metrics.halstead.volume"
+max = 1000
+scope = "function"
+severity = "warning"
+
+# --- MD01: Modularity & Coupling Rules ---
+
+[[rules.threshold]]
+id = "max-fan-out"
+name = "Maximum Efferent Coupling (Ce)"
+dimension = "MD01"
+source = "metrics/coupling.json"
+field = "efferent_coupling"
+max = 20
+scope = "module"
+severity = "error"
+exclude = ["**/tests/**", "**/conftest*"]
+
+[[rules.threshold]]
+id = "instability-balance"
+name = "Instability Balance (prevent rigidity and volatility)"
+dimension = "MD01"
+source = "metrics/coupling.json"
+field = "instability"
+min = 0.1
+max = 0.9
+scope = "module"
+severity = "warning"
+exclude = ["**/interfaces/**", "**/ports/**"]
+
+[[rules.threshold]]
+id = "max-main-sequence-distance"
+name = "Maximum Distance from Main Sequence"
+dimension = "MD01"
+source = "metrics/coupling.json"
+field = "distance_from_main_sequence"
+max = 0.7
+scope = "module"
+severity = "error"
+
+# --- MD01: Dependency Rules ---
+
+[[rules.dependency]]
+id = "no-circular-deps"
+name = "No Circular Dependencies"
+dimension = "MD01"
+type = "forbidden"
+from = { path = "src/**" }
+to = { path = "src/**" }
+circular = true
+severity = "error"
+

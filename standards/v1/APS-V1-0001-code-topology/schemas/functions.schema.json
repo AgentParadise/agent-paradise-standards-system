@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:apss:schema:aps-v1-0001:functions:1.0.0",
+  "title": "Topology Functions Artifact",
+  "description": "Per-function topology metrics produced by APS-V1-0001 Code Topology. Written to .topology/metrics/functions.json. Includes McCabe cyclomatic, SonarSource cognitive complexity, Halstead metrics, and LOC.",
+  "type": "object",
+  "required": ["schema_version", "functions"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "functions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Function" }
+    }
+  },
+  "$defs": {
+    "Function": {
+      "type": "object",
+      "required": ["id", "name", "module", "file", "line", "metrics"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Fully qualified function identifier, e.g. 'rust:auth::validator::validate_token'. Used as entity key in fitness rules with scope='function'."
+        },
+        "name": {
+          "type": "string",
+          "description": "Simple function name."
+        },
+        "module": {
+          "type": "string",
+          "description": "ID of the module containing this function, matching a Module.id in modules.json."
+        },
+        "file": {
+          "type": "string",
+          "description": "Path to the source file, relative to the analysis root."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based line number where the function starts."
+        },
+        "metrics": { "$ref": "#/$defs/FunctionMetrics" }
+      }
+    },
+    "FunctionMetrics": {
+      "type": "object",
+      "required": ["cyclomatic", "cognitive", "halstead", "loc"],
+      "additionalProperties": false,
+      "properties": {
+        "cyclomatic": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "McCabe (1976) cyclomatic complexity. Minimum 1 (straight-line function)."
+        },
+        "cognitive": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "SonarSource (2017) cognitive complexity."
+        },
+        "halstead": { "$ref": "#/$defs/Halstead" },
+        "loc": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Physical lines of code in the function body."
+        }
+      }
+    },
+    "Halstead": {
+      "type": "object",
+      "description": "Halstead (1977) software-science metrics. Only the five load-bearing fields are serialized; derived fields (bugs, time) can be computed from these if needed.",
+      "required": ["vocabulary", "length", "volume", "difficulty", "effort"],
+      "additionalProperties": false,
+      "properties": {
+        "vocabulary": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "η = η1 + η2 (distinct operators + distinct operands)."
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "N = N1 + N2 (total operators + total operands)."
+        },
+        "volume": {
+          "type": "number",
+          "minimum": 0,
+          "description": "V = N × log2(η)."
+        },
+        "difficulty": {
+          "type": "number",
+          "minimum": 0,
+          "description": "D = (η1 / 2) × (N2 / η2)."
+        },
+        "effort": {
+          "type": "number",
+          "minimum": 0,
+          "description": "E = D × V."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema_version": "1.0.0",
+      "functions": [
+        {
+          "id": "rust:auth::validator::validate_token",
+          "name": "validate_token",
+          "module": "auth",
+          "file": "src/auth/validator.rs",
+          "line": 42,
+          "metrics": {
+            "cyclomatic": 8,
+            "cognitive": 12,
+            "halstead": {
+              "vocabulary": 45,
+              "length": 120,
+              "volume": 658.2,
+              "difficulty": 15.3,
+              "effort": 10070.5
+            },
+            "loc": 36
+          }
+        }
+      ]
+    }
+  ]
+}

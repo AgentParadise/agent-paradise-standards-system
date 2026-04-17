@@ -1,0 +1,143 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2026-04-15T10:30:00Z",
+  "summary": {
+    "total_rules": 8,
+    "passed": 6,
+    "failed": 1,
+    "warned": 1,
+    "skipped": 0,
+    "total_violations": 8,
+    "excepted_violations": 5,
+    "stale_exceptions": 1
+  },
+  "dimensions": {
+    "MT01": {
+      "name": "Maintainability",
+      "status": "active",
+      "score": 0.92,
+      "rules_evaluated": 4,
+      "rules_passed": 3,
+      "rules_failed": 0,
+      "rules_warned": 1,
+      "total_violations": 4,
+      "excepted_violations": 3
+    },
+    "MD01": {
+      "name": "Modularity & Coupling",
+      "status": "active",
+      "score": 0.71,
+      "rules_evaluated": 4,
+      "rules_passed": 3,
+      "rules_failed": 1,
+      "rules_warned": 0,
+      "total_violations": 4,
+      "excepted_violations": 2
+    },
+    "ST01": {
+      "name": "Structural Integrity",
+      "status": "active",
+      "score": 1.0,
+      "rules_evaluated": 0,
+      "rules_passed": 0,
+      "rules_failed": 0,
+      "rules_warned": 0,
+      "total_violations": 0,
+      "excepted_violations": 0
+    },
+    "SC01": {
+      "name": "Security",
+      "status": "skipped",
+      "score": null,
+      "rules_evaluated": 0,
+      "rules_passed": 0,
+      "rules_failed": 0,
+      "rules_warned": 0,
+      "total_violations": 0,
+      "excepted_violations": 0
+    },
+    "LG01": {
+      "name": "Legality",
+      "status": "skipped",
+      "score": null,
+      "rules_evaluated": 0,
+      "rules_passed": 0,
+      "rules_failed": 0,
+      "rules_warned": 0,
+      "total_violations": 0,
+      "excepted_violations": 0
+    }
+  },
+  "system_fitness": {
+    "score": 0.78,
+    "min_score": 0.70,
+    "passing": true,
+    "weights_used": {
+      "MT01": 0.36,
+      "MD01": 0.36,
+      "ST01": 0.28
+    },
+    "weights_note": "SC01 and LG01 skipped (no adapter output); weights redistributed proportionally among active dimensions",
+    "trend": {
+      "previous_score": 0.81,
+      "delta": -0.03,
+      "direction": "declining",
+      "dimension_deltas": {
+        "MT01": 0.03,
+        "MD01": -0.05,
+        "ST01": 0.00
+      }
+    }
+  },
+  "results": [
+    {
+      "rule_id": "max-cyclomatic",
+      "rule_name": "Maximum Cyclomatic Complexity (function)",
+      "dimension": "MT01",
+      "status": "pass",
+      "violations": [
+        {
+          "entity": "src/orchestration/engine.py::execute",
+          "field": "cyclomatic_complexity",
+          "actual": 42.0,
+          "threshold": 10.0,
+          "direction": "max",
+          "excepted": true
+        },
+        {
+          "entity": "src/setup.py::configure_workspace",
+          "field": "cyclomatic_complexity",
+          "actual": 28.0,
+          "threshold": 10.0,
+          "direction": "max",
+          "excepted": true
+        }
+      ],
+      "exceptions_used": 2
+    },
+    {
+      "rule_id": "max-main-sequence-distance",
+      "rule_name": "Maximum Distance from Main Sequence",
+      "dimension": "MD01",
+      "status": "fail",
+      "violations": [
+        {
+          "entity": "packages.data-access",
+          "field": "distance_from_main_sequence",
+          "actual": 0.85,
+          "threshold": 0.7,
+          "direction": "max",
+          "excepted": false
+        }
+      ],
+      "exceptions_used": 0
+    }
+  ],
+  "stale_exceptions": [
+    {
+      "rule_id": "max-fan-out",
+      "entity": "packages.old-module",
+      "reason": "entity_not_found"
+    }
+  ]
+}
