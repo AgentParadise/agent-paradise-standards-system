@@ -1,0 +1,16 @@
+[package]
+name = "aps-v1-0000-dep01-dependency-policy"
+version = "1.0.0"
+edition = "2024"
+description = "Declares the zero-deps-by-default dependency policy for APS standards, with an approved-list enforcement scanner"
+
+[dependencies]
+aps-core = { path = "../../../../../crates/aps-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }
+chrono = { version = "0.4", default-features = false, features = ["serde", "std"] }
+
+[dev-dependencies]
+tempfile = "3.14"

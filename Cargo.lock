@@ -136,6 +136,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aps-v1-0000-dep01-dependency-policy"
+version = "1.0.0"
+dependencies = [
+ "aps-core",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "toml",
+]
+
+[[package]]
 name = "aps-v1-0000-meta"
 version = "1.1.0"
 dependencies = [
