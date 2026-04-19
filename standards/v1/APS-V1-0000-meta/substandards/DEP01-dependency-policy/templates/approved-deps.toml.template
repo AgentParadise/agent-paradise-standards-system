@@ -1,0 +1,27 @@
+schema = "aps.approved-deps/v1"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Approved third-party dependencies for <REPO>.
+#
+# Each `[[dep]]` entry is a reviewed exception to the zero-deps-by-default rule.
+# See APS-V1-0000.DEP01 (docs/01_spec.md) for the policy this file enforces.
+#
+# category = "standard"  → usable in any crate, including shippable standards
+# category = "tooling"   → scoped; allowed_for MUST enumerate consumers
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Example standard-category entry.
+# [[dep]]
+# name = "serde"
+# category = "standard"
+# justification = "Canonical Rust serialization framework."
+# allowed_for = ["*"]
+# transitive_audit_date = "YYYY-MM-DD"
+
+# Example tooling-category entry (explicit scope).
+# [[dep]]
+# name = "jsonschema"
+# category = "tooling"
+# justification = "Schema-drift testing. Heavy transitive — scoped to test harness."
+# allowed_for = ["my-schema-test-crate"]
+# transitive_audit_date = "YYYY-MM-DD"

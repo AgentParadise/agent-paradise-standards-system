@@ -1,0 +1,17 @@
+schema = "aps.approved-deps/v1"
+
+# Minimal illustrative approved list demonstrating both categories.
+
+[[dep]]
+name = "serde"
+category = "standard"
+justification = "Canonical serialization — required by any crate that reads TOML/JSON."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "jsonschema"
+category = "tooling"
+justification = "Draft 2020-12 validator for test-only schema-drift detection. Heavy transitive tree; scoped to the test harness crate."
+allowed_for = ["my-schema-harness"]
+transitive_audit_date = "2026-04-18"

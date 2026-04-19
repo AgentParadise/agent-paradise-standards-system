@@ -20,11 +20,13 @@ Normative specification. Keywords MUST, MUST NOT, SHOULD, MAY follow RFC 2119.
 
 §2.1 A crate whose path matches `standards/v1/APS-*/**` is a **shippable standard**.
 
-§2.2 A shippable standard **MUST NOT** declare a `[dependencies]` entry whose name is not present in `approved-deps.toml`.
+§2.2 Every dep name declared in a shippable standard's `[dependencies]` or `[dev-dependencies]` **MUST** appear in `approved-deps.toml`.
 
-§2.3 A shippable standard **MUST NOT** declare a `[dev-dependencies]` entry whose name is not present in `approved-deps.toml`, **unless** the entry has `category = "tooling"` AND the consuming crate's package name appears in that entry's `allowed_for` list.
+§2.3 The consuming crate's `[package].name` **MUST** satisfy one of the `allowed_for` patterns on the matched entry. `"*"` satisfies any name; exact strings match literally; a trailing `*` matches any suffix.
 
-§2.4 A `category = "tooling"` entry with `allowed_for = ["*"]` **MUST NOT** appear. Tooling deps require explicit scope.
+§2.4 A shippable standard **MUST NOT** declare a `[dependencies]` (non-dev) entry whose matched approved-list entry has `category = "tooling"`. Tooling deps are for tooling crates and test harnesses only.
+
+§2.5 A `category = "tooling"` entry with `allowed_for = ["*"]` **MUST NOT** appear. Tooling deps require explicit scope.
 
 ## §3 Tooling crates
 

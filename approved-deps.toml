@@ -1,0 +1,180 @@
+schema = "aps.approved-deps/v1"
+
+# Approved third-party dependencies for this workspace.
+# See standards/v1/APS-V1-0000-meta/substandards/DEP01-dependency-policy/ for policy.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Category: standard — universally usable (shippable standards + tooling)
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[dep]]
+name = "serde"
+category = "standard"
+justification = "Canonical Rust serialization framework. Maintained by dtolnay. Zero-cost derive; pulled by every standard that reads TOML/JSON."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "serde_json"
+category = "standard"
+justification = "JSON de/serialization for produced artifacts. Stdlib for Rust JSON; part of serde ecosystem."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "toml"
+category = "standard"
+justification = "Parse Cargo.toml / pyproject.toml / manifest.toml. Part of toml-rs, widely audited."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "thiserror"
+category = "standard"
+justification = "Ergonomic error derive. Maintained by dtolnay. Only adds a proc-macro dep."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "chrono"
+category = "standard"
+justification = "ISO-8601 dates for audit metadata and fitness timestamps. Used with minimal feature set (no time-zone database)."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "glob"
+category = "standard"
+justification = "Glob patterns for manifest scanning and fitness rule matchers."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "walkdir"
+category = "standard"
+justification = "Recursive directory traversal for manifest discovery and topology scanning."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "regex"
+category = "standard"
+justification = "Pattern matching for substandard ID validation and TODO scanning. rust-lang-maintained."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "tree-sitter"
+category = "standard"
+justification = "Incremental parsing framework used by LANG01 adapters. Stable ABI."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "tree-sitter-rust"
+category = "standard"
+justification = "Rust grammar for tree-sitter. Used by LANG01-rust."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "tree-sitter-python"
+category = "standard"
+justification = "Python grammar for tree-sitter. Used by future LANG02-python adapter."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "tree-sitter-typescript"
+category = "standard"
+justification = "TypeScript grammar for tree-sitter. Used by future LANG03-typescript adapter."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "streaming-iterator"
+category = "standard"
+justification = "Required by tree-sitter 0.24 query iteration API. Upstream transitive, surface minimal."
+allowed_for = ["code-topology", "code-topology-rust-adapter"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "syn"
+category = "standard"
+justification = "Rust AST parser for LANG01 adapter. Maintained by dtolnay."
+allowed_for = ["code-topology-rust-adapter"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "quote"
+category = "standard"
+justification = "Quasi-quoting paired with syn for proc-macro style work. Maintained by dtolnay."
+allowed_for = ["code-topology-rust-adapter"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "proc-macro2"
+category = "standard"
+justification = "Required by syn/quote; span-locations feature enabled for real line-number extraction."
+allowed_for = ["code-topology-rust-adapter"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "sha2"
+category = "standard"
+justification = "Content hashing for TODO-tracker issue identity. Stable, RustCrypto-maintained."
+allowed_for = ["todo-tracker"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "hex"
+category = "standard"
+justification = "Hex encoding paired with sha2. Trivial crate."
+allowed_for = ["todo-tracker"]
+transitive_audit_date = "2026-04-18"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Category: tooling — CLI/template/test infrastructure; NOT shippable standards
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[dep]]
+name = "clap"
+category = "tooling"
+justification = "CLI argument parsing. Heavy transitive tree. Confined to the aps-cli binary."
+allowed_for = ["aps-cli"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "handlebars"
+category = "tooling"
+justification = "Template rendering for `aps new` scaffolds. Confined to aps-core's template module."
+allowed_for = ["aps-core"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "serde_yaml_ng"
+category = "tooling"
+justification = "YAML (de)serialization for GitHub Actions templates. Non-abandoned fork of serde_yaml."
+allowed_for = ["aps-cli"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "reqwest"
+category = "tooling"
+justification = "Optional HTTP client behind the `github` feature of todo-tracker. Compile-gated; default-off."
+allowed_for = ["todo-tracker"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "jsonschema"
+category = "tooling"
+justification = "Draft 2020-12 validator for schema-drift detection. Heavy transitive tree (icu_*, fancy-regex, fraction) — isolated to the aps-schema-test tooling crate only."
+allowed_for = ["aps-schema-test"]
+transitive_audit_date = "2026-04-18"
+
+[[dep]]
+name = "tempfile"
+category = "standard"
+justification = "Temp directory fixtures for tests. Trivial transitive weight; Rust-lang-maintained. Universally usable as dev-dep."
+allowed_for = ["*"]
+transitive_audit_date = "2026-04-18"

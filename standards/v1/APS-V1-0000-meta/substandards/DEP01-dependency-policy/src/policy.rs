@@ -4,7 +4,7 @@
 //! whose schema is `"aps.approved-deps/v1"`. Each entry declares a third-party
 //! dependency the repo has audited and sanctioned for use.
 
-use crate::manifests::ParsedManifest;
+use crate::manifests::{DepRef, ParsedManifest};
 use crate::DepError;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -105,11 +105,64 @@ pub struct DepViolation {
 
 /// Match a parsed manifest against the approved list.
 ///
-/// Scaffold: returns an empty `Vec`. Full implementation lands in Commit 2.
+/// `crate_id` is the consumer name to match against `allowed_for` patterns.
+/// Normally this is the manifest's `[package].name`; callers supply it so the
+/// matcher stays agnostic to file-system layout.
 pub fn match_manifest(
-    _parsed: &ParsedManifest,
-    _list: &ApprovedList,
-    _crate_id: &str,
+    parsed: &ParsedManifest,
+    list: &ApprovedList,
+    crate_id: &str,
 ) -> Vec<DepViolation> {
-    Vec::new()
+    let mut out = Vec::new();
+    for DepRef { name, dev_only } in &parsed.deps {
+        let Some(entry) = list.get(name) else {
+            out.push(DepViolation {
+                crate_id: crate_id.to_string(),
+                dep: name.clone(),
+                reason: ViolationReason::Unapproved,
+            });
+            continue;
+        };
+        if !allowed_for_matches(&entry.allowed_for, crate_id) {
+            out.push(DepViolation {
+                crate_id: crate_id.to_string(),
+                dep: name.clone(),
+                reason: ViolationReason::NotAllowedForCrate,
+            });
+            continue;
+        }
+        // Regular [dependencies] of a shippable standard must not be tooling-category.
+        if !*dev_only
+            && matches!(entry.category, Category::Tooling)
+            && is_shippable_standard(crate_id, &parsed.path)
+        {
+            out.push(DepViolation {
+                crate_id: crate_id.to_string(),
+                dep: name.clone(),
+                reason: ViolationReason::WrongCategory,
+            });
+        }
+    }
+    out
+}
+
+/// True if the crate lives under `standards/v1/APS-*/**` — our definition of
+/// a shippable standard.
+fn is_shippable_standard(_crate_id: &str, manifest_path: &Path) -> bool {
+    let s = manifest_path.to_string_lossy();
+    s.contains("/standards/v1/APS-") || s.starts_with("standards/v1/APS-")
+}
+
+fn allowed_for_matches(patterns: &[String], crate_id: &str) -> bool {
+    for pat in patterns {
+        if pat == "*" || pat == crate_id {
+            return true;
+        }
+        if let Some(prefix) = pat.strip_suffix('*') {
+            if crate_id.starts_with(prefix) {
+                return true;
+            }
+        }
+    }
+    false
 }
