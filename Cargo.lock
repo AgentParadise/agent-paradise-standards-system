@@ -127,6 +127,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aps-schema-test"
+version = "0.1.2"
+dependencies = [
+ "architecture-fitness",
+ "code-topology-rust-adapter",
+ "jsonschema",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "aps-v1-0000-cli01-cli-contract"
 version = "1.0.0"
 dependencies = [
@@ -172,7 +184,6 @@ dependencies = [
  "aps-core",
  "chrono",
  "glob",
- "jsonschema",
  "serde",
  "serde_json",
  "tempfile",
@@ -451,7 +462,6 @@ dependencies = [
  "code-topology-3d",
  "code-topology-mermaid",
  "code-topology-rust-adapter",
- "jsonschema",
  "serde",
  "serde_json",
  "streaming-iterator",
