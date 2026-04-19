@@ -4,7 +4,7 @@ schema = "aps.approved-deps/v1"
 # Approved third-party dependencies for <REPO>.
 #
 # Each `[[dep]]` entry is a reviewed exception to the zero-deps-by-default rule.
-# See APS-V1-0000.DEP01 (docs/01_spec.md) for the policy this file enforces.
+# See APS-V1-0000.DP01 (docs/01_spec.md) for the policy this file enforces.
 #
 # category = "standard"  → usable in any crate, including shippable standards
 # category = "tooling"   → scoped; allowed_for MUST enumerate consumers

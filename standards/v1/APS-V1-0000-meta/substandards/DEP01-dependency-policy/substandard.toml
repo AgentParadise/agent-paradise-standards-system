@@ -1,7 +1,7 @@
 schema = "aps.substandard/v1"
 
 [substandard]
-id = "APS-V1-0000.DEP01"
+id = "APS-V1-0000.DP01"
 name = "Dependency Policy"
 slug = "dependency-policy"
 version = "1.0.0"

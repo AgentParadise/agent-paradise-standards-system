@@ -1,4 +1,4 @@
-//! APS-V1-0000.DEP01 — Dependency Policy
+//! APS-V1-0000.DP01 — Dependency Policy
 //!
 //! Declares the **zero-external-dependencies-by-default** principle for APS
 //! shippable standards and enforces it via an approved list. Any crate listed

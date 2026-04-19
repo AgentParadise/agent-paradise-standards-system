@@ -1,4 +1,4 @@
-# APS-V1-0000.DEP01 — Specification
+# APS-V1-0000.DP01 — Specification
 
 Normative specification. Keywords MUST, MUST NOT, SHOULD, MAY follow RFC 2119.
 
