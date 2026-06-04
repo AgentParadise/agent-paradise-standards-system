@@ -14,7 +14,7 @@ the "how do we enforce all this" section.
 
 ## Terminology
 
-RFC 2119 keywords apply. `<binary>` is a placeholder pending repo
+RFC 2119 keywords apply. `<bootstrap>` is a placeholder pending repo
 issue 64.
 
 ---
@@ -26,9 +26,9 @@ CF01 conformance has two scopes:
 1. **The APSS repository.** Every standard in `standards/v1/` and
    every experiment in `standards-experimental/v1/` MUST conform
    to the rules from the sibling specs. This is enforced by the
-   meta-validator at `<binary> v1 validate repo`.
+   meta-validator at `<bootstrap> v1 validate repo`.
 2. **Consumer projects.** Any project whose root has an apss.yaml
-   gets validated by `<binary> validate` (or the editor's LSP
+   gets validated by `<bootstrap> validate` (or the editor's LSP
    integration). This is the runtime-side validation.
 
 QA in this document covers BOTH. The same rule engine runs in both
@@ -64,7 +64,7 @@ makes failures actionable rather than serialized.
 ### 3.1 The Single Entry Point
 
 ```
-<binary> v1 validate repo
+<bootstrap> v1 validate repo
 ```
 
 runs all six dimensions across `standards/v1/` and
@@ -105,7 +105,7 @@ The new install-contract codes:
 The meta-validator MUST produce identical output (modulo timestamps
 in `generated_at` fields) on two consecutive runs against an
 unchanged filesystem. CI MUST enforce this by running
-`<binary> v1 validate repo` twice and diffing the diagnostic
+`<bootstrap> v1 validate repo` twice and diffing the diagnostic
 streams. A diff is `CF_VALIDATION_NONDETERMINISTIC` and fails CI.
 
 | Code | Severity | Rule |
@@ -122,9 +122,9 @@ slug registry, the schema diff, or the install-report comparison.
 ### 4.1 The Entry Point
 
 ```
-<binary> validate
-<binary> validate --project
-<binary> validate --slug <slug>
+<bootstrap> validate
+<bootstrap> validate --project
+<bootstrap> validate --slug <slug>
 ```
 
 The semantics are specified in `04_validation_delegation.md` §6.
@@ -135,7 +135,7 @@ existing test pipelines.
 
 ### 4.2 Pre-Install Validation
 
-`<binary> install` MUST run consumer-side validation BEFORE the
+`<bootstrap> install` MUST run consumer-side validation BEFORE the
 resolve step. A failed validation exits with code 1 and runs no
 installer side effects. This is the "manifest is law" property:
 the installer never tries to massage a broken apss.yaml into
@@ -148,7 +148,7 @@ The aggregate schema `generated/v1/apss.schema.json`
 A consumer project SHOULD register it in editor settings (e.g.
 VS Code's `yaml.schemas`) so that completion and hover work without
 a custom language server. The unified installer SHOULD offer to
-write this registration during `<binary> init` when an editor
+write this registration during `<bootstrap> init` when an editor
 config is detected; this is OPTIONAL.
 
 ---
@@ -162,7 +162,7 @@ The APSS repository's CI MUST run, in this order:
 2. just lint
 3. just typecheck
 4. just test
-5. just aps-validate   # this runs <binary> v1 validate repo
+5. just aps-validate   # this runs <bootstrap> v1 validate repo
 6. determinism re-run  # second invocation of step 5 with diff check
 ```
 
@@ -214,7 +214,7 @@ column, code)` so that output is byte-stable across runs (per §3.3).
 
 ### 6.1 Diagnostic JSON Output
 
-`<binary> v1 validate repo --json` MUST emit a stable JSON shape:
+`<bootstrap> v1 validate repo --json` MUST emit a stable JSON shape:
 
 ```json
 {

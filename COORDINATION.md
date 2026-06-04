@@ -100,3 +100,57 @@ sessions push commits incrementally to `apss_config-standard`.
   prefixed `CF_` and `DI_` as appropriate; they extend rather than
   conflict with the existing tables in CF01 `01_spec.md` §6 and
   DI01 `01_spec.md` §10.
+
+### 2026-06-05 (Claude 1)
+
+Reconciliation pass after reading Claude 2's committed sibling specs and
+the two in-progress siblings `05_substandard_nesting.md` and
+`06_unified_install_seam.md`.
+
+- 01_spec.md restructure. The CF01 `01_spec.md` rewrite no longer
+  carries inline placeholders for §3, §5, §6, §7, §10. Each of those
+  sections is now a short pointer paragraph that defers to the
+  matching sibling spec. This keeps the section numbering Claude 2
+  recommended (slug registry at §3, contribution schema at §5,
+  delegation at §6, nesting at §7, QA at §10) and avoids dueling
+  normative text. §8 (Manifest-Driven Installation) is a short
+  CF01-side summary that defers to
+  `06_unified_install_seam.md` as canonical; the npm-style model
+  and the CF01 to DI01 boundary table live in the sibling file. §2
+  (manifest structure, including `standards` activation) and §4
+  (cascade) and §9 (migration from `apss.toml`) are written out
+  inline because they are the brief's Claude 1 work block.
+- Schema identifier divergence. The doc-standard re-home in commit
+  `1784797` uses `schema: "apss.config/v1"` and the commit message
+  notes the change was operator-approved. Claude 2's
+  `04_validation_delegation.md` and `05_substandard_nesting.md`
+  example YAML show `schema: apss.project/v1`. Claude 1's
+  `01_spec.md` uses `apss.config/v1` for consistency with the
+  doc-standard work that already landed. Recommendation for the
+  reconciliation pass: pick `apss.config/v1` everywhere and update
+  `04` and `05` to match. The new identifier is also what the
+  migration note (Section 9) tells operators to write.
+- Binary name placeholder. CF01 `01_spec.md` and DI01 `01_spec.md`
+  edits use `<bootstrap>` as Claude 2 recommended (matches the
+  existing "bootstrap binary" prose in DI01 §3). The two in-progress
+  siblings use `<binary>`; the reconciliation pass should normalise
+  to `<bootstrap>`.
+- DI01 sweep. CF01 spec references to `apss.toml` are gone; DI01
+  `01_spec.md` Sections 3 through 8 are updated to point at
+  `apss.yaml`, the `.apss/bin/<bootstrap>` placeholder, and the new
+  install pipeline that loads the manifest, asks DI01 to resolve, and
+  drives each standard's install contract. The DI01 §4 rewrite
+  describes the install pipeline inline; once Claude 2's
+  `DI01/docs/02_unified_install_seam.md` lands, the inline §4 can
+  be reduced to a pointer the same way CF01 §8 already is.
+- Per the brief decision 6, `disable: true` (not `enabled: false`) is
+  the per-section opt-out convention inside a standard section. The
+  `enabled` flag on a `standards.<slug>` activation entry remains the
+  manifest-level opt-out (it controls whether the standard is in the
+  declared set at all). CF01 `01_spec.md` §2.5 and §8 keep both
+  flags with distinct meanings; this matches the doc-standard
+  precedent (commit 1784797) and Claude 2's
+  `06_unified_install_seam.md` §2.5 wording.
+- I removed my earlier in-substandard
+  `CF01-project-config/COORDINATION.md` after seeing this canonical
+  root file. This file is the only coordination point.

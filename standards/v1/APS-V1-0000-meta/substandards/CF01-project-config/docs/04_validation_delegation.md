@@ -43,7 +43,7 @@ do not belong to it.
 
 ## 2. End-to-End Validation Order
 
-`<binary> v1 validate` runs the following steps in order. Each step
+`<bootstrap> v1 validate` runs the following steps in order. Each step
 gates the next: a failure halts subsequent steps for that section
 (but other sections continue, so the user sees as many diagnostics
 as possible per run).
@@ -229,15 +229,15 @@ expected state for greenfield projects.
 The CF01 validation delegation is exposed at the CLI through:
 
 ```
-<binary> v1 validate                # full repo + project pass
-<binary> v1 validate --project      # only apss.yaml + sections
-<binary> v1 validate --slug <slug>  # only one section, useful for editor LSPs
+<bootstrap> v1 validate                # full repo + project pass
+<bootstrap> v1 validate --project      # only apss.yaml + sections
+<bootstrap> v1 validate --slug <slug>  # only one section, useful for editor LSPs
 ```
 
 `--slug` MUST still parse the entire file (so cascade is correct)
 but only emit diagnostics whose path roots at the named section.
 
-The placeholder `<binary>` reflects repo issue 64 (APS vs APSS naming)
+The placeholder `<bootstrap>` reflects repo issue 64 (APS vs APSS naming)
 and resolves once that issue closes.
 
 ---
@@ -269,7 +269,7 @@ unchanged at steps 6 and 7 respectively.
 Consumer apss.yaml:
 
 ```yaml
-schema: apss.project/v1
+schema: apss.config/v1
 
 project:
   name: my-service

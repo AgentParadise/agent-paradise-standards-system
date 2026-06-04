@@ -120,15 +120,15 @@ resolve step (see `06_unified_install_seam.md` §3.1). Tooling MAY
 expose the regeneration command directly:
 
 ```
-<binary> v1 generate slug-registry
+<bootstrap> v1 generate slug-registry
 ```
 
-where `<binary>` is the project-local entry point; see Note on
+where `<bootstrap>` is the project-local entry point; see Note on
 binary naming below.
 
 > Note on binary naming. The binary name is intentionally unfixed in
 > this spec while repo issue 64 (APS vs APSS naming) is open. All
-> examples use `<binary>` as a placeholder. Once issue 64 resolves,
+> examples use `<bootstrap>` as a placeholder. Once issue 64 resolves,
 > the name MAY be substituted everywhere without changing the
 > mechanism.
 
@@ -244,7 +244,7 @@ with the appropriate error code.
 
 ## 5. Meta-Validation Rules
 
-The following rules MUST be enforced by `<binary> v1 validate repo`
+The following rules MUST be enforced by `<bootstrap> v1 validate repo`
 (see `07_qa_checks.md` for the QA harness):
 
 | Code | Severity | Rule |
@@ -259,7 +259,7 @@ The following rules MUST be enforced by `<binary> v1 validate repo`
 | `CF_SLUG_RENAMED_ON_PROMOTION` | Warning | Promoted experiment's slug differs from the published experimental slug (§3.4). |
 | `CF_SLUG_TOO_GENERIC` | Warning | Slug is one of a small set of reserved-ish generic names (`config`, `core`, `meta`, `system`). Allowed but discouraged. |
 
-Errors here are blocking: `<binary> v1 validate repo` MUST exit
+Errors here are blocking: `<bootstrap> v1 validate repo` MUST exit
 with code 1 if any error-severity slug rule fails. Warnings MUST
 exit with code 2 only if no errors are present (APS-V1-0000 §16.3).
 

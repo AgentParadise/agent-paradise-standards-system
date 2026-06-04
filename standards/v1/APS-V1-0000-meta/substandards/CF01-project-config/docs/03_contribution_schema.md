@@ -244,12 +244,12 @@ schema agree.
 The contribution schema artifact MUST be regenerable via:
 
 ```
-<binary> v1 config schema <slug>
+<bootstrap> v1 config schema <slug>
 ```
 
 This is the same command surface as DI01 §3.2 `apss config schema <slug>`;
 that command is preserved verbatim and remains the documented entry
-point. The placeholder `<binary>` reflects the open APS vs APSS naming
+point. The placeholder `<bootstrap>` reflects the open APS vs APSS naming
 question (repo issue 64) and is replaced by the resolved name once
 that issue closes.
 
@@ -285,7 +285,7 @@ every standard whose source has changed since the last release tag.
 The contribution schema powers four concrete tooling targets:
 
 1. **Generated config docs.** Tooling MAY render a per-standard docs
-   page from the schema (`<binary> v1 config docs <slug>`), removing
+   page from the schema (`<bootstrap> v1 config docs <slug>`), removing
    the need for hand-written reference tables that drift.
 2. **Editor autocomplete and hover.** Editors that understand JSON
    Schema can be pointed at the per-slug `$id` for completion. The
@@ -297,7 +297,7 @@ The contribution schema powers four concrete tooling targets:
    validation (types, required, additionalProperties). Semantic
    validation is delegated to `StandardConfig::validate()`; see
    `04_validation_delegation.md`.
-4. **Scaffolding.** `<binary> v1 config template` emits a YAML
+4. **Scaffolding.** `<bootstrap> v1 config template` emits a YAML
    skeleton from every active standard's `yaml_template()`, used by
    the unified installer's first-run flow
    (`06_unified_install_seam.md` §2.4).

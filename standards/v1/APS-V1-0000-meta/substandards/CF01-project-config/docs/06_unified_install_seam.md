@@ -20,7 +20,7 @@ the installer is the glue. The DI01 side is specified in
 
 ## Terminology
 
-RFC 2119 keywords apply. The placeholder `<binary>` is used in CLI
+RFC 2119 keywords apply. The placeholder `<bootstrap>` is used in CLI
 examples while repo issue 64 (APS vs APSS naming) is open.
 
 ---
@@ -102,7 +102,7 @@ The installer consumes:
 The installer produces:
 
 - an updated apss.lock,
-- the composed binary (`.apss/bin/<binary>`, owned by DI01 §6),
+- the composed binary (`.apss/bin/<bootstrap>`, owned by DI01 §6),
 - the side effects declared by each active standard's install
   contract: git hooks, scaffolds, generated files, schema files,
   language-server config, etc.
@@ -137,20 +137,20 @@ deliberately do not use docs" in their manifest.
 ### 2.6 CLI Surface
 
 ```
-<binary> install                 # primary path; reads apss.yaml
-<binary> install --locked        # CI mode; fail if apss.lock changes
-<binary> install --offline       # use only cached crates
-<binary> install --dry-run       # print what would happen, no writes
-<binary> install --update <slug> # update a single standard
+<bootstrap> install                 # primary path; reads apss.yaml
+<bootstrap> install --locked        # CI mode; fail if apss.lock changes
+<bootstrap> install --offline       # use only cached crates
+<bootstrap> install --dry-run       # print what would happen, no writes
+<bootstrap> install --update <slug> # update a single standard
 ```
 
 DI01 §3.2 already lists these commands. CF01 re-states them here to
 emphasize that they are driven by apss.yaml, and that the manifest
 is the sole declarative input.
 
-`<binary> run <slug> <cmd>` (DI01 §3.3) remains the escape hatch for
+`<bootstrap> run <slug> <cmd>` (DI01 §3.3) remains the escape hatch for
 invoking a single standard directly without re-installing. Per the
-brief, individual installation (e.g. `<binary> run docs install`)
+brief, individual installation (e.g. `<bootstrap> run docs install`)
 also remains supported as an escape hatch; the unified installer is
 the documented primary path.
 
@@ -292,7 +292,7 @@ If any standard's `install()` returns an error, the installer MUST:
   full damage),
 - collect every error into a final report,
 - exit with code 1,
-- NOT write `.apss/bin/<binary>` so the composed binary is not
+- NOT write `.apss/bin/<bootstrap>` so the composed binary is not
   silently stale.
 
 The user fixes the failures and re-runs; idempotency guarantees no
@@ -310,7 +310,7 @@ explicit. Here it is:
 | Where standards come from (vendoring, registry, pinning) | DI01 | `apss.lock`, `[source]` resolution, registry config |
 | What standards are active and how they are configured | CF01 | apss.yaml manifest, contribution schemas |
 | How each standard installs its hooks and scaffolds | per-standard | `docs/02_install_contract.md`, `Installable` trait |
-| Orchestration: resolve then install | unified installer | the `<binary> install` command, owned by DI01 §3 with manifest semantics owned by CF01 |
+| Orchestration: resolve then install | unified installer | the `<bootstrap> install` command, owned by DI01 §3 with manifest semantics owned by CF01 |
 
 The installer MUST NOT bypass DI01 for source resolution and MUST
 NOT bypass CF01 for manifest interpretation. Per-standard install
@@ -346,7 +346,7 @@ shadows the new one.
 ## 7. Binary Naming
 
 Repo issue 64 logs an open question: APS vs APSS naming for the
-binary. This spec deliberately writes `<binary>` everywhere. Once
+binary. This spec deliberately writes `<bootstrap>` everywhere. Once
 issue 64 closes, all instances may be substituted by the agreed
 name without changing the underlying mechanism. The substitution is
 mechanical and does not require a CF01 version bump.

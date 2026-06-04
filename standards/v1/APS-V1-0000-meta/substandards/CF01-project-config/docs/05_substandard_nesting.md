@@ -139,7 +139,7 @@ substandard scope without modification.
 If a standard's contribution schema declares a property with the
 same name as one of its substandard slugs, the meta-validator MUST
 emit `CF_SUBSTANDARD_KEY_SHADOW`. This is a build-time error caught
-during `<binary> v1 validate repo`, not a runtime error against
+during `<bootstrap> v1 validate repo`, not a runtime error against
 apss.yaml. Standards are responsible for avoiding the clash; the
 slug registry produces the canonical list of substandard slugs
 each standard owns.
@@ -183,7 +183,7 @@ the parent and disable the parent's other substandards explicitly.
 ### 5.1 All Defaults
 
 ```yaml
-schema: apss.project/v1
+schema: apss.config/v1
 
 project:
   name: my-service
