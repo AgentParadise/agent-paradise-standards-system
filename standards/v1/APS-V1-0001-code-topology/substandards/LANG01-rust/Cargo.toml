@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Rust language adapter for Code Topology - analyzes Rust code and generates .topology/ artifacts"
+description = "Rust language adapter for Code Topology — analyzes Rust code and generates .topology/ artifacts"
 
 [dependencies]
 code-topology = { path = "../.." }

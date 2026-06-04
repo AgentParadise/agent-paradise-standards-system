@@ -1,14 +1,14 @@
-# Tests - 3D Force-Directed Projector
+# Tests — 3D Force-Directed Projector
 
 ## Test Categories
 
 ### Unit Tests (`src/lib.rs`)
 
-- `test_projector_creation` - Projector instantiation
-- `test_supported_formats` - Format enumeration
-- `test_config_schema` - JSON Schema generation
-- `test_default_config` - Default configuration values
-- `test_instability_color` - Color mapping correctness
+- `test_projector_creation` — Projector instantiation
+- `test_supported_formats` — Format enumeration
+- `test_config_schema` — JSON Schema generation
+- `test_default_config` — Default configuration values
+- `test_instability_color` — Color mapping correctness
 
 ### Integration Tests (Planned)
 

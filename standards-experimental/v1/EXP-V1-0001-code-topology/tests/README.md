@@ -1,4 +1,4 @@
-# Tests - Code Topology and Coupling Analysis
+# Tests — Code Topology and Coupling Analysis
 
 ## Test Categories
 
@@ -6,26 +6,26 @@
 
 Core type and metric calculation tests:
 
-- `test_creation` - Standard instantiation
-- `test_error_codes_defined` - Error codes are non-empty
-- `test_halstead_calculation` - Halstead derived metrics
-- `test_halstead_zero_handling` - Division by zero protection
-- `test_martin_metrics_calculation` - Martin's metrics (I, A, D)
-- `test_martin_metrics_zone_of_pain` - Zone detection
-- `test_coupling_matrix_*` - Matrix creation, symmetry, validation
-- `test_function_metrics_default` - Default metric values
-- `test_visibility_serialization` - Enum serialization
+- `test_creation` — Standard instantiation
+- `test_error_codes_defined` — Error codes are non-empty
+- `test_halstead_calculation` — Halstead derived metrics
+- `test_halstead_zero_handling` — Division by zero protection
+- `test_martin_metrics_calculation` — Martin's metrics (I, A, D)
+- `test_martin_metrics_zone_of_pain` — Zone detection
+- `test_coupling_matrix_*` — Matrix creation, symmetry, validation
+- `test_function_metrics_default` — Default metric values
+- `test_visibility_serialization` — Enum serialization
 
 ### Integration Tests (`tests/artifact_parsing.rs`)
 
 Artifact file parsing and validation:
 
-- `test_parse_functions_json` - Parse functions.json from sample
-- `test_parse_modules_json` - Parse modules.json with Martin's metrics
-- `test_parse_coupling_matrix_json` - Parse coupling matrix
-- `test_coupling_matrix_has_layout` - Verify layout positions
-- `test_all_modules_in_coupling_matrix` - Cross-file consistency
-- `test_values_in_valid_range` - Coupling values in [0, 1]
+- `test_parse_functions_json` — Parse functions.json from sample
+- `test_parse_modules_json` — Parse modules.json with Martin's metrics
+- `test_parse_coupling_matrix_json` — Parse coupling matrix
+- `test_coupling_matrix_has_layout` — Verify layout positions
+- `test_all_modules_in_coupling_matrix` — Cross-file consistency
+- `test_values_in_valid_range` — Coupling values in [0, 1]
 
 ## Running Tests
 
@@ -63,9 +63,9 @@ examples/sample-topology/
 
 When adding new tests:
 
-1. **Unit tests** - Add to `#[cfg(test)]` module in `src/lib.rs`
-2. **Integration tests** - Add to `tests/*.rs`
-3. **Sample artifacts** - Add to `examples/sample-topology/`
+1. **Unit tests** — Add to `#[cfg(test)]` module in `src/lib.rs`
+2. **Integration tests** — Add to `tests/*.rs`
+3. **Sample artifacts** — Add to `examples/sample-topology/`
 
 Ensure all tests pass before committing:
 

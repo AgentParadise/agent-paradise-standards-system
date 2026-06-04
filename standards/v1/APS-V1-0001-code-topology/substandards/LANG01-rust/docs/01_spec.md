@@ -1,4 +1,4 @@
-# APS-V1-0001.LANG01 - Rust Language Adapter (Specification)
+# APS-V1-0001.LANG01 — Rust Language Adapter (Specification)
 
 **Version**: 0.1.0
 **Status**: Promoted

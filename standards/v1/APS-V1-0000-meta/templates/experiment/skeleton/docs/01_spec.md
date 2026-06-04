@@ -1,4 +1,4 @@
-# {{id}} - {{name}} (Experimental Specification)
+# {{id}} — {{name}} (Experimental Specification)
 
 **Version**: {{version}}
 **Status**: Experimental

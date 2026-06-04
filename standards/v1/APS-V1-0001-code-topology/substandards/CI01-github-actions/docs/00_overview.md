@@ -88,7 +88,7 @@ Default thresholds (configurable):
 ## Example PR Comment
 
 ```markdown
-## 🔍 Topology Analysis - ⚠️ 2 warnings
+## 🔍 Topology Analysis — ⚠️ 2 warnings
 
 ### Summary
 | Metric | Base | PR | Δ |
@@ -97,7 +97,7 @@ Default thresholds (configurable):
 | Max CC | 12 | 18 | +6 ⚠️ |
 
 ### New Hotspots
-⚠️ `parser::parse_complex` - CC: 18 (threshold: 15)
+⚠️ `parser::parse_complex` — CC: 18 (threshold: 15)
 
 ### Module Changes
 ```mermaid

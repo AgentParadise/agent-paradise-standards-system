@@ -1,4 +1,4 @@
-//! EXP-V1-0003 - Architecture Fitness Functions
+//! EXP-V1-0003 — Architecture Fitness Functions
 //!
 //! Declarative architecture fitness functions: automated assertions on architectural
 //! properties that run in CI and fail on violations. This is the assertion layer on
@@ -81,9 +81,9 @@ pub struct ThresholdRule {
     pub source: String,
     /// JSON field to evaluate.
     pub field: String,
-    /// Upper bound - violation if value > max.
+    /// Upper bound — violation if value > max.
     pub max: Option<f64>,
-    /// Lower bound - violation if value < min.
+    /// Lower bound — violation if value < min.
     pub min: Option<f64>,
     /// Entity granularity: "module", "file", "function".
     pub scope: String,
@@ -305,7 +305,7 @@ pub enum FitnessError {
 
 // ─── Validator ──────────────────────────────────────────────────────────────
 
-/// Fitness function validator - evaluates rules against topology artifacts.
+/// Fitness function validator — evaluates rules against topology artifacts.
 pub struct FitnessValidator {
     config: FitnessConfig,
     exceptions: ExceptionSet,
@@ -372,13 +372,13 @@ impl FitnessValidator {
             all_stale.extend(stale);
         }
 
-        // Detect stale exceptions - only for rules that were fully evaluated.
+        // Detect stale exceptions — only for rules that were fully evaluated.
         // Skipped rules (missing artifact) should not trigger EntityNotFound.
         // Use matched_exceptions (not just excepted ones) so insufficient-budget
         // exceptions are not falsely reported as EntityNotFound.
         for (rule_id, entities) in &self.exceptions.rules {
             if !evaluated_rule_ids.contains(rule_id) {
-                continue; // Rule was skipped or doesn't exist - don't flag exceptions as stale
+                continue; // Rule was skipped or doesn't exist — don't flag exceptions as stale
             }
             let matched = matched_exceptions.get(rule_id);
             for entity in entities.keys() {
@@ -433,7 +433,7 @@ impl FitnessValidator {
     /// Returns `(result, stale_exceptions, matched_exception_entities)` where
     /// `matched_exception_entities` contains every entity path that had *any* exception
     /// entry (whether the budget was sufficient or not). This is used by `validate()` for
-    /// accurate stale-exception detection - an insufficient-budget exception is not stale.
+    /// accurate stale-exception detection — an insufficient-budget exception is not stale.
     fn evaluate_threshold_rule(
         &self,
         rule: &ThresholdRule,
@@ -506,7 +506,7 @@ impl FitnessValidator {
             if violated {
                 // Check for exception
                 let excepted = if let Some(exc) = self.exceptions.get(&rule.id, entity_path) {
-                    // Record match regardless of budget - prevents false EntityNotFound stale
+                    // Record match regardless of budget — prevents false EntityNotFound stale
                     matched_exception_entities.insert(entity_path.clone());
                     // If exception has a value budget, check it
                     if let Some(budget) = exc.value {
@@ -534,7 +534,7 @@ impl FitnessValidator {
                     excepted,
                 });
             } else {
-                // Entity passes - check if there's a now-stale exception
+                // Entity passes — check if there's a now-stale exception
                 if self.exceptions.get(&rule.id, entity_path).is_some() {
                     stale.push(StaleException {
                         rule_id: rule.id.clone(),
@@ -580,7 +580,7 @@ impl FitnessValidator {
 /// Extract entities from a topology artifact JSON.
 ///
 /// Supports three shapes:
-/// - **Wrapped object**: `{ "functions": [{ "id": "...", ... }, ...] }` - auto-detected
+/// - **Wrapped object**: `{ "functions": [{ "id": "...", ... }, ...] }` — auto-detected
 ///   from scope (`"function"` → `"functions"` key, `"module"` → `"modules"`, etc.).
 ///   Falls back to checking for a single array-valued key if scope doesn't match.
 /// - **Flat object**: `{ "entity_path": { "field": value, ... }, ... }`
@@ -604,7 +604,7 @@ fn extract_entities(artifact: &serde_json::Value, scope: &str) -> Vec<(String, s
                 }
             }
 
-            // Step 3: Fallback heuristic - if exactly one key has an array value, unwrap it
+            // Step 3: Fallback heuristic — if exactly one key has an array value, unwrap it
             let array_entries: Vec<_> = map.iter().filter(|(_, v)| v.is_array()).collect();
             if array_entries.len() == 1 {
                 if let serde_json::Value::Array(arr) = array_entries[0].1 {

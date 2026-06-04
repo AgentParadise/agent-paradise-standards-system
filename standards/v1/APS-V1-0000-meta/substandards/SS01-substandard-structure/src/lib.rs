@@ -1,4 +1,4 @@
-//! APS-V1-0000.SS01 - Substandard Structure
+//! APS-V1-0000.SS01 — Substandard Structure
 //!
 //! This substandard defines the structural requirements for all APS substandards.
 //! Substandards are domain-specific extensions that inherit from a parent standard

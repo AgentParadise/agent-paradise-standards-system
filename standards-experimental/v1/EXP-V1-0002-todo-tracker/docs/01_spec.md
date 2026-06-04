@@ -1,4 +1,4 @@
-# EXP-V1-0002 - TODO/FIXME Tracker and Issue Validator
+# EXP-V1-0002 — TODO/FIXME Tracker and Issue Validator
 
 **Version**: 0.1.0
 **Status**: Experimental
@@ -20,21 +20,21 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 This standard defines a **language-agnostic artifact format** for tracking TODO and FIXME comments in source code, with validation that they reference issue tracker items. The artifacts are designed to be:
 
-1. **Committable** - Stored in version control alongside code
-2. **Deterministic** - Same codebase → same artifacts
-3. **Machine-readable** - Consumable by AI agents and tooling
-4. **Human-reviewable** - Diffable and inspectable
-5. **Actionable** - Enables enforcement and visualization
+1. **Committable** — Stored in version control alongside code
+2. **Deterministic** — Same codebase → same artifacts
+3. **Machine-readable** — Consumable by AI agents and tooling
+4. **Human-reviewable** — Diffable and inspectable
+5. **Actionable** — Enables enforcement and visualization
 
 ### 1.2 Scope
 
 This standard covers:
 
-- **Artifact format specification** - Directory structure and file schemas
-- **Comment format specification** - Required syntax for TODO/FIXME items
-- **Validation rules** - Format compliance and issue reference validation
-- **Configuration schema** - How to configure the tracker
-- **GitHub integration** - Optional API validation
+- **Artifact format specification** — Directory structure and file schemas
+- **Comment format specification** — Required syntax for TODO/FIXME items
+- **Validation rules** — Format compliance and issue reference validation
+- **Configuration schema** — How to configure the tracker
+- **GitHub integration** — Optional API validation
 
 This standard does NOT cover:
 
@@ -47,9 +47,9 @@ This standard does NOT cover:
 
 This standard is independent but designed to integrate with:
 
-- **EXP-V1-0001 (Code Topology)** - Can reference TODO items in complexity reports
-- **Consumer SDK** - Can be adopted via `.aps/manifest.toml`
-- **CI/CD Substandards** - Can be enforced in GitHub Actions
+- **EXP-V1-0001 (Code Topology)** — Can reference TODO items in complexity reports
+- **Consumer SDK** — Can be adopted via `.aps/manifest.toml`
+- **CI/CD Substandards** — Can be enforced in GitHub Actions
 
 ---
 

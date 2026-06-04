@@ -96,11 +96,11 @@ notes = "Promoted after security review"
 
 ## Guidelines for Experiments
 
-1. **Version at 0.x.x** - Experiments typically start at `0.1.0`
-2. **Document clearly** - Explain what you're testing and why
-3. **Gather feedback** - Use issues/discussions for community input
-4. **Iterate quickly** - Don't be afraid to make breaking changes (it's experimental!)
-5. **Aim for promotion** - The goal is to prove the concept and promote
+1. **Version at 0.x.x** — Experiments typically start at `0.1.0`
+2. **Document clearly** — Explain what you're testing and why
+3. **Gather feedback** — Use issues/discussions for community input
+4. **Iterate quickly** — Don't be afraid to make breaking changes (it's experimental!)
+5. **Aim for promotion** — The goal is to prove the concept and promote
 
 ## What Happens After Promotion?
 

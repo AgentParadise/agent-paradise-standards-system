@@ -31,7 +31,7 @@ pub fn generate(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{repo_name} - Topology Dashboard</title>
+    <title>{repo_name} — Topology Dashboard</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0f; color: #fff; padding: 40px; min-height: 100vh; }}
@@ -67,7 +67,7 @@ pub fn generate(
 </head>
 <body>
     <div class="container">
-        <h1>📊 {repo_name} - Topology Dashboard</h1>
+        <h1>📊 {repo_name} — Topology Dashboard</h1>
         <p class="subtitle">Generated: {timestamp}</p>
 
         <div class="stats">
@@ -92,7 +92,7 @@ pub fn generate(
             <div id="about-body" class="about-body">
                 <h3>Philosophy</h3>
                 <p>
-                    Code topology treats a codebase as a living structure - not just lines of text,
+                    Code topology treats a codebase as a living structure — not just lines of text,
                     but a system of interconnected modules with measurable structural properties.
                     Like an X-ray for your architecture, topology analysis reveals the hidden forces
                     that make code easy or hard to change: coupling density, complexity hotspots,
@@ -100,7 +100,7 @@ pub fn generate(
                 </p>
                 <p>
                     The goal is <strong style="color:#ccc">deterministic, self-validating artifacts</strong>.
-                    Same code + same seed = same output. No opinions, no heuristics that drift -
+                    Same code + same seed = same output. No opinions, no heuristics that drift —
                     just structural facts derived from the AST via tree-sitter parsing.
                 </p>
 
@@ -126,7 +126,7 @@ pub fn generate(
 
                 <h3>Health Score</h3>
                 <p>
-                    Each module gets a composite health score (0-100%) from five equally-weighted metrics:
+                    Each module gets a composite health score (0–100%) from five equally-weighted metrics:
                     cyclomatic complexity, cognitive complexity, lines-of-code per function, coupling fan-out,
                     and module size. The color scale runs from
                     <span style="color:#00ff88">green (healthy)</span> through
@@ -136,21 +136,21 @@ pub fn generate(
 
                 <h3>How to Use the Visualizations</h3>
                 <p>
-                    <strong style="color:#ddd">CodeCity</strong> - look for tall, red buildings. Those are your complexity hotspots.
+                    <strong style="color:#ddd">CodeCity</strong> — look for tall, red buildings. Those are your complexity hotspots.
                     Districts group modules by package/slice. Hover any building for a full metric breakdown.
                 </p>
                 <p>
-                    <strong style="color:#ddd">3D Coupling Graph</strong> - thick edges mean high coupling.
-                    Clusters of tightly-connected nodes may indicate a bounded context - or a tangled dependency mess.
+                    <strong style="color:#ddd">3D Coupling Graph</strong> — thick edges mean high coupling.
+                    Clusters of tightly-connected nodes may indicate a bounded context — or a tangled dependency mess.
                     Hover nodes to see their connections.
                 </p>
                 <p>
-                    <strong style="color:#ddd">Package Clusters</strong> - shows how packages relate to each other at a higher level.
+                    <strong style="color:#ddd">Package Clusters</strong> — shows how packages relate to each other at a higher level.
                     Isolated clusters are healthy boundaries. Dense interconnections suggest leaky abstractions.
                 </p>
                 <p>
-                    <strong style="color:#ddd">VSA Diagram</strong> - maps feature slices against architectural layers.
-                    A well-structured vertical slice should touch exactly the layers it needs - no more, no less.
+                    <strong style="color:#ddd">VSA Diagram</strong> — maps feature slices against architectural layers.
+                    A well-structured vertical slice should touch exactly the layers it needs — no more, no less.
                 </p>
             </div>
         </div>

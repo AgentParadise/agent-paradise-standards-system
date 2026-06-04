@@ -33,12 +33,12 @@ aps run topology viz --type vsa
 
 ## Features
 
-- **Self-contained HTML** - No server required, open directly in browser
-- **Interactive controls** - Pan, zoom, rotate, filter
-- **Coupling threshold filter** - Focus on strong relationships
-- **Health indicators** - Color-coded by module health score
-- **Tooltips** - Detailed metrics on hover
-- **Sidebar navigation** - Quick access to modules by coupling strength
+- **Self-contained HTML** — No server required, open directly in browser
+- **Interactive controls** — Pan, zoom, rotate, filter
+- **Coupling threshold filter** — Focus on strong relationships
+- **Health indicators** — Color-coded by module health score
+- **Tooltips** — Detailed metrics on hover
+- **Sidebar navigation** — Quick access to modules by coupling strength
 
 ## Data Requirements
 
@@ -49,5 +49,5 @@ aps run topology analyze .
 ```
 
 Required files:
-- `.topology/metrics/modules.json` - Module metadata and metrics
-- `.topology/graphs/coupling-matrix.json` - Coupling relationships
+- `.topology/metrics/modules.json` — Module metadata and metrics
+- `.topology/graphs/coupling-matrix.json` — Coupling relationships

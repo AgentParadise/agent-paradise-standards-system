@@ -24,24 +24,24 @@ aps run fitness validate . --report fitness-report.json
 - `fitness.toml` with rule definitions
 
 **Exit codes:**
-- `0` - all rules pass (no unexcepted error-severity violations)
-- `1` - at least one rule failed
+- `0` — all rules pass (no unexcepted error-severity violations)
+- `1` — at least one rule failed
 
 ### interpret-report
 
 How to read a `fitness-report.json`:
 
-1. **summary** - overall pass/fail/warn counts
-2. **results** - per-rule details with violations
-   - `status: "pass"` - all entities within threshold (possibly with exceptions)
-   - `status: "fail"` - unexcepted violations with error severity
-   - `status: "warn"` - unexcepted violations with warning severity
-   - `status: "skip"` - topology artifact not found
-3. **violations** - each violation shows the entity, actual value, threshold, and whether it's excepted
-4. **stale_exceptions** - exceptions that should be removed (entity fixed or deleted)
+1. **summary** — overall pass/fail/warn counts
+2. **results** — per-rule details with violations
+   - `status: "pass"` — all entities within threshold (possibly with exceptions)
+   - `status: "fail"` — unexcepted violations with error severity
+   - `status: "warn"` — unexcepted violations with warning severity
+   - `status: "skip"` — topology artifact not found
+3. **violations** — each violation shows the entity, actual value, threshold, and whether it's excepted
+4. **stale_exceptions** — exceptions that should be removed (entity fixed or deleted)
 
 **Key fields per violation:**
-- `entity` - the module/file/function path
-- `actual` - current metric value
-- `threshold` - the rule's bound
-- `excepted` - `true` if covered by an exception in `fitness-exceptions.toml`
+- `entity` — the module/file/function path
+- `actual` — current metric value
+- `threshold` — the rule's bound
+- `excepted` — `true` if covered by an exception in `fitness-exceptions.toml`

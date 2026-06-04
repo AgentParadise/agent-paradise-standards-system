@@ -25,17 +25,17 @@ The **main standard defines the artifact format**. Each visualization is a **sep
 
 ```
 EXP-V1-0001 (Main)
-├── EXP-V1-0001.3D01 - 3D Force-Directed
-├── EXP-V1-0001.GV01 - Graphviz/DOT
-└── EXP-V1-0001.MM01 - Mermaid
+├── EXP-V1-0001.3D01 — 3D Force-Directed
+├── EXP-V1-0001.GV01 — Graphviz/DOT
+└── EXP-V1-0001.MM01 — Mermaid
 ```
 
 ## Rationale
 
-- **Clean separation** - Data format is stable; renderers evolve independently
-- **Parallel development** - Different teams can work on different projectors
-- **Easy extension** - Add new visualizations without touching core
-- **APS-native** - Follows the substandard pattern from the meta-standard
+- **Clean separation** — Data format is stable; renderers evolve independently
+- **Parallel development** — Different teams can work on different projectors
+- **Easy extension** — Add new visualizations without touching core
+- **APS-native** — Follows the substandard pattern from the meta-standard
 
 ## Consequences
 

@@ -66,7 +66,7 @@ pub fn generate(modules_json: &str) -> String {
 </head>
 <body>
     <h1>🍰 Vertical Slice Architecture</h1>
-    <p class="subtitle">Columns = bounded contexts, Rows = architectural layers - click a cell to inspect</p>
+    <p class="subtitle">Columns = bounded contexts, Rows = architectural layers — click a cell to inspect</p>
 
     <div class="matrix-container">
         <table id="matrix"></table>

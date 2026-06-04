@@ -5,11 +5,11 @@
 //!
 //! ## Visualization Types
 //!
-//! - **3D Force-Directed** - Coupling relationships as a 3D graph
-//! - **CodeCity** - 3D city metaphor (buildings = modules, height = complexity)
-//! - **Package Clusters** - 2D force-directed package relationships
-//! - **VSA Diagram** - Vertical Slice Architecture matrix
-//! - **Dashboard Index** - Landing page linking to all visualizations
+//! - **3D Force-Directed** — Coupling relationships as a 3D graph
+//! - **CodeCity** — 3D city metaphor (buildings = modules, height = complexity)
+//! - **Package Clusters** — 2D force-directed package relationships
+//! - **VSA Diagram** — Vertical Slice Architecture matrix
+//! - **Dashboard Index** — Landing page linking to all visualizations
 //!
 //! ## Usage
 //!
@@ -35,7 +35,7 @@ pub mod vsa;
 pub use clusters::generate as generate_clusters;
 pub use codecity::generate as generate_codecity;
 pub use force_3d::generate as generate_force_3d;
-// Note: index::generate takes a repo_name parameter - use index::generate directly
+// Note: index::generate takes a repo_name parameter — use index::generate directly
 pub use index::generate as generate_index;
 pub use vsa::generate as generate_vsa;
 

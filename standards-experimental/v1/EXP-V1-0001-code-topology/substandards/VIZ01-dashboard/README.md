@@ -1,4 +1,4 @@
-# VIZ01-dashboard - TopologyDependencyGraph
+# VIZ01-dashboard — TopologyDependencyGraph
 
 A generic, reusable React component that renders an interactive force-directed dependency graph from `.topology/` artifacts.
 
@@ -7,9 +7,9 @@ A generic, reusable React component that renders an interactive force-directed d
 - **Canvas-based** force-directed graph powered by `d3-force`
 - **Pan & zoom** with pointer/scroll interaction
 - **Hover tooltips** showing module metrics (LOC, cyclomatic complexity, instability)
-- **Bounded-context coloring** - automatic color mapping by module ID keywords
-- **Filtering** - excludes worktree modules and small modules (< 100 LOC by default)
-- **Fully self-contained** - copy into any React/Next.js project
+- **Bounded-context coloring** — automatic color mapping by module ID keywords
+- **Filtering** — excludes worktree modules and small modules (< 100 LOC by default)
+- **Fully self-contained** — copy into any React/Next.js project
 
 ## Installation
 
@@ -41,7 +41,7 @@ import modData from './.topology/metrics/modules.json';
 | `dependencies` | `DependencyEdge[]` | **required** | Edges from `dependencies.json` |
 | `modules` | `ModuleMetric[]` | **required** | Module entries from `modules.json` |
 | `height` | `number` | `600` | Container height in px |
-| `className` | `string` | - | CSS class on wrapper div |
+| `className` | `string` | — | CSS class on wrapper div |
 | `filterOptions` | `FilterOptions` | `{}` | Min LOC, exclude prefixes, color overrides |
 | `legendItems` | `[label, color][]` | built-in | Custom legend entries |
 

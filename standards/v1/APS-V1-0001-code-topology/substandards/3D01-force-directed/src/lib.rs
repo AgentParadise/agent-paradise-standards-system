@@ -5,10 +5,10 @@
 //!
 //! ## Key Features
 //!
-//! - **Force-directed layout** - Tightly coupled modules cluster together
-//! - **Deterministic positions** - Saves layout positions for reproducibility
-//! - **Multiple formats** - WebGL scene, GLTF model, HTML viewer
-//! - **Metric-driven sizing** - Node size reflects complexity
+//! - **Force-directed layout** — Tightly coupled modules cluster together
+//! - **Deterministic positions** — Saves layout positions for reproducibility
+//! - **Multiple formats** — WebGL scene, GLTF model, HTML viewer
+//! - **Metric-driven sizing** — Node size reflects complexity
 //!
 //! ## Usage
 //!

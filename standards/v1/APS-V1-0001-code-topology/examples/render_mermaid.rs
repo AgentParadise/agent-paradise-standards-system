@@ -121,7 +121,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Save to file
     let output_path = "ARCHITECTURE.md";
     let mut content = String::new();
-    content.push_str("# Agent Paradise Standards System - Architecture\n\n");
+    content.push_str("# Agent Paradise Standards System — Architecture\n\n");
     content.push_str("*Auto-generated from `.topology/` artifacts*\n\n");
     content.push_str("## Module Dependency Flowchart\n\n");
     content.push_str("```mermaid\n");

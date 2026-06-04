@@ -1,8 +1,8 @@
-# Architecture Fitness Functions - Overview
+# Architecture Fitness Functions — Overview
 
 ## What is this?
 
-**EXP-V1-0003** defines a declarative format for **architecture fitness functions** - automated assertions on architectural properties that run in CI and fail on violations. It is the *assertion layer* on top of APS-V1-0001's *measurement layer*.
+**EXP-V1-0003** defines a declarative format for **architecture fitness functions** — automated assertions on architectural properties that run in CI and fail on violations. It is the *assertion layer* on top of APS-V1-0001's *measurement layer*.
 
 Instead of writing bespoke Python/Rust tests for every metric threshold, you declare rules in a `fitness.toml` file and let the validator evaluate them against topology artifacts.
 
@@ -10,10 +10,10 @@ Instead of writing bespoke Python/Rust tests for every metric threshold, you dec
 
 As codebases grow, architectural constraints drift. Fitness functions catch this automatically:
 
-1. **Declarative** - Rules expressed as TOML, not imperative test code
-2. **Reusable** - Same format works across any codebase with topology artifacts
-3. **Ratcheting** - Violations can be excepted with mandatory issue references; budgets can only shrink
-4. **CI-friendly** - Exit codes and JSON reports for automation
+1. **Declarative** — Rules expressed as TOML, not imperative test code
+2. **Reusable** — Same format works across any codebase with topology artifacts
+3. **Ratcheting** — Violations can be excepted with mandatory issue references; budgets can only shrink
+4. **CI-friendly** — Exit codes and JSON reports for automation
 
 ## Quick Example
 
@@ -81,7 +81,7 @@ issue = "#138"
 ```
 
 - If the violation is fixed (metric drops below threshold), the exception becomes **stale**
-- If the metric exceeds the budget, the exception is **insufficient** - CI fails
+- If the metric exceeds the budget, the exception is **insufficient** — CI fails
 - Stale exceptions are reported so they can be cleaned up
 
 ### 3. Wrapped Topology Artifacts
@@ -168,23 +168,23 @@ issue = "#42"
 ## Use Cases
 
 ### For Developers
-- **Prevent drift** - New code that exceeds thresholds fails CI immediately
-- **Track debt** - Exceptions create visibility into known violations
-- **Simplify rules** - Replace bespoke test scripts with declarative TOML
+- **Prevent drift** — New code that exceeds thresholds fails CI immediately
+- **Track debt** — Exceptions create visibility into known violations
+- **Simplify rules** — Replace bespoke test scripts with declarative TOML
 
 ### For AI Agents
-- **Read fitness-report.json** - Understand which metrics are violated
-- **Add exceptions** - Acknowledge violations with issue references
-- **Monitor ratchet** - Track exceptions shrinking over time
+- **Read fitness-report.json** — Understand which metrics are violated
+- **Add exceptions** — Acknowledge violations with issue references
+- **Monitor ratchet** — Track exceptions shrinking over time
 
 ### For Teams
-- **Code reviews** - Violations flagged before merge
-- **Onboarding** - Rules are self-documenting in fitness.toml
-- **Architecture governance** - Thresholds enforce team agreements
+- **Code reviews** — Violations flagged before merge
+- **Onboarding** — Rules are self-documenting in fitness.toml
+- **Architecture governance** — Thresholds enforce team agreements
 
 ## Status
 
-**Experimental** - This standard is in incubation. Feedback welcome!
+**Experimental** — This standard is in incubation. Feedback welcome!
 
 ### What's Working
 - ✅ Threshold rule evaluation
@@ -195,14 +195,14 @@ issue = "#42"
 - ✅ Dogfooded in syntropic137
 
 ### Planned
-- ⏳ Dependency rules (v0.2.0) - forbidden/allowed/required import constraints
-- ⏳ Structural rules (v0.3.0) - AST-level pattern assertions
-- ⏳ `aps run fitness ratchet` - auto-generate exceptions from current violations
+- ⏳ Dependency rules (v0.2.0) — forbidden/allowed/required import constraints
+- ⏳ Structural rules (v0.3.0) — AST-level pattern assertions
+- ⏳ `aps run fitness ratchet` — auto-generate exceptions from current violations
 
 ## Related Standards
 
-- **APS-V1-0001 (Code Topology)** - Produces the `.topology/metrics/` artifacts consumed by fitness rules
-- **EXP-V1-0002 (TODO Tracker)** - Complementary: tracks TODO comments, fitness tracks metric thresholds
+- **APS-V1-0001 (Code Topology)** — Produces the `.topology/metrics/` artifacts consumed by fitness rules
+- **EXP-V1-0002 (TODO Tracker)** — Complementary: tracks TODO comments, fitness tracks metric thresholds
 
 ## Learn More
 

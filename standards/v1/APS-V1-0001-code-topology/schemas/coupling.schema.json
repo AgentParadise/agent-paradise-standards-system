@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:apss:schema:aps-v1-0001:coupling:1.0.0",
   "title": "Topology Coupling Artifact",
-  "description": "Flat per-module view of Martin's package metrics, optimized for fitness-rule consumption. Written to .topology/metrics/coupling.json. This is a denormalized projection of the martin block in modules.json - the same data, flat at the module level, with explicit long-form field names. Consumers that want the full module record should read modules.json; consumers that only need coupling governance read coupling.json.",
+  "description": "Flat per-module view of Martin's package metrics, optimized for fitness-rule consumption. Written to .topology/metrics/coupling.json. This is a denormalized projection of the martin block in modules.json — the same data, flat at the module level, with explicit long-form field names. Consumers that want the full module record should read modules.json; consumers that only need coupling governance read coupling.json.",
   "type": "object",
   "required": ["schema_version", "modules"],
   "additionalProperties": false,

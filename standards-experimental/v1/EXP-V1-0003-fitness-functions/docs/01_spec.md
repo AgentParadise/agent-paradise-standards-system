@@ -1,4 +1,4 @@
-# EXP-V1-0003 - Architecture Fitness Functions
+# EXP-V1-0003 — Architecture Fitness Functions
 
 **Version**: 0.1.0
 **Status**: Experimental
@@ -18,24 +18,24 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ### 1.1 Purpose
 
-This standard defines a **declarative format for architecture fitness functions** - automated assertions on architectural properties that run in CI and fail on violations. Fitness functions are the *assertion layer* on top of APS-V1-0001's *measurement layer*.
+This standard defines a **declarative format for architecture fitness functions** — automated assertions on architectural properties that run in CI and fail on violations. Fitness functions are the *assertion layer* on top of APS-V1-0001's *measurement layer*.
 
 The format is designed to be:
 
-1. **Declarative** - Rules expressed as TOML, not imperative test code
-2. **Reusable** - Same rule format works across any codebase with topology artifacts
-3. **Ratcheting** - Violations can be excepted with mandatory issue references; budgets can only shrink
-4. **CI-friendly** - Exit codes and JSON reports for automation
+1. **Declarative** — Rules expressed as TOML, not imperative test code
+2. **Reusable** — Same rule format works across any codebase with topology artifacts
+3. **Ratcheting** — Violations can be excepted with mandatory issue references; budgets can only shrink
+4. **CI-friendly** — Exit codes and JSON reports for automation
 
 ### 1.2 Scope
 
 This standard covers:
 
-- **Rule format specification** - `fitness.toml` schema for threshold, dependency, and structural rules
-- **Exception format specification** - `fitness-exceptions.toml` schema for tracked violations
-- **Report format specification** - `fitness-report.json` schema for validation output
-- **Validation semantics** - How rules are evaluated against topology artifacts
-- **Ratchet semantics** - How exceptions degrade over time
+- **Rule format specification** — `fitness.toml` schema for threshold, dependency, and structural rules
+- **Exception format specification** — `fitness-exceptions.toml` schema for tracked violations
+- **Report format specification** — `fitness-report.json` schema for validation output
+- **Validation semantics** — How rules are evaluated against topology artifacts
+- **Ratchet semantics** — How exceptions degrade over time
 
 This standard does NOT cover:
 
@@ -45,9 +45,9 @@ This standard does NOT cover:
 
 ### 1.3 Relationship to APS-V1-0001
 
-APS-V1-0001 (Code Topology) defines the **measurement layer** - it produces `.topology/metrics/` artifacts containing complexity, coupling, and structural data.
+APS-V1-0001 (Code Topology) defines the **measurement layer** — it produces `.topology/metrics/` artifacts containing complexity, coupling, and structural data.
 
-This standard defines the **assertion layer** - it consumes those artifacts and evaluates architectural rules against them.
+This standard defines the **assertion layer** — it consumes those artifacts and evaluates architectural rules against them.
 
 ```
 APS-V1-0001 (measure) → .topology/metrics/*.json
@@ -59,11 +59,11 @@ EXP-V1-0003 (assert)  → fitness.toml rules
 
 ### 1.4 Normative References
 
-- Ford, N. et al. (2017). *Building Evolutionary Architectures* - Fitness function taxonomy
-- SonarSource Cognitive Complexity - Metric definitions
-- [ArchUnit](https://www.archunit.org/) - FreezingArchRule ratchet pattern
-- [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) - Forbidden/allowed/required rule model
-- [pytest-archon](https://github.com/jwbargsten/pytest-archon) - Python import rule assertions
+- Ford, N. et al. (2017). *Building Evolutionary Architectures* — Fitness function taxonomy
+- SonarSource Cognitive Complexity — Metric definitions
+- [ArchUnit](https://www.archunit.org/) — FreezingArchRule ratchet pattern
+- [dependency-cruiser](https://github.com/sverweij/dependency-cruiser) — Forbidden/allowed/required rule model
+- [pytest-archon](https://github.com/jwbargsten/pytest-archon) — Python import rule assertions
 
 ---
 
@@ -83,9 +83,9 @@ An **architecture fitness function** is an objective integrity assessment of som
 
 A **rule** is a single architectural assertion declared in `fitness.toml`. Rules have:
 
-- **ID** - Unique identifier (e.g., `max-cyclomatic`)
-- **Type** - `threshold`, `dependency`, or `structural`
-- **Severity** - `error` (blocks CI) or `warning` (advisory)
+- **ID** — Unique identifier (e.g., `max-cyclomatic`)
+- **Type** — `threshold`, `dependency`, or `structural`
+- **Severity** — `error` (blocks CI) or `warning` (advisory)
 
 ### 2.3 Exception
 
@@ -109,9 +109,9 @@ The rule file MUST be named `fitness.toml` and SHOULD be placed at the repositor
 
 ```toml
 [config]
-topology_dir = ".topology"                          # REQUIRED - path to topology artifacts
-exceptions = "fitness-exceptions.toml"              # OPTIONAL - path to exceptions file (default: "fitness-exceptions.toml")
-severity_default = "error"                          # OPTIONAL - default severity for rules (default: "error")
+topology_dir = ".topology"                          # REQUIRED — path to topology artifacts
+exceptions = "fitness-exceptions.toml"              # OPTIONAL — path to exceptions file (default: "fitness-exceptions.toml")
+severity_default = "error"                          # OPTIONAL — default severity for rules (default: "error")
 ```
 
 | Field | Type | Required | Description |
@@ -142,8 +142,8 @@ exclude = ["**/test_*", "**/tests/**"]              # Glob patterns to exclude
 | `name` | string | MUST | Human-readable rule name |
 | `source` | string | MUST | Path to topology artifact (relative to `topology_dir`) |
 | `field` | string | MUST | JSON field path to evaluate (supports dot-notation, e.g., `metrics.cognitive`) |
-| `max` | float | MUST (one of max/min) | Upper bound - violation if `value > max` |
-| `min` | float | MUST (one of max/min) | Lower bound - violation if `value < min` |
+| `max` | float | MUST (one of max/min) | Upper bound — violation if `value > max` |
+| `min` | float | MUST (one of max/min) | Lower bound — violation if `value < min` |
 | `scope` | string | MUST | Entity granularity: `"module"`, `"file"`, `"function"` |
 | `severity` | string | MAY | `"error"` or `"warning"` (default: config default) |
 | `exclude` | array | MAY | Glob patterns for entities to skip |
@@ -183,7 +183,7 @@ Within unwrapped arrays, entity identifiers are resolved in priority order: `id`
 
 ### 3.3 Dependency Rules (v0.2.0)
 
-> ⚠️ **Planned for v0.2.0** - format documented here for feedback; not evaluated in v0.1.0.
+> ⚠️ **Planned for v0.2.0** — format documented here for feedback; not evaluated in v0.1.0.
 
 Dependency rules assert constraints on the import/coupling graph.
 
@@ -217,7 +217,7 @@ severity = "error"
 
 ### 3.4 Structural Rules (v0.3.0)
 
-> ⚠️ **Planned for v0.3.0** - AST-level pattern assertions, delegated to language-specific substandards.
+> ⚠️ **Planned for v0.3.0** — AST-level pattern assertions, delegated to language-specific substandards.
 
 ---
 
@@ -255,7 +255,7 @@ The `issue` field is **REQUIRED**. Exceptions without issue references MUST caus
 
 ### 4.3 Ratchet Semantics
 
-1. **Budget enforcement**: If `value` is specified and the actual metric value exceeds the exception's `value`, the exception is **insufficient** - the violation is reported as unexcepted.
+1. **Budget enforcement**: If `value` is specified and the actual metric value exceeds the exception's `value`, the exception is **insufficient** — the violation is reported as unexcepted.
 2. **Stale detection**: If an entity no longer exists in the topology artifacts, or its metric value is now within the rule's threshold, the exception is **stale**. Stale exceptions MUST be reported in the validation output.
 3. **Monotonic decrease**: When regenerating exceptions (via `aps run fitness ratchet`), new `value` entries MUST NOT exceed previous values. The ratchet only tightens.
 

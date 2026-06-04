@@ -4,9 +4,9 @@ Agent skills for working with topology visualizations.
 
 ## Available Skills
 
-- `visualize-topology.md` - Generate and open topology visualizations
-- `compare-visualizations.md` - Compare different visualization perspectives
-- `customize-viz.md` - Modify visualization parameters
+- `visualize-topology.md` — Generate and open topology visualizations
+- `compare-visualizations.md` — Compare different visualization perspectives
+- `customize-viz.md` — Modify visualization parameters
 
 ## Usage
 

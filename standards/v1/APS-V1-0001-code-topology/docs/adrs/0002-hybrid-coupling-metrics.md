@@ -8,8 +8,8 @@
 
 We need coupling data for two purposes:
 
-1. **Quality analysis** - Actionable insights about module health
-2. **3D visualization** - Distance/proximity in spatial layout
+1. **Quality analysis** — Actionable insights about module health
+2. **3D visualization** — Distance/proximity in spatial layout
 
 ## Decision
 
@@ -22,7 +22,7 @@ Compute BOTH:
 
 - **Martin's metrics** give developers actionable insights:
   - "This module is in the Zone of Pain"
-  - "Instability is 0.9 - very fragile"
+  - "Instability is 0.9 — very fragile"
 
 - **Coupling matrix** feeds visualization:
   - Symmetric matrix → distance metric
