@@ -1,39 +1,54 @@
 ---
-name: "EXP-V1-0004.PV01 (Purpose and Vision)"
-description: "Enforces the project's North Star Purpose and Vision document so agents stay aligned during plan and design"
+name: "EXP-V1-0004.PV01 (North Star: Mission, Vision, Position)"
+description: "Enforces the project's single North Star document so agents stay aligned during plan and design"
 ---
 
-# Purpose and Vision Substandard (EXP-V1-0004.PV01)
+# North Star Substandard (EXP-V1-0004.PV01)
 
-A small but load-bearing substandard. Every project that adopts EXP-V1-0004 carries a single Purpose and Vision document. Agents read it during planning and design to stay aligned with the project's North Star instead of drifting toward whatever the immediate prompt suggests.
+A small but load-bearing substandard. Every project that adopts
+EXP-V1-0004 carries a single North Star document made up of three
+sections: Mission, Vision, and Position. Agents read this document
+during planning and design to stay aligned with the project's intent
+instead of drifting toward whatever the immediate prompt suggests.
+
+This substandard is the canonical example of the parent standard's
+"single-document doc type" pattern: one file, structured frontmatter,
+required H2 sections, validated on every commit, surfaced in the docs
+root index by `description`.
 
 ## What It Enforces
 
-- The Purpose and Vision document exists at the configured location (default `docs/vision.md`).
+- The North Star document exists at the configured location (default
+  `docs/north-star.md`).
 - It carries frontmatter with `name`, `description`, and `status`.
-- It contains a `## Purpose` section, a `## Vision` section, and a `## Non-Goals` section.
-- It is backlinked from the root `CLAUDE.md` and `AGENTS.md` so agents can find it on a fresh start (handled by the parent standard's DOC03 self-reference check).
-- `status` follows the shared lifecycle vocabulary defined in the parent spec (Section 8.1): `proposed`, `active`, `deprecated`, `superseded`.
+- It contains, in order, a `## Mission` section, a `## Vision` section,
+  and a `## Position` section.
+- It is backlinked from the root `CLAUDE.md` and `AGENTS.md` so agents
+  can find it on a fresh start (handled by the parent standard's DOC03
+  self-reference check).
+- `status` follows the shared lifecycle vocabulary defined in the
+  parent spec (Section 8.1): `proposed`, `active`, `deprecated`,
+  `superseded`.
 
 ## Quick Start
 
 ```bash
-# Validate Purpose and Vision (runs as part of docs validate)
+# Validate the North Star document (runs as part of docs validate)
 aps run docs validate .
 ```
 
-A minimal valid `docs/vision.md`:
+A minimal valid `docs/north-star.md`:
 
 ```markdown
 ---
-name: "Project Purpose and Vision"
-description: "What this project exists to do and the world it tries to create"
+name: "Project North Star"
+description: "Mission, Vision, and Position for this project in one read"
 status: active
 ---
 
-# Purpose and Vision
+# North Star
 
-## Purpose
+## Mission
 
 We exist to ...
 
@@ -41,33 +56,56 @@ We exist to ...
 
 In three years, ...
 
-## Non-Goals
+## Position
 
-We will not ...
+We are the project that ...
 ```
 
 ## Configuration
 
-In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers the kebab-case key `purpose-and-vision` under the parent `docs` slug:
+In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers
+the kebab-case key `north-star` under the parent `docs` slug:
 
 ```yaml
 docs:
-  purpose-and-vision:
+  north-star:
     disable: false
-    location: docs/vision.md
+    location: docs/north-star.md
 ```
 
-Disabling: set `disable: true`. Backlinking from `CLAUDE.md` and `AGENTS.md` is enforced by the parent standard's DOC03-self-reference check, not by this substandard.
+Disabling: set `disable: true`. Backlinking from `CLAUDE.md` and
+`AGENTS.md` is enforced by the parent standard's DOC03-self-reference
+check, not by this substandard.
+
+## Why three sections, not two and not four
+
+The substandard's purpose is keeping plans, designs, and
+implementations aligned with the project's intent. The three sections
+are the smallest set that survives that load:
+
+- **Mission** answers "what do we exist to do". Present tense, names
+  the problem and the audience, not the solution.
+- **Vision** answers "where are we going". A concrete future state
+  measured against a date, so a reviewer can ask "are we on track"
+  and get a non-vacuous answer.
+- **Position** answers "where do we sit relative to the alternatives".
+  The shortest of the three; one paragraph naming the peers and what
+  this project does that they do not.
+
+A North Star without one of those three sections is doing one of the
+other two jobs badly. The validator therefore treats all three as
+required.
 
 ## Error Codes
 
 | Code | Severity | Description |
 |------|----------|-------------|
-| `PV01-document-missing` | error | No file at `docs.purpose-and-vision.location`. |
+| `PV01-document-missing` | error | No file at `docs.north-star.location`. |
 | `PV01-frontmatter-missing` | error | Document lacks frontmatter. |
 | `PV01-frontmatter-field-missing` | error | Document missing `name`, `description`, or `status`. |
-| `PV01-missing-purpose-section` | error | Document missing `## Purpose` heading. |
+| `PV01-missing-mission-section` | error | Document missing `## Mission` heading. |
 | `PV01-missing-vision-section` | error | Document missing `## Vision` heading. |
-| `PV01-missing-non-goals-section` | warning | Document missing `## Non-Goals` heading. |
+| `PV01-missing-position-section` | error | Document missing `## Position` heading. |
 | `PV01-invalid-status` | error | `status` is not one of the allowed values. |
 | `PV01-superseded-without-pointer` | error | `status: superseded` requires `superseded_by` in frontmatter. |
+| `PV01-deprecated-active` | warning | The only North Star document is `deprecated`. |

@@ -42,7 +42,7 @@ Steps, in order:
      ```
    - The block MUST be placed at the end of any existing `#!` shebang block and before any user-defined hook body, so that a user hook that exits early does not skip APSS validation.
    - Re-running the installer MUST replace the existing apss block in place rather than appending a duplicate. Detection is by sentinel match.
-4. **Materialise template files for active doc types.** Every active doc type substandard MAY ship a set of starter files (directory READMEs, agent-context files, document templates). The installer MUST copy these into the target repository for each active doc type whose target directory either does not exist or is empty of the substandard's templated files. Copying MUST NOT overwrite an existing target file under any circumstance. `--force` does NOT change this rule for template files: an existing file is always preserved. The installer MUST emit `install-template-conflict` (warning) for each existing file it skipped, naming both the template and the target so the operator can compare manually. See Section 1.4 for the per-substandard template inventory.
+4. **Materialise template files for active doc types.** Every active doc type substandard MAY ship a set of starter files (directory READMEs, agent-context files, document templates). For each templated file, the installer MUST create the destination file only when it is missing and MUST NOT overwrite an existing target file under any circumstance. If the destination directory is absent, create it first. `--force` does NOT change this rule for template files: an existing file is always preserved. The installer MUST emit `install-template-conflict` (warning) for each existing file it skipped, naming both the template and the target so the operator can compare manually. See Section 1.4 for the per-substandard template inventory.
 5. **Print the resolved doc type registry.** After install completes, the CLI MUST print a one-line summary of every active doc type, its resolved location, and the templates it materialised, so the operator immediately sees what just became enforced.
 6. **Exit code.** `0` on success, `2` on any unrecoverable install error. Diagnostics MUST use the human readable scheme.
 
@@ -166,7 +166,7 @@ The `machine_readable` field MUST contain the same content as `diagnostics`/`sum
 The validator MUST enforce, for each active doc type:
 
 - **ADR (`EXP-V1-0004.ADR01`)**: directory exists, every file matches the configured naming regex, every ADR has the required frontmatter and `status`, required topic keywords are satisfied, context files exist, no dead or superseded backlinks.
-- **Purpose and Vision (`EXP-V1-0004.PV01`)**: a single document exists at the configured location with required frontmatter, `## Purpose`, `## Vision`, `## Non-Goals`, and a current `status`.
+- **North Star (`EXP-V1-0004.PV01`)**: a single document exists at the configured location with required frontmatter, `## Mission`, `## Vision`, `## Position`, and a current `status`.
 - **Retrospectives (`EXP-V1-0004.RETRO01`)**: directory exists, each file matches the naming regex, files are append only (`Changed` scope: no historical retro file appears in the staged diff with content modifications outside the appended sections), and required sections are present.
 
 For every doc type, the validator MUST also enforce the parent rules: frontmatter present and well formed, README index present and up to date, per directory context files present.

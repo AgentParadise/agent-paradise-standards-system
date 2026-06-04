@@ -21,18 +21,47 @@ When this standard says a rule is "default-on, switchable-off", it means the rul
 
 ## 1. Scope and Authority
 
-This standard defines the structure of a project's technical documentation directory and the install contract for the tooling that enforces it. The unlocks are:
+This standard defines a generic frontmatter-driven indexing and
+progressive disclosure mechanism for a project's technical documentation
+directory, together with the install contract for the tooling that
+enforces it.
 
-1. **Frontmatter driven indexing.** Every Markdown file under the docs root carries YAML front matter, and the standard auto-generates `## Index` tables from that metadata. Validated structure is the prerequisite for semantic lookups, progressive disclosure, vectorize any directory pipelines, and any other tooling that wants to operate on docs as data.
-2. **A configurable, growing doc type registry.** Each doc type (ADR, Purpose and Vision, Retrospectives, and future additions) is defined as a substandard that lives under `substandards/` and inherits the parent's frontmatter and index format. Doc types are default on; a project disables a doc type by flipping one flag in `apss.yaml`.
-3. **Installable enforcement.** Installing the standard into a project installs git commit hooks that auto-update the doc index, validate structure against the config, and fail the commit when the structure is inaccurate or incomplete. The contract for that hook is normative and is specified in Section 9.
+The primary purpose is the generic mechanism. Every Markdown file under
+the docs root carries YAML frontmatter; every directory README carries
+a `## Index` table generated from that frontmatter (Section 4). An
+agent or human reads the index first and descends only into the
+documents whose `description` says they should. The docs tree becomes a
+skill manifest, shallow on the outside, deep where it needs to be.
 
-The documentation root defaults to `docs/`. The base parent standard enforces:
+Concrete doc types are instances of the generic mechanism. Each is
+defined as a substandard that lives under `substandards/`, inherits the
+parent's frontmatter and indexing rules, and adds its own structure
+rules and diagnostic codes. The shipped registry is in Section 8.
+Adding a new doc type does not change this spec.
+
+The unlocks layered on top of the generic mechanism are:
+
+1. **Frontmatter driven indexing (Section 4).** Validated structure is
+   the prerequisite for semantic lookups, progressive disclosure,
+   vectorize any directory pipelines, and every other tool that wants
+   to operate on docs as data.
+2. **A configurable, growing doc type registry (Section 8).** Doc
+   types are default on; a project disables one by flipping a single
+   flag in `apss.yaml`.
+3. **Installable enforcement (Section 9).** Installing the standard
+   installs a git pre-commit hook that auto-updates the doc index,
+   validates structure against the config, and fails the commit when
+   the structure is inaccurate or incomplete.
+
+The documentation root defaults to `docs/`. The base parent standard
+enforces:
 
 - **DOC02**: README index, frontmatter, and per-directory AI context files.
 - **DOC03**: Root-level context files so agents always find docs from a fresh start.
 
-Doc-type specific rules (ADR, Purpose and Vision, Retrospectives, future types) live in substandards. The current registry is defined in Section 8.
+Doc-type specific rules (ADRs, the North Star, Retrospectives, future
+types) live in substandards. The current registry is defined in
+Section 8.
 
 ### 1.1 Relationship to APS-V1-0000 and the unified APSS config
 
@@ -42,9 +71,9 @@ This standard:
 
 1. Registers the slug `docs`.
 2. Contributes the schema for the `docs` section of `apss.yaml` (Section 3 below).
-3. Validates its own section: the parent validator validates the `docs` block and its core sub-blocks (`index`, `context_files`, `readme`, `root_context`, `backlinking`); each substandard validates its own nested key (`adr`, `purpose-and-vision`, `retrospectives`).
+3. Validates its own section: the parent validator validates the `docs` block and its core sub-blocks (`index`, `context_files`, `readme`, `root_context`, `backlinking`); each substandard validates its own nested key (`adr`, `north-star`, `retrospectives`).
 
-Substandards do NOT register their own top-level slugs. They nest under the `docs` key as namespaced sub-sections (`docs.adr`, `docs.purpose-and-vision`, `docs.retrospectives`); the nesting convention is normative and is owned by the meta-standard.
+Substandards do NOT register their own top-level slugs. They nest under the `docs` key as namespaced sub-sections (`docs.adr`, `docs.north-star`, `docs.retrospectives`); the nesting convention is normative and is owned by the meta-standard.
 
 The `.apss/` dotdir, when it exists, holds GENERATED artifacts (such as cached indexes and validator state) only. It MUST NOT hold configuration. Earlier drafts of this standard placed configuration at `.apss/config.toml`; that location is superseded by `apss.yaml` at the repository root. Tooling MUST NOT continue to read `.apss/config.toml`; presence of that file is not a deprecation alias.
 
@@ -58,9 +87,9 @@ This standard complements APS-V1-0000's requirement for a per-package `docs/01_s
 - **Index**: An auto-generated `## Index` section in `README.md` listing the documents in that directory with selected frontmatter fields rendered as table columns.
 - **Context file**: `CLAUDE.md` or `AGENTS.md`, one per directory, providing AI agents with lightweight orientation to that directory.
 - **Docs root**: The project's technical documentation directory. Default `docs/`, configurable via `docs.root`.
-- **Doc type**: A class of document with its own structure rules (ADR, Purpose and Vision, Retrospective, ...). Each doc type is implemented as a substandard.
+- **Doc type**: A class of document with its own structure rules (ADR, North Star, Retrospective, ...). Each doc type is implemented as a substandard.
 - **Doc type registry**: The set of `docs.<type>` keys in `apss.yaml` that declare which doc types are active in a given project. See Section 8.
-- **Backlink**: A reference from an implementation file to the governing doc (ADR, Purpose and Vision, ...) that it implements. Backlinking is part of every doc type, not a per type opt in. See Section 7.
+- **Backlink**: A reference from an implementation file to the governing doc (ADR, North Star, ...) that it implements. Backlinking is part of every doc type, not a per type opt in. See Section 7.
 
 ---
 
@@ -70,7 +99,7 @@ This standard complements APS-V1-0000's requirement for a per-package `docs/01_s
 
 Project-level configuration MUST be located at `apss.yaml` relative to the repository root. The file is owned by the meta-standard (APS-V1-0000.CF01); this standard registers and contributes the `docs` section.
 
-Configuration MUST NOT be placed at `.apss/config.toml`. The `.apss/` dotdir is reserved for GENERATED artifacts (cached indexes, validator state) only.
+Configuration MUST NOT be placed under `.apss/`. The `.apss/` dotdir is reserved for GENERATED artifacts (cached indexes, validator state) only.
 
 Monorepo cascade: a nested `apss.yaml` inside a sub-package layers over the root file using the meta-standard's cascade rules (nearer file overrides root values). Cascade resolution is owned by CF01; this standard inherits whatever the meta-validator produces and validates the merged `docs` block.
 
@@ -142,9 +171,9 @@ docs:
     naming_pattern: "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
     required_adr_keywords: []
 
-  purpose-and-vision:
+  north-star:
     disable: false
-    location: docs/vision.md      # Default file path. See PV01.
+    location: docs/north-star.md  # Default file path. See PV01.
 
   retrospectives:
     disable: false
@@ -157,7 +186,7 @@ docs:
 - Every rule listed in this spec is on by default. A project disables one rule by setting `disable: true` in the smallest scope that contains it (a single nested key under `docs`, or the top-level `docs.disable` to disable all doc validation).
 - There MUST NOT be per feature `optional` flags scattered through the spec. The shape is always: a `disable` flag at the top of the relevant section, plus that section's content.
 - Adding a new doc type does not require changing this spec. A new substandard MAY claim its own `docs.<slug>` key; the parent standard MUST tolerate unknown `docs.<slug>` keys for forward compatibility, even though it MUST reject unknown scalar fields inside known sections.
-- Substandard keys use the substandard's kebab-case slug (for example `purpose-and-vision`, not `purpose_and_vision`). Scalar field names inside each section remain snake_case to match the Rust struct contract.
+- Substandard keys use the substandard's kebab-case slug (for example `north-star`, not `north_star`). Scalar field names inside each section remain snake_case to match the Rust struct contract.
 
 ### 3.5 Loading and validation of the config file itself
 
@@ -174,6 +203,13 @@ The parent meta-validator (CF01) is responsible for top-level structural diagnos
 
 ## 4. Frontmatter and Indexing
 
+Section 4 specifies the standard's primary mechanism: a contract on
+every Markdown file under the docs root and a deterministic index
+generator that reads those files. The contract is what makes
+progressive disclosure possible: the index carries each file's
+`description`, so an agent reads the index once and opens only the
+files whose descriptions tell it to.
+
 ### 4.1 Frontmatter Requirement
 
 Every `.md` file under the docs root MUST contain a YAML front matter block with at least the fields listed in `docs.index.frontmatter_fields` (default: `name` and `description`).
@@ -185,7 +221,17 @@ description: "How authentication works across all service boundaries"
 ---
 ```
 
-Front matter makes each document self-describing. Tooling reads these fields to generate indexes, power search, provide agents with structured context, and feed vectorization pipelines that need stable per-file metadata.
+Front matter is the load-bearing contract for the rest of the standard.
+The `description` field MUST be a single line that lets a reader decide
+whether to open the file without opening it. Index generation, agent
+context loading, search, vectorisation, and every other downstream
+consumer reads these fields directly.
+
+The validator MUST treat any `.md` file under the docs root that lacks
+the required fields as a `frontmatter-field-missing` (warning) or
+`frontmatter-missing` (warning) finding. A file with an opened but
+unclosed frontmatter block MUST be reported as `frontmatter-unclosed`
+(error). The diagnostic table is in Section 4.4.
 
 Parsing rules:
 
@@ -196,7 +242,11 @@ Parsing rules:
 
 ### 4.2 Index Generation
 
-When `docs.index.disable` is `false`, every directory `README.md` under the docs root MUST contain a `## Index` section. The index is a Markdown table auto-generated from the front matter of `.md` files in the same directory:
+When `docs.index.disable` is `false`, every directory `README.md` under
+the docs root MUST contain a `## Index` section. The index is a
+Markdown table auto-generated from the front matter of `.md` files in
+the same directory. This is the row a reader reads first; opening the
+underlying file is the second step in progressive disclosure.
 
 ```markdown
 ## Index
@@ -287,7 +337,7 @@ Diagnostic: `root-self-reference-missing` (warning). The validator MUST check fo
 
 - The literal token `APSS` or the phrase `Agent Paradise Standards System`.
 - The docs root path (matching `docs.root_context.docs_reference_pattern`).
-- Each active doc type's location (`docs.adr.directory`, `docs.purpose-and-vision.location`, ...).
+- Each active doc type's location (`docs.adr.directory`, `docs.north-star.location`, ...).
 
 ### 6.4 DOC03-skills-format
 
@@ -345,7 +395,7 @@ The parent standard defines the doc type registry. Each doc type is implemented 
 | Doc type | Substandard | Default location | Config key in `apss.yaml` |
 |----------|-------------|------------------|---------------------------|
 | Architecture Decision Records | `EXP-V1-0004.ADR01` | `docs/adrs/` | `docs.adr` |
-| Purpose and Vision | `EXP-V1-0004.PV01` | `docs/vision.md` | `docs.purpose-and-vision` |
+| North Star (Mission, Vision, Position) | `EXP-V1-0004.PV01` | `docs/north-star.md` | `docs.north-star` |
 | Retrospectives | `EXP-V1-0004.RETRO01` | `docs/retrospectives/` | `docs.retrospectives` |
 
 ### 8.1 Lifecycle status (shared)
@@ -357,7 +407,7 @@ Doc types that have lifecycle status MUST use a shared vocabulary so tooling can
 - `deprecated`: discouraged but still informative.
 - `superseded`: replaced by another doc of the same type; the front matter MUST include `superseded_by: <doc-id>`.
 
-ADRs are never revised; they are superseded. Retrospectives are append only. Purpose-and-Vision documents follow the same status field but typically remain `active` for long stretches.
+ADRs are never revised; they are superseded. Retrospectives are append only. North Star documents follow the same status field but typically remain `active` for long stretches.
 
 ### 8.2 Adding a new doc type
 
@@ -373,7 +423,7 @@ The parent standard MUST NOT hard code the list of doc types in code paths that 
 ### 8.3 Substandard summaries
 
 - **EXP-V1-0004.ADR01 (Architecture Decision Records).** Spec: [`substandards/ADR01-architecture-decision-records/docs/01_spec.md`](../substandards/ADR01-architecture-decision-records/docs/01_spec.md). Validates naming, frontmatter (including `status`), required topic keywords, header conventions, and per directory context files. Backlinking and dead reference detection use the shared rules in Section 7.
-- **EXP-V1-0004.PV01 (Purpose and Vision).** Spec: [`substandards/PV01-purpose-and-vision/docs/01_spec.md`](../substandards/PV01-purpose-and-vision/docs/01_spec.md). Validates the presence and structure of the project's Purpose and Vision document, used by agents during plan and design to stay aligned with the project's North Star.
+- **EXP-V1-0004.PV01 (North Star: Mission, Vision, Position).** Spec: [`substandards/PV01-purpose-and-vision/docs/01_spec.md`](../substandards/PV01-purpose-and-vision/docs/01_spec.md). Validates the presence and structure of the project's single North Star document, used by agents during plan and design to stay aligned with the project's intent.
 - **EXP-V1-0004.RETRO01 (Retrospectives).** Spec: [`substandards/RETRO01-retrospectives/docs/01_spec.md`](../substandards/RETRO01-retrospectives/docs/01_spec.md). Validates the retrospective directory, append only history, naming, and required sections.
 
 ---
@@ -464,7 +514,7 @@ The installed hook is a small shell wrapper that calls into `aps run docs hook -
 **What "valid structure" means per doc type**:
 
 - ADR (`EXP-V1-0004.ADR01`): the ADR directory exists, every file matches the naming pattern, every ADR has the required frontmatter and `status`, required topic keywords are satisfied, context files exist with referencing guidance, and there are no dead or superseded backlinks. See the ADR01 spec for the per rule diagnostic codes.
-- Purpose and Vision (`EXP-V1-0004.PV01`): a single `vision.md` (or configured location) exists with frontmatter, a `## Purpose` section, a `## Vision` section, a `## Non-Goals` section, and a current `status`. See PV01 spec.
+- North Star (`EXP-V1-0004.PV01`): a single `north-star.md` (or configured location) exists with frontmatter, a `## Mission` section, a `## Vision` section, a `## Position` section, and a current `status`. See PV01 spec.
 - Retrospectives (`EXP-V1-0004.RETRO01`): the retrospective directory exists, each file matches the naming pattern, files are append only (no historical retros modified in the staged change set), and required sections are present. See RETRO01 spec.
 
 ### 9.5 Why the install contract matters
