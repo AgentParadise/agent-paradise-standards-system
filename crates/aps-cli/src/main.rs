@@ -666,7 +666,6 @@ fn allocate_next_experiment_id(repo_root: &std::path::Path) -> String {
 // one place rather than scattered as duplicated string literals (this is the
 // `aps run` magic-string cleanup mandated by the operator review).
 
-
 /// Information about a registered standard.
 #[allow(dead_code)]
 struct StandardCliInfo {
@@ -754,7 +753,12 @@ fn dispatch_topology(
 ) -> ExitCode {
     match command {
         "--help" | "-h" | "help" => {
-            println!("{} ({}) v{}", code_topology::NAME, code_topology::ID, code_topology::VERSION);
+            println!(
+                "{} ({}) v{}",
+                code_topology::NAME,
+                code_topology::ID,
+                code_topology::VERSION
+            );
             println!();
             println!("USAGE:");
             println!("    aps run {} <COMMAND> [OPTIONS]", code_topology::SLUG);
@@ -903,10 +907,18 @@ fn dispatch_fitness(
 ) -> ExitCode {
     match command {
         "--help" | "-h" | "help" => {
-            println!("{} ({}) v{}", fitness_functions::NAME, fitness_functions::ID, fitness_functions::VERSION);
+            println!(
+                "{} ({}) v{}",
+                fitness_functions::NAME,
+                fitness_functions::ID,
+                fitness_functions::VERSION
+            );
             println!();
             println!("USAGE:");
-            println!("    aps run {} <COMMAND> [OPTIONS]", fitness_functions::SLUG);
+            println!(
+                "    aps run {} <COMMAND> [OPTIONS]",
+                fitness_functions::SLUG
+            );
             println!();
             println!("COMMANDS:");
             println!("    validate <path>    Validate fitness rules against topology artifacts");
