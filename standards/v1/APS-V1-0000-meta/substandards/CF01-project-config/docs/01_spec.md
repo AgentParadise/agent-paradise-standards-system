@@ -1,6 +1,6 @@
-# APS-V1-0000.CF01 — Project Configuration (Specification)
+# APS-V1-0000.CF01 Project Configuration (Specification)
 
-**Version**: 1.0.0
+**Version**: 2.0.0
 **Status**: Active
 **Parent**: APS-V1-0000 (Meta-Standard)
 
@@ -14,158 +14,531 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## 1. Scope
 
-This substandard defines:
+This substandard defines a single, unified configuration mechanism that serves
+three concerns at once: project configuration, standard activation, and the
+manifest that drives installation. The model is borrowed from the VS Code
+settings architecture: ONE shared configuration file whose top-level structure
+is owned by the meta-standard, into which each standard REGISTERS a namespaced
+section, with validation delegated to each standard's own validator.
 
-- The `apss.toml` project configuration schema
-- Cascading configuration rules for monorepos
-- Validation rules for consumer config files
-- Requirements for standards to define typed configuration surfaces
+Concretely, CF01 defines:
+
+- The `apss.yaml` manifest at the project root, its schema identifier, and its
+  top-level structure.
+- The core sections owned by CF01: project identity, the standards list, the
+  workspace declaration, and the tool block.
+- Cascading rules for nested `apss.yaml` files in monorepos.
+- A slug registry that every standard in the ecosystem registers into, and the
+  meta-validation rules over that registry (Section 3, owned by the registry
+  work block).
+- A config contribution schema that each standard ships so its section can be
+  type checked, documented, and validated without CF01 knowing the details
+  (Section 5, owned by the registry work block).
+- A validation delegation protocol that lets each standard's validator own its
+  section while the meta validator aggregates results (Section 6, owned by the
+  registry work block).
+- The substandard nesting convention used inside a parent slug (Section 7,
+  owned by the registry work block).
+- The seam between this manifest, the resolution layer in DI01, and each
+  standard's install contract, so that one command can install, update, and
+  remove everything declared in the manifest (Section 8).
+- A migration from the prior `apss.toml` and `.apss/config.toml` homes
+  (Section 9).
+- The QA checks that enforce all of the above across `standards/` and
+  `standards-experimental/` (Section 10, owned by the registry work block).
+
+The manifest is the single source of truth for what the project considers
+active, configured, and installed. It is the file an operator reads to know
+"what standards does this project use, with what config, at which versions",
+and it is the file the installer reads to materialize that intent on disk.
 
 ---
 
-## 2. Configuration File
+## 2. The `apss.yaml` Manifest
 
 ### 2.1 Filename and Location
 
-Consumer projects MUST place their configuration at `apss.toml` in the project root.
+A consumer project MUST place its configuration at `apss.yaml` in the project
+root.
 
-### 2.2 Schema
+- The file MUST be YAML 1.2 (the same dialect serde-yaml accepts).
+- The extension MUST be `.yaml` (not `.yml`).
+- The file MUST live at the project root, defined as the directory containing
+  the project's version control root (`git rev-parse --show-toplevel`) or,
+  when no VCS root is available, the directory in which the operator invokes
+  the bootstrap CLI.
+- A project MAY add nested `apss.yaml` files inside workspace members. Their
+  semantics are defined in Section 4.
 
-The schema identifier MUST be `"apss.project/v1"`.
+The `.apss/` dot directory is reserved for GENERATED artifacts (resolved
+indexes, build outputs, cached schemas, the composed binary). Configuration
+MUST NOT live under `.apss/`. Tooling MUST refuse to read configuration from
+`.apss/config.yaml`, `.apss/config.toml`, or any path under `.apss/`.
 
-### 2.3 Full Schema
+### 2.2 Schema Identifier
 
-```toml
-schema = "apss.project/v1"
+The top-level `schema` key MUST be the literal string `apss.config/v1`.
 
-[project]
-name = "my-service"              # REQUIRED. Human-readable project name.
-apss_version = "v1"              # REQUIRED. APSS major version.
+This identifier replaces the prior `apss.project/v1` identifier; see
+Section 9 for the migration rules.
 
-[standards.<slug>]
-id = "APS-V1-XXXX"              # REQUIRED. Standard ID.
-version = ">=1.0.0, <2.0.0"     # REQUIRED. Semver requirement (Cargo-style).
-enabled = true                   # OPTIONAL. Default: true.
-substandards = ["RS01", "CI01"]  # OPTIONAL. If omitted, all substandards enabled.
+### 2.3 Top-level Structure
 
-[standards.<slug>.config]
-# Standard-specific config. Schema defined by each standard's StandardConfig.
+The manifest has two kinds of top-level keys:
 
-[workspace]
-members = ["packages/*"]         # OPTIONAL. Glob patterns for child configs.
-exclude = ["packages/legacy-*"]  # OPTIONAL. Glob patterns to exclude.
+1. **Core keys** owned by CF01. These define project identity, the standards
+   the project declares as active, the workspace shape, and tool-level
+   configuration. Every core key is specified in this document.
+2. **Slug keys** contributed by individual standards. Each standard registers
+   a unique slug in the slug registry (Section 3), and the value of that slug
+   key holds the standard's configuration for this project.
 
-[tool]
-bin_dir = ".apss/bin"            # OPTIONAL. Default: ".apss/bin".
-registry = "https://crates.io"  # OPTIONAL. Default: crates.io.
-offline = false                  # OPTIONAL. Default: false.
-log_level = "warn"               # OPTIONAL. Default: "warn".
+```yaml
+schema: "apss.config/v1"
+
+# Core keys (CF01)
+project:        # project identity
+standards:      # standard activation and version pinning
+workspace:      # monorepo workspace declaration
+tool:           # bootstrap and tooling preferences
+
+# Slug keys (one per active standard, value owned by that standard)
+docs:           # contributed by EXP-V1-0004 (slug: docs)
+fitness:        # contributed by EXP-V1-0003 (slug: fitness)
+topology:       # contributed by APS-V1-0001 (slug: topology)
+# ...
 ```
 
+Every top-level key MUST be either a core key listed above or a slug
+registered in the slug registry. Unknown top-level keys MUST be rejected as
+`CF_UNKNOWN_TOP_LEVEL_KEY` (see Section 6 for the delegation protocol that
+catches this).
+
+### 2.4 Core Section: `project`
+
+```yaml
+project:
+  name: "my-service"      # REQUIRED. Non-empty string.
+  apss_version: "v1"      # REQUIRED. APSS major version.
+```
+
+Rules:
+
+- `project.name` MUST be a non-empty string.
+- `project.apss_version` MUST be `"v1"`. Future major versions of APSS will
+  introduce new permitted values; tooling MUST reject unknown values.
+
+### 2.5 Core Section: `standards`
+
+`standards` is a mapping from slug to a per-standard activation entry. The
+slug MUST be one registered in the slug registry (Section 3).
+
+```yaml
+standards:
+  docs:
+    id: "EXP-V1-0004"             # REQUIRED. Standard or experiment ID.
+    version: ">=1.0.0, <2.0.0"    # REQUIRED. SemVer requirement (Cargo style).
+    enabled: true                  # OPTIONAL. Default: true.
+    substandards: ["ADR01"]        # OPTIONAL. If omitted, all enabled.
+
+  fitness:
+    id: "EXP-V1-0003"
+    version: "^0.3.0"
+```
+
+Field rules:
+
+- `id` MUST match either `APS-V1-\d{4}` (official) or `EXP-V1-\d{4}`
+  (experimental).
+- `version` MUST be a valid SemVer requirement.
+- Each `id` MUST appear under at most one slug. Two slugs pointing at the
+  same standard ID MUST be rejected as `CF_DUPLICATE_STANDARD_ID`.
+- `enabled: false` keeps the entry in the manifest but disables the standard
+  for this project. The unified installer (Section 8) MUST uninstall the
+  standard's artifacts cleanly when this flag flips to false.
+- `substandards`, if present, lists profile codes the project explicitly
+  activates (e.g. `["RS01", "CI01"]`). If omitted, every substandard
+  shipped by the standard is enabled.
+- Each substandard code MUST match `[A-Z]{2}\d{2}`.
+
+The `standards` map is the dependency declaration that the unified installer
+reads to materialize the project. The standard's own configuration does NOT
+live here; it lives in the top-level slug key (Section 2.7 below).
+
+### 2.6 Core Section: `workspace`
+
+`workspace` declares this manifest as the root of a monorepo cascade. Its
+presence triggers the discovery and merge rules in Section 4.
+
+```yaml
+workspace:
+  members: ["packages/*"]          # OPTIONAL. Glob patterns for child configs.
+  exclude: ["packages/legacy-*"]   # OPTIONAL. Glob patterns to exclude.
+```
+
+Rules:
+
+- `workspace` MUST NOT appear in a child `apss.yaml`. A manifest with
+  `workspace` is by definition a root manifest.
+- `members` patterns MUST resolve to directories that contain an
+  `apss.yaml`. A pattern that matches no directory MUST raise
+  `CF_EMPTY_WORKSPACE_GLOB` as a warning.
+
+### 2.7 Standard Sections (slug keys)
+
+Each active standard contributes ONE top-level section keyed by its slug. The
+value is owned by the standard; CF01 treats it as opaque YAML during parsing
+and hands it to the standard's validator (Section 6).
+
+Default-on philosophy:
+
+- An active standard requires NO section in `apss.yaml`. Defaults from the
+  standard's contributed schema apply.
+- A section exists only to OVERRIDE a default or to DISABLE a feature.
+- The `disable: false` flag is the convention for opt-out, both at the top of
+  a section and at the head of any nested substandard block (Section 7).
+
+Snake case rule:
+
+- Scalar field names inside any standard section MUST be `snake_case`, to
+  match the Rust struct field names the validator deserialises into.
+
+Example (taken from the EXP-V1-0004 docs section after the re-home in commit
+`1784797`):
+
+```yaml
+docs:
+  disable: false
+  root: "docs"
+
+  index:
+    disable: false
+    auto_generate: true
+
+  adr:
+    disable: false
+    directory: "adrs"
+    naming_pattern: "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+```
+
+### 2.8 Core Section: `tool`
+
+`tool` carries preferences for the bootstrap CLI and supporting tooling.
+Every key is optional with documented defaults.
+
+```yaml
+tool:
+  bin_dir: ".apss/bin"             # OPTIONAL. Default: ".apss/bin".
+  registry: "https://crates.io"   # OPTIONAL. Default: crates.io.
+  offline: false                   # OPTIONAL. Default: false.
+  log_level: "warn"                # OPTIONAL. Default: "warn".
+```
+
+The values map directly onto resolution and installation flags described in
+DI01 and Section 8.
+
 ---
 
-## 3. Field Validation Rules
+## 3. Slug Registry
 
-### 3.1 Project Identity
-
-- `project.name` MUST be a non-empty string
-- `project.apss_version` MUST be `"v1"` (the only currently supported version)
-
-### 3.2 Standard Entries
-
-Each key under `[standards]` is a slug used for CLI dispatch.
-
-- `id` MUST match the pattern `APS-V1-\d{4}`
-- `version` MUST be a valid semver version requirement
-- Each standard ID MUST appear under exactly one slug (no duplicates)
-- `substandards` entries MUST match the pattern `[A-Z]{2}\d{2}`
-
-### 3.3 Standard-Specific Configuration
-
-The `[standards.<slug>.config]` table is opaque to CF01. Its schema is defined by each standard's `StandardConfig` implementation (see §5).
-
-CF01 validates config blocks by:
-1. Attempting deserialization into the standard's config type
-2. Running `StandardConfig::validate()` on the result
-3. Reporting any type errors or validation failures
+The slug registry is the single source of truth that maps every registered
+slug to its owning standard or experiment. Its normative definition lives in
+the sibling spec `02_slug_registry.md`, which has equal precedence with this
+document. See that file for the registration source of truth, the generated
+registry artifact, the format and reservation rules, and the meta-validation
+rules that enforce uniqueness and completeness across `standards/` and
+`standards-experimental/`.
 
 ---
 
-## 4. Cascading Configuration (Monorepos)
+## 4. Cascade (Monorepos)
 
 ### 4.1 Discovery
 
-1. Walk up from the current directory to find an `apss.toml` with `[workspace]`
-2. The first such file is the **root config**
-3. Child `apss.toml` files (without `[workspace]`) are **leaf configs**
+To resolve the active configuration for a given working directory, tooling
+MUST:
+
+1. Walk upward from the working directory looking for an `apss.yaml`
+   containing a `workspace` key. The first such file is the **root
+   manifest**.
+2. While walking, every `apss.yaml` without a `workspace` key encountered
+   between the working directory and the root manifest is a **child
+   manifest**, in deepest-to-shallowest order.
+3. If no manifest with a `workspace` key is found, the closest `apss.yaml`
+   to the working directory is the root manifest and there are no child
+   manifests.
+
+The "nearest manifest wins" rule layers like VS Code user and workspace
+settings: the user-wide configuration is the root manifest, and the
+workspace-scoped override is the nearest child manifest. The closer the
+manifest is to the working directory, the higher its precedence.
 
 ### 4.2 Merge Rules
 
-| Section | Rule |
-|---------|------|
-| `project.name` | Child wins |
-| `project.apss_version` | MUST match root (error if different) |
-| `standards.<slug>` absent in child | Inherited from root |
-| `standards.<slug>` present in child | Child fully replaces root's entry (no deep merge) |
-| `standards.<slug>.enabled = false` | Disables for this member only |
-| `[workspace]` | MUST NOT appear in child configs |
-| `[tool]` | Child overrides individual fields |
+Merging happens in two passes: core sections (this table) and standard
+sections (Section 4.3).
 
-### 4.3 Version Range Intersection
+| Key | Rule |
+|-----|------|
+| `schema` | MUST be identical across root and every child. Mismatch is `CF_SCHEMA_MISMATCH`. |
+| `project.name` | Child wins. A child MAY rename itself. |
+| `project.apss_version` | MUST match the root exactly. Mismatch is `CF_APSS_VERSION_MISMATCH`. |
+| `standards.<slug>` absent in child | Inherited from the parent (root or nearer child). |
+| `standards.<slug>` present in child | Child entry fully replaces the inherited entry (no deep merge). |
+| `standards.<slug>.enabled = false` in child | Disables that standard for this member subtree only. |
+| `workspace` | MUST NOT appear in a child. Presence in a child is `CF_WORKSPACE_IN_CHILD`. |
+| `tool.<key>` | Child overrides individual keys; unset child keys inherit. |
 
-When both root and child specify version requirements for the same standard, the resolved version MUST satisfy both ranges. If the intersection is empty, validation MUST emit `CF_VERSION_RANGE_CONFLICT`.
+### 4.3 Merging Standard Sections
+
+Standard sections are merged per slug. The standard's contributed schema
+(Section 5) declares for each field whether the merge is "child replaces" or
+"deep merge per key". CF01 itself performs no deep merge on standard
+sections; it delegates the merge decision to the standard's validator via the
+contribution schema. A standard that does not declare merge semantics for a
+field defaults to "child replaces".
+
+### 4.4 Version Range Intersection
+
+When both root and a child declare a `version` for the same slug, the
+resolved version requirement MUST be the intersection of the two ranges.
+If the intersection is empty, tooling MUST emit `CF_VERSION_RANGE_CONFLICT`
+and refuse to install.
+
+### 4.5 Disable Inheritance
+
+If a parent sets `standards.<slug>.enabled = false`, a child MAY re-enable
+the standard by setting `enabled = true`. This lets a monorepo disable a
+standard globally and opt one package back in. The same rule applies to
+section-level `disable: false` flags inside standard sections, scoped to the
+standard's own merge rules.
+
+### 4.6 Generated Artifact Scope
+
+Each manifest (root or child) owns its own `.apss/` artifact directory,
+sibling to the manifest file. Tools MUST NOT write generated artifacts under
+a different manifest's `.apss/` directory.
 
 ---
 
-## 5. StandardConfig Trait Contract
+## 5. Config Contribution Schema
 
-### 5.1 Requirement
-
-Every standard and substandard that accepts configuration MUST implement `StandardConfig` (defined in `aps-core`). Standards with no configuration MUST use `NoConfig`.
-
-### 5.2 Validation by CF01
-
-CF01 validates standard crates in the APS repo to ensure:
-
-- A `StandardConfig` type is exported (or `NoConfig`)
-- The type implements `Default`
-- `config.schema.json` matches `json_schema()` output (if present)
-
-### 5.3 Config Module Convention
-
-Standards SHOULD define their config in `src/config.rs` and re-export from `src/lib.rs`.
+Each standard ships a contribution schema that declares its slug, the keys
+it accepts under that slug, their types, defaults, and merge semantics for
+the cascade. The normative definition of the contribution schema lives in
+the sibling spec `03_contribution_schema.md`, which has equal precedence
+with this document. CF01 treats each standard section as opaque YAML and
+defers to the contribution schema for typing, defaulting, and merge.
 
 ---
 
-## 6. Error Codes
+## 6. Validation Delegation Protocol
 
-### 6.1 Consumer Config Validation
+The meta validator validates the core sections defined in Section 2 itself,
+and delegates each registered slug section to its owning standard's
+validator via the `StandardConfig` contract. Unknown top-level keys are
+errors. The normative protocol lives in the sibling spec
+`04_validation_delegation.md`, including the in-process trait surface, the
+diagnostics aggregation rules, and the ordering between core and delegated
+validation.
+
+---
+
+## 7. Substandard Nesting Convention
+
+Substandards nest under their parent slug as kebab-case keys (for example
+`docs.adr`, `docs.purpose-and-vision`, `docs.retrospectives`). Substandards
+do not receive top-level slugs. The per-substandard block uses the same
+`disable: false` convention as the parent section. The normative rules,
+disable-inheritance matrix, and worked examples live in the sibling spec
+`05_substandard_nesting.md`.
+
+---
+
+## 8. Manifest-Driven Installation (Summary)
+
+The operator-approved Addendum 1 of the unified-config brief makes
+configuration, distribution, and installation a single system. `apss.yaml`
+is the manifest, the unified installer is the glue, and each active
+standard ships an install contract that the installer invokes.
+
+The npm-style model is the binding analogy: `apss.yaml` is to APSS what
+`package.json` is to npm. The `standards` map (Section 2.5) is the
+dependency declaration; one install command reads the manifest, resolves
+versions via DI01, then drives each per-standard install contract; removing
+an entry and re-running uninstalls cleanly; disabling via `enabled: false`
+is equivalent to removal for on-disk artifacts but preserves the operator's
+intent to keep the entry on the manifest.
+
+Three ownership boundaries make the seam explicit:
+
+- **CF01 owns the manifest** (this document and Section 2): the file, the
+  schema, the slug keys, the activation entries, and the cascade.
+- **DI01 owns resolution and packaging** (see `DI01/docs/01_spec.md` Section 4):
+  where standards come from, how versions are pinned in the lockfile, how
+  the composed binary is built.
+- **Each standard owns its install contract** (`docs/02_install_contract.md`
+  in the standard's package): the per-standard lifecycle hook the installer
+  invokes for `install`, `uninstall`, and `plan`.
+
+The normative install pipeline, the per-standard install contract surface,
+the trait recommendation (`Installable`), the removal semantics, the
+failure-handling rules, and the explicit DI01 seam table live in the
+sibling spec `06_unified_install_seam.md`, which has equal precedence with
+this document. DI01's matching pipeline lives in `DI01/docs/01_spec.md`
+Section 4.
+
+The canonical binary name is being resolved separately in repo issue 64
+(APS vs APSS). This spec uses `<bootstrap>` (or the term "the unified
+installer") wherever the binary name can be avoided.
+
+---
+
+## 9. Migration from `apss.toml`
+
+The prior CF01 spec defined `apss.toml` as the project configuration file
+and EXP-V1-0004 placed its configuration in `.apss/config.toml`. Both
+homes are superseded by `apss.yaml`. This section is the normative migration
+guide.
+
+### 9.1 Scope of the change
+
+| Concern | Before | After |
+|---------|--------|-------|
+| File location | `apss.toml` and `.apss/config.toml` | `apss.yaml` |
+| Serialisation | TOML | YAML 1.2 |
+| Schema identifier | `apss.project/v1` | `apss.config/v1` |
+| Configuration in `.apss/` | Allowed (EXP-V1-0004) | Forbidden, dotdir is for generated artifacts only |
+| Per-standard configuration | `[standards.<slug>.config]` table | Top-level `<slug>:` mapping at the manifest root |
+| Substandard configuration | Implicit, varied | Kebab-case key under the parent slug (Section 7) |
+
+### 9.2 Top-level mapping
+
+The YAML equivalent of the previous TOML schema is:
+
+```yaml
+schema: "apss.config/v1"
+
+project:
+  name: "my-service"
+  apss_version: "v1"
+
+standards:
+  topology:
+    id: "APS-V1-0001"
+    version: ">=1.0.0, <2.0.0"
+    enabled: true
+    substandards: ["RS01", "CI01"]
+
+workspace:
+  members: ["packages/*"]
+  exclude: ["packages/legacy-*"]
+
+tool:
+  bin_dir: ".apss/bin"
+  registry: "https://crates.io"
+  offline: false
+  log_level: "warn"
+
+# Per-standard configuration moves out of the standards entry
+# and into a top-level slug key:
+topology:
+  disable: false
+  # ... standard-specific keys here, snake_case ...
+```
+
+Every previously valid `apss.toml` field maps one to one onto the YAML
+above; only the home of the per-standard configuration moves.
+
+### 9.3 Transition behavior
+
+Tooling MUST behave as follows during the transition window:
+
+- If only `apss.yaml` exists: load it normally.
+- If only `apss.toml` exists: emit `CF_LEGACY_APSS_TOML` at error severity
+  with a hint pointing at this migration section. Tooling MUST NOT silently
+  convert; the operator MUST opt in.
+- If only `.apss/config.toml` exists: emit `CF_LEGACY_APSS_CONFIG_TOML` at
+  error severity with the same hint. Tooling MUST NOT read configuration
+  from `.apss/`.
+- If both `apss.yaml` and `apss.toml` exist: emit
+  `CF_DUAL_MANIFEST` at error severity. The YAML file wins for parsing, but
+  the operator MUST resolve the duplication by deleting the legacy file.
+- A future major version of APSS MAY remove the legacy diagnostics and
+  refuse to start when a legacy file is present. The diagnostics are the
+  one-shot warning that lets the operator notice the rename.
+
+### 9.4 Manual conversion
+
+The recommended manual conversion is:
+
+1. Rename `apss.toml` to `apss.yaml` and convert it to YAML keeping the
+   structure described in Section 9.2.
+2. Replace `schema = "apss.project/v1"` with `schema: "apss.config/v1"`.
+3. For each `[standards.<slug>.config]` table, lift its body into a top-level
+   `<slug>:` mapping. Drop the `.config` suffix.
+4. Move any keys from `.apss/config.toml` into the appropriate slug section
+   in the new `apss.yaml` (typically `docs:` for EXP-V1-0004).
+5. Delete `.apss/config.toml`.
+6. Re-run the unified installer to refresh `apss.lock` and the composed
+   binary.
+
+DI01 and per-standard install contracts MAY ship an automated converter as
+a fast-follow; the converter is out of scope for this spec.
+
+### 9.5 Spec-internal compatibility
+
+References elsewhere in the APSS spec text that still say `apss.toml` MUST be
+treated as references to `apss.yaml` until the corresponding docs are
+updated. The authoritative file location is this section.
+
+---
+
+## 10. QA Checks
+
+The meta validator MUST enforce the manifest, registry, contribution
+schema, delegation, and substandard nesting rules across both `standards/`
+and `standards-experimental/`. The normative check list lives in the
+sibling spec `07_qa_checks.md`. The checks driven directly from Section 2
+of this document (schema identifier, core sections, cascade) MUST be part
+of the meta validator's manifest-parse stage; the registry, schema, and
+delegation checks MUST be part of the corresponding stages defined in their
+sibling specs.
+
+---
+
+## 11. Error Codes
+
+Error codes for the slug registry, contribution schema, validation
+delegation, substandard nesting, install seam, and QA checks live in their
+respective sibling specs. The codes below are CF01-owned for the manifest
+parsing and core sections.
+
+### 11.1 Manifest parsing and core sections (this document)
 
 | Code | Severity | Rule |
 |------|----------|------|
-| `CF_MISSING_SCHEMA` | Error | Schema must be `"apss.project/v1"` |
-| `CF_MISSING_PROJECT_NAME` | Error | `project.name` required, non-empty |
-| `CF_INVALID_APSS_VERSION` | Error | Must be `"v1"` |
-| `CF_MISSING_STANDARD_ID` | Error | Each standard needs `id` |
-| `CF_INVALID_STANDARD_ID` | Error | Must match `APS-V1-\d{4}` |
-| `CF_MISSING_VERSION_REQ` | Error | Each standard needs `version` |
-| `CF_INVALID_VERSION_REQ` | Error | Must be valid semver requirement |
-| `CF_DUPLICATE_STANDARD_ID` | Error | Same ID under two slugs |
-| `CF_INVALID_SUBSTANDARD_CODE` | Error | Must match `[A-Z]{2}\d{2}` |
-| `CF_WORKSPACE_IN_CHILD` | Error | Child must not have `[workspace]` |
-| `CF_APSS_VERSION_MISMATCH` | Error | Child vs root version mismatch |
-| `CF_VERSION_RANGE_CONFLICT` | Error | Empty version intersection |
-| `CF_INVALID_CONFIG_VALUE` | Error | Config deserialization failed |
-| `CF_CONFIG_VALIDATION_FAILED` | Error | Config semantic validation failed |
-| `CF_EMPTY_STANDARDS` | Warning | No standards declared |
-| `CF_NO_LOCKFILE` | Warning | No apss.lock found |
-| `CF_LOCKFILE_STALE` | Warning | Config newer than lockfile |
+| `CF_APSS_VERSION_MISMATCH` | Error | Child `project.apss_version` differs from root. |
+| `CF_DUAL_MANIFEST` | Error | Both `apss.yaml` and `apss.toml` exist; YAML wins, legacy MUST be removed. |
+| `CF_DUPLICATE_STANDARD_ID` | Error | Two slugs reference the same standard ID. |
+| `CF_EMPTY_STANDARDS` | Warning | No standards declared in the manifest. |
+| `CF_EMPTY_WORKSPACE_GLOB` | Warning | A workspace member glob matched no directory. |
+| `CF_INVALID_APSS_VERSION` | Error | `project.apss_version` is not a supported value. |
+| `CF_INVALID_STANDARD_ID` | Error | Entry `id` does not match `APS-V1-\d{4}` or `EXP-V1-\d{4}`. |
+| `CF_INVALID_SUBSTANDARD_CODE` | Error | Substandard code does not match `[A-Z]{2}\d{2}`. |
+| `CF_INVALID_VERSION_REQ` | Error | `version` is not a valid SemVer requirement. |
+| `CF_LEGACY_APSS_CONFIG_TOML` | Error | Legacy `.apss/config.toml` present; see Section 9. |
+| `CF_LEGACY_APSS_TOML` | Error | Legacy `apss.toml` present; see Section 9. |
+| `CF_MISSING_PROJECT_NAME` | Error | `project.name` missing or empty. |
+| `CF_MISSING_SCHEMA` | Error | Top-level `schema` not equal to `apss.config/v1`. |
+| `CF_MISSING_STANDARD_ID` | Error | Standards entry without `id`. |
+| `CF_MISSING_VERSION_REQ` | Error | Standards entry without `version`. |
+| `CF_SCHEMA_MISMATCH` | Error | Cascade child uses a different `schema` than the root. |
+| `CF_UNKNOWN_TOP_LEVEL_KEY` | Error | Top-level key is neither a core key nor a registered slug. |
+| `CF_VERSION_RANGE_CONFLICT` | Error | Empty intersection between root and child version ranges. |
+| `CF_WORKSPACE_IN_CHILD` | Error | `workspace` key present in a child manifest. |
 
-### 6.2 Standard Config Surface Validation
+<!-- Codes for the slug registry, contribution schema, validation
+delegation, substandard nesting, install seam, and QA checks are owned
+by their sibling specs. -->
 
-| Code | Severity | Rule |
-|------|----------|------|
-| `CF_MISSING_CONFIG_TYPE` | Error | No `StandardConfig` export |
-| `CF_NO_CONFIG_DEFAULTS` | Error | Missing `Default` impl |
-| `CF_CONFIG_SCHEMA_STALE` | Warning | JSON schema out of date |
-| `CF_NO_CONFIG_VALIDATION` | Warning | `validate()` is a no-op |

@@ -17,10 +17,15 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 This substandard defines:
 
 - How standards are packaged and published as independent Rust crates
-- The bootstrap CLI binary (`apss`) for project onboarding
-- The installation workflow (`apss install`)
+- The bootstrap CLI binary used for project onboarding (canonical binary name
+  is being resolved in repo issue 64; this spec refers to it as the
+  "bootstrap" where the name can be avoided)
+- The installation workflow that reads the `apss.yaml` manifest defined by
+  CF01 and resolves, fetches, locks, and composes the standards it declares
 - The lockfile format (`apss.lock`)
 - Code generation for composed project-local binaries
+- The seam between CF01 (manifest), DI01 (resolution and packaging), and each
+  standard's install contract that the unified installer invokes
 
 ---
 
@@ -76,46 +81,107 @@ Standard crates MUST export a type implementing `StandardConfig` (or use `NoConf
 
 ### 3.1 Purpose
 
-The bootstrap binary is a lightweight CLI installed globally via `cargo install apss`. It handles project onboarding and standard installation.
+The bootstrap binary is a lightweight CLI installed globally via
+`cargo install <bootstrap>`. It handles project onboarding and unified
+installation. The canonical binary name is being resolved in repo issue 64;
+this spec uses `<bootstrap>` where the name can be avoided.
 
 ### 3.2 Bootstrap Commands
 
 | Command | Description |
 |---------|-------------|
-| `apss init` | Create `apss.toml` |
-| `apss install` | Resolve + build composed binary |
-| `apss install --locked` | CI mode — fail if lockfile changes |
-| `apss install --update <slug>` | Update one standard |
-| `apss install --offline` | Use only cached crates |
-| `apss status` | Show project config + installed versions |
-| `apss validate` | Validate project against all standards |
-| `apss validate --config-only` | Validate only `apss.toml` |
-| `apss config show <slug>` | Show resolved config for a standard |
-| `apss config schema <slug>` | Show JSON Schema for config |
-| `apss config template` | Generate config with defaults |
-| `apss run <slug> <cmd>` | Delegate to composed binary |
+| `<bootstrap> init` | Create `apss.yaml` |
+| `<bootstrap> install` | Read `apss.yaml`, resolve, run per-standard install contracts, build composed binary |
+| `<bootstrap> install --check` | Report what install would do without writing |
+| `<bootstrap> install --locked` | CI mode, fail if lockfile would change |
+| `<bootstrap> install --update <slug>` | Update one standard |
+| `<bootstrap> install --offline` | Use only cached crates |
+| `<bootstrap> uninstall <slug>` | Invoke a single standard's uninstall contract |
+| `<bootstrap> status` | Show project config and installed versions |
+| `<bootstrap> validate` | Validate project against all standards |
+| `<bootstrap> validate --config-only` | Validate only the manifest |
+| `<bootstrap> config show <slug>` | Show resolved config for a standard |
+| `<bootstrap> config schema <slug>` | Show JSON Schema for config |
+| `<bootstrap> config template` | Generate config with defaults |
+| `<bootstrap> run <slug> <cmd>` | Delegate to composed binary |
 
 ### 3.3 Delegation
 
-When the bootstrap receives `apss run ...`, it delegates to the composed binary at `.apss/bin/apss`. If the binary doesn't exist, it prints a helpful error directing the user to run `apss install`.
+When the bootstrap receives `<bootstrap> run ...`, it delegates to the
+composed binary at `.apss/bin/<bootstrap>`. If the binary does not exist, it
+prints a helpful error directing the user to run `<bootstrap> install`.
 
 ---
 
 ## 4. Installation Workflow
 
-### 4.1 `apss install` Steps
+The unified installer reads the `apss.yaml` manifest (CF01 Section 2),
+resolves the standards it declares, drives each resolved standard's install
+contract, then composes the project-local binary. CF01 owns the manifest;
+DI01 owns resolution and the lockfile; each standard owns its install
+contract. The pipeline below stitches the three together.
 
-1. Parse `apss.toml` (with cascading if workspace)
-2. Resolve version ranges against the registry index
-3. Write/update `apss.lock`
-4. Generate `.apss/build/Cargo.toml` with resolved dependencies
-5. Generate `.apss/build/src/main.rs` with `register()` calls
-6. Run `cargo build --release --manifest-path .apss/build/Cargo.toml`
-7. Copy binary to `.apss/bin/apss`
+### 4.1 Install Pipeline
+
+1. Parse and validate `apss.yaml` via CF01 (with cascade applied for
+   workspaces). Refuse to proceed on any error-severity diagnostic.
+2. Resolve version ranges against the registry index, producing one
+   `ResolvedStandard` per `standards.<slug>` entry in the manifest.
+3. Write or update `apss.lock` (Section 5).
+4. For each `ResolvedStandard`, load its install contract
+   (`docs/02_install_contract.md` in the standard's package) and ask it for
+   an install plan in dry-run mode.
+5. Apply each install plan in dependency order. Standards may install git
+   hooks, scaffolds, validators, and other artifacts per their contract.
+6. Reconcile removals: any standard previously present in `apss.lock` but
+   absent or `enabled: false` in the current manifest MUST have its
+   uninstall contract invoked. Removal MUST leave operator data and source
+   code untouched.
+7. Generate `.apss/build/Cargo.toml` with resolved dependencies.
+8. Generate `.apss/build/src/main.rs` with `register()` calls.
+9. Run `cargo build --release --manifest-path .apss/build/Cargo.toml`.
+10. Copy binary to `.apss/bin/<bootstrap>`.
+
+The pipeline MUST be idempotent: re-running with an unchanged manifest and
+registry MUST be a no-op (no file rewrites, no rebuild, exit zero).
 
 ### 4.2 Locked Mode
 
-`apss install --locked` MUST fail if the resolved versions would change `apss.lock`. This is intended for CI environments.
+`<bootstrap> install --locked` MUST fail if the resolved versions or the
+per-standard install plans would change `apss.lock`. This is intended for
+CI environments.
+
+### 4.3 Per-standard Install Contracts
+
+Every standard MUST ship `docs/02_install_contract.md`, which is the
+per-standard lifecycle hook the unified installer invokes. The contract
+MUST define `install`, `uninstall`, and a `plan` mode, each with stable
+diagnostics. The `StandardCli` trait (CL01) is the in-process API the
+installer uses to reach the contract.
+
+The per-standard escape hatch MUST remain supported as a debugging aid:
+
+```
+<bootstrap> run <slug> install
+<bootstrap> run <slug> uninstall
+```
+
+Documentation MUST present the unified `install` command as the primary path
+and the per-standard form as a secondary escape hatch.
+
+### 4.4 CF01 to DI01 Seam
+
+The boundary between CF01 and DI01 is explicit:
+
+- CF01 hands DI01 an ordered list of `(slug, id, version, substandards)`
+  tuples derived from the manifest, the cascade, and the slug registry.
+- DI01 returns a `ResolvedStandard` per tuple, containing the pinned
+  version, the checksum, and a source descriptor (registry, path, git).
+- The installer then drives the per-standard install contracts using those
+  `ResolvedStandard` values.
+- DI01 owns no knowledge of standard configuration content. CF01 owns no
+  knowledge of how a version range is resolved against a registry. Each
+  standard owns its own install contract content.
 
 ---
 
@@ -123,7 +189,8 @@ When the bootstrap receives `apss run ...`, it delegates to the composed binary 
 
 ### 5.1 Location
 
-The lockfile MUST be at `apss.lock` in the project root, next to `apss.toml`.
+The lockfile MUST be at `apss.lock` in the project root, next to
+`apss.yaml`.
 
 ### 5.2 Schema
 
@@ -164,7 +231,7 @@ The `source` field supports:
 
 ### 6.1 Generated Crate
 
-`apss install` generates a minimal Rust crate at `.apss/build/`:
+`<bootstrap> install` generates a minimal Rust crate at `.apss/build/`:
 
 ```
 .apss/
@@ -173,12 +240,13 @@ The `source` field supports:
 │   └── src/
 │       └── main.rs    # Generated register() + dispatch
 └── bin/
-    └── apss           # Compiled binary
+    └── <bootstrap>    # Compiled binary
 ```
 
 ### 6.2 Determinism
 
-Code generation MUST be deterministic — the same `apss.toml` + `apss.lock` MUST produce identical generated files.
+Code generation MUST be deterministic: the same `apss.yaml` and `apss.lock`
+MUST produce identical generated files.
 
 ---
 
@@ -192,7 +260,7 @@ Consumer projects SHOULD add:
 ```
 
 And SHOULD commit:
-- `apss.toml`
+- `apss.yaml`
 - `apss.lock`
 
 ---
@@ -211,9 +279,9 @@ The system has two independent version tracks:
 The system version MUST track `1.x.y` to align with `APS-V1`. It is bumped on
 any change to system crates (`aps-core`, `aps-cli`, `apss`).
 
-Standard and substandard versions are independent — a standard MAY be at `3.0.0`
-while the system is at `1.2.0`. Consumer projects pin standard versions in
-`apss.toml` via semver ranges.
+Standard and substandard versions are independent: a standard MAY be at
+`3.0.0` while the system is at `1.2.0`. Consumer projects pin standard
+versions in `apss.yaml` via semver ranges.
 
 ### 8.2 Version Consistency
 

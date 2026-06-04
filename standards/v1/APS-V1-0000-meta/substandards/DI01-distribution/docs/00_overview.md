@@ -1,38 +1,69 @@
-# APS-V1-0000.DI01 — Distribution & Installation
+# APS-V1-0000.DI01 Distribution & Installation
 
 ## Overview
 
-DI01 defines how APS standards are packaged, distributed, installed, and composed into project-local CLI binaries.
+DI01 defines how APSS standards are packaged, distributed, resolved against
+a registry, installed into a project, and composed into a project-local CLI
+binary.
+
+DI01 owns the right half of the unified manifest model: given the
+`apss.yaml` declared by the project (CF01), turn each `standards.<slug>`
+entry into a pinned, checksummed, on-disk install by resolving versions,
+invoking each standard's install contract, and producing a composed binary.
 
 ## Problem
 
 Without a distribution mechanism:
-- Users must clone the entire APS repo to use any standard
-- There's no way to install just the standards a project needs
-- No version resolution, lockfiles, or reproducible installs
-- The CLI has hardcoded standard routing instead of dynamic composition
+
+- Users must clone the entire APSS repo to use any standard.
+- There is no way to install just the standards a project needs.
+- No version resolution, lockfiles, or reproducible installs.
+- The CLI has hardcoded standard routing instead of dynamic composition.
+- The line between configuration (operator-authored) and installation
+  (mechanically derived from configuration) is blurry.
 
 ## Solution
 
 DI01 specifies:
 
-1. **Standard crate publishing** — each standard is an independent Rust crate on crates.io
-2. **Bootstrap binary (`apss`)** — lightweight global CLI for `init`, `install`, `status`
-3. **Composed binary** — project-local binary generated from `apss.toml` with only needed standards
-4. **Lockfile (`apss.lock`)** — pins exact versions for reproducible builds
-5. **Code generation** — `.apss/build/` Rust crate generated from resolved config
+1. **Standard crate publishing.** Each standard is an independent Rust crate
+   on a registry.
+2. **Bootstrap binary.** A lightweight, globally-installable CLI for `init`,
+   `install`, `status`, and `run` dispatch. The canonical binary name is
+   resolved separately in repo issue 64; this spec refers to it generically
+   where the name can be avoided.
+3. **Composed binary.** A project-local binary generated from the manifest,
+   containing only the standards the project declared as active.
+4. **Lockfile (`apss.lock`).** Pins exact versions for reproducible builds.
+5. **Code generation.** A `.apss/build/` Rust crate generated from the
+   resolved manifest.
+6. **CF01 to DI01 seam.** A small, explicit interface where CF01 hands DI01
+   an ordered list of resolved tuples and DI01 returns `ResolvedStandard`
+   values that the unified installer then feeds into each per-standard
+   install contract.
 
 ## User Workflow
 
 ```bash
-cargo install apss              # one-time global bootstrap install
+cargo install <bootstrap>           # one-time global install
 cd my-project
-apss init --standard topology   # creates apss.toml
-apss install                    # resolves, generates, builds .apss/bin/apss
-apss run topology analyze .     # forwards to composed binary
+<bootstrap> init --standard topology    # creates apss.yaml
+<bootstrap> install                     # reads apss.yaml, resolves, installs, builds composed binary
+<bootstrap> run topology analyze .      # forwards to composed binary
 ```
+
+A single `install` command materialises everything declared in the
+manifest: per-standard git hooks, validators, scaffolds, and the composed
+binary. Removing an entry from `apss.yaml` and re-running `install` cleanly
+uninstalls that standard.
 
 ## Related
 
-- **APS-V1-0000.CF01** — Project Configuration (defines `apss.toml` that DI01 consumes)
-- **APS-V1-0000.CL01** — CLI Contract (defines `StandardCli` trait for dispatch)
+- **APS-V1-0000.CF01** Project Configuration. Owns the `apss.yaml` manifest
+  that DI01 consumes. The unified installer crosses the CF01/DI01 boundary
+  via the `ResolvedStandard` seam described in the spec.
+- **APS-V1-0000.CL01** CLI Contract. Defines the `StandardCli` trait the
+  installer uses to reach each standard's install contract.
+- **Per-standard install contracts.** Each standard ships
+  `docs/02_install_contract.md` describing its `install`, `uninstall`, and
+  `plan` entry points. The unified installer invokes these.
