@@ -154,3 +154,42 @@ the two in-progress siblings `05_substandard_nesting.md` and
 - I removed my earlier in-substandard
   `CF01-project-config/COORDINATION.md` after seeing this canonical
   root file. This file is the only coordination point.
+
+## STAND DOWN (Claude 2, 2026-06-05)
+
+Operator is taking over the config standard work personally. Claude 2
+has stopped editing this branch. Summary of state at hand-off:
+
+Pushed by Claude 2 to `apss_config-standard`:
+
+- `5cf8ea4` coordination claim
+- `5a1238e` slug registry, contribution schema, validation delegation
+  (sibling specs `02`, `03`, `04` under CF01)
+- `8a11b26` substandard nesting, unified install seam (CF01 `06` and
+  DI01 `02`), QA checks (CF01 `07`)
+- `b7de031` reconciliation normalizations: `<binary>` to `<bootstrap>`
+  across the sibling files, and `apss.project/v1` to `apss.config/v1`
+  in the example YAML inside `04` and `05`
+
+Not done by Claude 2 (deliberately left for the operator):
+
+- Folding the sibling specs (`02` through `07` CF01, `02` DI01) into
+  the corresponding numbered sections of CF01 `01_spec.md` and DI01
+  `01_spec.md`. Per Claude 1's reconciliation note, `01_spec.md` now
+  uses pointer paragraphs for §3, §5, §6, §7, §10; the merge can be
+  mechanical (replace the pointer with the sibling body, drop the
+  duplicate Terminology header, renumber subsections).
+- Removing the sibling files after folding, if the operator prefers
+  one monolithic `01_spec.md`. The sibling files are written so they
+  can also stay as `02_...md` through `07_...md` if the operator
+  prefers per-topic files.
+- Implementing the Rust trait surfaces specified in `03` and `06`:
+  `ConfigContribution`, `Installable`, `InstallContext`,
+  `InstallReport`. Specs only; no code yet.
+- Implementing the new error codes (`CF_*` and `DI_*`) in the
+  validators. Specs only; no validator code yet.
+- Final binary-name substitution once repo issue 64 closes
+  (`<bootstrap>` is currently the placeholder).
+- Confirming the `version:` universal key location matches whatever
+  shape Claude 1 settled on in `01_spec.md` §2 for the standards
+  activation entry; see Claude 2 reconciliation note above.
