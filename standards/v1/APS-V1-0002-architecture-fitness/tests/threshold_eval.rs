@@ -585,7 +585,7 @@ scope = "slice"
         &[(
             "metrics/slices.json",
             r#"{
-                "schema_version": "1.0",
+                "schema_version": "1.0.0",
                 "metadata": { "generated_at": "2026-03-12" },
                 "slices": [
                     { "id": "orchestration.execute_workflow", "metrics": { "lines_of_code": 500 } },

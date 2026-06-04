@@ -52,6 +52,17 @@ pub mod error_codes {
     pub const INVALID_WEIGHTS: &str = "INVALID_WEIGHTS";
     /// Circular dependency found (forbidden).
     pub const DEPENDENCY_CYCLE_DETECTED: &str = "DEPENDENCY_CYCLE_DETECTED";
+    /// A rule on an `incubating` dimension declared `severity = "error"`; the
+    /// engine downgraded it to `warning` per §3.4. The diagnostic includes
+    /// the dimension code and rule ID so users can locate what is and is not
+    /// being enforced.
+    pub const INCUBATING_DIMENSION_ERROR_DOWNGRADED: &str = "INCUBATING_DIMENSION_ERROR_DOWNGRADED";
+    /// A dimension declared `active` in its substandard manifest does not
+    /// satisfy one or more of the R1-R5 promotion requirements (§3.3).
+    /// Reported either at config validation time (active dimension with no
+    /// rules) or at evaluation time (active dimension whose required
+    /// artifact is missing).
+    pub const PROMOTION_REQUIREMENT_UNMET: &str = "PROMOTION_REQUIREMENT_UNMET";
 }
 
 // ─── Severity ───────────────────────────────────────────────────────────────
@@ -158,14 +169,18 @@ impl DimensionCode {
     /// `Incubating`, a missing artifact is a `Skip` (advisory).
     ///
     /// This mapping MUST agree with the table in Appendix D of the spec.
+    /// Six dimensions (MT01, MD01, ST01, SC01, LG01, AC01) carry universally
+    /// citable default thresholds per R4 and are `Active`. PF01 and AV01
+    /// remain `Incubating` because their thresholds (SLOs, latency targets)
+    /// are project-specific and cannot be set without an ADR.
     pub const fn promotion_status(self) -> PromotionStatus {
         match self {
             DimensionCode::MT01 => PromotionStatus::Active,
             DimensionCode::MD01 => PromotionStatus::Active,
-            DimensionCode::ST01 => PromotionStatus::Incubating,
-            DimensionCode::SC01 => PromotionStatus::Incubating,
-            DimensionCode::LG01 => PromotionStatus::Incubating,
-            DimensionCode::AC01 => PromotionStatus::Incubating,
+            DimensionCode::ST01 => PromotionStatus::Active,
+            DimensionCode::SC01 => PromotionStatus::Active,
+            DimensionCode::LG01 => PromotionStatus::Active,
+            DimensionCode::AC01 => PromotionStatus::Active,
             DimensionCode::PF01 => PromotionStatus::Incubating,
             DimensionCode::AV01 => PromotionStatus::Incubating,
         }
@@ -267,6 +282,8 @@ pub struct SystemFitnessConfig {
     pub enabled: bool,
     pub min_score: f64,
     #[serde(default)]
+    pub include_incubating: bool,
+    #[serde(default)]
     pub weights: HashMap<String, f64>,
 }
 
@@ -275,6 +292,7 @@ impl Default for SystemFitnessConfig {
         Self {
             enabled: true,
             min_score: 0.7,
+            include_incubating: false,
             weights: HashMap::new(),
         }
     }
@@ -372,6 +390,14 @@ impl ThresholdRule {
                 self.id
             ));
         }
+        if let Some(dim) = &self.dimension {
+            if DimensionCode::parse(dim).is_none() {
+                return Err(format!(
+                    "Rule '{}': invalid dimension code '{}'",
+                    self.id, dim
+                ));
+            }
+        }
         Ok(())
     }
 }
@@ -393,6 +419,30 @@ pub struct DependencyRule {
     pub severity: Option<Severity>,
 }
 
+impl DependencyRule {
+    /// Validate that the rule definition is well-formed. Rejects unknown
+    /// dimension codes and unknown `type` values so a misspelled rule cannot
+    /// silently pass (the engine evaluates `forbidden` / `required` /
+    /// `allowed` and would treat anything else as a no-op).
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(dim) = &self.dimension {
+            if DimensionCode::parse(dim).is_none() {
+                return Err(format!(
+                    "Rule '{}': invalid dimension code '{}'",
+                    self.id, dim
+                ));
+            }
+        }
+        match self.rule_type.as_str() {
+            "forbidden" | "required" | "allowed" => Ok(()),
+            other => Err(format!(
+                "Rule '{}': invalid type '{}' (expected 'forbidden', 'required', or 'allowed')",
+                self.id, other
+            )),
+        }
+    }
+}
+
 /// Path matcher for dependency and structural rules.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PathMatcher {
@@ -412,6 +462,22 @@ pub struct StructuralRule {
     pub from: Option<PathMatcher>,
     pub to: Option<PathMatcher>,
     pub severity: Option<Severity>,
+}
+
+impl StructuralRule {
+    /// Validate that the rule definition is well-formed. Rejects unknown
+    /// dimension codes so a misspelled rule is caught at config load.
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(dim) = &self.dimension {
+            if DimensionCode::parse(dim).is_none() {
+                return Err(format!(
+                    "Rule '{}': invalid dimension code '{}'",
+                    self.id, dim
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 // ─── Exception Set (fitness-exceptions.toml) ────────────────────────────────
@@ -729,9 +795,26 @@ impl FitnessValidator {
         let config: FitnessConfig = toml::from_str(&config_content)
             .map_err(|e| FitnessError::ParseConfig(e.to_string()))?;
 
-        // Validate all threshold rules
+        // Validate all rules. Each rule type checks its dimension code, and
+        // dependency rules additionally validate `type` so a typo cannot
+        // silently no-op (Copilot review on this PR).
         for rule in &config.rules.threshold {
             rule.validate().map_err(FitnessError::InvalidRule)?;
+        }
+        for rule in &config.rules.dependency {
+            rule.validate().map_err(FitnessError::InvalidRule)?;
+        }
+        for rule in &config.rules.structural {
+            rule.validate().map_err(FitnessError::InvalidRule)?;
+        }
+
+        // Validate that any dimension referenced in system_fitness.weights is
+        // a known code. Unknown weights would otherwise silently contribute
+        // nothing to the composite (HashMap lookup miss) and confuse reports.
+        for code in config.system_fitness.weights.keys() {
+            if DimensionCode::parse(code).is_none() {
+                return Err(FitnessError::InvalidDimension(code.clone()));
+            }
         }
 
         // Validate dimension configuration
@@ -1199,7 +1282,37 @@ impl FitnessValidator {
                     }
                 }
             }
-            _ => {} // "allowed" and unknown types — no-op for now
+            "allowed" => {
+                // `allowed`: from_nodes MAY depend on to_nodes; ANY edge from
+                // a from_node to a node outside to_set is a violation. This
+                // implements the dependency-cruiser "allowed" semantics.
+                // Unknown rule_types are rejected at config load (see
+                // DependencyRule::validate), so reaching this match arm with
+                // anything other than these three values is impossible.
+                for (from, to) in &edges {
+                    if from_set.contains(from.as_str()) && !to_set.contains(to.as_str()) {
+                        let excepted = self.check_dependency_exception(
+                            &rule.id,
+                            from,
+                            &mut matched_exception_entities,
+                        );
+                        if excepted {
+                            exceptions_used += 1;
+                        }
+                        violations.push(Violation {
+                            entity: from.clone(),
+                            field: "depends_on".to_string(),
+                            actual: 1.0,
+                            threshold: 0.0,
+                            direction: ThresholdDirection::Max,
+                            excepted,
+                        });
+                    }
+                }
+            }
+            _ => unreachable!(
+                "DependencyRule::validate rejects unknown rule_type before reaching this point"
+            ),
         }
 
         // Detect stale exceptions for dependency rules
@@ -1300,7 +1413,11 @@ impl FitnessValidator {
         // Collect active dimensions with scores
         let active: Vec<(&str, f64)> = dimensions
             .iter()
-            .filter(|(_, d)| d.runtime_status == DimensionStatus::Evaluated)
+            .filter(|(_, d)| {
+                d.runtime_status == DimensionStatus::Evaluated
+                    && (self.config.system_fitness.include_incubating
+                        || d.promotion_status == PromotionStatus::Active)
+            })
             .filter_map(|(code, d)| d.score.map(|s| (code.as_str(), s)))
             .collect();
 

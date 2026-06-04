@@ -138,6 +138,10 @@
             "maximum": 1
           }
         },
+        "weights_note": {
+          "type": "string",
+          "description": "Optional human-readable note about weight redistribution (e.g., which dimensions were skipped and how their weight was reallocated)."
+        },
         "trend": { "$ref": "#/$defs/Trend" }
       }
     },
@@ -247,7 +251,7 @@
           "excepted_violations": 2
         },
         "MD01": {
-          "name": "Modularity",
+          "name": "Modularity & Coupling",
           "runtime_status": "evaluated",
           "promotion_status": "active",
           "enforcement": "enforced",
@@ -259,15 +263,75 @@
           "rules_downgraded": 0,
           "total_violations": 1,
           "excepted_violations": 0
+        },
+        "ST01": {
+          "name": "Structural Integrity",
+          "runtime_status": "evaluated",
+          "promotion_status": "active",
+          "enforcement": "enforced",
+          "score": 1.0,
+          "rules_evaluated": 0,
+          "rules_passed": 0,
+          "rules_failed": 0,
+          "rules_warned": 0,
+          "rules_downgraded": 0,
+          "total_violations": 0,
+          "excepted_violations": 0
+        },
+        "SC01": {
+          "name": "Security",
+          "runtime_status": "evaluated",
+          "promotion_status": "active",
+          "enforcement": "enforced",
+          "score": 1.0,
+          "rules_evaluated": 0,
+          "rules_passed": 0,
+          "rules_failed": 0,
+          "rules_warned": 0,
+          "rules_downgraded": 0,
+          "total_violations": 0,
+          "excepted_violations": 0
+        },
+        "LG01": {
+          "name": "Legality",
+          "runtime_status": "evaluated",
+          "promotion_status": "active",
+          "enforcement": "enforced",
+          "score": 1.0,
+          "rules_evaluated": 0,
+          "rules_passed": 0,
+          "rules_failed": 0,
+          "rules_warned": 0,
+          "rules_downgraded": 0,
+          "total_violations": 0,
+          "excepted_violations": 0
+        },
+        "AC01": {
+          "name": "Accessibility",
+          "runtime_status": "evaluated",
+          "promotion_status": "active",
+          "enforcement": "enforced",
+          "score": 1.0,
+          "rules_evaluated": 0,
+          "rules_passed": 0,
+          "rules_failed": 0,
+          "rules_warned": 0,
+          "rules_downgraded": 0,
+          "total_violations": 0,
+          "excepted_violations": 0
         }
       },
       "system_fitness": {
-        "score": 0.90,
+        "score": 0.95,
         "min_score": 0.7,
         "passing": true,
         "weights_used": {
-          "MT01": 0.5,
-          "MD01": 0.5
+          "MT01": 0.25,
+          "MD01": 0.25,
+          "ST01": 0.15,
+          "SC01": 0.15,
+          "LG01": 0.10,
+          "AC01": 0.10
         }
       },
       "results": [
@@ -286,7 +350,8 @@
               "excepted": false
             }
           ],
-          "exceptions_used": 0
+          "exceptions_used": 0,
+          "total_entities": 36
         }
       ],
       "stale_exceptions": []

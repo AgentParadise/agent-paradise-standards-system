@@ -24,6 +24,7 @@ const EXCEPTIONS_SCHEMA: &str = include_str!("../schemas/fitness-exceptions.sche
 
 const EXAMPLE_FITNESS_TOML: &str = include_str!("../examples/fitness.toml");
 const EXAMPLE_EXCEPTIONS_TOML: &str = include_str!("../examples/fitness-exceptions.toml");
+const EXAMPLE_FITNESS_REPORT_JSON: &str = include_str!("../examples/fitness-report.json");
 
 fn compile(schema_str: &str) -> Validator {
     let schema: Value = serde_json::from_str(schema_str).expect("schema parses");
@@ -122,6 +123,19 @@ fn example_fitness_toml_matches_config_schema() {
 fn example_fitness_exceptions_toml_matches_schema() {
     let value = toml_to_json(EXAMPLE_EXCEPTIONS_TOML);
     let schema = compile(EXCEPTIONS_SCHEMA);
+    let errors = format_errors(&schema, &value);
+    assert!(errors.is_empty(), "schema errors: {errors:#?}");
+}
+
+#[test]
+fn example_fitness_report_json_matches_schema() {
+    // The canonical example report under examples/ MUST stay a valid
+    // instance of the published report schema. This is what users copy as a
+    // template, and is what the Copilot review of PR #63 (Comment 14)
+    // specifically asked to pin.
+    let value: Value = serde_json::from_str(EXAMPLE_FITNESS_REPORT_JSON)
+        .expect("example fitness-report.json parses");
+    let schema = compile(REPORT_SCHEMA);
     let errors = format_errors(&schema, &value);
     assert!(errors.is_empty(), "schema errors: {errors:#?}");
 }

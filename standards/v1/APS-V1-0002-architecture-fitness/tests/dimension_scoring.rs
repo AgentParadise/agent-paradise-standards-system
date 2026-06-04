@@ -154,22 +154,26 @@ AV01 = false
 
 #[test]
 fn skipped_dimension_when_incubating_and_artifacts_missing() {
-    // Incubating dimensions (like ST01) skip silently when source artifacts are
-    // missing — the dimension is advisory, not enforced. Contrast with active
-    // dimensions, which fail with PROMOTION_REQUIREMENT_UNMET (§12).
+    // Incubating dimensions (PF01, AV01 after the six-dimension promotion in
+    // ADR 0003) skip silently when source artifacts are missing: the
+    // dimension is advisory, not enforced. Contrast with active dimensions
+    // which fail with PROMOTION_REQUIREMENT_UNMET (§12).
     let dir = setup_fixture(
         r#"
 [config]
 topology_dir = ".topology"
 
+[dimensions]
+PF01 = true
+
 [[rules.threshold]]
-id = "max-something"
-name = "Max Something"
-dimension = "ST01"
+id = "max-p95-latency"
+name = "Max P95 Latency"
+dimension = "PF01"
 source = "metrics/nonexistent.json"
-field = "something"
-max = 15
-scope = "module"
+field = "p95_latency_ms"
+max = 250
+scope = "system"
 "#,
         None,
         &[],
@@ -178,10 +182,10 @@ scope = "module"
     let validator = FitnessValidator::load(dir.path(), None).unwrap();
     let report = validator.validate().unwrap();
 
-    let st01 = &report.dimensions["ST01"];
-    assert_eq!(st01.runtime_status, DimensionStatus::Skipped);
-    assert_eq!(st01.score, None);
-    assert_eq!(st01.rules_evaluated, 0);
+    let pf01 = &report.dimensions["PF01"];
+    assert_eq!(pf01.runtime_status, DimensionStatus::Skipped);
+    assert_eq!(pf01.score, None);
+    assert_eq!(pf01.rules_evaluated, 0);
 }
 
 #[test]

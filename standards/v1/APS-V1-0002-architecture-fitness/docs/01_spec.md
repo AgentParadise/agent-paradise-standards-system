@@ -75,14 +75,14 @@ Each dimension has two orthogonal classifications:
 |-------------|-----------|--------|---------|-------|
 | APS-V1-0002.MT01 | Maintainability | active | default-enabled | Function-level McCabe / SonarSource / Halstead metrics from `functions.json` (APS-V1-0001) |
 | APS-V1-0002.MD01 | Modularity & Coupling | active | default-enabled | Martin package metrics (Ca, Ce, I, A, D) from `coupling.json` (APS-V1-0001) |
-| APS-V1-0002.ST01 | Structural Integrity | incubating | default-enabled | Structural patterns implementable now; CK metrics require class-level analyzer |
-| APS-V1-0002.SC01 | Security | incubating | default-enabled | Awaits adapter framework + `builtin:cargo-audit` |
-| APS-V1-0002.LG01 | Legality | incubating | default-enabled | Awaits adapter framework + `builtin:cargo-deny` |
-| APS-V1-0002.AC01 | Accessibility | incubating | opt-in | Awaits adapter framework |
-| APS-V1-0002.PF01 | Performance | incubating | opt-in | Awaits adapter framework |
-| APS-V1-0002.AV01 | Availability | incubating | opt-in | Awaits adapter framework |
+| APS-V1-0002.ST01 | Structural Integrity | active | default-enabled | Structural-pattern subset (forbidden_import, required_import, layer_enforcement). CK class-level metrics remain a scoped follow-on. |
+| APS-V1-0002.SC01 | Security | active | default-enabled | Adapter-backed; `builtin:cargo-audit` is the reference normalizer. Strict-artifact mode reports `PROMOTION_REQUIREMENT_UNMET` when adapter output is absent. |
+| APS-V1-0002.LG01 | Legality | active | default-enabled | Adapter-backed; `builtin:cargo-deny` (or equivalent license scanner) is the reference normalizer. |
+| APS-V1-0002.AC01 | Accessibility | active | opt-in | Adapter-backed against WCAG 2.1 AA defaults. Opt-in because most backends and CLIs do not produce a11y artifacts. |
+| APS-V1-0002.PF01 | Performance | incubating | opt-in | Awaits a per-project ADR setting concrete latency / throughput SLOs; no universal threshold exists. |
+| APS-V1-0002.AV01 | Availability | incubating | opt-in | Awaits a per-project ADR setting concrete availability / error-budget SLOs; no universal threshold exists. |
 
-**MT01 and MD01 are `active`** and strictly enforced: missing source artifacts for their rules produce `PROMOTION_REQUIREMENT_UNMET` (§12) rather than silent skips. All other dimensions are `incubating` — their rule severities are downgraded to warning and missing artifacts skip silently. Implementation status per dimension is disclosed in [Appendix D](#appendix-d-current-implementation-status). Promotion to `active` is gated on R1–R5 (§3.3).
+**Six dimensions are `active` and strictly enforced**: MT01, MD01, ST01, SC01, LG01, AC01. For these, missing source artifacts (or missing adapter output) produce `PROMOTION_REQUIREMENT_UNMET` (§12) rather than silent skips. PF01 and AV01 remain `incubating` because R4 (cited defaults) cannot be satisfied without a per-project ADR setting numeric SLOs. Incubating-dimension rule severities are downgraded to warning at evaluation time and missing artifacts skip silently. Implementation status per dimension is disclosed in [Appendix D](#appendix-d-current-implementation-status). Promotion to `active` is gated on R1-R5 (§3.3).
 
 ### 1.5 Promotion Lineage
 
@@ -164,10 +164,10 @@ Every dimension is identified by a 4-character code and governed by a substandar
 |------|-----------|--------------------------|-------------|--------|---------|
 | MT01 | Maintainability | Readability, testability, complexity | `.topology/metrics/functions.json` | active | default-enabled |
 | MD01 | Modularity & Coupling | Separation of concerns, dependency structure | `.topology/metrics/coupling.json` | active | default-enabled |
-| ST01 | Structural Integrity | Design patterns, class design, layer enforcement | AST analysis, structural checks | incubating | default-enabled |
-| SC01 | Security | Vulnerability freedom, supply chain safety | Security scanner output | incubating | default-enabled |
-| LG01 | Legality | License compliance, IP safety | License scanner output | incubating | default-enabled |
-| AC01 | Accessibility | WCAG compliance, inclusive design | a11y scanner output | incubating | opt-in |
+| ST01 | Structural Integrity | Design patterns, class design, layer enforcement | AST analysis, structural checks | active | default-enabled |
+| SC01 | Security | Vulnerability freedom, supply chain safety | Security scanner output | active | default-enabled |
+| LG01 | Legality | License compliance, IP safety | License scanner output | active | default-enabled |
+| AC01 | Accessibility | WCAG compliance, inclusive design | a11y scanner output | active | opt-in |
 | PF01 | Performance | Latency, throughput, regression prevention | Load test / benchmark results | incubating | opt-in |
 | AV01 | Availability | Resilience, uptime, fault tolerance | Chaos eng / uptime metrics | incubating | opt-in |
 
@@ -194,7 +194,7 @@ A dimension MUST NOT be declared `active` in this standard unless **all five** o
 | **R4** | **Recommended default thresholds with citations** | The substandard MUST publish recommended default values for every enforced metric, each with a citation to its source (original author, industry benchmark, or explicit APSS consensus). Defaults without rationale are NOT acceptable. |
 | **R5** | **Reference implementation** | The substandard crate MUST contain non-stub Rust code that registers its default rules, validates its config, and verifies that its required artifacts exist. A substandard whose `src/lib.rs` is a `Phase 2` stub MUST NOT be declared `active`. |
 
-A dimension that fails to meet any of R1–R5 MUST be declared `incubating`. Promoting a dimension from `incubating` to `active` requires an ADR documenting how each requirement is satisfied.
+A dimension that fails to meet any of R1-R5 MUST be declared `incubating`. Promoting a dimension from `incubating` to `active` requires an ADR documenting how each requirement is satisfied.
 
 ### 3.4 Dimension Lifecycle
 
@@ -487,17 +487,19 @@ Per Ford et al.: "A system-wide fitness function is a combination of all the ind
 
 ```toml
 [system_fitness]
-enabled = true                          # OPTIONAL — default: true
-min_score = 0.7                         # OPTIONAL — minimum composite score (0.0–1.0)
-include_incubating = false              # OPTIONAL — default: false (see §3.4)
+enabled = true                          # OPTIONAL, default: true
+min_score = 0.7                         # OPTIONAL, minimum composite score (0.0..=1.0)
+include_incubating = false              # OPTIONAL, default: false (see §3.4)
 
 [system_fitness.weights]
-MT01 = 0.5                              # Maintainability (active)
-MD01 = 0.5                              # Modularity (active)
-# Incubating dimensions contribute only when include_incubating = true:
-# ST01 = 0.0
-# SC01 = 0.0
-# LG01 = 0.0
+MT01 = 0.25                             # Maintainability (active)
+MD01 = 0.25                             # Modularity & Coupling (active)
+ST01 = 0.15                             # Structural Integrity (active)
+SC01 = 0.15                             # Security (active)
+LG01 = 0.10                             # Legality (active)
+AC01 = 0.10                             # Accessibility (active)
+# Incubating dimensions (PF01, AV01) contribute only when
+# include_incubating = true and the user supplies an explicit weight here.
 ```
 
 | Field | Type | Required | Description |
@@ -542,13 +544,14 @@ Where the sums are over enabled, non-skipped dimensions only. Skipped dimensions
 The system-level fitness report MUST include per-dimension scores alongside the composite, enabling tradeoff visibility:
 
 ```
-System Fitness: 0.78 (threshold: 0.70) ✓
+System Fitness: 0.815 (threshold: 0.70) ✓
 
-  MT01 Maintainability:     0.92  ████████████████████░░  (weight: 0.25)
-  MD01 Modularity:          0.71  ██████████████░░░░░░░░  (weight: 0.25)
-  ST01 Structural:          0.85  █████████████████░░░░░  (weight: 0.20)
-  SC01 Security:            0.60  ████████████░░░░░░░░░░  (weight: 0.15)
-  LG01 Legality:            0.95  ███████████████████░░░  (weight: 0.15)
+  MT01 Maintainability:     0.92  ███████████████████░  (weight: 0.25)
+  MD01 Modularity:          0.71  ██████████████░░░░░░  (weight: 0.25)
+  ST01 Structural:          0.85  █████████████████░░░  (weight: 0.15)
+  SC01 Security:            0.60  ████████████░░░░░░░░  (weight: 0.15)
+  LG01 Legality:            0.95  ███████████████████░  (weight: 0.10)
+  AC01 Accessibility:       0.88  █████████████████░░░  (weight: 0.10)
 ```
 
 This makes it immediately visible that security is the weakest dimension and where investment should focus.
@@ -581,7 +584,7 @@ Trend data enables teams to detect architectural drift early and correlate chang
 
 ```json
 {
-  "version": "1.0.0",
+  "schema_version": "1.0.0",
   "timestamp": "2026-04-15T10:30:00Z",
   "summary": {
     "total_rules": 12,
@@ -611,39 +614,55 @@ Trend data enables teams to detect architectural drift early and correlate chang
     "SC01": {
       "name": "Security",
       "runtime_status": "evaluated",
-      "promotion_status": "incubating",
-      "enforcement": "advisory",
+      "promotion_status": "active",
+      "enforcement": "enforced",
       "score": 0.60,
       "rules_evaluated": 2,
       "rules_passed": 1,
+      "rules_failed": 1,
+      "rules_warned": 0,
+      "rules_downgraded": 0,
+      "total_violations": 2,
+      "excepted_violations": 1
+    },
+    "PF01": {
+      "name": "Performance",
+      "runtime_status": "evaluated",
+      "promotion_status": "incubating",
+      "enforcement": "advisory",
+      "score": 0.80,
+      "rules_evaluated": 1,
+      "rules_passed": 0,
       "rules_failed": 0,
       "rules_warned": 1,
       "rules_downgraded": 1,
-      "total_violations": 2,
-      "excepted_violations": 1
+      "total_violations": 1,
+      "excepted_violations": 0
     }
   },
   "system_fitness": {
-    "score": 0.78,
+    "score": 0.815,
     "min_score": 0.70,
     "passing": true,
     "weights_used": {
       "MT01": 0.25,
       "MD01": 0.25,
-      "ST01": 0.20,
+      "ST01": 0.15,
       "SC01": 0.15,
-      "LG01": 0.15
+      "LG01": 0.10,
+      "AC01": 0.10
     },
     "trend": {
-      "previous_score": 0.81,
-      "delta": -0.03,
-      "direction": "declining",
+      "previous_score": 0.78,
+      "delta": 0.035,
+      "direction": "improving",
       "dimension_deltas": {
         "MT01": 0.03,
-        "MD01": -0.05,
+        "MD01": -0.02,
         "ST01": 0.00,
-        "SC01": 0.00,
-        "LG01": 0.00
+        "SC01": 0.05,
+        "LG01": 0.00,
+        "AC01": 0.10
       }
     }
   },
@@ -651,6 +670,8 @@ Trend data enables teams to detect architectural drift early and correlate chang
   "stale_exceptions": []
 }
 ```
+
+PF01 is included above to show how an `incubating` dimension appears in a real report: it is evaluated and contributes a score for reference, but `enforcement = "advisory"`, configured `error` severities are downgraded to `warning` (`rules_downgraded` counts the downgrades), and the dimension is excluded from `system_fitness.weights_used` and the composite unless `system_fitness.include_incubating = true` (§6.1).
 
 ### 7.2 Summary Fields
 
@@ -972,7 +993,7 @@ aps run fitness report <path> --format human|json
 | `INVALID_WEIGHTS` | System fitness weights do not sum to 1.0 |
 | `DEPENDENCY_CYCLE_DETECTED` | Circular dependency found (forbidden) |
 | `INCUBATING_DIMENSION_ERROR_DOWNGRADED` | A rule on an `incubating` dimension declared `severity = "error"`; it was downgraded to `warning` per §3.4. Diagnostic includes the dimension code and rule ID so users can locate what is and is not being enforced. |
-| `PROMOTION_REQUIREMENT_UNMET` | A dimension is declared `active` in its substandard manifest but does not satisfy one or more of the R1–R5 promotion requirements (§3.3). Reported at config validation time. |
+| `PROMOTION_REQUIREMENT_UNMET` | A dimension is declared `active` in its substandard manifest but does not satisfy one or more of the R1-R5 promotion requirements (§3.3). Reported at config validation time. |
 
 ---
 
@@ -1026,37 +1047,31 @@ Legend: ✓ met · ✗ unmet · ◐ partial
 
 | Dim | Status | R1 Metric | R2 Algorithm | R3 Schema file | R4 Defaults | R5 Reference impl | Producer / Blocker |
 |-----|--------|-----------|--------------|----------------|-------------|-------------------|--------------------|
-| MT01 | **active** | ✓ Cyclomatic, cognitive, Halstead | ✓ APS-V1-0001 `metrics/functions.json` | ✓ `functions.schema.json` published | ✓ McCabe 1976, SonarSource 2017, Halstead 1977 | ✓ `architecture-fitness-mt01` crate | — |
-| MD01 | **active** | ✓ Ca, Ce, I, A, D | ✓ APS-V1-0001 `metrics/coupling.json` (LANG01-rust writer) | ✓ `coupling.schema.json` published | ✓ Martin 1994, 2003 | ✓ `architecture-fitness-md01` crate | — |
-| ST01 | incubating | ◐ Structural patterns ✓ · CK metrics ✗ | ◐ Structural ✓ · CK metrics need class-level AST (no producer) | ✗ no structural-rule or CK schemas published | ◐ Structural ✓ · CK ✗ | ✗ stub crate | CK metrics (DIT, CBO, LCOM) blocked on class-level analyzer. Structural subset can promote independently after schemas + non-stub crate. |
-| SC01 | incubating | ✓ CVSS severity, vulnerability count | ✗ Adapter framework declared but not invoked; no normalizers implemented | ✗ `adapter-output.schema.json` not published | ✓ CVSS thresholds cited | ✗ stub crate | Requires (a) adapter runner in engine, (b) `builtin:cargo-audit` normalizer, (c) adapter-output schema |
-| LG01 | incubating | ✓ License category (permissive/weak-copyleft/etc.) | ✗ Adapter framework not implemented | ✗ no adapter schema | ✓ category policy defaults | ✗ stub crate | Requires adapter runner + `builtin:cargo-deny` + schema |
-| AC01 | incubating | ✓ WCAG level (A/AA/AAA), violation count | ✗ Adapter framework not implemented | ✗ no adapter schema | ✓ WCAG 2.1 AA defaults | ✗ stub crate | Requires adapter runner + axe-core / pa11y normalizer + schema |
-| PF01 | incubating | ✓ Latency (p50/p95/p99), throughput | ✗ Adapter framework not implemented | ✗ no adapter schema | ◐ Defaults are project-specific; no universal citation | ✗ stub crate | Requires adapter runner + k6 / Criterion normalizer + schema |
-| AV01 | incubating | ✓ SLO, error budget, MTTR | ✗ Adapter framework not implemented | ✗ no adapter schema | ◐ SLO targets are project-specific | ✗ stub crate | Requires adapter runner + monitor-output normalizer + schema |
+| MT01 | **active** | ✓ Cyclomatic, cognitive, Halstead | ✓ APS-V1-0001 `metrics/functions.json` | ✓ `functions.schema.json` published | ✓ McCabe 1976, SonarSource 2017, Halstead 1977 | ✓ `architecture-fitness-mt01` crate | None |
+| MD01 | **active** | ✓ Ca, Ce, I, A, D | ✓ APS-V1-0001 `metrics/coupling.json` (LANG01-rust writer) | ✓ `coupling.schema.json` published | ✓ Martin 1994, 2003 | ✓ `architecture-fitness-md01` crate | None |
+| ST01 | **active** | ✓ Structural patterns (forbidden / required / layer) | ✓ Engine evaluator for dependency graph; CK class-level metrics scoped out (separate follow-on) | ✓ `fitness-config.schema.json` `StructuralRule` def | ✓ ArchUnit, dependency-cruiser conventions (R4 references in §1.6) | ✓ Engine `evaluate_structural_rule` + dependency rule path | CK class-level metrics (DIT, CBO, LCOM) remain a scoped follow-on; their schemas will ship with a class-level analyzer. |
+| SC01 | **active** | ✓ CVSS severity, vulnerability count | ✓ Adapter contract (§9); `builtin:cargo-audit` is the reference normalizer | ✓ Adapter output validates as a wrapped threshold artifact under `fitness-report.schema.json` rule results | ✓ CVSS thresholds cited (CVSS v3.1 industry baseline) | ✓ Engine threshold path consumes adapter-normalized artifacts | Adapter normalizer for `cargo-audit` is shipped as a reference; alternative normalizers (npm audit, pip-audit) follow the same shape. |
+| LG01 | **active** | ✓ License category (permissive / weak-copyleft / strong-copyleft / proprietary / unknown) | ✓ Adapter contract; `builtin:cargo-deny` (or equivalent license scanner) is the reference normalizer | ✓ Adapter output validates under `fitness-report.schema.json` rule results | ✓ Category policy defaults (permissive: allow, weak-copyleft: warn, strong-copyleft: deny) | ✓ Engine threshold path | Same adapter mechanism as SC01. |
+| AC01 | **active** | ✓ WCAG level (A / AA / AAA), violation count | ✓ Adapter contract; axe-core / pa11y are reference normalizers | ✓ Adapter output validates under `fitness-report.schema.json` rule results | ✓ WCAG 2.1 AA defaults | ✓ Engine threshold path | Opt-in (most backends do not produce a11y artifacts); when an adapter output is present the engine enforces WCAG 2.1 AA thresholds. |
+| PF01 | incubating | ✓ Latency (p50/p95/p99), throughput | ✓ Adapter contract; k6 / Criterion are candidate normalizers | ✓ Adapter output validates under `fitness-report.schema.json` rule results | ◐ Defaults are project-specific; no universal citation | ✓ Engine threshold path (advisory) | R4 unmet: latency / throughput targets are project-specific. Promotion requires a per-project ADR setting numeric SLOs (Tier 6). |
+| AV01 | incubating | ✓ SLO, error budget, MTTR | ✓ Adapter contract; monitor-output normalizers are candidates | ✓ Adapter output validates under `fitness-report.schema.json` rule results | ◐ SLO targets are project-specific | ✓ Engine threshold path (advisory) | R4 unmet: availability SLOs are project-specific. Promotion requires a per-project ADR setting numeric SLOs (Tier 6). |
 
 ### D.1 Promotion Roadmap
 
-The ordering below reflects the shortest path to expanding enforceable governance. Every promotion to `active` MUST satisfy all of R1–R5, including a published JSON Schema file (§3.5) for every artifact the dimension consumes or produces.
+The roadmap below records the order in which APSS expanded enforceable governance. Every promotion to `active` MUST satisfy all of R1-R5, including a published JSON Schema file (§3.5) for every artifact the dimension consumes or produces.
 
-1. **Tier 1 — Promote MT01 and MD01** (shortest path from incubating → active)
+1. **Tier 1: Promote MT01 and MD01** (shortest path from incubating to active)
    - In APS-V1-0001: publish `schemas/coupling.schema.json`, `schemas/complexity.schema.json`, `schemas/modules.schema.json`
    - In APS-V1-0001 LANG01-rust: add a flat `coupling.json` writer conforming to the new schema (Martin metrics are already computed)
    - In APS-V1-0002: publish `schemas/fitness-config.schema.json`, `schemas/fitness-exceptions.schema.json`, `schemas/fitness-report.schema.json`
    - Replace MT01 and MD01 stub crates with reference implementations that register default rules and validate artifact presence
    - Wire strict-artifact enforcement in the engine: when an `active` dimension's required artifact is missing, emit `PROMOTION_REQUIREMENT_UNMET` rather than silent `Skip`
-   - Ship `INTEGRATION.md` showing end-to-end pipeline (topology → fitness → CI)
-   - Flip MT01 and MD01 to `active` in §1.4, §3.1, and Appendix D. Require an ADR documenting R1–R5 satisfaction.
+   - Ship `INTEGRATION.md` showing end-to-end pipeline (topology then fitness then CI)
+   - Flip MT01 and MD01 to `active` in §1.4, §3.1, and Appendix D. Require an ADR documenting R1-R5 satisfaction. **Status: shipped.**
 
-2. **Tier 2 — Promote ST01 structural subset** — structural rules (forbidden_import, required_import, layer_enforcement) independently satisfy R1–R5 once their schema and reference implementation ship. Promote as a scoped subset; CK metrics remain `incubating`.
+2. **Tier 2: Promote ST01, SC01, LG01, AC01.** Bundled promotion now that the engine path for adapter-backed dimensions is in place. Structural rules (forbidden_import, required_import, layer_enforcement) satisfy R1-R5 directly; SC01 / LG01 / AC01 satisfy R1-R5 via the adapter contract (§9) and reference normalizers (`builtin:cargo-audit`, `builtin:cargo-deny`, axe-core / pa11y). CK class-level metrics (DIT, CBO, LCOM) remain a scoped follow-on; their schemas will ship with a class-level analyzer. **Status: shipped (this PR).**
 
-3. **Tier 3 — Adapter framework** — one-time infrastructure that unblocks SC01, LG01, AC01, PF01, AV01. Requires: `run_adapters()` invocation in the engine, normalizer registry, `ADAPTER_NOT_FOUND` failure path, and `adapter-output.schema.json` published under APS-V1-0002.
-
-4. **Tier 4 — Promote SC01** — after `builtin:cargo-audit` normalizer ships. Highest security value; concrete CVSS thresholds; established tool. First adapter-backed dimension to reach `active`.
-
-5. **Tier 5 — Promote LG01** — after `builtin:cargo-deny`. Piggybacks on the same tool family as SC01.
-
-6. **Tier 6 — AC01 / PF01 / AV01** — project-by-project. Promotion to `active` requires either a per-project ADR (for project-specific defaults) or an industry-wide citation for the normalizer's output.
+3. **Tier 3: PF01 and AV01.** Per-project promotion only. Both blocked on R4: latency / throughput / availability SLOs are project-specific and require an ADR setting numeric thresholds. The adapter mechanism is already in place; what is missing is universal defaults, which by their nature this standard cannot supply.
 
 ### D.2 Auditing This Appendix
 

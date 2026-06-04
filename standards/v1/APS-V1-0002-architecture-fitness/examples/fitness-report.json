@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "schema_version": "1.0.0",
   "timestamp": "2026-04-15T10:30:00Z",
   "summary": {
     "total_rules": 8,
@@ -14,78 +14,113 @@
   "dimensions": {
     "MT01": {
       "name": "Maintainability",
-      "status": "active",
+      "runtime_status": "evaluated",
+      "promotion_status": "active",
+      "enforcement": "enforced",
       "score": 0.92,
       "rules_evaluated": 4,
       "rules_passed": 3,
       "rules_failed": 0,
       "rules_warned": 1,
+      "rules_downgraded": 0,
       "total_violations": 4,
       "excepted_violations": 3
     },
     "MD01": {
       "name": "Modularity & Coupling",
-      "status": "active",
+      "runtime_status": "evaluated",
+      "promotion_status": "active",
+      "enforcement": "enforced",
       "score": 0.71,
       "rules_evaluated": 4,
       "rules_passed": 3,
       "rules_failed": 1,
       "rules_warned": 0,
+      "rules_downgraded": 0,
       "total_violations": 4,
       "excepted_violations": 2
     },
     "ST01": {
       "name": "Structural Integrity",
-      "status": "active",
+      "runtime_status": "evaluated",
+      "promotion_status": "active",
+      "enforcement": "enforced",
       "score": 1.0,
       "rules_evaluated": 0,
       "rules_passed": 0,
       "rules_failed": 0,
       "rules_warned": 0,
+      "rules_downgraded": 0,
       "total_violations": 0,
       "excepted_violations": 0
     },
     "SC01": {
       "name": "Security",
-      "status": "skipped",
-      "score": null,
+      "runtime_status": "evaluated",
+      "promotion_status": "active",
+      "enforcement": "enforced",
+      "score": 1.0,
       "rules_evaluated": 0,
       "rules_passed": 0,
       "rules_failed": 0,
       "rules_warned": 0,
+      "rules_downgraded": 0,
       "total_violations": 0,
       "excepted_violations": 0
     },
     "LG01": {
       "name": "Legality",
-      "status": "skipped",
-      "score": null,
+      "runtime_status": "evaluated",
+      "promotion_status": "active",
+      "enforcement": "enforced",
+      "score": 1.0,
       "rules_evaluated": 0,
       "rules_passed": 0,
       "rules_failed": 0,
       "rules_warned": 0,
+      "rules_downgraded": 0,
+      "total_violations": 0,
+      "excepted_violations": 0
+    },
+    "AC01": {
+      "name": "Accessibility",
+      "runtime_status": "evaluated",
+      "promotion_status": "active",
+      "enforcement": "enforced",
+      "score": 1.0,
+      "rules_evaluated": 0,
+      "rules_passed": 0,
+      "rules_failed": 0,
+      "rules_warned": 0,
+      "rules_downgraded": 0,
       "total_violations": 0,
       "excepted_violations": 0
     }
   },
   "system_fitness": {
-    "score": 0.78,
-    "min_score": 0.70,
+    "score": 0.815,
+    "min_score": 0.7,
     "passing": true,
     "weights_used": {
-      "MT01": 0.36,
-      "MD01": 0.36,
-      "ST01": 0.28
+      "MT01": 0.25,
+      "MD01": 0.25,
+      "ST01": 0.15,
+      "SC01": 0.15,
+      "LG01": 0.10,
+      "AC01": 0.10
     },
-    "weights_note": "SC01 and LG01 skipped (no adapter output); weights redistributed proportionally among active dimensions",
+    "weights_note": "All six active dimensions contributed; no redistribution needed",
     "trend": {
-      "previous_score": 0.81,
-      "delta": -0.03,
-      "direction": "declining",
+      "previous_score": 0.78,
+      "delta": 0.035,
+      "direction": "improving",
       "dimension_deltas": {
         "MT01": 0.03,
-        "MD01": -0.05,
-        "ST01": 0.00
+        "MD01": -0.02,
+        "ST01": 0.00,
+        "SC01": 0.05,
+        "LG01": 0.00,
+        "AC01": 0.10
       }
     }
   },
@@ -113,7 +148,8 @@
           "excepted": true
         }
       ],
-      "exceptions_used": 2
+      "exceptions_used": 2,
+      "total_entities": 312
     },
     {
       "rule_id": "max-main-sequence-distance",
@@ -130,7 +166,8 @@
           "excepted": false
         }
       ],
-      "exceptions_used": 0
+      "exceptions_used": 0,
+      "total_entities": 48
     }
   ],
   "stale_exceptions": [

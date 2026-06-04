@@ -59,14 +59,18 @@ All `*.json` artifacts carry `schema_version: "1.0.0"` and validate against the 
 
 ## 3. Configure fitness rules
 
-Create `fitness.toml` at the repo root. Minimal config using the default rules for the two active dimensions:
+Create `fitness.toml` at the repo root. Minimal config using the default rules for the six active dimensions (MT01, MD01, ST01, SC01, LG01, AC01). The five default-enabled actives (MT01, MD01, ST01, SC01, LG01) auto-enable; AC01 is opt-in and must be turned on explicitly:
 
 ```toml
 [config]
 topology_dir = ".topology"
 severity_default = "error"
 
-# MT01 + MD01 auto-enabled (active, default-enabled)
+# Default-enabled actives auto-enable: MT01, MD01, ST01, SC01, LG01.
+# AC01 is active but opt-in (requires an a11y adapter output).
+# PF01, AV01 remain incubating; enabling them runs rules in advisory mode.
+[dimensions]
+AC01 = true
 
 [system_fitness]
 enabled = true
@@ -136,9 +140,13 @@ Outputs:
 
 ### Strict-artifact enforcement
 
-MT01 and MD01 are **active**. If their source artifacts are missing (e.g., you forgot step 2), the rules fail with `PROMOTION_REQUIREMENT_UNMET` rather than silently skipping. This is deliberate — active dimensions promise data exists; its absence is a contract violation.
+The six active dimensions are MT01, MD01, ST01, SC01, LG01, AC01. If a rule on any of them references a source artifact (a topology metrics file or an adapter output) and that artifact is missing, the rule fails with `PROMOTION_REQUIREMENT_UNMET` rather than silently skipping. This is deliberate: active dimensions promise data exists; its absence is a contract violation.
 
-Incubating dimensions (ST01, SC01, LG01, AC01, PF01, AV01) continue to skip silently on missing artifacts — they are advisory.
+Adopters wiring up adapter-backed dimensions for the first time should expect this. For SC01, LG01, AC01 you MUST either (a) configure an adapter so that the normalized artifact is generated before validation, or (b) explicitly disable the dimension in `[dimensions]` with a `reasons.<CODE>` entry. Silently leaving the dimension enabled without an adapter output is no longer permitted.
+
+Incubating dimensions (PF01, AV01) continue to skip silently on missing artifacts: their thresholds are project-specific and cannot be enforced without a per-project ADR.
+
+**Adoption note:** this is a raised conformance bar compared to APS-V1-0002 v1.0.0, where only MT01 and MD01 were active. Pre-existing `fitness.toml` files that omit `[dimensions]` will now strictly enforce ST01, SC01, LG01 by default. Adopters who do not yet have adapter outputs for SC01 / LG01 should either land the adapter configuration in the same change as the version bump, or disable those dimensions explicitly with a tracked reason.
 
 ## 5. Record exceptions (ratchet pattern)
 
@@ -176,19 +184,30 @@ GitHub Actions example (both commands in one job):
     path: fitness-report.json
 ```
 
-For pull-request trend tracking, cache the previous run's `fitness-report.json` and pass it with `--previous=path/to/prior.json`. The engine emits `system_fitness.trend` deltas so reviewers can see whether a PR improves or regresses each dimension.
+For pull-request trend tracking, cache the previous run's `fitness-report.json` and pass it with `--previous-report path/to/prior.json` (the flag is `--previous-report`, not `--previous`; relative paths resolve against the validate target). The engine emits `system_fitness.trend` deltas so reviewers can see whether a PR improves or regresses each dimension.
 
 ## 7. Progressive rollout
 
-Start incubating dimensions opt-in as their substandards mature. For example, enable ST01 structural patterns without blocking CI:
+ST01, SC01, LG01, AC01 are now `active` alongside MT01 and MD01. Adopters typically roll out in this order:
+
+1. Land MT01 and MD01 against topology output (steps 2-5 above).
+2. Add the SC01 adapter (e.g., `builtin:cargo-audit`) and start enforcing CVSS thresholds.
+3. Add LG01 (`builtin:cargo-deny` or equivalent) for license policy.
+4. Add ST01 structural rules (forbidden_import / required_import / layer_enforcement) keyed to your domain boundaries.
+5. Add AC01 against axe-core or pa11y output for projects with a web frontend.
+
+PF01 and AV01 remain `incubating`. Enabling either causes rules to run in advisory mode:
 
 ```toml
 [dimensions]
-ST01 = true
-# ST01 is still incubating — rules run advisory; errors downgrade to warnings.
+PF01 = true
+# PF01 is incubating; configured error severities downgrade to warning.
+
+[system_fitness]
+include_incubating = true   # OPTIONAL: include PF01's score in the composite.
 ```
 
-Once an incubating dimension lands its schemas + reference crate + ADR, it can promote to active in a follow-up release.
+Once a project lands an ADR setting concrete SLOs for PF01 or AV01, the dimension can promote to active for that project. Universal promotion in the standard requires industry-wide threshold citations.
 
 ## Troubleshooting
 
@@ -202,10 +221,11 @@ Once an incubating dimension lands its schemas + reference crate + ADR, it can p
 
 ## Canonical references
 
-- [Spec §3.3](./01_spec.md) — R1–R5 promotion requirements
-- [Spec §3.5](./01_spec.md) — Artifact Contracts
-- [ADR 0002](./adrs/0002-mt01-md01-promotion.md) — Why MT01 and MD01 are active
-- [APS-V1-0001 schemas](../../APS-V1-0001-code-topology/schemas/) — Artifact contracts
-- [`fitness-config.schema.json`](../schemas/fitness-config.schema.json) — Config contract
-- [`fitness-exceptions.schema.json`](../schemas/fitness-exceptions.schema.json) — Exceptions contract
-- [`fitness-report.schema.json`](../schemas/fitness-report.schema.json) — Report contract
+- [Spec §3.3](./01_spec.md) for R1-R5 promotion requirements
+- [Spec §3.5](./01_spec.md) for Artifact Contracts
+- [ADR 0002](./adrs/0002-mt01-md01-promotion.md) for why MT01 and MD01 are active
+- [ADR 0003](./adrs/0003-six-dimension-promotion.md) for why ST01, SC01, LG01, AC01 promoted alongside them
+- [APS-V1-0001 schemas](../../APS-V1-0001-code-topology/schemas/) for upstream artifact contracts
+- [`fitness-config.schema.json`](../schemas/fitness-config.schema.json) for the config contract
+- [`fitness-exceptions.schema.json`](../schemas/fitness-exceptions.schema.json) for the exceptions contract
+- [`fitness-report.schema.json`](../schemas/fitness-report.schema.json) for the report contract

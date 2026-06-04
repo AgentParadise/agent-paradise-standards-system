@@ -37,9 +37,17 @@
     },
     "Dimensions": {
       "type": "object",
-      "description": "Map of dimension code to enabled flag, plus optional reasons submap. Unknown keys pass to allow future dimensions.",
-      "additionalProperties": { "type": "boolean" },
+      "description": "Enable/disable flags for each known dimension code, plus an optional `reasons` submap. Keys are restricted to the eight dimension codes defined in APS-V1-0002 (the Rust `DimensionsConfig` deserializer rejects unknown codes; new codes require a spec change).",
+      "additionalProperties": false,
       "properties": {
+        "MT01": { "type": "boolean" },
+        "MD01": { "type": "boolean" },
+        "ST01": { "type": "boolean" },
+        "SC01": { "type": "boolean" },
+        "LG01": { "type": "boolean" },
+        "AC01": { "type": "boolean" },
+        "PF01": { "type": "boolean" },
+        "AV01": { "type": "boolean" },
         "reasons": {
           "type": "object",
           "description": "When disabling a default-enabled dimension, a reason string is REQUIRED.",
@@ -109,7 +117,8 @@
         "name": { "type": "string" },
         "dimension": {
           "type": "string",
-          "description": "Dimension code (e.g., MT01). If omitted, inferred from source/field."
+          "enum": ["MT01", "MD01", "ST01", "SC01", "LG01", "AC01", "PF01", "AV01"],
+          "description": "Dimension code this rule belongs to. The engine validates the code at config load (see FitnessError::InvalidDimension). Recommended to set explicitly; engine does not currently infer dimensions from source/field."
         },
         "source": {
           "type": "string",
@@ -148,7 +157,10 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "dimension": { "type": "string" },
+        "dimension": {
+          "type": "string",
+          "enum": ["MT01", "MD01", "ST01", "SC01", "LG01", "AC01", "PF01", "AV01"]
+        },
         "type": {
           "type": "string",
           "enum": ["forbidden", "allowed", "required"]
@@ -168,11 +180,15 @@
     "StructuralRule": {
       "type": "object",
       "required": ["id", "name", "pattern"],
-      "additionalProperties": true,
+      "additionalProperties": false,
+      "description": "Structural rule. The closed set of fields below matches the Rust `StructuralRule` deserializer; pattern-specific extension fields, once introduced, will be added here in tandem with engine support.",
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "dimension": { "type": "string" },
+        "dimension": {
+          "type": "string",
+          "enum": ["MT01", "MD01", "ST01", "SC01", "LG01", "AC01", "PF01", "AV01"]
+        },
         "pattern": {
           "type": "string",
           "description": "Pattern type from the structural pattern catalog defined in the ST01 substandard."
@@ -211,15 +227,24 @@
       "dimensions": {
         "MT01": true,
         "MD01": true,
-        "ST01": false
+        "ST01": true,
+        "SC01": true,
+        "LG01": true,
+        "AC01": true,
+        "PF01": false,
+        "AV01": false
       },
       "system_fitness": {
         "enabled": true,
         "min_score": 0.7,
         "include_incubating": false,
         "weights": {
-          "MT01": 0.5,
-          "MD01": 0.5
+          "MT01": 0.25,
+          "MD01": 0.25,
+          "ST01": 0.15,
+          "SC01": 0.15,
+          "LG01": 0.10,
+          "AC01": 0.10
         }
       },
       "rules": {

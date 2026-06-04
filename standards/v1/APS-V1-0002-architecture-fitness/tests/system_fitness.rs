@@ -139,8 +139,14 @@ scope = "function"
 
 #[test]
 fn system_score_weight_redistribution_on_skip() {
-    // SC01 has a rule that will be skipped (missing artifact).
-    // Its weight should be redistributed.
+    // PF01 (incubating after ADR 0003) has a rule against a missing
+    // artifact. Incubating dimensions skip silently rather than failing,
+    // so PF01 drops out of the composite and its weight is redistributed
+    // onto the surviving configured dimensions.
+    //
+    // We also set `include_incubating = true` so PF01 *would* contribute
+    // when its score exists; the redistribution then comes specifically
+    // from the runtime skip, not from the promotion-status filter.
     let dir = setup_fixture(
         r#"
 [config]
@@ -148,12 +154,15 @@ topology_dir = ".topology"
 
 [dimensions]
 AC01 = false
-PF01 = false
+PF01 = true
 AV01 = false
+
+[system_fitness]
+include_incubating = true
 
 [system_fitness.weights]
 MT01 = 0.5
-SC01 = 0.5
+PF01 = 0.5
 
 [[rules.threshold]]
 id = "max-cc"
@@ -165,12 +174,12 @@ max = 10
 scope = "function"
 
 [[rules.threshold]]
-id = "vuln-count"
-name = "Vulnerability Count"
-dimension = "SC01"
+id = "max-p95-latency"
+name = "Max P95 Latency"
+dimension = "PF01"
 source = "metrics/nonexistent.json"
-field = "vulnerability_count"
-max = 0
+field = "p95_latency_ms"
+max = 250
 scope = "system"
 "#,
         None,
@@ -184,13 +193,7 @@ scope = "system"
     let report = validator.validate().unwrap();
 
     let sf = report.system_fitness.as_ref().unwrap();
-    // SC01 is skipped (missing artifact), so weights redistribute
-    // MT01 gets all weight. MD01, ST01, LG01 have no configured weight and no active rules.
-    // But they ARE active with score=1.0. Let me check the logic...
-    // Actually: only configured weights (MT01=0.5, SC01=0.5) are used.
-    // SC01 is skipped → only MT01 weight active → redistributed to 1.0 for MT01.
-    // But MD01/ST01/LG01 don't have configured weights, so they get 0.
-    // So score = 1.0 * 1.0 (MT01 score) = 1.0
+    // PF01 is skipped (missing artifact), weights redistribute onto MT01.
     assert!(sf.weights_note.is_some());
     assert!(sf.weights_note.as_ref().unwrap().contains("skipped"));
 }

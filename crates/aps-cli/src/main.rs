@@ -942,9 +942,18 @@ fn dispatch_fitness_v2(
                     }
                 };
 
-            // Attach previous report for trend comparison
+            // Attach previous report for trend comparison. Resolve the path
+            // relative to `target` so `aps run fitness validate <path>
+            // --previous-report prev.json` does the right thing regardless of
+            // the caller's working directory (mirrors --config resolution).
             let validator = if let Some(prev_path) = previous_report_path {
-                match std::fs::read_to_string(prev_path)
+                let prev_pb = std::path::PathBuf::from(prev_path);
+                let resolved = if prev_pb.is_absolute() {
+                    prev_pb
+                } else {
+                    target.join(prev_pb)
+                };
+                match std::fs::read_to_string(&resolved)
                     .map_err(|e| e.to_string())
                     .and_then(|s| {
                         serde_json::from_str::<architecture_fitness::FitnessReport>(&s)
