@@ -75,7 +75,7 @@ This standard:
 
 Substandards do NOT register their own top-level slugs. They nest under the `docs` key as namespaced sub-sections (`docs.adr`, `docs.north-star`, `docs.retrospectives`); the nesting convention is normative and is owned by the meta-standard.
 
-The `.apss/` dotdir, when it exists, holds GENERATED artifacts (such as cached indexes and validator state) only. It MUST NOT hold configuration. Earlier drafts of this standard placed configuration at `.apss/config.toml`; that location is superseded by `apss.yaml` at the repository root. Tooling MUST NOT continue to read `.apss/config.toml`; presence of that file is not a deprecation alias.
+The `.apss/` dotdir, when it exists, holds GENERATED artifacts (such as cached indexes and validator state) only. It MUST NOT hold configuration. Earlier drafts of this standard placed configuration in the `.apss` tree; that layout is superseded by `apss.yaml` at the repository root. Tooling MUST NOT continue to read legacy `.apss` project configuration.
 
 This standard complements APS-V1-0000's requirement for a per-package `docs/01_spec.md` by enforcing broader documentation structure across the project's docs root, beyond each standard package's own spec file.
 
