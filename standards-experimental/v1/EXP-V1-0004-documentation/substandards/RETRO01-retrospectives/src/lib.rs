@@ -1,4 +1,4 @@
-//! Retrospectives (EXP-V1-0004.RET01) substandard.
+//! Retrospectives (EXP-V1-0004.RETRO01) substandard.
 //!
 //! This crate is scaffolded. The full validator implementation lands in a
 //! follow up PR. The normative contract lives in `docs/01_spec.md`; this
@@ -12,14 +12,14 @@ use std::path::Path;
 ///
 /// See `docs/01_spec.md` Section 9 for descriptions.
 pub mod error_codes {
-    pub const DIR_NOT_FOUND: &str = "RET01-dir-not-found";
-    pub const NAMING_MISMATCH: &str = "RET01-naming-mismatch";
-    pub const INVALID_NAMING_REGEX: &str = "RET01-invalid-naming-regex";
-    pub const FRONTMATTER_MISSING: &str = "RET01-frontmatter-missing";
-    pub const FRONTMATTER_FIELD_MISSING: &str = "RET01-frontmatter-field-missing";
-    pub const INVALID_STATUS: &str = "RET01-invalid-status";
-    pub const MISSING_SECTION: &str = "RET01-missing-section";
-    pub const HISTORY_MODIFIED: &str = "RET01-history-modified";
+    pub const DIR_NOT_FOUND: &str = "RETRO01-dir-not-found";
+    pub const NAMING_MISMATCH: &str = "RETRO01-naming-mismatch";
+    pub const INVALID_NAMING_REGEX: &str = "RETRO01-invalid-naming-regex";
+    pub const FRONTMATTER_MISSING: &str = "RETRO01-frontmatter-missing";
+    pub const FRONTMATTER_FIELD_MISSING: &str = "RETRO01-frontmatter-field-missing";
+    pub const INVALID_STATUS: &str = "RETRO01-invalid-status";
+    pub const MISSING_SECTION: &str = "RETRO01-missing-section";
+    pub const HISTORY_MODIFIED: &str = "RETRO01-history-modified";
 }
 
 /// Allowed lifecycle status values for retrospectives.
@@ -32,10 +32,13 @@ pub const REQUIRED_SECTIONS: &[&str] = &["Context", "What Went Well", "What Did 
 pub const DEFAULT_DIRECTORY: &str = "docs/retrospectives";
 
 /// Default naming pattern (3 to 5 digit numeric block, kebab slug, `.md`).
-pub const DEFAULT_NAMING_PATTERN: &str = r"RET-\d{3,5}-[a-zA-Z0-9-]+\.md";
+///
+/// The file prefix matches the substandard id (RETRO01 substandard, RETRO
+/// file prefix) the same way ADR01 substandard uses an ADR file prefix.
+pub const DEFAULT_NAMING_PATTERN: &str = r"RETRO-\d{3,5}-[a-zA-Z0-9-]+\.md";
 
 /// Sentinel marking the start of an append-only region inside a retrospective.
-pub const APPEND_REGION_SENTINEL: &str = "<!-- RET01:append-only -->";
+pub const APPEND_REGION_SENTINEL: &str = "<!-- RETRO01:append-only -->";
 
 /// Scaffolded validator entry point.
 ///
@@ -45,7 +48,7 @@ pub fn validate(_repo_root: &Path) -> Diagnostics {
     Diagnostics::new()
 }
 
-/// Placeholder factory for the canonical `RET01-dir-not-found` diagnostic so
+/// Placeholder factory for the canonical `RETRO01-dir-not-found` diagnostic so
 /// downstream code can already assert against the contract.
 #[doc(hidden)]
 pub fn dir_not_found_diagnostic(dir: &Path) -> Diagnostic {
@@ -83,11 +86,11 @@ mod tests {
     #[test]
     fn default_naming_pattern_compiles_and_accepts_expected_range() {
         let re = regex::Regex::new(&format!("^{DEFAULT_NAMING_PATTERN}$")).unwrap();
-        assert!(re.is_match("RET-001-q1-launch.md"));
-        assert!(re.is_match("RET-99999-late-stage.md"));
-        assert!(!re.is_match("RET-01-too-short.md"));
-        assert!(!re.is_match("RET-123456-too-long.md"));
-        assert!(!re.is_match("RET-001-q1-launch")); // no .md
+        assert!(re.is_match("RETRO-001-q1-launch.md"));
+        assert!(re.is_match("RETRO-99999-late-stage.md"));
+        assert!(!re.is_match("RETRO-01-too-short.md"));
+        assert!(!re.is_match("RETRO-123456-too-long.md"));
+        assert!(!re.is_match("RETRO-001-q1-launch")); // no .md
     }
 
     #[test]

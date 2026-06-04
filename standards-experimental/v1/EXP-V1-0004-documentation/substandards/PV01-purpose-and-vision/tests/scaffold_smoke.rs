@@ -26,9 +26,16 @@ fn error_codes_use_human_readable_scheme() {
             code.starts_with("PV01-"),
             "code missing PV01- prefix: {code}"
         );
+        // Check the SUFFIX (after the PV01- prefix) has no uppercase. The
+        // earlier "starts_with prefix" disjunction was a no-op because the
+        // prefix check itself is always true, so an unintended uppercase
+        // in the verb phrase would slip through.
+        let suffix = code
+            .strip_prefix("PV01-")
+            .expect("prefix check passed above");
         assert!(
-            !code.contains(char::is_uppercase) || code.starts_with("PV01-"),
-            "code has unexpected uppercase: {code}"
+            !suffix.contains(char::is_uppercase),
+            "code suffix has unexpected uppercase: {code}"
         );
     }
 }
@@ -47,6 +54,6 @@ fn allowed_statuses_match_lifecycle_vocabulary() {
 }
 
 #[test]
-fn default_location_is_docs_purpose_md() {
-    assert_eq!(DEFAULT_LOCATION, "docs/PURPOSE.md");
+fn default_location_is_docs_vision_md() {
+    assert_eq!(DEFAULT_LOCATION, "docs/vision.md");
 }

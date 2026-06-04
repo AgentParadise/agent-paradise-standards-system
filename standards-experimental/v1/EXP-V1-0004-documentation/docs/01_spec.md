@@ -107,12 +107,12 @@ required_adr_keywords = []
 
 [docs.purpose_and_vision]
 disable   = false
-location  = "docs/PURPOSE.md"     # Default file path. See PV01.
+location  = "docs/vision.md"      # Default file path. See PV01.
 
 [docs.retrospectives]
 disable        = false
 directory      = "docs/retrospectives"
-naming_pattern = "RET-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+naming_pattern = "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 ```
 
 ### 3.4 Configurability rules
@@ -276,7 +276,7 @@ Examples:
 ```
 
 ```python
-# Implements PV-001-product-purpose, RET-007-q1-launch
+# Implements PV-001-product-purpose, RETRO-007-q1-launch
 ```
 
 ### 7.2 Dead-reference detection
@@ -305,8 +305,8 @@ The parent standard defines the doc type registry. Each doc type is implemented 
 | Doc type | Substandard | Default location | Config block |
 |----------|-------------|------------------|--------------|
 | Architecture Decision Records | `EXP-V1-0004.ADR01` | `docs/adrs/` | `[docs.adr]` |
-| Purpose and Vision | `EXP-V1-0004.PV01` | `docs/PURPOSE.md` | `[docs.purpose_and_vision]` |
-| Retrospectives | `EXP-V1-0004.RET01` | `docs/retrospectives/` | `[docs.retrospectives]` |
+| Purpose and Vision | `EXP-V1-0004.PV01` | `docs/vision.md` | `[docs.purpose_and_vision]` |
+| Retrospectives | `EXP-V1-0004.RETRO01` | `docs/retrospectives/` | `[docs.retrospectives]` |
 
 ### 8.1 Lifecycle status (shared)
 
@@ -334,7 +334,7 @@ The parent standard MUST NOT hard code the list of doc types in code paths that 
 
 - **EXP-V1-0004.ADR01 (Architecture Decision Records).** Spec: [`substandards/ADR01-architecture-decision-records/docs/01_spec.md`](../substandards/ADR01-architecture-decision-records/docs/01_spec.md). Validates naming, frontmatter (including `status`), required topic keywords, header conventions, and per directory context files. Backlinking and dead reference detection use the shared rules in Section 7.
 - **EXP-V1-0004.PV01 (Purpose and Vision).** Spec: [`substandards/PV01-purpose-and-vision/docs/01_spec.md`](../substandards/PV01-purpose-and-vision/docs/01_spec.md). Validates the presence and structure of the project's Purpose and Vision document, used by agents during plan and design to stay aligned with the project's North Star.
-- **EXP-V1-0004.RET01 (Retrospectives).** Spec: [`substandards/RET01-retrospectives/docs/01_spec.md`](../substandards/RET01-retrospectives/docs/01_spec.md). Validates the retrospective directory, append only history, naming, and required sections.
+- **EXP-V1-0004.RETRO01 (Retrospectives).** Spec: [`substandards/RETRO01-retrospectives/docs/01_spec.md`](../substandards/RETRO01-retrospectives/docs/01_spec.md). Validates the retrospective directory, append only history, naming, and required sections.
 
 ---
 
@@ -424,8 +424,8 @@ The installed hook is a small shell wrapper that calls into `aps run docs hook -
 **What "valid structure" means per doc type**:
 
 - ADR (`EXP-V1-0004.ADR01`): the ADR directory exists, every file matches the naming pattern, every ADR has the required frontmatter and `status`, required topic keywords are satisfied, context files exist with referencing guidance, and there are no dead or superseded backlinks. See the ADR01 spec for the per rule diagnostic codes.
-- Purpose and Vision (`EXP-V1-0004.PV01`): a single `PURPOSE.md` (or configured location) exists with frontmatter, a `## Purpose` section, a `## Vision` section, a `## Non-Goals` section, and a current `status`. See PV01 spec.
-- Retrospectives (`EXP-V1-0004.RET01`): the retrospective directory exists, each file matches the naming pattern, files are append only (no historical retros modified in the staged change set), and required sections are present. See RET01 spec.
+- Purpose and Vision (`EXP-V1-0004.PV01`): a single `vision.md` (or configured location) exists with frontmatter, a `## Purpose` section, a `## Vision` section, a `## Non-Goals` section, and a current `status`. See PV01 spec.
+- Retrospectives (`EXP-V1-0004.RETRO01`): the retrospective directory exists, each file matches the naming pattern, files are append only (no historical retros modified in the staged change set), and required sections are present. See RETRO01 spec.
 
 ### 9.5 Why the install contract matters
 
@@ -440,7 +440,7 @@ All diagnostic codes in this standard and its substandards MUST be human readabl
 Format:
 
 - Parent standard: `<area>-<short-name>` (lowercase kebab). Examples: `readme-missing`, `frontmatter-unclosed`, `index-stale`.
-- Substandards: `<substandard-id>-<short-name>`. Examples: `ADR01-dir-not-found`, `ADR01-naming-mismatch`, `PV01-missing-vision-section`, `RET01-history-modified`.
+- Substandards: `<substandard-id>-<short-name>`. Examples: `ADR01-dir-not-found`, `ADR01-naming-mismatch`, `PV01-missing-vision-section`, `RETRO01-history-modified`.
 
 Existing numeric or composite codes (for example, `ADR01-001`) MAY be retained as aliases during the transition but MUST be supplemented by the human readable form in tool output. New codes MUST be human readable from the start.
 

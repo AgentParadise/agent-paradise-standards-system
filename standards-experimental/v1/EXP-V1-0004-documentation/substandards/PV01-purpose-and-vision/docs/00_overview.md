@@ -9,7 +9,7 @@ A small but load-bearing substandard. Every project that adopts EXP-V1-0004 carr
 
 ## What It Enforces
 
-- The Purpose and Vision document exists at the configured location (default `docs/PURPOSE.md`).
+- The Purpose and Vision document exists at the configured location (default `docs/vision.md`).
 - It carries frontmatter with `name`, `description`, and `status`.
 - It contains a `## Purpose` section, a `## Vision` section, and a `## Non-Goals` section.
 - It is backlinked from the root `CLAUDE.md` and `AGENTS.md` so agents can find it on a fresh start (handled by the parent standard's DOC03 self-reference check).
@@ -22,7 +22,7 @@ A small but load-bearing substandard. Every project that adopts EXP-V1-0004 carr
 aps run docs validate .
 ```
 
-A minimal valid `docs/PURPOSE.md`:
+A minimal valid `docs/vision.md`:
 
 ```markdown
 ---
@@ -51,7 +51,7 @@ We will not ...
 ```toml
 [docs.purpose_and_vision]
 disable  = false
-location = "docs/PURPOSE.md"
+location = "docs/vision.md"
 ```
 
 Disabling: set `disable = true`. Backlinking from `CLAUDE.md` and `AGENTS.md` is enforced by the parent standard's DOC03-self-reference check, not by this substandard.

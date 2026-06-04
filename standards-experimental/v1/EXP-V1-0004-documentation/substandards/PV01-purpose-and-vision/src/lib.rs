@@ -30,7 +30,7 @@ pub const ALLOWED_STATUSES: &[&str] = &["proposed", "active", "deprecated", "sup
 pub const REQUIRED_SECTIONS: &[&str] = &["Purpose", "Vision", "Non-Goals"];
 
 /// Default location relative to the repo root.
-pub const DEFAULT_LOCATION: &str = "docs/PURPOSE.md";
+pub const DEFAULT_LOCATION: &str = "docs/vision.md";
 
 /// Scaffolded validator entry point.
 ///

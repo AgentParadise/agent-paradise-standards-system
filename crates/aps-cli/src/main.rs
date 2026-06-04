@@ -1076,10 +1076,15 @@ fn dispatch_docs(
 ) -> ExitCode {
     match command {
         "--help" | "-h" | "help" => {
-            println!("Documentation and Context Engineering (EXP-V1-0004) v0.1.0");
+            println!(
+                "{} ({}) v{}",
+                documentation::NAME,
+                documentation::ID,
+                documentation::VERSION
+            );
             println!();
             println!("USAGE:");
-            println!("    aps run docs <COMMAND> [OPTIONS]");
+            println!("    aps run {} <COMMAND> [OPTIONS]", documentation::SLUG);
             println!();
             println!("COMMANDS:");
             println!("    validate [path]    Validate documentation structure, ADRs, and indexes");
@@ -1176,6 +1181,16 @@ fn dispatch_docs(
             };
             diagnostics.merge(adr_validator.validate());
 
+            // Purpose and Vision substandard (EXP-V1-0004.PV01).
+            // Scaffold returns Diagnostics::new() today; wired in so the
+            // full doc type registry is honoured as soon as the validator
+            // body lands in the follow up PR.
+            diagnostics.merge(documentation_purpose_and_vision::validate(&target));
+
+            // Retrospectives substandard (EXP-V1-0004.RETRO01). Same scaffold
+            // pattern as PV01.
+            diagnostics.merge(documentation_retrospectives::validate(&target));
+
             if json_output {
                 match diagnostics.to_json() {
                     Ok(json) => println!("{json}"),
@@ -1190,9 +1205,13 @@ fn dispatch_docs(
                 println!("{diagnostics}");
             }
 
-            match diagnostics.exit_code() {
-                0 => ExitCode::SUCCESS,
-                _ => ExitCode::FAILURE,
+            // Per the EXP-V1-0004 install contract (spec section 9.2),
+            // warnings MUST NOT block. aps_core::Diagnostics::exit_code()
+            // returns 2 for warnings-only; here we only fail on errors.
+            if diagnostics.has_errors() {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
             }
         }
         "index" => {

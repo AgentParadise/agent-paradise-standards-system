@@ -1,16 +1,16 @@
 ---
-name: "EXP-V1-0004.RET01 (Retrospectives)"
+name: "EXP-V1-0004.RETRO01 (Retrospectives)"
 description: "Enforces an append-only retrospective directory with consistent naming and required sections"
 ---
 
-# Retrospectives Substandard (EXP-V1-0004.RET01)
+# Retrospectives Substandard (EXP-V1-0004.RETRO01)
 
-A retrospective is the project's institutional memory. RET01 keeps that memory append only, consistently named, and structured the same way every time so that agents and humans can scan twenty retros and pull patterns out of them.
+A retrospective is the project's institutional memory. RETRO01 keeps that memory append only, consistently named, and structured the same way every time so that agents and humans can scan twenty retros and pull patterns out of them.
 
 ## What It Enforces
 
 - A retrospective directory exists at the configured location (default `docs/retrospectives/`).
-- Every retro file matches the naming pattern (default `RET-\d{3,5}-<slug>.md`).
+- Every retro file matches the naming pattern (default `RETRO-\d{3,5}-<slug>.md`).
 - Every retro has frontmatter with `name`, `description`, `date`, and `status`.
 - Every retro contains `## Context`, `## What Went Well`, `## What Did Not`, and `## Followups`.
 - Retros are append only: an existing retro in the staged change set MUST NOT have content modifications outside an appended footnote section. (`Changed` validator scope only.)
@@ -22,7 +22,7 @@ A retrospective is the project's institutional memory. RET01 keeps that memory a
 aps run docs validate .
 ```
 
-A minimal valid `docs/retrospectives/RET-001-q1-launch.md`:
+A minimal valid `docs/retrospectives/RETRO-001-q1-launch.md`:
 
 ```markdown
 ---
@@ -57,7 +57,7 @@ We shipped ...
 [docs.retrospectives]
 disable        = false
 directory      = "docs/retrospectives"
-naming_pattern = "RET-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+naming_pattern = "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 append_only    = true
 ```
 
@@ -67,11 +67,11 @@ append_only    = true
 
 | Code | Severity | Description |
 |------|----------|-------------|
-| `RET01-dir-not-found` | error | Retrospective directory does not exist. |
-| `RET01-naming-mismatch` | error | File in the retro directory does not match the naming pattern. |
-| `RET01-frontmatter-missing` | error | Retro file has no frontmatter. |
-| `RET01-frontmatter-field-missing` | error | Retro frontmatter missing a required field. |
-| `RET01-invalid-status` | error | `status` is not one of `proposed`, `active`, `deprecated`, `superseded`. |
-| `RET01-missing-section` | warning | Retro missing a required section heading. |
-| `RET01-history-modified` | error | An existing retro was modified outside the allowed append region. |
-| `RET01-invalid-naming-regex` | error | Configured naming regex is invalid. |
+| `RETRO01-dir-not-found` | error | Retrospective directory does not exist. |
+| `RETRO01-naming-mismatch` | error | File in the retro directory does not match the naming pattern. |
+| `RETRO01-frontmatter-missing` | error | Retro file has no frontmatter. |
+| `RETRO01-frontmatter-field-missing` | error | Retro frontmatter missing a required field. |
+| `RETRO01-invalid-status` | error | `status` is not one of `proposed`, `active`, `deprecated`, `superseded`. |
+| `RETRO01-missing-section` | warning | Retro missing a required section heading. |
+| `RETRO01-history-modified` | error | An existing retro was modified outside the allowed append region. |
+| `RETRO01-invalid-naming-regex` | error | Configured naming regex is invalid. |

@@ -84,6 +84,8 @@ dependencies = [
  "code-topology-viz",
  "documentation",
  "documentation-adr",
+ "documentation-purpose-and-vision",
+ "documentation-retrospectives",
  "fitness-functions",
  "regex",
  "serde",

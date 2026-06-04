@@ -22,8 +22,8 @@ fn error_codes_use_human_readable_scheme() {
         error_codes::HISTORY_MODIFIED,
     ] {
         assert!(
-            code.starts_with("RET01-"),
-            "code missing RET01- prefix: {code}"
+            code.starts_with("RETRO01-"),
+            "code missing RETRO01- prefix: {code}"
         );
     }
 }

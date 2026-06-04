@@ -125,7 +125,7 @@ The validator MUST enforce, for each active doc type:
 
 - **ADR (`EXP-V1-0004.ADR01`)**: directory exists, every file matches the configured naming regex, every ADR has the required frontmatter and `status`, required topic keywords are satisfied, context files exist, no dead or superseded backlinks.
 - **Purpose and Vision (`EXP-V1-0004.PV01`)**: a single document exists at the configured location with required frontmatter, `## Purpose`, `## Vision`, `## Non-Goals`, and a current `status`.
-- **Retrospectives (`EXP-V1-0004.RET01`)**: directory exists, each file matches the naming regex, files are append only (`Changed` scope: no historical retro file appears in the staged diff with content modifications outside the appended sections), and required sections are present.
+- **Retrospectives (`EXP-V1-0004.RETRO01`)**: directory exists, each file matches the naming regex, files are append only (`Changed` scope: no historical retro file appears in the staged diff with content modifications outside the appended sections), and required sections are present.
 
 For every doc type, the validator MUST also enforce the parent rules: frontmatter present and well formed, README index present and up to date, per directory context files present.
 
@@ -245,4 +245,4 @@ This document is the contract. The actual installer, hook binary, and CLI sub-co
 - Parent spec: [`01_spec.md`](01_spec.md).
 - Diagnostic code scheme: Section 10 of `01_spec.md`.
 - Doc type registry: Section 8 of `01_spec.md`.
-- Substandards: [`../substandards/ADR01-architecture-decision-records`](../substandards/ADR01-architecture-decision-records), [`../substandards/PV01-purpose-and-vision`](../substandards/PV01-purpose-and-vision), [`../substandards/RET01-retrospectives`](../substandards/RET01-retrospectives).
+- Substandards: [`../substandards/ADR01-architecture-decision-records`](../substandards/ADR01-architecture-decision-records), [`../substandards/PV01-purpose-and-vision`](../substandards/PV01-purpose-and-vision), [`../substandards/RETRO01-retrospectives`](../substandards/RETRO01-retrospectives).

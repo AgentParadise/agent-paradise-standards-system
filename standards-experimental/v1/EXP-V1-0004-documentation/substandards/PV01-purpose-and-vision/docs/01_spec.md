@@ -19,7 +19,7 @@ This substandard makes sure that document exists, is parseable, and is findable 
 
 ## 2. Document location (PV01-document-missing)
 
-A file MUST exist at `docs.purpose_and_vision.location` (default: `docs/PURPOSE.md`).
+A file MUST exist at `docs.purpose_and_vision.location` (default: `docs/vision.md`).
 
 Diagnostic: `PV01-document-missing` (error). Hint: "Create the file at `<location>` or set `docs.purpose_and_vision.disable = true` in `.apss/config.toml`."
 
@@ -75,10 +75,10 @@ Diagnostic for an unrecognized value: `PV01-invalid-status` (error).
 ```toml
 [docs.purpose_and_vision]
 disable  = false
-location = "docs/PURPOSE.md"
+location = "docs/vision.md"
 ```
 
-A project that legitimately has no Purpose and Vision document (rare) sets `disable = true`. Customizing `location` is supported (for example `docs/00_purpose.md` or `PURPOSE.md` at the repo root) but the default is recommended.
+A project that legitimately has no Purpose and Vision document (rare) sets `disable = true`. Customizing `location` is supported (for example `docs/00_purpose.md` or `VISION.md` at the repo root) but the default is recommended.
 
 ## 8. Error Codes
 
