@@ -3,6 +3,7 @@
 //! Provides utilities for rendering templates with variable substitution.
 
 use handlebars::Handlebars;
+use walkdir::DirEntry;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -68,6 +69,16 @@ impl TemplateEngine {
 
         // Walk the skeleton directory
         for entry in walkdir::WalkDir::new(skeleton_dir)
+            .into_iter()
+            .filter_entry(|entry| {
+                // Ignore hidden directories and files in template trees so runtime
+                // agent artifacts such as .agentic do not land in shipped templates.
+                if entry.depth() == 0 {
+                    return true;
+                }
+
+                !is_hidden_path(entry)
+            })
             .into_iter()
             .filter_map(|e| e.ok())
         {
@@ -143,6 +154,15 @@ fn should_render_as_template(path: &Path) -> bool {
         ext,
         "toml" | "md" | "rs" | "yaml" | "yml" | "json" | "txt" | "hbs"
     )
+}
+
+/// Check whether a skeleton path points to a hidden entry.
+fn is_hidden_path(entry: &DirEntry) -> bool {
+    entry
+        .path()
+        .components()
+        .skip(1)
+        .any(|component| component.as_os_str().to_string_lossy().starts_with('.'))
 }
 
 /// Context for rendering a standard package template.
