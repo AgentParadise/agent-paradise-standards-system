@@ -1,5 +1,5 @@
 [package]
-name = "code-topology-3d"
+name = "apss-v1-0001-3d01-force-directed"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -7,8 +7,14 @@ repository.workspace = true
 rust-version.workspace = true
 description = "3D Force-Directed Coupling Visualization for Code Topology"
 
+[lib]
+name = "code_topology_3d"
+
+
 [dependencies]
-code-topology = { path = "../.." }
+toml.workspace = true
+aps-core.workspace = true
+code-topology = { package = "apss-v1-0001-code-topology", path = "../.." }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

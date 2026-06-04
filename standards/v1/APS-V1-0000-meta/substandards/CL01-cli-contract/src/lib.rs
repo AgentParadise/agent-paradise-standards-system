@@ -422,6 +422,34 @@ impl StandardInfo {
 // Tests
 // ============================================================================
 
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+    registry.register(
+        aps_core::registry::RegisteredStandard {
+            id: "APS-V1-0000.CL01".to_string(),
+            slug: "cl01-cli-contract".to_string(),
+            name: "CLI Contract".to_string(),
+            description: "CLI contract definitions for APS standards".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl aps_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for cl01-cli-contract yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

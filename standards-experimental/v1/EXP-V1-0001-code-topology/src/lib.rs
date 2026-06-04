@@ -968,6 +968,34 @@ impl Default for CodeTopologyStandard {
 // Tests
 // ============================================================================
 
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+    registry.register(
+        aps_core::registry::RegisteredStandard {
+            id: "EXP-V1-0001".to_string(),
+            slug: "code-topology".to_string(),
+            name: "Experimental Code Topology".to_string(),
+            description: "Experimental code topology analysis standard".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl aps_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for code-topology yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

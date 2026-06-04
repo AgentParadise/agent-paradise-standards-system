@@ -1265,6 +1265,34 @@ impl ForceDirectedProjector {
     }
 }
 
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+    registry.register(
+        aps_core::registry::RegisteredStandard {
+            id: "APS-V1-0001.3D01".to_string(),
+            slug: "3d01-force-directed".to_string(),
+            name: "3D Force Directed".to_string(),
+            description: "3D force-directed topology visualization substandard".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl aps_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for 3d01-force-directed yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -47,9 +47,9 @@ DI01 specifies:
 ```bash
 cargo install <bootstrap>           # one-time global install
 cd my-project
-<bootstrap> init --standard topology    # creates apss.yaml
+<bootstrap> init --standard code-topology    # creates apss.yaml
 <bootstrap> install                     # reads apss.yaml, resolves, installs, builds composed binary
-<bootstrap> run topology analyze .      # forwards to composed binary
+<bootstrap> run code-topology analyze .      # forwards to composed binary
 ```
 
 A single `install` command materialises everything declared in the

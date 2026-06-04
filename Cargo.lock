@@ -78,13 +78,13 @@ dependencies = [
  "aps-v1-0000-meta",
  "apss-distribution",
  "apss-project-config",
+ "apss-v1-0001-3d01-force-directed",
+ "apss-v1-0001-code-topology",
+ "apss-v1-0001-lang01-rust",
+ "apss-v1-0001-viz01-dashboard",
+ "apss-v1-0003-fitness-functions",
  "chrono",
  "clap",
- "code-topology",
- "code-topology-3d",
- "code-topology-rust-adapter",
- "code-topology-viz",
- "fitness-functions",
  "regex",
  "serde",
  "serde_json",
@@ -112,6 +112,7 @@ dependencies = [
 name = "aps-v1-0000-cli01-cli-contract"
 version = "1.1.0"
 dependencies = [
+ "aps-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -133,6 +134,7 @@ version = "1.0.0"
 dependencies = [
  "aps-core",
  "regex",
+ "toml",
 ]
 
 [[package]]
@@ -146,6 +148,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "tempfile",
  "toml",
 ]
 
@@ -171,6 +174,125 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0001-3d01-force-directed"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "apss-v1-0001-code-topology",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0001-ci01-github-actions"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "apss-v1-0001-code-topology",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0001-code-topology"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "apss-v1-0001-3d01-force-directed",
+ "apss-v1-0001-lang01-rust",
+ "apss-v1-0001-viz01-mermaid",
+ "serde",
+ "serde_json",
+ "streaming-iterator",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-python",
+ "tree-sitter-rust",
+ "tree-sitter-typescript",
+]
+
+[[package]]
+name = "apss-v1-0001-lang01-rust"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "apss-v1-0001-code-topology",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
+name = "apss-v1-0001-viz01-dashboard"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "apss-v1-0001-code-topology",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0001-viz01-mermaid"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "apss-v1-0001-code-topology",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-todo-tracker"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "chrono",
+ "glob",
+ "hex",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
+name = "apss-v1-0003-fitness-functions"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "chrono",
+ "glob",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
  "toml",
 ]
 
@@ -288,82 +410,6 @@ name = "clap_lex"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
-
-[[package]]
-name = "code-topology"
-version = "0.1.0"
-dependencies = [
- "aps-core",
- "code-topology-3d",
- "code-topology-mermaid",
- "code-topology-rust-adapter",
- "serde",
- "serde_json",
- "streaming-iterator",
- "tempfile",
- "thiserror",
- "tree-sitter",
- "tree-sitter-python",
- "tree-sitter-rust",
- "tree-sitter-typescript",
-]
-
-[[package]]
-name = "code-topology-3d"
-version = "0.1.0"
-dependencies = [
- "code-topology",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "code-topology-ci-github-actions"
-version = "0.1.0"
-dependencies = [
- "code-topology",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "code-topology-mermaid"
-version = "0.1.0"
-dependencies = [
- "code-topology",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "code-topology-rust-adapter"
-version = "0.1.0"
-dependencies = [
- "code-topology",
- "proc-macro2",
- "quote",
- "serde",
- "serde_json",
- "syn",
- "tempfile",
- "thiserror",
- "toml",
- "walkdir",
-]
-
-[[package]]
-name = "code-topology-viz"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "code-topology",
- "serde",
- "serde_json",
- "tempfile",
-]
 
 [[package]]
 name = "colorchoice"
@@ -529,20 +575,6 @@ name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844"
-
-[[package]]
-name = "fitness-functions"
-version = "0.1.0"
-dependencies = [
- "aps-core",
- "chrono",
- "glob",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "toml",
-]
 
 [[package]]
 name = "fnv"
@@ -1669,25 +1701,6 @@ checksum = "42d3e9c45c09de15d06dd8acf5f4e0e399e85927b7f00711024eb7ae10fa4869"
 dependencies = [
  "displaydoc",
  "zerovec",
-]
-
-[[package]]
-name = "todo-tracker"
-version = "0.1.0"
-dependencies = [
- "aps-core",
- "chrono",
- "glob",
- "hex",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror",
- "toml",
- "walkdir",
 ]
 
 [[package]]

@@ -85,6 +85,34 @@ pub fn validate_substandard_metadata(
     }
 }
 
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+    registry.register(
+        aps_core::registry::RegisteredStandard {
+            id: "APS-V1-0000.SS01".to_string(),
+            slug: "ss01-substandard-structure".to_string(),
+            name: "Substandard Structure".to_string(),
+            description: "Structural requirements for APS substandards".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl aps_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for ss01-substandard-structure yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

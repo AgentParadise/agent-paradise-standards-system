@@ -97,7 +97,7 @@ After scanning the sample repositories, you should get artifacts like:
 The integration tests use these examples:
 
 ```bash
-cargo test -p todo-tracker
+cargo test -p apss-v1-0002-todo-tracker
 ```See `tests/scanner_integration_test.rs` for test cases that validate:
 - Polyglot scanning (Rust, TypeScript, Python)
 - Issue reference parsing

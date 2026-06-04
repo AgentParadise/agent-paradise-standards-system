@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "CLI Contract substandard - defines command patterns and traits for APS standards"
 
 [dependencies]
+aps-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

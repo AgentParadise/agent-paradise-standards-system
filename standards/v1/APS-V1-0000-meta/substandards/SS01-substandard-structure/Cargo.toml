@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Defines structural requirements for all APS substandards"
 
 [dependencies]
+toml.workspace = true
 aps-core.workspace = true
 
 # Pattern matching for validation rules

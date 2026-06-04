@@ -415,17 +415,30 @@ impl MetaStandard {
 
         let content = match std::fs::read_to_string(&cargo_path) {
             Ok(c) => c,
-            Err(_) => return,
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        INVALID_METADATA,
+                        format!("Failed to read Cargo.toml for dependency validation: {e}"),
+                    )
+                    .with_path(&cargo_path),
+                );
+                return;
+            }
         };
 
         let cargo_toml: toml::Value = match content.parse() {
             Ok(v) => v,
-            Err(_) => return,
-        };
-
-        let deps = match cargo_toml.get("dependencies").and_then(|d| d.as_table()) {
-            Some(d) => d,
-            None => return,
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        INVALID_METADATA,
+                        format!("Failed to parse Cargo.toml for dependency validation: {e}"),
+                    )
+                    .with_path(&cargo_path),
+                );
+                return;
+            }
         };
 
         let allowed_names: Vec<&str> = allowed_external
@@ -433,42 +446,47 @@ impl MetaStandard {
             .map(|d| d.crate_name.as_str())
             .collect();
 
-        for (dep_name, dep_value) in deps {
-            // Workspace-inherited deps are fine — they're controlled at the workspace root
-            let is_workspace = dep_value
-                .as_table()
-                .and_then(|t| t.get("workspace"))
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-
-            if is_workspace {
+        for section in ["dependencies", "build-dependencies"] {
+            let Some(deps) = cargo_toml.get(section).and_then(|d| d.as_table()) else {
                 continue;
-            }
+            };
 
-            // Path deps (workspace-internal crates) are fine
-            let is_path = dep_value.as_table().and_then(|t| t.get("path")).is_some();
+            for (dep_name, dep_value) in deps {
+                // Workspace-inherited deps are fine — they're controlled at the workspace root
+                let is_workspace = dep_value
+                    .as_table()
+                    .and_then(|t| t.get("workspace"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
 
-            if is_path {
-                continue;
-            }
+                if is_workspace {
+                    continue;
+                }
 
-            // aps-core is always allowed
-            if dep_name == "aps-core" {
-                continue;
-            }
+                // Path deps (workspace-internal crates) are fine
+                let is_path = dep_value.as_table().and_then(|t| t.get("path")).is_some();
 
-            // Check if it's in the allowlist
-            if allowed_names.contains(&dep_name.as_str()) {
-                continue;
-            }
+                if is_path {
+                    continue;
+                }
 
-            // Check if it's a dev-dependency that leaked into [dependencies]
-            // (dev-deps are checked separately and are more lenient)
-            diagnostics.push(
+                // aps-core is always allowed
+                if dep_name == "aps-core" {
+                    continue;
+                }
+
+                // Check if it's in the allowlist
+                if allowed_names.contains(&dep_name.as_str()) {
+                    continue;
+                }
+
+                // Check if it's a dev-dependency that leaked into [dependencies]
+                // (dev-deps are checked separately and are more lenient)
+                diagnostics.push(
                 Diagnostic::error(
                     UNAPPROVED_EXTERNAL_DEP,
                     format!(
-                        "External dependency '{dep_name}' is not in the approved allowlist"
+                        "External dependency '{dep_name}' in [{section}] is not in the approved allowlist"
                     ),
                 )
                 .with_path(&cargo_path)
@@ -483,6 +501,7 @@ impl MetaStandard {
                     }
                 )),
             );
+            }
         }
     }
 
@@ -744,6 +763,34 @@ fn is_valid_semver(version: &str) -> bool {
         return false;
     }
     parts.iter().all(|p| p.parse::<u32>().is_ok())
+}
+
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+    registry.register(
+        aps_core::registry::RegisteredStandard {
+            id: "APS-V1-0000".to_string(),
+            slug: "meta".to_string(),
+            name: "Meta Standard".to_string(),
+            description: "Meta-standard for APS V1 package structure and validation".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl aps_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for meta yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]

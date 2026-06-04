@@ -146,7 +146,7 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
         .and_then(|p| p.get("name"))
         .and_then(|n| n.as_str())
     {
-        if !is_exempt_crate_name(name) && !is_valid_standard_crate_name(name) {
+        if !aps_core::ecosystem::is_ecosystem_crate(name) && !is_valid_standard_crate_name(name) {
             diags.push(
                 Diagnostic::error(
                     error_codes::DI_INVALID_CRATE_NAME,
@@ -209,12 +209,30 @@ pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
     let cargo_path = crate_path.join("Cargo.toml");
     let cargo_content = match std::fs::read_to_string(&cargo_path) {
         Ok(c) => c,
-        Err(_) => return diags,
+        Err(e) => {
+            diags.push(
+                Diagnostic::error(
+                    error_codes::DI_MISSING_CARGO_TOML,
+                    format!("Failed to read Cargo.toml: {e}"),
+                )
+                .with_path(&cargo_path),
+            );
+            return diags;
+        }
     };
 
     let cargo_toml: toml::Value = match cargo_content.parse() {
         Ok(v) => v,
-        Err(_) => return diags,
+        Err(e) => {
+            diags.push(
+                Diagnostic::error(
+                    error_codes::DI_CARGO_TOML_PARSE_ERROR,
+                    format!("Failed to parse Cargo.toml: {e}"),
+                )
+                .with_path(&cargo_path),
+            );
+            return diags;
+        }
     };
 
     let package = match cargo_toml.get("package").and_then(|p| p.as_table()) {
@@ -426,15 +444,6 @@ fn is_valid_standard_crate_name(name: &str) -> bool {
         && after_digits.len() > 1
 }
 
-/// Check if a crate name is exempt from the standard naming convention.
-/// Ecosystem crates (core, bootstrap, meta substandards) use their own names.
-fn is_exempt_crate_name(name: &str) -> bool {
-    matches!(
-        name,
-        "aps-core" | "apss" | "apss-project-config" | "apss-distribution"
-    ) || name.starts_with("aps-v1-0000")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -489,16 +498,17 @@ mod tests {
     }
 
     #[test]
-    fn test_is_exempt_crate_name() {
-        assert!(is_exempt_crate_name("aps-core"));
-        assert!(is_exempt_crate_name("apss"));
-        assert!(is_exempt_crate_name("apss-project-config"));
-        assert!(is_exempt_crate_name("apss-distribution"));
-        assert!(is_exempt_crate_name("aps-v1-0000-meta"));
-        assert!(is_exempt_crate_name(
-            "aps-v1-0000-ss01-substandard-structure"
+    fn test_ecosystem_allowlist_wired_through_aps_core() {
+        // Regression guard: DI01 must read the ecosystem allowlist from aps-core
+        // rather than maintaining its own list. A minimal spot-check here is
+        // enough; the full matrix lives in aps_core::ecosystem's own tests.
+        assert!(aps_core::ecosystem::is_ecosystem_crate("aps-core"));
+        assert!(aps_core::ecosystem::is_ecosystem_crate(
+            "aps-v1-0000-cf01-project-config"
         ));
-        assert!(!is_exempt_crate_name("apss-v1-0001-code-topology"));
+        assert!(!aps_core::ecosystem::is_ecosystem_crate(
+            "apss-v1-0001-code-topology"
+        ));
     }
 
     #[test]

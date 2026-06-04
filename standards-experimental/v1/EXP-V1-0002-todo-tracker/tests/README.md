@@ -5,6 +5,5 @@ Tests for the experimental standard.
 ## Running Tests
 
 ```bash
-cargo test -p todo-tracker
+cargo test -p apss-v1-0002-todo-tracker
 ```
-

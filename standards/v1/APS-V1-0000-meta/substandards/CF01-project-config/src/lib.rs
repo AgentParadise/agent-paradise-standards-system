@@ -95,6 +95,12 @@ pub mod error_codes {
     /// The apss.toml file was not found.
     pub const CF_FILE_NOT_FOUND: &str = "CF_FILE_NOT_FOUND";
 
+    /// An included config file (via `config = { include = "..." }`) was not found.
+    pub const CF_INCLUDE_NOT_FOUND: &str = "CF_INCLUDE_NOT_FOUND";
+
+    /// An included config file failed to parse as TOML.
+    pub const CF_INCLUDE_PARSE_ERROR: &str = "CF_INCLUDE_PARSE_ERROR";
+
     // --- Standard config surface validation (APS repo CI) ---
 
     /// Standard crate doesn't export a `StandardConfig` type.
@@ -176,6 +182,34 @@ fn validate_config_fields(path: &Path) -> Diagnostics {
             );
             return diags;
         }
+        Err(config::ConfigError::IncludeNotFound { path: inc_path, .. }) => {
+            diags.push(
+                Diagnostic::error(
+                    error_codes::CF_INCLUDE_NOT_FOUND,
+                    format!("Included config file not found: {}", inc_path.display()),
+                )
+                .with_path(path)
+                .with_hint("Check the 'include' path in your standard config block"),
+            );
+            return diags;
+        }
+        Err(config::ConfigError::IncludeParse {
+            path: inc_path,
+            source,
+            ..
+        }) => {
+            diags.push(
+                Diagnostic::error(
+                    error_codes::CF_INCLUDE_PARSE_ERROR,
+                    format!(
+                        "Failed to parse included config {}: {source}",
+                        inc_path.display()
+                    ),
+                )
+                .with_path(path),
+            );
+            return diags;
+        }
         Err(e) => {
             diags.push(
                 Diagnostic::error(error_codes::CF_PARSE_ERROR, e.to_string()).with_path(path),
@@ -232,6 +266,66 @@ pub fn validate_child_config(child_path: &Path, root_config: &ProjectConfig) -> 
             .with_path(child_path)
             .with_hint("All workspace members must use the same apss_version as the root"),
         );
+    }
+
+    diags
+}
+
+/// Validate that a standard directory has proper config compliance.
+///
+/// Checks that standards with configuration code (`src/config.rs`) also ship
+/// a `config.schema.json` file, and that existing schema files are valid JSON.
+///
+/// This enforces CF01's config surface validation codes:
+/// - `CF_MISSING_CONFIG_TYPE` — `src/config.rs` exists but no `config.schema.json`
+/// - `CF_CONFIG_SCHEMA_STALE` — `config.schema.json` exists but is invalid JSON
+///
+/// Full freshness checks (comparing schema file against `StandardConfig::json_schema()` output)
+/// are handled by per-standard tests, not this static validator.
+pub fn validate_config_compliance(standard_dir: &Path) -> Diagnostics {
+    let mut diags = Diagnostics::new();
+
+    let config_rs = standard_dir.join("src/config.rs");
+    let schema_path = standard_dir.join("config.schema.json");
+
+    if config_rs.exists() && !schema_path.exists() {
+        diags.push(
+            Diagnostic::error(
+                error_codes::CF_MISSING_CONFIG_TYPE,
+                format!(
+                    "Standard has src/config.rs but no config.schema.json: {}",
+                    standard_dir.display()
+                ),
+            )
+            .with_hint(
+                "Generate config.schema.json from your StandardConfig::json_schema() implementation",
+            ),
+        );
+    }
+
+    if schema_path.exists() {
+        match std::fs::read_to_string(&schema_path) {
+            Ok(content) => {
+                if let Err(e) = serde_json::from_str::<serde_json::Value>(&content) {
+                    diags.push(
+                        Diagnostic::error(
+                            error_codes::CF_CONFIG_SCHEMA_STALE,
+                            format!("config.schema.json is not valid JSON: {e}"),
+                        )
+                        .with_path(&schema_path),
+                    );
+                }
+            }
+            Err(e) => {
+                diags.push(
+                    Diagnostic::error(
+                        error_codes::CF_CONFIG_SCHEMA_STALE,
+                        format!("Failed to read config.schema.json: {e}"),
+                    )
+                    .with_path(&schema_path),
+                );
+            }
+        }
     }
 
     diags
@@ -438,6 +532,34 @@ fn is_valid_substandard_code(code: &str) -> bool {
         && bytes[1].is_ascii_uppercase()
         && bytes[2].is_ascii_digit()
         && bytes[3].is_ascii_digit()
+}
+
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+    registry.register(
+        aps_core::registry::RegisteredStandard {
+            id: "APS-V1-0000.CF01".to_string(),
+            slug: "cf01-project-config".to_string(),
+            name: "Project Configuration".to_string(),
+            description: "Project configuration validation for APSS manifests".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl aps_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for cf01-project-config yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+        Vec::new()
+    }
 }
 
 #[cfg(test)]
@@ -801,5 +923,61 @@ apss_version = "v1"
             lockfile_warnings, 0,
             "child config should not warn about missing lockfile"
         );
+    }
+
+    #[test]
+    fn test_config_compliance_missing_schema() {
+        let temp = tempfile::tempdir().unwrap();
+        let src_dir = temp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(src_dir.join("config.rs"), "// config module").unwrap();
+        // No config.schema.json
+
+        let diags = validate_config_compliance(temp.path());
+        assert!(diags.has_errors());
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code == error_codes::CF_MISSING_CONFIG_TYPE)
+        );
+    }
+
+    #[test]
+    fn test_config_compliance_valid_schema() {
+        let temp = tempfile::tempdir().unwrap();
+        let src_dir = temp.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(src_dir.join("config.rs"), "// config module").unwrap();
+        std::fs::write(
+            temp.path().join("config.schema.json"),
+            r#"{"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}"#,
+        )
+        .unwrap();
+
+        let diags = validate_config_compliance(temp.path());
+        assert!(!diags.has_errors());
+    }
+
+    #[test]
+    fn test_config_compliance_invalid_json() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("config.schema.json"), "not json {").unwrap();
+
+        let diags = validate_config_compliance(temp.path());
+        assert!(diags.has_errors());
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code == error_codes::CF_CONFIG_SCHEMA_STALE)
+        );
+    }
+
+    #[test]
+    fn test_config_compliance_no_config_is_fine() {
+        let temp = tempfile::tempdir().unwrap();
+        // No src/config.rs, no config.schema.json — standard with no config is fine
+
+        let diags = validate_config_compliance(temp.path());
+        assert!(!diags.has_errors());
     }
 }
