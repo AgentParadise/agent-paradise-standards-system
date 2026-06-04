@@ -1,4 +1,4 @@
-# APS-V1-0002 Architecture Fitness — Integration Guide
+# APS-V1-0002 Architecture Fitness - Integration Guide
 
 This guide walks through wiring architectural fitness governance into a Rust project end-to-end: topology measurement → fitness assertion → CI gating. It assumes APS-V1-0001 (Code Topology) and APS-V1-0002 (Architecture Fitness) are both installed.
 
@@ -49,11 +49,11 @@ apss run code-topology analyze
 
 This writes:
 
-- `.topology/metrics/functions.json` — per-function McCabe cyclomatic, SonarSource cognitive, Halstead metrics, LOC
-- `.topology/metrics/modules.json` — per-module aggregates and Martin metrics (Ca, Ce, I, A, D)
-- `.topology/metrics/coupling.json` — flat per-module Martin view, optimized for fitness consumption
-- `.topology/graphs/coupling-matrix.json` — module-to-module coupling strengths
-- `.topology/manifest.toml` — run metadata
+- `.topology/metrics/functions.json` - per-function McCabe cyclomatic, SonarSource cognitive, Halstead metrics, LOC
+- `.topology/metrics/modules.json` - per-module aggregates and Martin metrics (Ca, Ce, I, A, D)
+- `.topology/metrics/coupling.json` - flat per-module Martin view, optimized for fitness consumption
+- `.topology/graphs/coupling-matrix.json` - module-to-module coupling strengths
+- `.topology/manifest.toml` - run metadata
 
 All `*.json` artifacts carry `schema_version: "1.0.0"` and validate against the schemas in `APS-V1-0001/schemas/`.
 
@@ -132,11 +132,11 @@ apss run architecture-fitness validate
 
 Outputs:
 
-- `fitness-report.json` — machine-readable report matching `fitness-report.schema.json`
+- `fitness-report.json` - machine-readable report matching `fitness-report.schema.json`
 - Exit code:
-  - `0` — system score ≥ `min_score` and no error-severity failures
-  - `1` — any error-severity failure, or system score below `min_score`
-  - `2` — only warning-severity violations
+  - `0` - system score ≥ `min_score` and no error-severity failures
+  - `1` - any error-severity failure, or system score below `min_score`
+  - `2` - only warning-severity violations
 
 ### Strict-artifact enforcement
 
@@ -163,7 +163,7 @@ value = 28
 issue = "#185"
 ```
 
-Every exception REQUIRES an `issue` reference — it MUST be tracked work, not just a silenced warning. The `value` acts as a budget: if the metric climbs above 42, the exception is insufficient and the violation re-surfaces. Regenerating exceptions tightens monotonically — `apss run fitness ratchet` will never widen an existing budget.
+Every exception REQUIRES an `issue` reference - it MUST be tracked work, not just a silenced warning. The `value` acts as a budget: if the metric climbs above 42, the exception is insufficient and the violation re-surfaces. Regenerating exceptions tightens monotonically - `apss run fitness ratchet` will never widen an existing budget.
 
 ## 6. CI integration
 

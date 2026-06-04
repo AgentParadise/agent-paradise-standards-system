@@ -35,7 +35,7 @@ aps run topology viz .topology --type codecity --output my-city.html
 
 ## Built-in Visualizations
 
-### 🌐 `3d` — 3D Force-Directed Coupling Graph (Default)
+### 🌐 `3d` - 3D Force-Directed Coupling Graph (Default)
 
 Best for: Understanding coupling relationships and Martin's metrics
 
@@ -47,7 +47,7 @@ Best for: Understanding coupling relationships and Martin's metrics
 | Edge thickness | Coupling strength |
 | Clustered nodes | Tightly coupled modules |
 
-### 🏙️ `codecity` — 3D City Metaphor
+### 🏙️ `codecity` - 3D City Metaphor
 
 Best for: Quick architectural health assessment, identifying complexity hotspots
 
@@ -63,7 +63,7 @@ Best for: Quick architectural health assessment, identifying complexity hotspots
 - Short green buildings = healthy, well-structured modules
 - Separate districts = good package organization
 
-### 🔧 `clusters` — 2D Package Relationship Graph
+### 🔧 `clusters` - 2D Package Relationship Graph
 
 Best for: Understanding package-level coupling, finding isolated/over-coupled packages
 
@@ -75,7 +75,7 @@ Best for: Understanding package-level coupling, finding isolated/over-coupled pa
 | Line thickness | Coupling strength |
 | Well-separated circles | Good encapsulation |
 
-### 🍰 `vsa` — Vertical Slice Architecture Matrix
+### 🍰 `vsa` - Vertical Slice Architecture Matrix
 
 Best for: Validating VSA compliance, identifying missing layers, detecting coupling smells
 
@@ -92,7 +92,7 @@ Best for: Validating VSA compliance, identifying missing layers, detecting coupl
 - Missing layers = incomplete feature slices
 - Red cells = problematic areas needing attention
 
-### 📊 `all` — Generate All + Dashboard Index
+### 📊 `all` - Generate All + Dashboard Index
 
 Generates all four visualizations plus an `index.html` dashboard with:
 - Summary statistics (modules, slices, average health)
@@ -223,5 +223,5 @@ Recommendations:
 
 ## Related Skills
 
-- `analyze-topology` — Generate topology artifacts first
-- `query-coupling` — Get detailed coupling metrics
+- `analyze-topology` - Generate topology artifacts first
+- `query-coupling` - Get detailed coupling metrics

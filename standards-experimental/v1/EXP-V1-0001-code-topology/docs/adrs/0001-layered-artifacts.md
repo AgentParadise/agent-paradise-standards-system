@@ -8,9 +8,9 @@
 
 We need a committable, language-agnostic format for storing code topology data. Options considered:
 
-1. **Single unified file** — One large JSON with everything
-2. **Layered directory structure** — Separate files by concern
-3. **Event-sourced log** — Append-only changes
+1. **Single unified file** - One large JSON with everything
+2. **Layered directory structure** - Separate files by concern
+3. **Event-sourced log** - Append-only changes
 
 ## Decision
 
@@ -26,10 +26,10 @@ Use a **layered directory structure**:
 
 ## Rationale
 
-- **Modular updates** — Only changed files need commits
-- **Clear separation** — Metrics vs graphs vs history
-- **Git-friendly** — Easy to diff individual aspects
-- **Scalable** — Can compress large files independently
+- **Modular updates** - Only changed files need commits
+- **Clear separation** - Metrics vs graphs vs history
+- **Git-friendly** - Easy to diff individual aspects
+- **Scalable** - Can compress large files independently
 
 ## Consequences
 

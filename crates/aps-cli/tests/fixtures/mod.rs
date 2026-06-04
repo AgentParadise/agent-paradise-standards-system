@@ -88,10 +88,10 @@ edition = "2021"
     fs::write(pkg_dir.join("src/lib.rs"), "// Minimal lib\n").unwrap();
 
     // docs/01_spec.md
-    let spec = format!("# {id} — {name} (Canonical Specification)\n\n**Version**: 1.0.0\n");
+    let spec = format!("# {id} - {name} (Canonical Specification)\n\n**Version**: 1.0.0\n");
     fs::write(pkg_dir.join("docs/01_spec.md"), spec).unwrap();
 
-    // Content files (§5.1 — standards require real content)
+    // Content files (§5.1 - standards require real content)
     fs::write(pkg_dir.join("examples/example.toml"), "# Example config\n").unwrap();
     fs::write(pkg_dir.join("tests/basic_test.rs"), "// placeholder test\n").unwrap();
     fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills\n").unwrap();
@@ -145,10 +145,10 @@ edition = "2021"
     fs::write(pkg_dir.join("src/lib.rs"), "// Minimal lib\n").unwrap();
 
     // docs/01_spec.md
-    let spec = format!("# {id} — {name} (Experimental Specification)\n\n**Version**: 0.1.0\n");
+    let spec = format!("# {id} - {name} (Experimental Specification)\n\n**Version**: 0.1.0\n");
     fs::write(pkg_dir.join("docs/01_spec.md"), spec).unwrap();
 
-    // Content files (§5.1 — experiments require real content like standards)
+    // Content files (§5.1 - experiments require real content like standards)
     fs::write(pkg_dir.join("examples/example.toml"), "# Example config\n").unwrap();
     fs::write(pkg_dir.join("tests/basic_test.rs"), "// placeholder test\n").unwrap();
     fs::write(pkg_dir.join("agents/skills/README.md"), "# Skills\n").unwrap();
@@ -171,7 +171,7 @@ pub fn create_valid_substandard(
     ));
     fs::create_dir_all(&pkg_dir).unwrap();
 
-    // Required directories for substandards (§5.2 — reduced requirements)
+    // Required directories for substandards (§5.2 - reduced requirements)
     fs::create_dir_all(pkg_dir.join("docs")).unwrap();
     fs::create_dir_all(pkg_dir.join("src")).unwrap();
 
@@ -203,7 +203,7 @@ edition = "2021"
     );
     fs::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
 
-    // src/lib.rs with inline tests (§11.2 — inline tests count as coverage)
+    // src/lib.rs with inline tests (§11.2 - inline tests count as coverage)
     fs::write(
         pkg_dir.join("src/lib.rs"),
         "//! Minimal substandard lib\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn it_works() {}\n}\n",
@@ -212,7 +212,7 @@ edition = "2021"
 
     // docs/01_spec.md (agent-readable knowledge about what this consumes/produces)
     let spec =
-        format!("# {substandard_id} — {name} (Canonical Specification)\n\n**Version**: 1.0.0\n");
+        format!("# {substandard_id} - {name} (Canonical Specification)\n\n**Version**: 1.0.0\n");
     fs::write(pkg_dir.join("docs/01_spec.md"), spec).unwrap();
 
     pkg_dir

@@ -191,7 +191,7 @@ impl DimensionCode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PromotionStatus {
-    /// All R1–R5 requirements satisfied; rules are strictly enforced.
+    /// All R1-R5 requirements satisfied; rules are strictly enforced.
     Active,
     /// Partial implementation; rule severities downgraded to warning;
     /// missing artifacts silently skip rather than fail.

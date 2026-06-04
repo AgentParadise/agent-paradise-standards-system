@@ -1,4 +1,4 @@
-# EXP-V1-0001.3D01 — 3D Force-Directed Coupling Visualization (Specification)
+# EXP-V1-0001.3D01 - 3D Force-Directed Coupling Visualization (Specification)
 
 **Version**: 0.1.0  
 **Status**: Experimental  
@@ -13,8 +13,8 @@ This substandard specifies the **3D Force-Directed Projector** for visualizing c
 ### 1.1 Required Artifacts
 
 This projector REQUIRES:
-- `graphs/coupling-matrix.json` — Module coupling coefficients
-- `metrics/modules.json` — Module-level metrics (RECOMMENDED)
+- `graphs/coupling-matrix.json` - Module coupling coefficients
+- `metrics/modules.json` - Module-level metrics (RECOMMENDED)
 
 ### 1.2 Output Formats
 
@@ -64,9 +64,9 @@ position += velocity × delta_time
 
 To ensure reproducible layouts:
 
-1. **Seed** — Random number generator is seeded (default: 42)
-2. **Save positions** — Final positions are written to `coupling-matrix.json`
-3. **Load positions** — If positions exist, use them as initial state
+1. **Seed** - Random number generator is seeded (default: 42)
+2. **Save positions** - Final positions are written to `coupling-matrix.json`
+3. **Load positions** - If positions exist, use them as initial state
 
 ---
 
@@ -79,7 +79,7 @@ To ensure reproducible layouts:
 | **Position** | Force simulation | Calculated |
 | **Size** | `sqrt(total_cyclomatic) × nodeScale` | 1.0 |
 | **Color** | Instability (0=blue, 1=red) | `#8040ff` |
-| **Label** | Module ID | — |
+| **Label** | Module ID | - |
 
 ### 3.2 Edge Properties
 

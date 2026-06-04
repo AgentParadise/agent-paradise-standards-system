@@ -58,7 +58,7 @@ edition = "2021"
     .unwrap();
     fs::write(
         dir.join("docs/01_spec.md"),
-        "# {{id}} — {{name}} (Canonical Specification)\n\n**Version**: {{version}}\n",
+        "# {{id}} - {{name}} (Canonical Specification)\n\n**Version**: {{version}}\n",
     )
     .unwrap();
 
@@ -112,7 +112,7 @@ edition = "2021"
     .unwrap();
     fs::write(
         dir.join("docs/01_spec.md"),
-        "# {{id}} — {{name}} (Experimental Specification)\n\n**Version**: {{version}}\n",
+        "# {{id}} - {{name}} (Experimental Specification)\n\n**Version**: {{version}}\n",
     )
     .unwrap();
 

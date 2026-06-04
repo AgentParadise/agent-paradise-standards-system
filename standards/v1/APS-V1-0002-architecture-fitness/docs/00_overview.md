@@ -1,15 +1,15 @@
-# Architecture Fitness Functions — Overview
+# Architecture Fitness Functions - Overview
 
 ## What is this?
 
-**APS-V1-0002** defines a comprehensive architectural governance framework based on the principles of evolutionary architecture (Ford et al., 2017). It provides **fitness functions** — automated, continuous, objective assertions on architectural properties — organized into composable dimensional substandards.
+**APS-V1-0002** defines a comprehensive architectural governance framework based on the principles of evolutionary architecture (Ford et al., 2017). It provides **fitness functions** - automated, continuous, objective assertions on architectural properties - organized into composable dimensional substandards.
 
 The core insight from *Building Evolutionary Architectures*:
 
 > **Architecture = Requirements + Architectural Characteristics**
 
 - **Requirements** (functional behavior) are tested by unit, functional, and integration tests.
-- **Architectural Characteristics** (the "-ilities") are tested by **fitness functions** — this standard.
+- **Architectural Characteristics** (the "-ilities") are tested by **fitness functions** - this standard.
 
 Fitness functions are to architecture what unit tests are to business logic.
 
@@ -40,11 +40,11 @@ Architecture has multiple dimensions. Each dimension is governed by a substandar
 | **PF01** | Performance | Latency, throughput regression (opt-in) |
 | **AV01** | Availability | Resilience, uptime (opt-in) |
 
-Dimensions are composable — enable what matters for your project, disable what doesn't.
+Dimensions are composable - enable what matters for your project, disable what doesn't.
 
 ## System-Level Fitness Function
 
-The defining feature of this standard is the **system-level fitness function** — a weighted aggregation of all dimension scores into a single holistic assessment.
+The defining feature of this standard is the **system-level fitness function** - a weighted aggregation of all dimension scores into a single holistic assessment.
 
 ```
 System Fitness: 0.78 (threshold: 0.70) ✓
@@ -58,9 +58,9 @@ System Fitness: 0.78 (threshold: 0.70) ✓
 
 This enables teams to:
 - **See overall health** at a glance
-- **Analyze tradeoffs** — how improving one dimension affects others
-- **Guide decisions** — determine the impact of changes across all dimensions
-- **Track trends** — detect architectural drift early
+- **Analyze tradeoffs** - how improving one dimension affects others
+- **Guide decisions** - determine the impact of changes across all dimensions
+- **Track trends** - detect architectural drift early
 
 ## Architecture
 
@@ -116,14 +116,14 @@ Promoted from EXP-V1-0003 with significantly expanded scope:
 | Threshold rules | Yes | Yes (carried forward) |
 | Exception ratcheting | Yes | Yes (carried forward) |
 | Stale detection | Yes | Yes (carried forward) |
-| Dimensional model | No | Yes — 8 composable dimensions |
-| System-level fitness | No | Yes — weighted composite with tradeoff analysis |
-| Metrics catalog | Informal | Normative — 20+ metrics with formulas and citations |
+| Dimensional model | No | Yes - 8 composable dimensions |
+| System-level fitness | No | Yes - weighted composite with tradeoff analysis |
+| Metrics catalog | Informal | Normative - 20+ metrics with formulas and citations |
 | Dependency rules | Planned | Normative |
 | Structural rules | Planned | Normative |
-| Adapter contract | No | Yes — anti-corruption layer for external tools |
-| VSA integration | No | Yes — via adapter |
-| Trend tracking | No | Yes — delta from previous reports |
+| Adapter contract | No | Yes - anti-corruption layer for external tools |
+| VSA integration | No | Yes - via adapter |
+| Trend tracking | No | Yes - delta from previous reports |
 
 **Backward compatible**: Every existing EXP-V1-0003 `fitness.toml` works unchanged.
 
@@ -170,7 +170,7 @@ issue = "#138"
 
 ## Status
 
-**Official** — Promoted from EXP-V1-0003.
+**Official** - Promoted from EXP-V1-0003.
 
 ### Phase 1 (Current)
 - Normative specification complete
@@ -186,16 +186,16 @@ issue = "#138"
 
 ## Related Standards
 
-- **APS-V1-0001** (Code Topology) — Measurement layer producing `.topology/metrics/`
-- **EXP-V1-0003** — Predecessor experiment (remains in place)
-- **APS-V1-0000** (Meta-Standard) — Governance rules for this standard
+- **APS-V1-0001** (Code Topology) - Measurement layer producing `.topology/metrics/`
+- **EXP-V1-0003** - Predecessor experiment (remains in place)
+- **APS-V1-0000** (Meta-Standard) - Governance rules for this standard
 
 ## Learn More
 
-- [Full specification](./01_spec.md) — Normative rules, rule format, report format
-- [Metrics catalog](./02_metrics-catalog.md) — All metrics with formulas, authors, thresholds
-- [Examples](../examples/) — Sample configurations and reports
-- [Agent skills](../agents/skills/) — AI agent integration
+- [Full specification](./01_spec.md) - Normative rules, rule format, report format
+- [Metrics catalog](./02_metrics-catalog.md) - All metrics with formulas, authors, thresholds
+- [Examples](../examples/) - Sample configurations and reports
+- [Agent skills](../agents/skills/) - AI agent integration
 
 ---
 

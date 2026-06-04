@@ -74,7 +74,7 @@ agent-paradise-standards-system/
 │   ├── aps-core/                      # Core engine (diagnostics, discovery, templates)
 │   └── aps-cli/                       # CLI: aps run, aps v1 validate/create/promote
 ├── standards/v1/
-│   ├── APS-V1-0000-meta/             # Meta-standard (v1.1.0) — defines all V1 rules
+│   ├── APS-V1-0000-meta/             # Meta-standard (v1.1.0) - defines all V1 rules
 │   └── APS-V1-0001-code-topology/    # Code topology + 5 substandards
 ├── standards-experimental/v1/
 │   ├── EXP-V1-0001-code-topology/    # Promoted → APS-V1-0001 (historical)
@@ -89,7 +89,7 @@ agent-paradise-standards-system/
 |------|-----------|-----------|---------|
 | **Standard** | `APS-V1-XXXX` | Full: `docs/`, `examples/`, `tests/`, `agents/skills/`, `src/` | Produces artifacts, defines rules |
 | **Substandard** | `APS-V1-XXXX.YY##` | Reduced: `docs/`, `src/` | Consumes parent artifacts, produces further output |
-| **Experiment** | `EXP-V1-XXXX` | Full (same as standard) | Incubating — not enforced on consumers |
+| **Experiment** | `EXP-V1-XXXX` | Full (same as standard) | Incubating - not enforced on consumers |
 
 Substandards inherit agent context and examples from their parent. Their `docs/01_spec.md` serves as agent-readable knowledge about what they consume and produce.
 
@@ -132,12 +132,12 @@ cargo run -p aps-cli -- v1 validate repo
 
 ## Documentation
 
-- [Meta-Standard Spec (v1.1.0)](standards/v1/APS-V1-0000-meta/docs/01_spec.md) — Normative rules for all V1 packages
-- [Code Topology Overview](standards/v1/APS-V1-0001-code-topology/docs/00_overview.md) — Architecture metrics and visualization
-- [Fitness Functions Overview](standards-experimental/v1/EXP-V1-0003-fitness-functions/docs/00_overview.md) — Declarative fitness thresholds
-- [Templates](standards/v1/APS-V1-0000-meta/templates/README.md) — Package scaffolding
-- [Experimental Standards](standards-experimental/v1/README.md) — Incubation and promotion
+- [Meta-Standard Spec (v1.1.0)](standards/v1/APS-V1-0000-meta/docs/01_spec.md) - Normative rules for all V1 packages
+- [Code Topology Overview](standards/v1/APS-V1-0001-code-topology/docs/00_overview.md) - Architecture metrics and visualization
+- [Fitness Functions Overview](standards-experimental/v1/EXP-V1-0003-fitness-functions/docs/00_overview.md) - Declarative fitness thresholds
+- [Templates](standards/v1/APS-V1-0000-meta/templates/README.md) - Package scaffolding
+- [Experimental Standards](standards-experimental/v1/README.md) - Incubation and promotion
 
 ## License
 
-MIT — See [LICENSE](LICENSE) for details.
+MIT - See [LICENSE](LICENSE) for details.

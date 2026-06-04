@@ -1,4 +1,4 @@
-# CLI01 — CLI Contract Specification
+# CLI01 - CLI Contract Specification
 
 **Version**: 1.0.0  
 **Status**: Active  
@@ -90,7 +90,7 @@ Standards SHOULD implement:
 | Command | Description | Arguments |
 |---------|-------------|-----------|
 | `analyze <path>` | Generate artifacts from codebase | `--output <dir>` |
-| `check <path>` | Check repo compliance with standard | — |
+| `check <path>` | Check repo compliance with standard | - |
 | `diff <a> <b>` | Compare two artifact sets | `--format <fmt>` |
 
 ### 3.3 Optional Commands

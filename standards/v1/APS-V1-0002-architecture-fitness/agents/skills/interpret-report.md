@@ -48,7 +48,7 @@ Failures (1):
     → Consider adding abstractions or reducing incoming dependencies
 
 Recommendations:
-  1. MD01 declined by 0.05 — investigate new coupling in recent commits
+  1. MD01 declined by 0.05 - investigate new coupling in recent commits
   2. packages.data-access needs refactoring (Zone of Pain)
 ```
 

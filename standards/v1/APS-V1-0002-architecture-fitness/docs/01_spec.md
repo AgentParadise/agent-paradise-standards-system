@@ -1,4 +1,4 @@
-# APS-V1-0002 — Architecture Fitness Functions
+# APS-V1-0002 - Architecture Fitness Functions
 
 **Version**: 1.0.0
 **Status**: Active
@@ -16,14 +16,14 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ### 1.1 Purpose
 
-This standard defines a **comprehensive architectural governance framework** based on the principles of evolutionary architecture (Ford et al., 2017). It provides declarative fitness functions — automated, continuous, objective assertions on architectural properties — organized into composable dimensional substandards.
+This standard defines a **comprehensive architectural governance framework** based on the principles of evolutionary architecture (Ford et al., 2017). It provides declarative fitness functions - automated, continuous, objective assertions on architectural properties - organized into composable dimensional substandards.
 
 The core thesis of evolutionary architecture is:
 
 > **Architecture = Requirements + Architectural Characteristics**
 
 - **Requirements** (functional behavior) are tested via unit, functional, and integration tests. Requirements are NOT in scope of this standard.
-- **Architectural Characteristics** (the "-ilities" — maintainability, security, scalability, etc.) are tested via **fitness functions**. This IS the scope of this standard.
+- **Architectural Characteristics** (the "-ilities" - maintainability, security, scalability, etc.) are tested via **fitness functions**. This IS the scope of this standard.
 
 Fitness functions are to architecture what unit tests are to business logic: automated assertions that run continuously in CI and fail on violations.
 
@@ -31,14 +31,14 @@ Fitness functions are to architecture what unit tests are to business logic: aut
 
 This standard covers:
 
-- **Dimensional governance model** — A framework of composable architectural dimensions, each governed by a substandard
-- **Metrics catalog** — Comprehensive definitions of all architectural metrics with mathematical formulas, original authors, industry thresholds, and rationale (see [02_metrics-catalog.md](./02_metrics-catalog.md))
-- **Rule format specification** — `fitness.toml` schema for threshold, dependency, and structural rules
-- **Exception format specification** — `fitness-exceptions.toml` schema for tracked violations with ratchet semantics
-- **Report format specification** — `fitness-report.json` schema for per-dimension and composite results
-- **System-Level Fitness Function** — Weighted aggregation of dimensions for holistic architectural health and tradeoff analysis
-- **Adapter contract** — Anti-corruption layer interface for normalizing external tool output
-- **Validation semantics** — How rules are evaluated, scored, and reported
+- **Dimensional governance model** - A framework of composable architectural dimensions, each governed by a substandard
+- **Metrics catalog** - Comprehensive definitions of all architectural metrics with mathematical formulas, original authors, industry thresholds, and rationale (see [02_metrics-catalog.md](./02_metrics-catalog.md))
+- **Rule format specification** - `fitness.toml` schema for threshold, dependency, and structural rules
+- **Exception format specification** - `fitness-exceptions.toml` schema for tracked violations with ratchet semantics
+- **Report format specification** - `fitness-report.json` schema for per-dimension and composite results
+- **System-Level Fitness Function** - Weighted aggregation of dimensions for holistic architectural health and tradeoff analysis
+- **Adapter contract** - Anti-corruption layer interface for normalizing external tool output
+- **Validation semantics** - How rules are evaluated, scored, and reported
 
 This standard does NOT cover:
 
@@ -49,9 +49,9 @@ This standard does NOT cover:
 
 ### 1.3 Relationship to APS-V1-0001
 
-APS-V1-0001 (Code Topology) defines the **measurement layer** — it produces `.topology/metrics/` artifacts containing complexity, coupling, and structural data.
+APS-V1-0001 (Code Topology) defines the **measurement layer** - it produces `.topology/metrics/` artifacts containing complexity, coupling, and structural data.
 
-This standard defines the **assertion layer** — it consumes those artifacts (and optionally external tool output via adapters) and evaluates architectural rules against them.
+This standard defines the **assertion layer** - it consumes those artifacts (and optionally external tool output via adapters) and evaluates architectural rules against them.
 
 ```
 APS-V1-0001 (measure)    → .topology/metrics/*.json ─┐
@@ -68,8 +68,8 @@ Each architectural dimension is governed by a substandard. The parent standard d
 
 Each dimension has two orthogonal classifications:
 
-- **Status** — `active` or `incubating` (see §3.3 Dimension Promotion Requirements and §3.4 Dimension Lifecycle). Only `active` dimensions MAY produce error-severity failures that block CI.
-- **Default** — `default-enabled` or `opt-in`. Whether a dimension auto-activates when `[dimensions]` is omitted.
+- **Status** - `active` or `incubating` (see §3.3 Dimension Promotion Requirements and §3.4 Dimension Lifecycle). Only `active` dimensions MAY produce error-severity failures that block CI.
+- **Default** - `default-enabled` or `opt-in`. Whether a dimension auto-activates when `[dimensions]` is omitted.
 
 | Substandard | Dimension | Status | Default | Notes |
 |-------------|-----------|--------|---------|-------|
@@ -86,7 +86,7 @@ Each dimension has two orthogonal classifications:
 
 ### 1.5 Promotion Lineage
 
-This standard is promoted from EXP-V1-0003 (Architecture Fitness Functions, experimental). All EXP-V1-0003 `fitness.toml` files are forward-compatible with this standard — the new sections (`[dimensions]`, `[system_fitness]`) are all optional with backward-compatible defaults.
+This standard is promoted from EXP-V1-0003 (Architecture Fitness Functions, experimental). All EXP-V1-0003 `fitness.toml` files are forward-compatible with this standard - the new sections (`[dimensions]`, `[system_fitness]`) are all optional with backward-compatible defaults.
 
 EXP-V1-0003 remains in place per the meta-standard (experiments are never removed).
 
@@ -121,16 +121,16 @@ An **architecture fitness function** is an objective integrity assessment of som
 
 ### 2.2 Dimension
 
-A **dimension** is an independently measurable and governable architectural characteristic. Each dimension maps to one substandard and has its own metrics, rules, and scoring. Dimensions are composable — the system-level fitness function aggregates them.
+A **dimension** is an independently measurable and governable architectural characteristic. Each dimension maps to one substandard and has its own metrics, rules, and scoring. Dimensions are composable - the system-level fitness function aggregates them.
 
 ### 2.3 Rule
 
 A **rule** is a single architectural assertion declared in `fitness.toml`. Rules have:
 
-- **ID** — Unique identifier (e.g., `max-cyclomatic`)
-- **Type** — `threshold`, `dependency`, or `structural`
-- **Dimension** — Which architectural dimension this rule governs (e.g., `MT01`)
-- **Severity** — `error` (blocks CI) or `warning` (advisory)
+- **ID** - Unique identifier (e.g., `max-cyclomatic`)
+- **Type** - `threshold`, `dependency`, or `structural`
+- **Dimension** - Which architectural dimension this rule governs (e.g., `MT01`)
+- **Severity** - `error` (blocks CI) or `warning` (advisory)
 
 ### 2.4 Exception
 
@@ -158,7 +158,7 @@ An **adapter** is a component that normalizes external tool output into the fitn
 
 ### 3.1 Dimension Registry
 
-Every dimension is identified by a 4-character code and governed by a substandard. Each dimension carries a **status** (promotion state — see §3.3 and §3.4) and a **default** (whether it auto-activates):
+Every dimension is identified by a 4-character code and governed by a substandard. Each dimension carries a **status** (promotion state - see §3.3 and §3.4) and a **default** (whether it auto-activates):
 
 | Code | Dimension | Characteristics Protected | Data Source | Status | Default |
 |------|-----------|--------------------------|-------------|--------|---------|
@@ -175,8 +175,8 @@ Every dimension is identified by a 4-character code and governed by a substandar
 
 The **default** classification controls whether a dimension auto-activates when `[dimensions]` is omitted from `fitness.toml`. It is independent of the dimension's status (§3.4).
 
-- **Default-enabled**: MT01, MD01, ST01, SC01, LG01 — Represent baseline architectural governance that applies to virtually all software projects. Auto-active unless explicitly disabled.
-- **Opt-in**: AC01, PF01, AV01 — Require specialized infrastructure (web frontends, load test harnesses, chaos engineering). Inactive unless explicitly enabled.
+- **Default-enabled**: MT01, MD01, ST01, SC01, LG01 - Represent baseline architectural governance that applies to virtually all software projects. Auto-active unless explicitly disabled.
+- **Opt-in**: AC01, PF01, AV01 - Require specialized infrastructure (web frontends, load test harnesses, chaos engineering). Inactive unless explicitly enabled.
 
 Disabling a default-enabled dimension MUST include a `reason` field in the configuration to maintain auditability.
 
@@ -190,7 +190,7 @@ A dimension MUST NOT be declared `active` in this standard unless **all five** o
 |---|-------------|-------------|
 | **R1** | **Objective metric definition** | Every rule enforced by the dimension MUST target a metric with a formal, unambiguous definition (mathematical formula or algorithmic specification) documented in [`02_metrics-catalog.md`](./02_metrics-catalog.md). Free-text "good design" criteria are NOT acceptable. |
 | **R2** | **Computable algorithm** | A concrete, deterministic, automated producer MUST exist for every metric the dimension enforces. The producer MUST be one of: (a) a native APS standard (e.g., APS-V1-0001 topology), or (b) a registered adapter with an implemented normalizer. Human judgment calls are not acceptable inputs. |
-| **R3** | **Artifact schema** | Every JSON artifact the dimension **consumes or produces** MUST be described by a [JSON Schema](https://json-schema.org/) file on disk, published alongside the producing standard. See §3.5 for canonical paths, versioning, and compatibility rules. A prose description in the spec is NOT sufficient — the schema MUST be machine-readable so external tools can validate, transform, or visualize artifacts without reading APSS source code. |
+| **R3** | **Artifact schema** | Every JSON artifact the dimension **consumes or produces** MUST be described by a [JSON Schema](https://json-schema.org/) file on disk, published alongside the producing standard. See §3.5 for canonical paths, versioning, and compatibility rules. A prose description in the spec is NOT sufficient - the schema MUST be machine-readable so external tools can validate, transform, or visualize artifacts without reading APSS source code. |
 | **R4** | **Recommended default thresholds with citations** | The substandard MUST publish recommended default values for every enforced metric, each with a citation to its source (original author, industry benchmark, or explicit APSS consensus). Defaults without rationale are NOT acceptable. |
 | **R5** | **Reference implementation** | The substandard crate MUST contain non-stub Rust code that registers its default rules, validates its config, and verifies that its required artifacts exist. A substandard whose `src/lib.rs` is a `Phase 2` stub MUST NOT be declared `active`. |
 
@@ -206,7 +206,7 @@ Each dimension version follows SemVer independently. The status field is normati
 | `incubating` | Specified but at least one promotion requirement (§3.3) is unmet. | All rules run as advisory. Rule severity is **downgraded** at evaluation time: any `error` configured on an incubating dimension MUST be reported as `warning` in the output with a `downgraded_from_error` flag. Incubating dimensions MUST NOT cause exit code `1`. Contributes to system-level score only if the user explicitly sets `system_fitness.include_incubating = true` (default: `false`). |
 | `deprecated` | Scheduled for removal in a future major version. | Rules continue to run but produce a deprecation warning. New projects SHOULD NOT adopt deprecated dimensions. |
 
-Implementers MUST emit the diagnostic code `INCUBATING_DIMENSION_ERROR_DOWNGRADED` (§12) for every rule whose configured severity was downgraded due to incubating status. This makes the soft enforcement visible rather than silent — users know exactly which assertions are advisory and why.
+Implementers MUST emit the diagnostic code `INCUBATING_DIMENSION_ERROR_DOWNGRADED` (§12) for every rule whose configured severity was downgraded due to incubating status. This makes the soft enforcement visible rather than silent - users know exactly which assertions are advisory and why.
 
 ### 3.5 Artifact Contracts
 
@@ -214,7 +214,7 @@ Artifacts are the public contract of an APS standard. A standard is only as usef
 
 #### 3.5.1 Scope
 
-Every JSON artifact read or written by a standard or substandard — topology metrics, fitness reports, adapter outputs, exception files — MUST have a corresponding [JSON Schema](https://json-schema.org/) file (Draft 2020-12 or later). This includes:
+Every JSON artifact read or written by a standard or substandard - topology metrics, fitness reports, adapter outputs, exception files - MUST have a corresponding [JSON Schema](https://json-schema.org/) file (Draft 2020-12 or later). This includes:
 
 - **Input artifacts** the standard consumes from upstream producers
 - **Output artifacts** the standard emits for downstream consumers
@@ -243,17 +243,17 @@ Canonical examples (load-bearing for this standard):
 | `fitness.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-config.schema.json` | APS-V1-0002 |
 | `fitness-exceptions.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-exceptions.schema.json` | APS-V1-0002 |
 | `fitness-report.json` | `APS-V1-0002-architecture-fitness/schemas/fitness-report.schema.json` | APS-V1-0002 |
-| Adapter-normalized output (Tier 3) | `APS-V1-0002-architecture-fitness/schemas/adapter-output.schema.json` | APS-V1-0002 — deferred |
+| Adapter-normalized output (Tier 3) | `APS-V1-0002-architecture-fitness/schemas/adapter-output.schema.json` | APS-V1-0002 - deferred |
 
 #### 3.5.3 Schema Requirements
 
 Every schema MUST declare:
 
-- `"$schema"` — explicit JSON Schema dialect
-- `"$id"` — stable URI identifying the artifact
-- `"title"` and `"description"` — human-readable
-- `"type"` and `"properties"` — strongly typed; `"additionalProperties": false` at the root unless the schema explicitly documents forward-compatible extension points
-- A required `"schema_version"` property on the artifact itself, matching SemVer (the established APSS convention — already used by APS-V1-0001 topology artifacts)
+- `"$schema"` - explicit JSON Schema dialect
+- `"$id"` - stable URI identifying the artifact
+- `"title"` and `"description"` - human-readable
+- `"type"` and `"properties"` - strongly typed; `"additionalProperties": false` at the root unless the schema explicitly documents forward-compatible extension points
+- A required `"schema_version"` property on the artifact itself, matching SemVer (the established APSS convention - already used by APS-V1-0001 topology artifacts)
 
 Schemas SHOULD include examples (`"examples"`) and reference the source spec section.
 
@@ -287,9 +287,9 @@ The rule file MUST be named `fitness.toml` and SHOULD be placed at the repositor
 
 ```toml
 [config]
-topology_dir = ".topology"                          # REQUIRED — path to topology artifacts
-exceptions = "fitness-exceptions.toml"              # OPTIONAL — default shown
-severity_default = "error"                          # OPTIONAL — default: "error"
+topology_dir = ".topology"                          # REQUIRED - path to topology artifacts
+exceptions = "fitness-exceptions.toml"              # OPTIONAL - default shown
+severity_default = "error"                          # OPTIONAL - default: "error"
 ```
 
 | Field | Type | Required | Description |
@@ -307,9 +307,9 @@ MD01 = true             # Modularity (default: true)
 ST01 = true             # Structural Integrity (default: true)
 SC01 = true             # Security (default: true)
 LG01 = true             # Legality (default: true)
-AC01 = false            # Accessibility (default: false — opt-in)
-PF01 = false            # Performance (default: false — opt-in)
-AV01 = false            # Availability (default: false — opt-in)
+AC01 = false            # Accessibility (default: false - opt-in)
+PF01 = false            # Performance (default: false - opt-in)
+AV01 = false            # Availability (default: false - opt-in)
 
 # Disabling a default-enabled dimension requires a reason
 [dimensions.reasons]
@@ -347,8 +347,8 @@ exclude = ["**/test_*", "**/tests/**"]              # Glob patterns to exclude
 | `dimension` | string | RECOMMENDED | Dimension code (e.g., `"MT01"`). If omitted, inferred from `source` and `field`. |
 | `source` | string | MUST | Path to topology artifact (relative to `topology_dir`) or adapter output |
 | `field` | string | MUST | JSON field path to evaluate (supports dot-notation, e.g., `metrics.cognitive`) |
-| `max` | float | MUST (one of) | Upper bound — violation if `value > max` |
-| `min` | float | MUST (one of) | Lower bound — violation if `value < min` |
+| `max` | float | MUST (one of) | Upper bound - violation if `value > max` |
+| `min` | float | MUST (one of) | Lower bound - violation if `value < min` |
 | `scope` | string | MUST | Entity granularity: `"function"`, `"file"`, `"module"`, `"class"`, `"slice"`, `"system"` |
 | `severity` | string | MAY | `"error"` or `"warning"` (default: config default) |
 | `exclude` | array | MAY | Glob patterns for entities to skip |
@@ -466,7 +466,7 @@ The `issue` field is **REQUIRED**. Exceptions without issue references MUST caus
 
 ### 5.3 Ratchet Semantics
 
-1. **Budget enforcement**: If `value` is specified and the actual metric value exceeds the exception's `value`, the exception is **insufficient** — the violation is reported as unexcepted.
+1. **Budget enforcement**: If `value` is specified and the actual metric value exceeds the exception's `value`, the exception is **insufficient** - the violation is reported as unexcepted.
 2. **Stale detection**: If an entity no longer exists in the topology artifacts, or its metric value is now within the rule's threshold, the exception is **stale**. Stale exceptions MUST be reported in the validation output.
 3. **Monotonic decrease**: When regenerating exceptions (via `aps run fitness ratchet`), new `value` entries MUST NOT exceed previous values. The ratchet only tightens.
 
@@ -477,9 +477,9 @@ The `issue` field is **REQUIRED**. Exceptions without issue references MUST caus
 The system-level fitness function is the defining feature of architectural governance. It aggregates per-dimension scores into a single holistic assessment, enabling teams to:
 
 1. **Understand overall architectural health** at a glance
-2. **Analyze tradeoffs** — see how improving one dimension affects others
-3. **Guide evolutionary decisions** — determine the impact of changes across all dimensions simultaneously
-4. **Track trends** — monitor whether the architecture is improving or degrading over time
+2. **Analyze tradeoffs** - see how improving one dimension affects others
+3. **Guide evolutionary decisions** - determine the impact of changes across all dimensions simultaneously
+4. **Track trends** - monitor whether the architecture is improving or degrading over time
 
 Per Ford et al.: "A system-wide fitness function is a combination of all the individual fitness functions, providing a holistic picture of architectural health."
 
@@ -506,7 +506,7 @@ AC01 = 0.10                             # Accessibility (active)
 |-------|------|----------|-------------|
 | `enabled` | bool | MAY | Enable system-level scoring (default: `true`) |
 | `min_score` | float | MAY | Minimum composite score; below this = system failure (default: `0.7`) |
-| `include_incubating` | bool | MAY | Whether incubating dimensions count toward the system score. Default `false` — the composite reflects only enforced governance. When `true`, incubating scores are included but their rule failures still cannot cause exit code `1` (§3.4). |
+| `include_incubating` | bool | MAY | Whether incubating dimensions count toward the system score. Default `false` - the composite reflects only enforced governance. When `true`, incubating scores are included but their rule failures still cannot cause exit code `1` (§3.4). |
 | `weights.<CODE>` | float | MAY | Weight for a dimension. Weights MUST sum to 1.0 across contributing dimensions (active, plus incubating when `include_incubating = true`). |
 
 If weights are omitted, contributing dimensions receive equal weight. By default, only `active` dimensions contribute: this keeps the composite score an honest measure of what is actually enforced.

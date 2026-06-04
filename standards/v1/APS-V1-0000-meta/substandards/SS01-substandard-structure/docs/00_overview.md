@@ -1,4 +1,4 @@
-# APS-V1-0000.SS01 — Substandard Structure
+# APS-V1-0000.SS01 - Substandard Structure
 
 ## Overview
 

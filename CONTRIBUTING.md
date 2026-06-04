@@ -28,8 +28,8 @@ git push origin my-feature-branch
 
 ### Prerequisites
 
-- **Rust 1.85+** — Install via [rustup](https://rustup.rs/)
-- **Just** — Task runner: `cargo install just`
+- **Rust 1.85+** - Install via [rustup](https://rustup.rs/)
+- **Just** - Task runner: `cargo install just`
 
 ### Useful Commands
 
@@ -68,10 +68,10 @@ standards-experimental/v1/EXP-V1-XXXX-my-idea/
 
 Every standard must include:
 
-- **`docs/01_spec.md`** — Core specification
-- **`examples/`** — At least one working example
-- **`tests/`** — Automated validation tests
-- **`agents/skills/`** — Agent capability definitions
+- **`docs/01_spec.md`** - Core specification
+- **`examples/`** - At least one working example
+- **`tests/`** - Automated validation tests
+- **`agents/skills/`** - Agent capability definitions
 
 ### 3. Validate Your Work
 
@@ -144,9 +144,9 @@ Key points:
 
 ## Getting Help
 
-- **Issues** — Bug reports and feature requests
-- **Discussions** — Questions and ideas
-- **PRs** — Code contributions
+- **Issues** - Bug reports and feature requests
+- **Discussions** - Questions and ideas
+- **PRs** - Code contributions
 
 ## License
 

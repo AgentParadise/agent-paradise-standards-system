@@ -5,11 +5,11 @@
 //!
 //! ## Key Features
 //!
-//! - **Committable artifacts** — `.topology/` directory with metrics and graphs
-//! - **Complexity metrics** — Cyclomatic, Cognitive, Halstead, Martin's coupling
-//! - **Coupling matrix** — For 3D visualization of architecture
-//! - **Language adapters** — Polyglot support via tree-sitter
-//! - **Projector interface** — Substandards implement visualizations
+//! - **Committable artifacts** - `.topology/` directory with metrics and graphs
+//! - **Complexity metrics** - Cyclomatic, Cognitive, Halstead, Martin's coupling
+//! - **Coupling matrix** - For 3D visualization of architecture
+//! - **Language adapters** - Polyglot support via tree-sitter
+//! - **Projector interface** - Substandards implement visualizations
 //!
 //! ## Example
 //!

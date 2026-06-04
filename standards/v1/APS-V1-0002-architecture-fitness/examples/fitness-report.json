@@ -8,7 +8,7 @@
     "warned": 1,
     "skipped": 0,
     "total_violations": 8,
-    "excepted_violations": 5,
+    "excepted_violations": 7,
     "stale_exceptions": 1
   },
   "dimensions": {
@@ -18,27 +18,27 @@
       "promotion_status": "active",
       "enforcement": "enforced",
       "score": 0.92,
-      "rules_evaluated": 4,
+      "rules_evaluated": 3,
       "rules_passed": 3,
       "rules_failed": 0,
-      "rules_warned": 1,
+      "rules_warned": 0,
       "rules_downgraded": 0,
-      "total_violations": 4,
-      "excepted_violations": 3
+      "total_violations": 2,
+      "excepted_violations": 2
     },
     "MD01": {
       "name": "Modularity & Coupling",
       "runtime_status": "evaluated",
       "promotion_status": "active",
       "enforcement": "enforced",
-      "score": 0.71,
-      "rules_evaluated": 4,
-      "rules_passed": 3,
-      "rules_failed": 1,
-      "rules_warned": 0,
+      "score": 0.88,
+      "rules_evaluated": 2,
+      "rules_passed": 1,
+      "rules_failed": 0,
+      "rules_warned": 1,
       "rules_downgraded": 0,
-      "total_violations": 4,
-      "excepted_violations": 2
+      "total_violations": 1,
+      "excepted_violations": 0
     },
     "ST01": {
       "name": "Structural Integrity",
@@ -95,10 +95,38 @@
       "rules_downgraded": 0,
       "total_violations": 0,
       "excepted_violations": 0
+    },
+    "PF01": {
+      "name": "Performance",
+      "runtime_status": "evaluated",
+      "promotion_status": "incubating",
+      "enforcement": "advisory",
+      "score": 1.0,
+      "rules_evaluated": 0,
+      "rules_passed": 0,
+      "rules_failed": 0,
+      "rules_warned": 0,
+      "rules_downgraded": 0,
+      "total_violations": 0,
+      "excepted_violations": 0
+    },
+    "AV01": {
+      "name": "Availability",
+      "runtime_status": "evaluated",
+      "promotion_status": "incubating",
+      "enforcement": "advisory",
+      "score": 1.0,
+      "rules_evaluated": 0,
+      "rules_passed": 0,
+      "rules_failed": 0,
+      "rules_warned": 0,
+      "rules_downgraded": 0,
+      "total_violations": 0,
+      "excepted_violations": 0
     }
   },
   "system_fitness": {
-    "score": 0.815,
+    "score": 0.95,
     "min_score": 0.7,
     "passing": true,
     "weights_used": {
@@ -126,48 +154,22 @@
   },
   "results": [
     {
-      "rule_id": "max-cyclomatic",
-      "rule_name": "Maximum Cyclomatic Complexity (function)",
-      "dimension": "MT01",
-      "status": "pass",
-      "violations": [
-        {
-          "entity": "src/orchestration/engine.py::execute",
-          "field": "cyclomatic_complexity",
-          "actual": 42.0,
-          "threshold": 10.0,
-          "direction": "max",
-          "excepted": true
-        },
-        {
-          "entity": "src/setup.py::configure_workspace",
-          "field": "cyclomatic_complexity",
-          "actual": 28.0,
-          "threshold": 10.0,
-          "direction": "max",
-          "excepted": true
-        }
-      ],
-      "exceptions_used": 2,
-      "total_entities": 312
-    },
-    {
-      "rule_id": "max-main-sequence-distance",
-      "rule_name": "Maximum Distance from Main Sequence",
+      "rule_id": "max-efferent-coupling",
+      "rule_name": "Maximum Efferent Coupling",
       "dimension": "MD01",
-      "status": "fail",
+      "status": "warn",
       "violations": [
         {
-          "entity": "packages.data-access",
-          "field": "distance_from_main_sequence",
-          "actual": 0.85,
-          "threshold": 0.7,
+          "entity": "src/core",
+          "field": "efferent_coupling",
+          "actual": 24,
+          "threshold": 20,
           "direction": "max",
           "excepted": false
         }
       ],
       "exceptions_used": 0,
-      "total_entities": 48
+      "total_entities": 36
     }
   ],
   "stale_exceptions": [

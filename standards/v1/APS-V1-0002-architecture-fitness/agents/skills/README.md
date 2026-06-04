@@ -1,4 +1,4 @@
-# Architecture Fitness Functions — Agent Skills
+# Architecture Fitness Functions - Agent Skills
 
 Skills for AI agents to interact with the architectural fitness governance framework.
 

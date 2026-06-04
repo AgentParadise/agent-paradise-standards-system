@@ -909,7 +909,7 @@ fn dispatch_fitness_v2(
                         report_path = args.get(i + 1);
                         i += 2;
                     }
-                    "--previous-report" => {
+                    "--previous-report" | "--previous" => {
                         previous_report_path = args.get(i + 1);
                         i += 2;
                     }
@@ -1461,7 +1461,7 @@ fn write_topology_artifacts(
     fs::create_dir_all(output_path.join("metrics"))?;
     fs::create_dir_all(output_path.join("graphs"))?;
 
-    // Deduplicate functions — tree-sitter queries can match the same function
+    // Deduplicate functions - tree-sitter queries can match the same function
     // multiple times (e.g. a class method matches both the function pattern
     // and the method-in-class pattern).  Keep the first occurrence per
     // (file_path, start_line) pair.
@@ -1687,7 +1687,7 @@ total_dependencies = {}
         serde_json::to_string_pretty(&modules_json).unwrap(),
     )?;
 
-    // Write coupling.json — flat per-module Martin projection for APS-V1-0002
+    // Write coupling.json - flat per-module Martin projection for APS-V1-0002
     // MD01 consumers. Shape computation lives in code_topology::coupling so
     // LANG01-rust and the CLI can't drift. Schema:
     // standards/v1/APS-V1-0001-code-topology/schemas/coupling.schema.json
@@ -2039,7 +2039,7 @@ total_dependencies = {}
     //       "crates::aps-cli::src::main" -> slice "crates::aps-cli"
     fn get_slice_id(module_id: &str) -> String {
         // Split by the appropriate separator and take first two segments.
-        // Path-like IDs (containing '/') use '/' — this avoids splitting inside
+        // Path-like IDs (containing '/') use '/' - this avoids splitting inside
         // Next.js catch-all routes like [[...slug]] where '.' is literal.
         let separator = if module_id.contains('/') {
             "/"
@@ -3043,7 +3043,7 @@ fn generate_vsa_placeholder() -> String {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>VSA Visualization — No Configuration</title>
+<title>VSA Visualization - No Configuration</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a2e; color: #ccc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
   .card { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 48px; max-width: 560px; text-align: center; }
@@ -3057,7 +3057,7 @@ fn generate_vsa_placeholder() -> String {
 <div class="card">
   <h1>No VSA Configuration Found</h1>
   <p>The VSA (Vertical Slice Architecture) visualization requires a <code>vsa.yaml</code> file in your repository root to identify which bounded contexts to display.</p>
-  <p>Without this file, all modules would appear as vertical slices — which is misleading for non-VSA packages.</p>
+  <p>Without this file, all modules would appear as vertical slices - which is misleading for non-VSA packages.</p>
   <pre>
 # vsa.yaml (version 1)
 version: 1
@@ -3099,7 +3099,7 @@ fn get_slice_from_id(module_id: &str) -> String {
         return parts.first().unwrap_or(&module_id).to_string();
     }
 
-    // Handle path-like IDs (containing '/') — split on '/' to avoid breaking
+    // Handle path-like IDs (containing '/') - split on '/' to avoid breaking
     // Next.js catch-all routes like [[...slug]] where '.' is literal.
     let separator = if module_id.contains('/') { "/" } else { "." };
     let parts: Vec<&str> = module_id.split(separator).collect();
@@ -3151,7 +3151,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
         Ok(Some(config)) => {
             if verbose {
                 println!(
-                    "  Found vsa.yaml (v{}) — root: {}",
+                    "  Found vsa.yaml (v{}) - root: {}",
                     config.version,
                     config.normalized_root()
                 );
@@ -3434,7 +3434,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                         serde_json::to_string_pretty(&vsa_modules).unwrap_or_default();
                     code_topology_viz::vsa::generate(&modules_json)
                 } else {
-                    // No vsa.yaml — render placeholder
+                    // No vsa.yaml - render placeholder
                     generate_vsa_placeholder()
                 };
 

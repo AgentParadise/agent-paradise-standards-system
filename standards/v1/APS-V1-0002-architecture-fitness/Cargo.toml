@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Architecture Fitness Functions — comprehensive architectural governance framework"
+description = "Architecture Fitness Functions - comprehensive architectural governance framework"
 
 [dependencies]
 aps-core.workspace = true

@@ -16,10 +16,10 @@ A "standard of standards" that defines how ADRs should be structured across all 
 
 ### Key Features
 
-- **Progressive disclosure** — Index with summaries, drill into details on demand
-- **Searchable** — Simple command to query ADRs across standards
-- **Context-efficient** — Designed for agentic consumption (minimal tokens for max understanding)
-- **Adoptable** — Other standards implement THIS standard for their ADRs
+- **Progressive disclosure** - Index with summaries, drill into details on demand
+- **Searchable** - Simple command to query ADRs across standards
+- **Context-efficient** - Designed for agentic consumption (minimal tokens for max understanding)
+- **Adoptable** - Other standards implement THIS standard for their ADRs
 
 ### Rough Structure
 
@@ -47,7 +47,7 @@ A "standard of standards" that defines how ADRs should be structured across all 
 
 ### Problem
 
-The 3D force-directed visualization becomes unusable ("hairball") for large codebases (600+ modules). Tested on `agentic-engineering-framework` with 609 modules — completely unnavigable.
+The 3D force-directed visualization becomes unusable ("hairball") for large codebases (600+ modules). Tested on `agentic-engineering-framework` with 609 modules - completely unnavigable.
 
 ### Proposed Solutions
 
@@ -63,9 +63,9 @@ The 3D force-directed visualization becomes unusable ("hairball") for large code
 
 ### Quick Wins
 
-1. **Focus mode** — Lowest effort, highest impact for exploration
-2. **Smart filter defaults** — Trivial to implement, immediate UX improvement
-3. **Package-level view** — `clusters.html` already does this, could make it the default for large codebases
+1. **Focus mode** - Lowest effort, highest impact for exploration
+2. **Smart filter defaults** - Trivial to implement, immediate UX improvement
+3. **Package-level view** - `clusters.html` already does this, could make it the default for large codebases
 
 ### Open Questions
 
