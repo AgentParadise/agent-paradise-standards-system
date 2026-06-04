@@ -42,6 +42,17 @@ pub enum ConfigError {
     /// Configuration file not found.
     #[error("no apss.toml found (searched from {start_dir})")]
     NotFound { start_dir: PathBuf },
+
+    /// Included config file does not exist.
+    #[error("included config file not found: {path}")]
+    IncludeNotFound { path: PathBuf },
+
+    /// Included config file failed to parse as TOML.
+    #[error("failed to parse included config {path}: {source}")]
+    IncludeParse {
+        path: PathBuf,
+        source: Box<toml::de::Error>,
+    },
 }
 
 // ============================================================================
@@ -65,9 +76,13 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub workspace: Option<WorkspaceConfig>,
 
-    /// Tool configuration controlling APSS CLI behavior.
+    /// Tool configuration controlling APSS CLI behavior. This is the
+    /// *raw* parse-time view: fields are `Option<T>` so downstream merge
+    /// can distinguish "omitted" from "explicitly set to default". The
+    /// resolved, defaulted form lives in `ResolvedProjectConfig::tool`
+    /// as [`ToolConfig`].
     #[serde(default)]
-    pub tool: Option<ToolConfig>,
+    pub tool: Option<RawToolConfig>,
 }
 
 /// Project identity information.
@@ -116,6 +131,10 @@ pub struct WorkspaceConfig {
 }
 
 /// Tool configuration controlling APSS CLI behavior.
+///
+/// Resolved form with all fields populated. Produced from [`RawToolConfig`]
+/// by [`RawToolConfig::into_resolved`] or its defaulted shape via
+/// [`ToolConfig::default`].
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ToolConfig {
     /// Directory for the composed binary. Default: `".apss/bin"`.
@@ -133,6 +152,34 @@ pub struct ToolConfig {
     /// Log level for APSS operations. Default: `"warn"`.
     #[serde(default = "default_log_level")]
     pub log_level: String,
+}
+
+/// Raw, parse-time view of `[tool]` config. Every field is `Option<T>` so
+/// the cascading merge in `resolution` can distinguish "omitted by the user"
+/// from "explicitly set to the default value" — a distinction required for
+/// child configs that intentionally re-set a boolean back to `false`.
+///
+/// This type is only used at the parse boundary; resolution always produces
+/// a fully-populated [`ToolConfig`] via [`Self::into_resolved`].
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct RawToolConfig {
+    pub bin_dir: Option<String>,
+    pub registry: Option<String>,
+    pub offline: Option<bool>,
+    pub log_level: Option<String>,
+}
+
+impl RawToolConfig {
+    /// Fill in any unset field from its default and return a [`ToolConfig`].
+    pub fn into_resolved(self) -> ToolConfig {
+        ToolConfig {
+            bin_dir: self.bin_dir.unwrap_or_else(default_bin_dir),
+            registry: self.registry.unwrap_or_else(default_registry),
+            offline: self.offline.unwrap_or(false),
+            log_level: self.log_level.unwrap_or_else(default_log_level),
+        }
+    }
 }
 
 // ============================================================================
@@ -175,16 +222,61 @@ impl Default for ToolConfig {
 // ============================================================================
 
 /// Parse a project configuration from a file path.
+///
+/// After TOML deserialization, resolves `config = { include = "path" }` directives
+/// by reading the referenced file and replacing the config value with its contents.
 pub fn parse_project_config(path: &Path) -> Result<ProjectConfig, ConfigError> {
     let content = std::fs::read_to_string(path).map_err(|e| ConfigError::Io {
         path: path.to_path_buf(),
         source: e,
     })?;
 
-    toml::from_str(&content).map_err(|e| ConfigError::Parse {
+    let mut config: ProjectConfig = toml::from_str(&content).map_err(|e| ConfigError::Parse {
         path: path.to_path_buf(),
         source: e,
-    })
+    })?;
+
+    let config_dir = path.parent().unwrap_or(Path::new("."));
+    resolve_includes(&mut config, config_dir)?;
+
+    Ok(config)
+}
+
+/// Resolve `config = { include = "path" }` directives in standard entries.
+///
+/// A config value is treated as an include directive only when it is a table
+/// with exactly one key `"include"` whose value is a string. This prevents
+/// false positives when a standard's actual config has an `include` field
+/// among other keys.
+fn resolve_includes(config: &mut ProjectConfig, config_dir: &Path) -> Result<(), ConfigError> {
+    for entry in config.standards.values_mut() {
+        if let toml::Value::Table(ref table) = entry.config {
+            if table.len() == 1 {
+                if let Some(toml::Value::String(include_path)) = table.get("include") {
+                    let resolved_path = config_dir.join(include_path);
+                    let content = std::fs::read_to_string(&resolved_path).map_err(|e| {
+                        if e.kind() == std::io::ErrorKind::NotFound {
+                            ConfigError::IncludeNotFound {
+                                path: resolved_path.clone(),
+                            }
+                        } else {
+                            ConfigError::Io {
+                                path: resolved_path.clone(),
+                                source: e,
+                            }
+                        }
+                    })?;
+                    let parsed: toml::Value =
+                        toml::from_str(&content).map_err(|e| ConfigError::IncludeParse {
+                            path: resolved_path,
+                            source: Box::new(e),
+                        })?;
+                    entry.config = parsed;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Walk up from `start_dir` to find the nearest `apss.toml`.
@@ -301,7 +393,7 @@ offline = true
         assert_eq!(ws.exclude, vec!["packages/deprecated-*"]);
 
         let tool = config.tool.unwrap();
-        assert!(tool.offline);
+        assert_eq!(tool.offline, Some(true));
     }
 
     #[test]
@@ -356,5 +448,118 @@ apss_version = "v1"
         std::fs::create_dir_all(&sub).unwrap();
         let found = find_project_config(&sub);
         assert_eq!(found, Some(config_path));
+    }
+
+    #[test]
+    fn test_config_include_resolves() {
+        let temp = tempfile::tempdir().unwrap();
+
+        // Write included config file
+        let config_dir = temp.path().join(".apss/config");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(
+            config_dir.join("topology.toml"),
+            "output_dir = \".topology\"\nlanguages = [\"rust\"]\n",
+        )
+        .unwrap();
+
+        // Write main config referencing it
+        let config_path = temp.path().join(CONFIG_FILENAME);
+        std::fs::write(
+            &config_path,
+            r#"schema = "apss.project/v1"
+[project]
+name = "test"
+apss_version = "v1"
+
+[standards.topology]
+id = "APS-V1-0001"
+version = ">=1.0.0"
+config = { include = ".apss/config/topology.toml" }
+"#,
+        )
+        .unwrap();
+
+        let config = parse_project_config(&config_path).unwrap();
+        let topo = &config.standards["topology"];
+        assert_eq!(topo.config["output_dir"].as_str().unwrap(), ".topology");
+        assert_eq!(topo.config["languages"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_config_include_not_found() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join(CONFIG_FILENAME);
+        std::fs::write(
+            &config_path,
+            r#"schema = "apss.project/v1"
+[project]
+name = "test"
+apss_version = "v1"
+
+[standards.topology]
+id = "APS-V1-0001"
+version = ">=1.0.0"
+config = { include = "nonexistent.toml" }
+"#,
+        )
+        .unwrap();
+
+        let err = parse_project_config(&config_path).unwrap_err();
+        assert!(matches!(err, ConfigError::IncludeNotFound { .. }));
+    }
+
+    #[test]
+    fn test_config_include_bad_toml() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("bad.toml"), "not valid { toml").unwrap();
+
+        let config_path = temp.path().join(CONFIG_FILENAME);
+        std::fs::write(
+            &config_path,
+            r#"schema = "apss.project/v1"
+[project]
+name = "test"
+apss_version = "v1"
+
+[standards.topology]
+id = "APS-V1-0001"
+version = ">=1.0.0"
+config = { include = "bad.toml" }
+"#,
+        )
+        .unwrap();
+
+        let err = parse_project_config(&config_path).unwrap_err();
+        assert!(matches!(err, ConfigError::IncludeParse { .. }));
+    }
+
+    #[test]
+    fn test_config_multi_key_table_not_treated_as_include() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join(CONFIG_FILENAME);
+        std::fs::write(
+            &config_path,
+            r#"schema = "apss.project/v1"
+[project]
+name = "test"
+apss_version = "v1"
+
+[standards.topology]
+id = "APS-V1-0001"
+version = ">=1.0.0"
+
+[standards.topology.config]
+include = "some-value"
+other_key = "other-value"
+"#,
+        )
+        .unwrap();
+
+        // Should parse without trying to resolve as include
+        let config = parse_project_config(&config_path).unwrap();
+        let topo = &config.standards["topology"];
+        assert_eq!(topo.config["include"].as_str().unwrap(), "some-value");
+        assert_eq!(topo.config["other_key"].as_str().unwrap(), "other-value");
     }
 }

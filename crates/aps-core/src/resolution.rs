@@ -6,7 +6,9 @@
 //!
 //! See `APS-V1-0000.CF01` for the normative specification.
 
-use crate::config::{ConfigError, ProjectConfig, ProjectInfo, StandardEntry, ToolConfig};
+use crate::config::{
+    ConfigError, ProjectConfig, ProjectInfo, RawToolConfig, StandardEntry, ToolConfig,
+};
 use crate::{Diagnostic, Diagnostics};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -118,7 +120,7 @@ pub fn resolve_single(config: ProjectConfig, source: PathBuf) -> ResolvedProject
     ResolvedProjectConfig {
         project: config.project,
         standards,
-        tool: config.tool.unwrap_or_default(),
+        tool: config.tool.unwrap_or_default().into_resolved(),
         source_files: vec![source],
     }
 }
@@ -178,33 +180,21 @@ pub fn merge_configs(
         }
     }
 
-    // Merge tool config field-by-field: child overrides root only for
-    // fields that differ from the serde default (best-effort detection).
-    // NOTE: Cannot distinguish "child explicitly set to default" from "child omitted".
-    // A RawToolConfig with Option fields would fix this, but adds complexity.
+    // Merge tool config field-by-field with child-wins semantics.
+    // RawToolConfig's Option<T> fields let us distinguish "child omitted this
+    // field" (None → inherit from root) from "child explicitly set the default"
+    // (Some(default) → still overrides root). This matters when, e.g., the root
+    // sets `offline = true` and a child wants to force `offline = false` —
+    // previously the OR-semantics made `false` unreachable.
     let root_tool = root.tool.clone().unwrap_or_default();
-    let defaults = ToolConfig::default();
-    let merged_tool = match &child.tool {
-        Some(child_tool) => ToolConfig {
-            bin_dir: if child_tool.bin_dir != defaults.bin_dir {
-                child_tool.bin_dir.clone()
-            } else {
-                root_tool.bin_dir
-            },
-            registry: if child_tool.registry != defaults.registry {
-                child_tool.registry.clone()
-            } else {
-                root_tool.registry
-            },
-            offline: child_tool.offline || root_tool.offline,
-            log_level: if child_tool.log_level != defaults.log_level {
-                child_tool.log_level.clone()
-            } else {
-                root_tool.log_level
-            },
-        },
-        None => root_tool,
+    let child_tool = child.tool.clone().unwrap_or_default();
+    let merged_raw = RawToolConfig {
+        bin_dir: child_tool.bin_dir.or(root_tool.bin_dir),
+        registry: child_tool.registry.or(root_tool.registry),
+        offline: child_tool.offline.or(root_tool.offline),
+        log_level: child_tool.log_level.or(root_tool.log_level),
     };
+    let merged_tool = merged_raw.into_resolved();
 
     // Build resolved config
     let resolved_standards = standards
@@ -479,6 +469,136 @@ apss_version = "v1"
         let diags = validate_resolved(&config);
         assert!(diags.has_errors());
         assert!(diags.iter().any(|d| d.code == "CF_DUPLICATE_STANDARD_ID"));
+    }
+
+    #[test]
+    fn test_merge_tool_child_false_overrides_root_true() {
+        // Regression: a child explicitly setting `offline = false` must win,
+        // even though `false` is the default. Previously the merge used
+        // `child.offline || root.offline`, which made `false` unreachable.
+        let root: ProjectConfig = toml::from_str(
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "root"
+apss_version = "v1"
+
+[workspace]
+members = ["packages/*"]
+
+[tool]
+offline = true
+"#,
+        )
+        .unwrap();
+
+        let child: ProjectConfig = toml::from_str(
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "child"
+apss_version = "v1"
+
+[tool]
+offline = false
+"#,
+        )
+        .unwrap();
+
+        let resolved = merge_configs(
+            &root,
+            Path::new("apss.toml"),
+            &child,
+            Path::new("packages/a/apss.toml"),
+        )
+        .unwrap();
+
+        assert!(!resolved.tool.offline);
+    }
+
+    #[test]
+    fn test_merge_tool_child_omits_field_inherits_root() {
+        // Child omits `offline` entirely → inherit root's `true`.
+        let root: ProjectConfig = toml::from_str(
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "root"
+apss_version = "v1"
+
+[workspace]
+members = ["packages/*"]
+
+[tool]
+offline = true
+"#,
+        )
+        .unwrap();
+
+        let child: ProjectConfig = toml::from_str(
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "child"
+apss_version = "v1"
+"#,
+        )
+        .unwrap();
+
+        let resolved = merge_configs(
+            &root,
+            Path::new("apss.toml"),
+            &child,
+            Path::new("packages/a/apss.toml"),
+        )
+        .unwrap();
+
+        assert!(resolved.tool.offline);
+    }
+
+    #[test]
+    fn test_merge_tool_child_explicit_default_still_wins() {
+        // Regression: a child setting `bin_dir = ".apss/bin"` (the default
+        // string) must still override the root's `"custom-bin"`. The old
+        // "equals default" heuristic silently dropped this override.
+        let root: ProjectConfig = toml::from_str(
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "root"
+apss_version = "v1"
+
+[workspace]
+members = ["packages/*"]
+
+[tool]
+bin_dir = "custom-bin"
+"#,
+        )
+        .unwrap();
+
+        let child: ProjectConfig = toml::from_str(
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "child"
+apss_version = "v1"
+
+[tool]
+bin_dir = ".apss/bin"
+"#,
+        )
+        .unwrap();
+
+        let resolved = merge_configs(
+            &root,
+            Path::new("apss.toml"),
+            &child,
+            Path::new("packages/a/apss.toml"),
+        )
+        .unwrap();
+
+        assert_eq!(resolved.tool.bin_dir, ".apss/bin");
     }
 
     #[test]

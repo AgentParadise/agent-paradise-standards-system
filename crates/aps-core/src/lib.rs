@@ -16,10 +16,12 @@
 //! - [`resolution`] - Cascading configuration resolution for monorepos
 //! - [`lockfile`] - Lockfile types for reproducible installations
 //! - [`registry`] - Dynamic standard composition and CLI dispatch
+//! - [`ecosystem`] - Identity of ecosystem crates vs. published standards
 
 pub mod config;
 pub mod diagnostics;
 pub mod discovery;
+pub mod ecosystem;
 pub mod lockfile;
 pub mod metadata;
 pub mod promotion;
@@ -40,7 +42,8 @@ pub use versioning::{
 pub use views::{Registry, ViewsError, generate_all_views, generate_registry};
 
 // Project configuration and distribution
-pub use config::{ConfigError, ProjectConfig, StandardEntry};
+pub use config::{ConfigError, ProjectConfig, RawToolConfig, StandardEntry, ToolConfig};
+pub use ecosystem::{ECOSYSTEM_CRATE_NAMES, is_ecosystem_crate};
 pub use lockfile::{Lockfile, LockfileError};
 pub use registry::{CommandHandler, ProjectRunner, RegisteredStandard, StandardRegistry};
 pub use resolution::{ResolutionError, ResolvedProjectConfig, ResolvedStandard};
