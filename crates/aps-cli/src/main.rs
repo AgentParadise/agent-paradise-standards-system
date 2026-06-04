@@ -683,16 +683,10 @@ fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
             name: "Code Topology",
             version: "0.1.0",
         }),
-        "fitness" | "architecture-fitness" | "aps-v1-0002" => Some(StandardCliInfo {
-            id: "APS-V1-0002",
+        "fitness" | "fitness-functions" | "exp-v1-0003" => Some(StandardCliInfo {
+            id: "EXP-V1-0003",
             slug: "fitness",
             name: "Architecture Fitness Functions",
-            version: "1.0.0",
-        }),
-        "fitness-functions" | "exp-v1-0003" => Some(StandardCliInfo {
-            id: "EXP-V1-0003",
-            slug: "fitness-legacy",
-            name: "Architecture Fitness Functions (Experimental)",
             version: "0.1.0",
         }),
         _ => None,
@@ -711,8 +705,7 @@ fn dispatch_standard_cli(
 
     match info.slug {
         "topology" => dispatch_topology(command, cmd_args, repo_root, verbose),
-        "fitness" => dispatch_fitness_v2(command, cmd_args, repo_root, verbose),
-        "fitness-legacy" => dispatch_fitness(command, cmd_args, repo_root, verbose),
+        "fitness" => dispatch_fitness(command, cmd_args, repo_root, verbose),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -869,242 +862,7 @@ fn dispatch_topology(
     }
 }
 
-/// Dispatch fitness function commands (APS-V1-0002).
-fn dispatch_fitness_v2(
-    command: &str,
-    args: &[String],
-    repo_root: &std::path::Path,
-    _verbose: bool,
-) -> ExitCode {
-    match command {
-        "--help" | "-h" | "help" => {
-            println!("Architecture Fitness Functions (APS-V1-0002) v1.0.0");
-            println!();
-            println!("USAGE:");
-            println!("    aps run fitness <COMMAND> [OPTIONS]");
-            println!();
-            println!("COMMANDS:");
-            println!("    validate <path>    Validate fitness rules against topology artifacts");
-            println!();
-            println!("OPTIONS:");
-            println!("    --config <file>         Path to fitness.toml (default: ./fitness.toml)");
-            println!("    --report <file>         Write JSON report to file");
-            println!("    --previous-report <file> Previous report for trend comparison");
-            println!("    --help                  Show this help message");
-            ExitCode::SUCCESS
-        }
-        "validate" => {
-            let mut positional_path: Option<&str> = None;
-            let mut config_path: Option<std::path::PathBuf> = None;
-            let mut report_path: Option<&String> = None;
-            let mut previous_report_path: Option<&String> = None;
-            let mut i = 0;
-            while i < args.len() {
-                match args[i].as_str() {
-                    "--config" => {
-                        config_path = args.get(i + 1).map(std::path::PathBuf::from);
-                        i += 2;
-                    }
-                    "--report" => {
-                        report_path = args.get(i + 1);
-                        i += 2;
-                    }
-                    "--previous-report" | "--previous" => {
-                        previous_report_path = args.get(i + 1);
-                        i += 2;
-                    }
-                    arg if !arg.starts_with('-') && positional_path.is_none() => {
-                        positional_path = Some(arg);
-                        i += 1;
-                    }
-                    _ => {
-                        i += 1;
-                    }
-                }
-            }
-            let path = positional_path.unwrap_or(".");
-
-            let target = if std::path::Path::new(path).is_absolute() {
-                std::path::PathBuf::from(path)
-            } else {
-                repo_root.join(path)
-            };
-
-            let config_path = config_path.map(|p| if p.is_absolute() { p } else { target.join(p) });
-
-            let validator =
-                match architecture_fitness::FitnessValidator::load(&target, config_path.as_deref())
-                {
-                    Ok(v) => v,
-                    Err(e) => {
-                        eprintln!("Error: {e}");
-                        return ExitCode::FAILURE;
-                    }
-                };
-
-            // Attach previous report for trend comparison. Resolve the path
-            // relative to `target` so `aps run fitness validate <path>
-            // --previous-report prev.json` does the right thing regardless of
-            // the caller's working directory (mirrors --config resolution).
-            let validator = if let Some(prev_path) = previous_report_path {
-                let prev_pb = std::path::PathBuf::from(prev_path);
-                let resolved = if prev_pb.is_absolute() {
-                    prev_pb
-                } else {
-                    target.join(prev_pb)
-                };
-                match std::fs::read_to_string(&resolved)
-                    .map_err(|e| e.to_string())
-                    .and_then(|s| {
-                        serde_json::from_str::<architecture_fitness::FitnessReport>(&s)
-                            .map_err(|e| e.to_string())
-                    }) {
-                    Ok(prev) => validator.with_previous_report(prev),
-                    Err(e) => {
-                        eprintln!("Warning: Could not load previous report: {e}");
-                        validator
-                    }
-                }
-            } else {
-                validator
-            };
-
-            let report = match validator.validate() {
-                Ok(r) => r,
-                Err(e) => {
-                    eprintln!("Error during validation: {e}");
-                    return ExitCode::FAILURE;
-                }
-            };
-
-            // Print human-readable summary
-            println!("Architecture Fitness Report (APS-V1-0002)");
-            println!("==========================================\n");
-
-            // Rule results
-            for result in &report.results {
-                let status_icon = match result.status {
-                    architecture_fitness::RuleStatus::Pass => "PASS",
-                    architecture_fitness::RuleStatus::Fail => "FAIL",
-                    architecture_fitness::RuleStatus::Warn => "WARN",
-                    architecture_fitness::RuleStatus::Skip => "SKIP",
-                };
-                let dim_tag = result
-                    .dimension
-                    .as_deref()
-                    .map(|d| format!(" [{d}]"))
-                    .unwrap_or_default();
-                println!(
-                    "  [{status_icon}] {} ({}){dim_tag}",
-                    result.rule_name, result.rule_id
-                );
-                for v in &result.violations {
-                    let exc = if v.excepted { " (excepted)" } else { "" };
-                    println!(
-                        "         {} = {} (threshold: {} {:?}){exc}",
-                        v.entity, v.actual, v.threshold, v.direction
-                    );
-                }
-            }
-
-            // Dimension scores
-            if !report.dimensions.is_empty() {
-                println!("\nDimension Scores:");
-                let mut dims: Vec<_> = report.dimensions.iter().collect();
-                dims.sort_by_key(|(k, _)| (*k).clone());
-                for (code, dim) in &dims {
-                    let status = match dim.runtime_status {
-                        architecture_fitness::DimensionStatus::Evaluated => {
-                            let score = dim.score.unwrap_or(0.0);
-                            let bar_len = (score * 20.0).round() as usize;
-                            let bar: String = "#".repeat(bar_len) + &"-".repeat(20 - bar_len);
-                            format!("[{bar}] {score:.0}%", score = score * 100.0)
-                        }
-                        architecture_fitness::DimensionStatus::Skipped => "skipped".to_string(),
-                        architecture_fitness::DimensionStatus::Disabled => "disabled".to_string(),
-                    };
-                    println!("  {code} ({name}): {status}", name = dim.name);
-                }
-            }
-
-            // System fitness
-            if let Some(sf) = &report.system_fitness {
-                println!("\nSystem Fitness:");
-                let pass_label = if sf.passing { "PASS" } else { "FAIL" };
-                println!(
-                    "  Score: {:.1}% (min: {:.1}%) [{pass_label}]",
-                    sf.score * 100.0,
-                    sf.min_score * 100.0,
-                );
-                if let Some(note) = &sf.weights_note {
-                    println!("  Note: {note}");
-                }
-                if let Some(trend) = &sf.trend {
-                    let dir = match trend.direction {
-                        architecture_fitness::TrendDirection::Improving => "improving",
-                        architecture_fitness::TrendDirection::Declining => "declining",
-                        architecture_fitness::TrendDirection::Stable => "stable",
-                    };
-                    let sign = if trend.delta >= 0.0 { "+" } else { "" };
-                    println!(
-                        "  Trend: {dir} ({sign}{:.1}% from previous {:.1}%)",
-                        trend.delta * 100.0,
-                        trend.previous_score * 100.0,
-                    );
-                }
-            }
-
-            // Stale exceptions
-            if !report.stale_exceptions.is_empty() {
-                println!("\nStale Exceptions:");
-                for s in &report.stale_exceptions {
-                    println!("  {} [{}]: {:?}", s.entity, s.rule_id, s.reason);
-                }
-            }
-
-            println!(
-                "\nSummary: {} passed, {} failed, {} warned, {} skipped, {} violations ({} excepted), {} stale exceptions",
-                report.summary.passed,
-                report.summary.failed,
-                report.summary.warned,
-                report.summary.skipped,
-                report.summary.total_violations,
-                report.summary.excepted_violations,
-                report.summary.stale_exceptions,
-            );
-
-            // Write JSON report if requested
-            if let Some(report_file) = report_path {
-                match serde_json::to_string_pretty(&report) {
-                    Ok(json) => {
-                        if let Err(e) = std::fs::write(report_file, json) {
-                            eprintln!("Error writing report: {e}");
-                        } else {
-                            println!("\nReport written to: {report_file}");
-                        }
-                    }
-                    Err(e) => eprintln!("Error serializing report: {e}"),
-                }
-            }
-
-            // Exit codes: 1 = failures, 2 = warnings only, 0 = clean
-            if architecture_fitness::FitnessValidator::has_failures(&report) {
-                ExitCode::FAILURE
-            } else if architecture_fitness::FitnessValidator::has_warnings(&report) {
-                ExitCode::from(2)
-            } else {
-                ExitCode::SUCCESS
-            }
-        }
-        other => {
-            eprintln!("Error: Unknown fitness command '{other}'");
-            eprintln!("Use 'aps run fitness --help' for available commands.");
-            ExitCode::FAILURE
-        }
-    }
-}
-
-/// Dispatch fitness function commands (legacy EXP-V1-0003).
+/// Dispatch fitness function commands.
 fn dispatch_fitness(
     command: &str,
     args: &[String],
@@ -1461,7 +1219,7 @@ fn write_topology_artifacts(
     fs::create_dir_all(output_path.join("metrics"))?;
     fs::create_dir_all(output_path.join("graphs"))?;
 
-    // Deduplicate functions - tree-sitter queries can match the same function
+    // Deduplicate functions — tree-sitter queries can match the same function
     // multiple times (e.g. a class method matches both the function pattern
     // and the method-in-class pattern).  Keep the first occurrence per
     // (file_path, start_line) pair.
@@ -1685,34 +1443,6 @@ total_dependencies = {}
     fs::write(
         output_path.join("metrics/modules.json"),
         serde_json::to_string_pretty(&modules_json).unwrap(),
-    )?;
-
-    // Write coupling.json - flat per-module Martin projection for APS-V1-0002
-    // MD01 consumers. Shape computation lives in code_topology::coupling so
-    // LANG01-rust and the CLI can't drift. Schema:
-    // standards/v1/APS-V1-0001-code-topology/schemas/coupling.schema.json
-    let coupling_inputs: Vec<code_topology::coupling::ModuleCouplingInput<'_>> = modules
-        .keys()
-        .map(|module_id| {
-            let (abs_types, total) = module_types.get(module_id).copied().unwrap_or((0, 0));
-            code_topology::coupling::ModuleCouplingInput {
-                id: module_id.as_str(),
-                path: format!("{}/", module_id.replace("::", "/")),
-                afferent: afferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32,
-                efferent: efferent.get(module_id).map(|s| s.len()).unwrap_or(0) as u32,
-                abstract_types: abs_types,
-                total_types: total,
-            }
-        })
-        .collect();
-    let coupling_records = code_topology::coupling::compute_coupling_records(&coupling_inputs);
-    let coupling_json = serde_json::json!({
-        "schema_version": "1.0.0",
-        "modules": coupling_records,
-    });
-    fs::write(
-        output_path.join("metrics/coupling.json"),
-        serde_json::to_string_pretty(&coupling_json).unwrap(),
     )?;
 
     // =========================================================================
@@ -2039,7 +1769,7 @@ total_dependencies = {}
     //       "crates::aps-cli::src::main" -> slice "crates::aps-cli"
     fn get_slice_id(module_id: &str) -> String {
         // Split by the appropriate separator and take first two segments.
-        // Path-like IDs (containing '/') use '/' - this avoids splitting inside
+        // Path-like IDs (containing '/') use '/' — this avoids splitting inside
         // Next.js catch-all routes like [[...slug]] where '.' is literal.
         let separator = if module_id.contains('/') {
             "/"
@@ -3043,7 +2773,7 @@ fn generate_vsa_placeholder() -> String {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>VSA Visualization - No Configuration</title>
+<title>VSA Visualization — No Configuration</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a2e; color: #ccc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
   .card { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 48px; max-width: 560px; text-align: center; }
@@ -3057,7 +2787,7 @@ fn generate_vsa_placeholder() -> String {
 <div class="card">
   <h1>No VSA Configuration Found</h1>
   <p>The VSA (Vertical Slice Architecture) visualization requires a <code>vsa.yaml</code> file in your repository root to identify which bounded contexts to display.</p>
-  <p>Without this file, all modules would appear as vertical slices - which is misleading for non-VSA packages.</p>
+  <p>Without this file, all modules would appear as vertical slices — which is misleading for non-VSA packages.</p>
   <pre>
 # vsa.yaml (version 1)
 version: 1
@@ -3099,7 +2829,7 @@ fn get_slice_from_id(module_id: &str) -> String {
         return parts.first().unwrap_or(&module_id).to_string();
     }
 
-    // Handle path-like IDs (containing '/') - split on '/' to avoid breaking
+    // Handle path-like IDs (containing '/') — split on '/' to avoid breaking
     // Next.js catch-all routes like [[...slug]] where '.' is literal.
     let separator = if module_id.contains('/') { "/" } else { "." };
     let parts: Vec<&str> = module_id.split(separator).collect();
@@ -3151,7 +2881,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
         Ok(Some(config)) => {
             if verbose {
                 println!(
-                    "  Found vsa.yaml (v{}) - root: {}",
+                    "  Found vsa.yaml (v{}) — root: {}",
                     config.version,
                     config.normalized_root()
                 );
@@ -3434,7 +3164,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                         serde_json::to_string_pretty(&vsa_modules).unwrap_or_default();
                     code_topology_viz::vsa::generate(&modules_json)
                 } else {
-                    // No vsa.yaml - render placeholder
+                    // No vsa.yaml — render placeholder
                     generate_vsa_placeholder()
                 };
 

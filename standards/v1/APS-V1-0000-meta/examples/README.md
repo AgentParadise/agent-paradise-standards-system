@@ -25,7 +25,7 @@ APS-V1-XXXX-slug/
 └── agents/skills/      # MUST have skills or README
 ```
 
-### Substandard (§5.2 - reduced requirements)
+### Substandard (§5.2 — reduced requirements)
 
 ```
 XXXX-YY01-slug/

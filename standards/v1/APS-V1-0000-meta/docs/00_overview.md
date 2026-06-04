@@ -1,4 +1,4 @@
-# APS-V1-0000 - Meta-Standard Overview
+# APS-V1-0000 — Meta-Standard Overview
 
 ## What is APS?
 
@@ -15,17 +15,17 @@ APS standards are not static documents. Each standard is a **versioned Rust crat
 
 ## What is APS-V1-0000?
 
-APS-V1-0000 is the **Meta-Standard** - the "standard of standards" for the V1 ecosystem.
+APS-V1-0000 is the **Meta-Standard** — the "standard of standards" for the V1 ecosystem.
 
 It defines:
 
-- **Repository layout** - Where official and experimental standards live
-- **Package structure** - Required directories and files for every standard
-- **Metadata schemas** - `standard.toml`, `substandard.toml`, `experiment.toml`
-- **Validation rules** - What the `aps` CLI checks
-- **Versioning rules** - SemVer, evolution packs, backward compatibility
-- **Substandard conformance** - How substandards relate to parent standards
-- **Experimental lifecycle** - Incubation and promotion to official
+- **Repository layout** — Where official and experimental standards live
+- **Package structure** — Required directories and files for every standard
+- **Metadata schemas** — `standard.toml`, `substandard.toml`, `experiment.toml`
+- **Validation rules** — What the `aps` CLI checks
+- **Versioning rules** — SemVer, evolution packs, backward compatibility
+- **Substandard conformance** — How substandards relate to parent standards
+- **Experimental lifecycle** — Incubation and promotion to official
 
 ## How to Use This Standard
 

@@ -1,4 +1,4 @@
-# CI01 Specification - Threshold Configuration
+# CI01 Specification — Threshold Configuration
 
 ## 1. Configuration File
 
@@ -115,7 +115,7 @@ The CI posts a structured comment:
 ### Header
 
 ```markdown
-## 🔍 Topology Analysis - {status_emoji} {status_text}
+## 🔍 Topology Analysis — {status_emoji} {status_text}
 ```
 
 ### Summary Table
@@ -135,7 +135,7 @@ The CI posts a structured comment:
 ### 🔥 New Hotspots
 
 <details>
-<summary>⚠️ <code>{function}</code> - CC: {cc} (threshold: {threshold})</summary>
+<summary>⚠️ <code>{function}</code> — CC: {cc} (threshold: {threshold})</summary>
 
 **File**: `{file}:{line}`
 

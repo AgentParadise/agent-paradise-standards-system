@@ -1,4 +1,4 @@
-# APS-V1-0001 - Code Topology and Coupling Analysis
+# APS-V1-0001 — Code Topology and Coupling Analysis
 
 **Version**: 0.1.0
 **Status**: Active
@@ -18,20 +18,20 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 This standard defines a **language-agnostic artifact format** for capturing code topology, complexity metrics, and coupling analysis across polyglot codebases. The artifacts are designed to be:
 
-1. **Committable** - Stored in version control alongside code
-2. **Deterministic** - Same codebase → same artifacts
-3. **Machine-readable** - Consumable by AI agents and tooling
-4. **Human-reviewable** - Diffable and inspectable
+1. **Committable** — Stored in version control alongside code
+2. **Deterministic** — Same codebase → same artifacts
+3. **Machine-readable** — Consumable by AI agents and tooling
+4. **Human-reviewable** — Diffable and inspectable
 
 ### 1.2 Scope
 
 This standard covers:
 
-- **Artifact format specification** - Directory structure and file schemas
-- **Metrics definitions** - Cyclomatic, Cognitive, Halstead, and Martin's coupling metrics
-- **Graph structures** - Call graphs, dependency graphs, coupling matrices
-- **Language adapter interface** - How analyzers extract data from source code
-- **Projector interface** - How visualizations consume artifacts
+- **Artifact format specification** — Directory structure and file schemas
+- **Metrics definitions** — Cyclomatic, Cognitive, Halstead, and Martin's coupling metrics
+- **Graph structures** — Call graphs, dependency graphs, coupling matrices
+- **Language adapter interface** — How analyzers extract data from source code
+- **Projector interface** — How visualizations consume artifacts
 
 This standard does NOT cover:
 
@@ -53,10 +53,10 @@ Substandards MUST consume artifacts conforming to this specification.
 
 ### 1.4 Normative References
 
-- [McCabe, T.J. (1976). "A Complexity Measure"](https://ieeexplore.ieee.org/document/1702388) - Cyclomatic Complexity
-- [SonarSource Cognitive Complexity](https://www.sonarsource.com/docs/CognitiveComplexity.pdf) - Cognitive Complexity
-- [Halstead, M.H. (1977). "Elements of Software Science"](https://en.wikipedia.org/wiki/Halstead_complexity_measures) - Halstead Metrics
-- [Martin, R.C. (2003). "Agile Software Development"](https://en.wikipedia.org/wiki/Software_package_metrics) - Coupling Metrics
+- [McCabe, T.J. (1976). "A Complexity Measure"](https://ieeexplore.ieee.org/document/1702388) — Cyclomatic Complexity
+- [SonarSource Cognitive Complexity](https://www.sonarsource.com/docs/CognitiveComplexity.pdf) — Cognitive Complexity
+- [Halstead, M.H. (1977). "Elements of Software Science"](https://en.wikipedia.org/wiki/Halstead_complexity_measures) — Halstead Metrics
+- [Martin, R.C. (2003). "Agile Software Development"](https://en.wikipedia.org/wiki/Software_package_metrics) — Coupling Metrics
 
 ---
 
@@ -519,19 +519,19 @@ Where:
 
 | Range | Risk Level |
 |-------|------------|
-| 1-10 | Low - Simple, easy to test |
-| 11-20 | Moderate - More complex |
-| 21-50 | High - Complex, difficult to test |
-| 51+ | Very High - Untestable, refactor recommended |
+| 1-10 | Low — Simple, easy to test |
+| 11-20 | Moderate — More complex |
+| 21-50 | High — Complex, difficult to test |
+| 51+ | Very High — Untestable, refactor recommended |
 
 ### 4.2 Cognitive Complexity
 
 **Definition:** A measure of how difficult code is for a human to understand, based on SonarSource's specification.
 
 **Key principles:**
-1. **Nesting increases complexity** - Each level of nesting adds to the penalty
-2. **Breaks in linear flow** increase complexity - jumps, recursion
-3. **Shorthand is not penalized** - null coalescing, boolean shortcuts
+1. **Nesting increases complexity** — Each level of nesting adds to the penalty
+2. **Breaks in linear flow** increase complexity — jumps, recursion
+3. **Shorthand is not penalized** — null coalescing, boolean shortcuts
 
 **Increments:**
 - Control structures (`if`, `for`, `while`, etc.) → +1
@@ -596,8 +596,8 @@ Where:
 - Formula: `D = |A + I - 1|`
 - Ideal: D = 0 (on the "main sequence")
 - High D indicates problematic design:
-  - Zone of Pain (A≈0, I≈0): Concrete and stable - rigid
-  - Zone of Uselessness (A≈1, I≈1): Abstract and unstable - useless
+  - Zone of Pain (A≈0, I≈0): Concrete and stable — rigid
+  - Zone of Uselessness (A≈1, I≈1): Abstract and unstable — useless
 
 ### 4.5 Coupling Matrix Calculation
 
@@ -681,8 +681,8 @@ Alternative normalizations (in decreasing preference):
 
 Coupling MAY be either:
 
-- **Directional:** `matrix[A][B]` ≠ `matrix[B][A]` - A depends on B differently than B depends on A
-- **Symmetric:** `matrix[A][B]` == `matrix[B][A]` - Bidirectional average
+- **Directional:** `matrix[A][B]` ≠ `matrix[B][A]` — A depends on B differently than B depends on A
+- **Symmetric:** `matrix[A][B]` == `matrix[B][A]` — Bidirectional average
 
 Implementations SHOULD use **directional coupling** for accuracy. Visualizations MAY display the maximum of both directions.
 
@@ -737,9 +737,9 @@ Implementations MAY support incremental mode but MUST support full snapshot mode
 
 The `snapshot_retention` config controls how many historical snapshots to keep:
 
-- `0` - No history (just current state)
-- `N` - Keep last N snapshots, delete older ones
-- `-1` - Keep all snapshots (unlimited)
+- `0` — No history (just current state)
+- `N` — Keep last N snapshots, delete older ones
+- `-1` — Keep all snapshots (unlimited)
 
 ### 5.4 Compression
 
@@ -773,9 +773,9 @@ Language adapters extract topology data from source code. Each adapter MUST impl
 
 The adapter interface enables:
 
-1. **Polyglot analysis** - Same output format regardless of source language
-2. **Pluggable parsers** - Swap parsing backends without changing output
-3. **Incremental analysis** - Re-analyze only changed files
+1. **Polyglot analysis** — Same output format regardless of source language
+2. **Pluggable parsers** — Swap parsing backends without changing output
+3. **Incremental analysis** — Re-analyze only changed files
 
 ### 6.2 LanguageAdapter Trait
 
@@ -1183,10 +1183,10 @@ New language adapters MUST pass validation tests:
 
 Key design principles:
 
-1. **Artifact-first** - Projectors read committed artifacts, not live code
-2. **Format flexibility** - Multiple output formats from same data
-3. **Configuration isolation** - Projector-specific options don't pollute core schema
-4. **Composability** - Multiple projectors can process the same artifacts
+1. **Artifact-first** — Projectors read committed artifacts, not live code
+2. **Format flexibility** — Multiple output formats from same data
+3. **Configuration isolation** — Projector-specific options don't pollute core schema
+4. **Composability** — Multiple projectors can process the same artifacts
 
 ### 9.2 Projector Trait
 
@@ -1246,7 +1246,7 @@ pub trait Projector: Send + Sync {
     
     /// Render the topology to the specified format.
     /// 
-    /// Returns raw bytes - caller is responsible for writing to file.
+    /// Returns raw bytes — caller is responsible for writing to file.
     fn render(
         &self, 
         topology: &Topology, 
@@ -1505,10 +1505,10 @@ When using `--type all`, visualizations are generated to `.topology/viz/`:
 
 Each projector is implemented as a **substandard** of `APS-V1-0001`. This allows:
 
-1. **Independent versioning** - Projectors evolve separately from core spec
-2. **Modular installation** - Users install only needed projectors
-3. **Community contributions** - Third parties can create projectors
-4. **Focused testing** - Each projector has isolated test cases
+1. **Independent versioning** — Projectors evolve separately from core spec
+2. **Modular installation** — Users install only needed projectors
+3. **Community contributions** — Third parties can create projectors
+4. **Focused testing** — Each projector has isolated test cases
 
 ### 10.2 Projector Substandard ID Format
 
@@ -1583,12 +1583,12 @@ maintainers = ["AgentParadise"]
 
 A projector substandard is conformant if:
 
-1. **Structure** - Follows package layout (Section 10.3)
-2. **Metadata** - Valid `substandard.toml` (Section 10.4)
-3. **Implementation** - Implements `Projector` trait (Section 9.2)
-4. **Documentation** - Spec documents supported formats and required artifacts
-5. **Testing** - Includes test cases with sample inputs/outputs
-6. **Examples** - Provides at least one example rendering
+1. **Structure** — Follows package layout (Section 10.3)
+2. **Metadata** — Valid `substandard.toml` (Section 10.4)
+3. **Implementation** — Implements `Projector` trait (Section 9.2)
+4. **Documentation** — Spec documents supported formats and required artifacts
+5. **Testing** — Includes test cases with sample inputs/outputs
+6. **Examples** — Provides at least one example rendering
 
 ---
 

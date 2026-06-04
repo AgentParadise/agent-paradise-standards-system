@@ -29,7 +29,7 @@ Promote **MT01 (Maintainability)** and **MD01 (Modularity & Coupling)** from `in
 With MT01 and MD01 active, the engine enters **strict-artifact mode** for their rules (per §3.3 R3 and §12 `PROMOTION_REQUIREMENT_UNMET`):
 
 - A rule on an active dimension whose source artifact is missing now produces a failing `RuleResult` rather than `Skip`. The dimension promised this data exists; its absence is a contract violation.
-- Incubating dimensions continue to skip silently on missing artifacts. **At the time of writing this ADR (2026-04-16), that set was `{ST01, SC01, LG01, AC01, PF01, AV01}`. Per ADR 0003 (2026-06-04), only `{PF01, AV01}` remain incubating today.**
+- Incubating dimensions continue to skip silently on missing artifacts. At the time of this decision, that included ST01, SC01, LG01, AC01, PF01, and AV01; however, subsequent decisions (see ADR 0003) promoted the first four to active status.
 
 Source of truth: `DimensionCode::promotion_status()` in `architecture-fitness/src/lib.rs`. This MUST remain in sync with the Status column of §1.4 and the Status row of Appendix D.
 
@@ -44,7 +44,7 @@ Source of truth: `DimensionCode::promotion_status()` in `architecture-fitness/sr
 ## Consequences
 
 - Projects using APS-V1-0002 with MT01 or MD01 rules MUST run APS-V1-0001 topology generation before `apss run fitness validate`; otherwise rules fail rather than skip.
-- Incubating dimensions remain advisory. The composite system fitness score reflects only enforced dimensions by default per §6.1. At the time of this ADR the enforced set was `{MT01, MD01}`; per [ADR 0003](./0003-six-dimension-promotion.md) it is now `{MT01, MD01, ST01, SC01, LG01, AC01}`. Users who want incubating scores in the composite set `include_incubating = true`.
+- Incubating dimensions remain advisory. The composite system fitness score reflects only enforced dimensions (originally MT01 + MD01, now including others per ADR 0003) by default per §6.1. Users who want incubating scores in the composite set `include_incubating = true`.
 - Future dimension promotions follow this same pattern: land producer + schema + reference crate + ADR in a single bounded change.
 
 ## References

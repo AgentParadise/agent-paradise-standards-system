@@ -8,9 +8,9 @@ These skills teach AI agents how to work with APS standards safely and effective
 
 When creating or modifying APS standards:
 
-1. **Follow directory contracts** - Every standard needs `docs/`, `examples/`, `tests/`, `agents/skills/`, `src/`
-2. **Use the CLI** - Always use `aps v1 create standard <slug>` to scaffold new standards
-3. **Validate before commit** - Run `aps v1 validate standard <id>` before committing changes
+1. **Follow directory contracts** — Every standard needs `docs/`, `examples/`, `tests/`, `agents/skills/`, `src/`
+2. **Use the CLI** — Always use `aps v1 create standard <slug>` to scaffold new standards
+3. **Validate before commit** — Run `aps v1 validate standard <id>` before committing changes
 
 ### Version Management
 
@@ -25,9 +25,9 @@ Before introducing a breaking change:
 1. Check if it's truly necessary
 2. Bump the major version
 3. Create the evolution pack with:
-   - `rationale.toml` - Why the change is needed
-   - `compatibility.toml` - What breaks and what doesn't
-   - `migration.md` - How consumers can migrate
+   - `rationale.toml` — Why the change is needed
+   - `compatibility.toml` — What breaks and what doesn't
+   - `migration.md` — How consumers can migrate
 
 ### Experimental Standards
 

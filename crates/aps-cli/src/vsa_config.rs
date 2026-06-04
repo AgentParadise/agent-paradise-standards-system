@@ -40,7 +40,7 @@ impl fmt::Display for VsaConfigError {
 
 // ─── Raw deserialization (maps directly to YAML) ─────────────────────────────
 
-/// Raw YAML structure - deserializes both v1 and v2 formats.
+/// Raw YAML structure — deserializes both v1 and v2 formats.
 #[derive(Debug, Deserialize)]
 struct RawVsaConfig {
     version: Option<u8>,
@@ -235,7 +235,7 @@ impl VsaConfig {
         let path_parts = Self::normalize_to_components(module_path);
         let root_len = root_parts.len();
 
-        // Module path shorter than root - can't possibly contain a context
+        // Module path shorter than root — can't possibly contain a context
         if path_parts.len() < root_len {
             return None;
         }
@@ -505,7 +505,7 @@ root: src/syn_domain/contexts
         )
         .unwrap();
 
-        // Domain sublayers - drills into domain/ to get the specific sublayer
+        // Domain sublayers — drills into domain/ to get the specific sublayer
         assert_eq!(
             config.extract_layer("packages.syn-domain.src.syn_domain.contexts.orchestration.domain.commands.CreateWorkspaceCommand"),
             Some("commands".to_string())

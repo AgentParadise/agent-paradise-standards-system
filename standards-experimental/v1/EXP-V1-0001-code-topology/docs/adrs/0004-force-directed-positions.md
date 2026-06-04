@@ -32,10 +32,10 @@ Force-directed layout algorithms are non-deterministic:
 
 ## Rationale
 
-- **Reproducibility** - Same artifact → same visualization
-- **Stability** - Modules stay in place unless topology changes
-- **Diffing** - Can see which modules moved between commits
-- **Performance** - Skip layout computation on re-render
+- **Reproducibility** — Same artifact → same visualization
+- **Stability** — Modules stay in place unless topology changes
+- **Diffing** — Can see which modules moved between commits
+- **Performance** — Skip layout computation on re-render
 
 ## Consequences
 

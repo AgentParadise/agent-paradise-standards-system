@@ -1,4 +1,4 @@
-# CLI01 - CLI Contract
+# CLI01 — CLI Contract
 
 **Status**: Active  
 **Parent**: APS-V1-0000 (Meta Standard)
@@ -7,10 +7,10 @@
 
 This substandard defines how APS standards expose their functionality through the command-line interface. It provides:
 
-1. **Command patterns** - Consistent naming and argument conventions
-2. **Output formats** - Structured JSON output for automation
-3. **Exit codes** - Semantic return codes for CI integration
-4. **Rust traits** - `StandardCli` trait for standard integration
+1. **Command patterns** — Consistent naming and argument conventions
+2. **Output formats** — Structured JSON output for automation
+3. **Exit codes** — Semantic return codes for CI integration
+4. **Rust traits** — `StandardCli` trait for standard integration
 
 ## Quick Start
 
@@ -57,5 +57,5 @@ Every standard with artifacts SHOULD expose:
 
 ## Related
 
-- [01_spec.md](./01_spec.md) - Full specification
-- [EXP-V1-0001](../../../standards-experimental/v1/EXP-V1-0001-code-topology/) - Example implementation
+- [01_spec.md](./01_spec.md) — Full specification
+- [EXP-V1-0001](../../../standards-experimental/v1/EXP-V1-0001-code-topology/) — Example implementation

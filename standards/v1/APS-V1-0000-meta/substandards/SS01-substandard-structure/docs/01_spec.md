@@ -1,4 +1,4 @@
-# APS-V1-0000.SS01 - Substandard Structure (Canonical Specification)
+# APS-V1-0000.SS01 — Substandard Structure (Canonical Specification)
 
 **Version**: 1.0.0  
 **Status**: Active  
@@ -33,13 +33,13 @@ The standard that a substandard extends. Every substandard MUST have exactly one
 ### 2.3 Profile Code
 
 A two-letter uppercase code identifying the substandard type within its parent:
-- `SS` - Structure/Schema definitions
-- `GH` - GitHub integrations
-- `PY` - Python implementations
-- `TS` - TypeScript implementations
-- `RS` - Rust implementations
-- `GO` - Go implementations
-- `SK` - Agent Skills
+- `SS` — Structure/Schema definitions
+- `GH` — GitHub integrations
+- `PY` — Python implementations
+- `TS` — TypeScript implementations
+- `RS` — Rust implementations
+- `GO` — Go implementations
+- `SK` — Agent Skills
 - Custom codes as needed
 
 ## 3. ID Format
@@ -49,18 +49,18 @@ A two-letter uppercase code identifying the substandard type within its parent:
 Substandard IDs MUST match: `APS-V1-XXXX.YY##`
 
 Where:
-- `APS-V1-XXXX` - Parent standard ID
-- `.` - Separator (required)
-- `YY` - Two uppercase letters (profile code)
-- `##` - Two-digit sequence number (01-99)
+- `APS-V1-XXXX` — Parent standard ID
+- `.` — Separator (required)
+- `YY` — Two uppercase letters (profile code)
+- `##` — Two-digit sequence number (01-99)
 
 ### 3.2 Examples
 
 ```
-APS-V1-0000.SS01  - First structure substandard of meta-standard
-APS-V1-0001.GH01  - First GitHub profile of APS-V1-0001
-APS-V1-0001.PY01  - First Python binding of APS-V1-0001
-APS-V1-0002.TS02  - Second TypeScript variant of APS-V1-0002
+APS-V1-0000.SS01  — First structure substandard of meta-standard
+APS-V1-0001.GH01  — First GitHub profile of APS-V1-0001
+APS-V1-0001.PY01  — First Python binding of APS-V1-0001
+APS-V1-0002.TS02  — Second TypeScript variant of APS-V1-0002
 ```
 
 ## 4. Package Layout

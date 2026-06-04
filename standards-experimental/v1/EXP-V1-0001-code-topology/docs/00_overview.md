@@ -1,21 +1,21 @@
-# Code Topology and Coupling Analysis - Overview
+# Code Topology and Coupling Analysis — Overview
 
 ## What is this?
 
 **EXP-V1-0001** defines a standard format for capturing and visualizing code architecture across polyglot codebases. It enables:
 
-- **Complexity tracking** - Cyclomatic, Cognitive, Halstead metrics per function/file/module
-- **Coupling analysis** - Martin's metrics (Ca, Ce, Instability, Abstractness)
-- **Architecture visualization** - Call graphs, dependency graphs, 3D coupling models
+- **Complexity tracking** — Cyclomatic, Cognitive, Halstead metrics per function/file/module
+- **Coupling analysis** — Martin's metrics (Ca, Ce, Instability, Abstractness)
+- **Architecture visualization** — Call graphs, dependency graphs, 3D coupling models
 
 ## Why does it matter?
 
 As codebases scale (especially with thousands of AI agents contributing), maintaining architecture quality becomes critical. This standard provides:
 
-1. **Committed artifacts** - Version-controlled topology snapshots
-2. **Language-agnostic format** - Same structure for Rust, TypeScript, Python, C++
-3. **AI-consumable data** - Structured JSON for agent reasoning
-4. **Visual projectors** - 2D graphs, 3D models, diagrams
+1. **Committed artifacts** — Version-controlled topology snapshots
+2. **Language-agnostic format** — Same structure for Rust, TypeScript, Python, C++
+3. **AI-consumable data** — Structured JSON for agent reasoning
+4. **Visual projectors** — 2D graphs, 3D models, diagrams
 
 ## Quick Example
 
@@ -65,9 +65,9 @@ EXP-V1-0001 (This Standard)
 └── Projector Interface
 
 Future Substandards:
-├── EXP-V1-0001.3D01 - 3D Force-Directed Visualization
-├── EXP-V1-0001.GV01 - Graphviz/DOT Projector
-└── EXP-V1-0001.MM01 - Mermaid Diagrams
+├── EXP-V1-0001.3D01 — 3D Force-Directed Visualization
+├── EXP-V1-0001.GV01 — Graphviz/DOT Projector
+└── EXP-V1-0001.MM01 — Mermaid Diagrams
 ```
 
 ## Getting Started
@@ -79,5 +79,5 @@ Future Substandards:
 
 ## Status
 
-⚠️ **Experimental** - This standard is incubating. Feedback welcome!
+⚠️ **Experimental** — This standard is incubating. Feedback welcome!
 

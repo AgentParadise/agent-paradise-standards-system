@@ -34,7 +34,7 @@ Query coupling relationships and metrics from existing `.topology/` artifacts wi
 
 ## Query Types
 
-### `dependents` - Who depends on this module?
+### `dependents` — Who depends on this module?
 
 ```
 Query: What depends on the crypto module?
@@ -44,7 +44,7 @@ Result:
   - Uses: hmac::sign, hmac::verify
 ```
 
-### `dependencies` - What does this module depend on?
+### `dependencies` — What does this module depend on?
 
 ```
 Query: What does api depend on?
@@ -55,7 +55,7 @@ Result:
 - utils (coupling: 0.35, imports: 1)
 ```
 
-### `coupling` - How coupled are two modules?
+### `coupling` — How coupled are two modules?
 
 ```
 Query: How coupled are auth and crypto?
@@ -67,7 +67,7 @@ Result:
 - Recommendation: Consider if crypto should be internal to auth
 ```
 
-### `metrics` - What are the quality metrics for a module?
+### `metrics` — What are the quality metrics for a module?
 
 ```
 Query: Show metrics for the utils module.
@@ -76,9 +76,9 @@ Result:
 Module: utils
 ├── Cyclomatic: 1 (avg), 1 (max) ✅
 ├── Cognitive: 0 (avg), 0 (max) ✅
-├── Instability (I): 0.0 - Very stable
-├── Abstractness (A): 0.0 - Concrete
-└── Distance (D): 1.0 ⚠️ - Zone of Pain
+├── Instability (I): 0.0 — Very stable
+├── Abstractness (A): 0.0 — Concrete
+└── Distance (D): 1.0 ⚠️ — Zone of Pain
 
 Warning: utils is concrete and stable. Changes are risky.
 ```
@@ -95,12 +95,12 @@ Agent: Let me check what depends on crypto.
 **Crypto Module Analysis:**
 
 Dependents (Ca=2):
-- auth (coupling: 0.75) - Heavy user of crypto
+- auth (coupling: 0.75) — Heavy user of crypto
 - No other direct dependents
 
 Martin's Metrics:
 - Instability: 0.33 (relatively stable)
-- Distance: 0.67 ⚠️ - In Zone of Pain
+- Distance: 0.67 ⚠️ — In Zone of Pain
 
 **Assessment:** Refactoring crypto is moderately risky.
 The auth module is heavily coupled (0.75) and would need updates.
@@ -117,6 +117,6 @@ Consider adding abstraction (traits/interfaces) before major changes.
 
 ## Related Skills
 
-- `analyze-topology` - Generate topology artifacts
-- `visualize-architecture` - See coupling as 3D visualization
+- `analyze-topology` — Generate topology artifacts
+- `visualize-architecture` — See coupling as 3D visualization
 

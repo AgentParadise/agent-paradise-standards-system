@@ -876,16 +876,17 @@ impl FitnessValidator {
             all_stale.extend(stale);
         }
 
-        // Evaluate structural rules. The evaluator delegates to the
-        // dependency-graph path for the three documented patterns
-        // (forbidden_import / required_import / layer_enforcement); track
-        // non-Skip results so stale-exception detection sees them.
+        // Evaluate structural rules
         for rule in &self.config.rules.structural {
-            let result = self.evaluate_structural_rule(rule);
+            let (result, stale, matched) = self.evaluate_structural_rule(rule)?;
             if result.status != RuleStatus::Skip {
                 evaluated_rule_ids.push(rule.id.clone());
+                if !matched.is_empty() {
+                    matched_exceptions.insert(rule.id.clone(), matched);
+                }
             }
             results.push(result);
+            all_stale.extend(stale);
         }
 
         // Detect stale exceptions - only for rules that were fully evaluated.
@@ -1403,36 +1404,40 @@ impl FitnessValidator {
     /// CK class-level metrics (DIT, CBO, LCOM) are out of scope for this
     /// evaluator and remain a scoped follow-on; per ADR 0003 they ship with
     /// a class-level analyzer.
-    fn evaluate_structural_rule(&self, rule: &StructuralRule) -> RuleResult {
-        let dimension = rule
-            .dimension
-            .clone()
-            .or_else(|| Some("ST01".to_string()));
+    fn evaluate_structural_rule(
+        &self,
+        rule: &StructuralRule,
+    ) -> Result<(RuleResult, Vec<StaleException>, HashSet<String>), FitnessError> {
+        let dimension = rule.dimension.clone().or_else(|| Some("ST01".to_string()));
 
         let dep_rule_type = match rule.pattern.as_str() {
             "forbidden_import" | "layer_enforcement" => "forbidden",
             "required_import" => "required",
             _ => {
-                return RuleResult {
-                    rule_id: rule.id.clone(),
-                    rule_name: rule.name.clone(),
-                    dimension,
-                    status: RuleStatus::Fail,
-                    violations: vec![Violation {
-                        entity: format!(
-                            "{}:{}",
-                            error_codes::INVALID_STRUCTURAL_PATTERN,
-                            rule.pattern
-                        ),
-                        field: "pattern".to_string(),
-                        actual: 0.0,
-                        threshold: 0.0,
-                        direction: ThresholdDirection::Max,
-                        excepted: false,
-                    }],
-                    exceptions_used: 0,
-                    total_entities: None,
-                };
+                return Ok((
+                    RuleResult {
+                        rule_id: rule.id.clone(),
+                        rule_name: rule.name.clone(),
+                        dimension,
+                        status: RuleStatus::Fail,
+                        violations: vec![Violation {
+                            entity: format!(
+                                "{}:{}",
+                                error_codes::INVALID_STRUCTURAL_PATTERN,
+                                rule.pattern
+                            ),
+                            field: "pattern".to_string(),
+                            actual: 0.0,
+                            threshold: 0.0,
+                            direction: ThresholdDirection::Max,
+                            excepted: false,
+                        }],
+                        exceptions_used: 0,
+                        total_entities: None,
+                    },
+                    vec![],
+                    HashSet::new(),
+                ));
             }
         };
 
@@ -1441,22 +1446,26 @@ impl FitnessValidator {
             _ => {
                 // Pattern requires from + to; missing matchers are a hard
                 // config error (INVALID_RULE) at evaluation time.
-                return RuleResult {
-                    rule_id: rule.id.clone(),
-                    rule_name: rule.name.clone(),
-                    dimension,
-                    status: RuleStatus::Fail,
-                    violations: vec![Violation {
-                        entity: format!("{}:missing from/to", rule.id),
-                        field: "from/to".to_string(),
-                        actual: 0.0,
-                        threshold: 0.0,
-                        direction: ThresholdDirection::Max,
-                        excepted: false,
-                    }],
-                    exceptions_used: 0,
-                    total_entities: None,
-                };
+                return Ok((
+                    RuleResult {
+                        rule_id: rule.id.clone(),
+                        rule_name: rule.name.clone(),
+                        dimension,
+                        status: RuleStatus::Fail,
+                        violations: vec![Violation {
+                            entity: format!("{}:missing from/to", rule.id),
+                            field: "from/to".to_string(),
+                            actual: 0.0,
+                            threshold: 0.0,
+                            direction: ThresholdDirection::Max,
+                            excepted: false,
+                        }],
+                        exceptions_used: 0,
+                        total_entities: None,
+                    },
+                    vec![],
+                    HashSet::new(),
+                ));
             }
         };
 
@@ -1476,19 +1485,23 @@ impl FitnessValidator {
         // whole report (the underlying error is surfaced via the dependency
         // path the next time it runs).
         match self.evaluate_dependency_rule(&transient) {
-            Ok((mut result, _stale, _matched)) => {
+            Ok((mut result, stale, matched)) => {
                 result.dimension = dimension;
-                result
+                Ok((result, stale, matched))
             }
-            Err(_) => RuleResult {
-                rule_id: rule.id.clone(),
-                rule_name: rule.name.clone(),
-                dimension,
-                status: RuleStatus::Skip,
-                violations: vec![],
-                exceptions_used: 0,
-                total_entities: None,
-            },
+            Err(_) => Ok((
+                RuleResult {
+                    rule_id: rule.id.clone(),
+                    rule_name: rule.name.clone(),
+                    dimension,
+                    status: RuleStatus::Skip,
+                    violations: vec![],
+                    exceptions_used: 0,
+                    total_entities: None,
+                },
+                vec![],
+                HashSet::new(),
+            )),
         }
     }
 

@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for func in hotspots.iter().take(10) {
                 let status = if func.cyclomatic > 10 { "⚠️" } else { "  " };
                 println!(
-                    "   {} {} - CC:{} Cog:{}",
+                    "   {} {} — CC:{} Cog:{}",
                     status, func.id, func.cyclomatic, func.cognitive
                 );
             }
@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "🟡"
         };
         println!(
-            "   {} {} - {} funcs, {} (I={:.2})",
+            "   {} {} — {} funcs, {} (I={:.2})",
             status, module.id, module.function_count, ca_ce, instability
         );
     }

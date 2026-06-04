@@ -40,10 +40,10 @@ Generate `.topology/` artifacts from a codebase by running complexity analysis a
 6. **Aggregate by module** to compute module-level metrics
 7. **Build coupling matrix** between modules
 8. **Write artifacts** to `.topology/` directory:
-   - `manifest.toml` - Analysis metadata
-   - `metrics/functions.json` - Per-function metrics
-   - `metrics/modules.json` - Per-module aggregates
-   - `graphs/coupling-matrix.json` - Module coupling
+   - `manifest.toml` — Analysis metadata
+   - `metrics/functions.json` — Per-function metrics
+   - `metrics/modules.json` — Per-module aggregates
+   - `graphs/coupling-matrix.json` — Module coupling
 
 ## Supported Languages
 
@@ -92,14 +92,14 @@ Agent: I'll analyze the codebase topology to identify complexity hotspots.
 Based on the analysis:
 
 **Complexity Hotspots:**
-1. `api/handlers.ts::processRequest` - CC=12, Cognitive=18 ⚠️
+1. `api/handlers.ts::processRequest` — CC=12, Cognitive=18 ⚠️
    - Consider extracting validation logic
-2. `auth/validator.rs::validate_token` - CC=8, Cognitive=12
+2. `auth/validator.rs::validate_token` — CC=8, Cognitive=12
    - Multiple error paths could be simplified
 
 **Coupling Analysis:**
 - `auth` and `crypto` are tightly coupled (0.75)
-- `utils` is in "Zone of Pain" - many modules depend on it
+- `utils` is in "Zone of Pain" — many modules depend on it
 
 The full analysis is saved in `.topology/` for visualization.
 ```
@@ -114,6 +114,6 @@ The full analysis is saved in `.topology/` for visualization.
 
 ## Related Skills
 
-- `query-coupling` - Query coupling relationships from existing artifacts
-- `visualize-architecture` - Render topology as 3D visualization
+- `query-coupling` — Query coupling relationships from existing artifacts
+- `visualize-architecture` — Render topology as 3D visualization
 

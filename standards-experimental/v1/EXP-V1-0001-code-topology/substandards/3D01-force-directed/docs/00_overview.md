@@ -1,4 +1,4 @@
-# EXP-V1-0001.3D01 - 3D Force-Directed Coupling Visualization
+# EXP-V1-0001.3D01 — 3D Force-Directed Coupling Visualization
 
 ## Overview
 
@@ -6,10 +6,10 @@ This projector renders the coupling matrix from code topology artifacts as an **
 
 ## Key Features
 
-- **Force-directed layout** - Uses physics simulation where coupling strength acts as spring force
-- **Deterministic positions** - Saves calculated positions for reproducible renders
-- **Multiple output formats** - WebGL scenes, GLTF models, self-contained HTML viewers
-- **Metric-driven styling** - Node size reflects complexity, color reflects instability
+- **Force-directed layout** — Uses physics simulation where coupling strength acts as spring force
+- **Deterministic positions** — Saves calculated positions for reproducible renders
+- **Multiple output formats** — WebGL scenes, GLTF models, self-contained HTML viewers
+- **Metric-driven styling** — Node size reflects complexity, color reflects instability
 
 ## Visual Mapping
 
@@ -33,11 +33,11 @@ open coupling.html
 ## Example Output
 
 The visualization shows:
-- **Tightly coupled clusters** - Modules with high coupling are pulled together
-- **Isolated modules** - Low-coupling modules float away from clusters
-- **Architectural zones** - Natural groupings emerge from the force simulation
+- **Tightly coupled clusters** — Modules with high coupling are pulled together
+- **Isolated modules** — Low-coupling modules float away from clusters
+- **Architectural zones** — Natural groupings emerge from the force simulation
 
 ## Status
 
-⚠️ **EXPERIMENTAL** - This substandard is in active development.
+⚠️ **EXPERIMENTAL** — This substandard is in active development.
 

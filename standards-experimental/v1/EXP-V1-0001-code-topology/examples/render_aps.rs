@@ -139,7 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     modules_sorted.sort_by(|a, b| b.metrics.total_cyclomatic.cmp(&a.metrics.total_cyclomatic));
     for m in modules_sorted.iter().take(5) {
         println!(
-            "   {} - CC:{} Cog:{} LOC:{}",
+            "   {} — CC:{} Cog:{} LOC:{}",
             m.name, m.metrics.total_cyclomatic, m.metrics.total_cognitive, m.metrics.lines_of_code
         );
     }

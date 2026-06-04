@@ -1,4 +1,4 @@
-# Agent Skills - APS-V1-0000.SS01
+# Agent Skills — APS-V1-0000.SS01
 
 ## Substandard Structure Skills
 

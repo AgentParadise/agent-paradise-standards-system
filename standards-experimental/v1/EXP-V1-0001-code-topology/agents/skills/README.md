@@ -1,4 +1,4 @@
-# Agent Skills - Code Topology and Coupling Analysis
+# Agent Skills — Code Topology and Coupling Analysis
 
 This directory contains skill definitions for AI agents working with code topology artifacts.
 

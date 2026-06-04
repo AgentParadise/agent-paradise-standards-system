@@ -174,9 +174,11 @@ to = { path = "src" }
     let result = &report.results[0];
     assert_eq!(result.status, RuleStatus::Fail);
     assert_eq!(result.violations.len(), 1);
-    assert!(result.violations[0]
-        .entity
-        .starts_with("INVALID_STRUCTURAL_PATTERN:"));
+    assert!(
+        result.violations[0]
+            .entity
+            .starts_with("INVALID_STRUCTURAL_PATTERN:")
+    );
 }
 
 #[test]

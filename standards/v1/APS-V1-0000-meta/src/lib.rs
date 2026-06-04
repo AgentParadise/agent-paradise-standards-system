@@ -52,7 +52,7 @@ pub mod error_codes {
 /// Required directories for standards and experiments (§5.1).
 pub const REQUIRED_STANDARD_DIRS: &[&str] = &["docs", "examples", "tests", "agents/skills", "src"];
 
-/// Required directories for substandards (§5.2) - reduced requirements.
+/// Required directories for substandards (§5.2) — reduced requirements.
 pub const REQUIRED_SUBSTANDARD_DIRS: &[&str] = &["docs", "src"];
 
 /// Metadata file options (one must exist).
@@ -168,7 +168,7 @@ impl MetaStandard {
             );
         }
 
-        // Content checks - only for standards and experiments (§5.1), not substandards (§5.2)
+        // Content checks — only for standards and experiments (§5.1), not substandards (§5.2)
         if !is_substandard {
             // §11.1: examples/ MUST contain at least one example
             let examples_dir = path.join("examples");
@@ -794,7 +794,7 @@ maintainers = ["Test"]
     fn test_validate_substandard_package() {
         let temp_dir = tempfile::tempdir().unwrap();
 
-        // Create minimal valid substandard structure (§5.2 - reduced requirements)
+        // Create minimal valid substandard structure (§5.2 — reduced requirements)
         let pkg_dir = temp_dir
             .path()
             .join("standards/v1/APS-V1-0001-test/substandards/GH01-github");
@@ -944,7 +944,7 @@ maintainers = ["Test"]
             "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
         )
         .unwrap();
-        // examples/ is empty - should fail
+        // examples/ is empty — should fail
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);
         assert!(
@@ -973,7 +973,7 @@ maintainers = ["Test"]
             "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
         )
         .unwrap();
-        // examples/ has ONLY a README - still fails
+        // examples/ has ONLY a README — still fails
         fs::write(pkg_dir.join("examples/README.md"), "# Examples").unwrap();
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);
