@@ -142,7 +142,7 @@ fn cmd_status() -> i32 {
             config
                 .tool
                 .as_ref()
-                .map(|t| t.bin_dir.as_str())
+                .and_then(|t| t.bin_dir.as_deref())
                 .unwrap_or(".apss/bin"),
         )
         .join("apss");
@@ -201,7 +201,7 @@ fn cmd_run(args: &[String]) -> i32 {
     let bin_dir = config
         .tool
         .as_ref()
-        .map(|t| t.bin_dir.as_str())
+        .and_then(|t| t.bin_dir.as_deref())
         .unwrap_or(".apss/bin");
     let binary_path = project_root.join(bin_dir).join("apss");
 
@@ -238,16 +238,16 @@ name = "my-project"
 apss_version = "v1"
 
 # Declare which standards this project implements.
-# Each key is a slug used for CLI dispatch (e.g., `apss run topology ...`).
+    # Each key is a slug used for CLI dispatch (e.g., `apss run code-topology ...`).
 
-# [standards.topology]
-# id = "APS-V1-0001"
-# version = ">=1.0.0, <2.0.0"
-# substandards = ["RS01", "CI01"]  # omit for all
-#
-# [standards.topology.config]
-# output_dir = ".topology"
-# languages = ["rust", "python"]
+    # [standards.code-topology]
+    # id = "APS-V1-0001"
+    # version = ">=1.0.0, <2.0.0"
+    # substandards = ["RS01", "CI01"]  # omit for all
+    #
+    # [standards.code-topology.config]
+    # output_dir = ".topology"
+    # languages = ["rust", "python"]
 
 # Monorepo workspace configuration (optional).
 # [workspace]

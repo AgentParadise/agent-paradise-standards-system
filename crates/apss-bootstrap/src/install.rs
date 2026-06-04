@@ -1,7 +1,7 @@
 //! `apss install` command implementation.
 
 use aps_core::config::{self, CONFIG_FILENAME};
-use aps_core::lockfile::{self, LOCKFILE_FILENAME, LockedPackage, Lockfile};
+use aps_core::lockfile::{self, LOCKFILE_FILENAME, LockedPackage, LockedSubstandard, Lockfile};
 use aps_core::resolution;
 use apss_distribution::codegen;
 use clap::Args;
@@ -61,7 +61,13 @@ pub fn run(args: InstallArgs) -> i32 {
     let lockfile_path = project_root.join(LOCKFILE_FILENAME);
     let lockfile = generate_lockfile(&resolved);
 
-    if args.locked && lockfile_path.exists() {
+    if args.locked {
+        if !lockfile_path.exists() {
+            eprintln!("Lockfile would be created but --locked was specified.");
+            eprintln!("Run 'apss install' without --locked to create {LOCKFILE_FILENAME}.");
+            return 1;
+        }
+
         let existing = match lockfile::parse_lockfile(&lockfile_path) {
             Ok(l) => l,
             Err(e) => {
@@ -156,9 +162,14 @@ pub fn run(args: InstallArgs) -> i32 {
         println!("Installed: {}", output_binary.display());
     } else {
         eprintln!(
-            "Warning: expected binary at {} not found",
+            "Expected composed binary at {} not found after build.",
             target_binary.display()
         );
+        eprintln!(
+            "Install failed; no runnable {} was installed.",
+            output_binary.display()
+        );
+        return 1;
     }
 
     println!("\nDone! Run 'apss run <standard> <command>' to use your standards.");
@@ -174,15 +185,20 @@ fn generate_lockfile(config: &resolution::ResolvedProjectConfig) -> Lockfile {
             continue;
         }
 
-        // TODO: resolve exact version from registry index instead of using sentinel
+        // TODO: resolve exact version and checksum from registry metadata.
         lockfile.packages.push(LockedPackage {
             id: standard.id.clone(),
             slug: slug.clone(),
             crate_name: standard.crate_name.clone(),
-            version: "0.0.0-unresolved".to_string(),
-            checksum: String::new(), // TODO: compute SHA-256 from downloaded crate tarball
-            source: format!("registry+{}", config.tool.registry),
-            substandards: vec![],
+            version: format!("UNRESOLVED({})", standard.version_req),
+            checksum: "UNRESOLVED".to_string(),
+            source: format!("unresolved+registry+{}", config.tool.registry),
+            substandards: vec![LockedSubstandard {
+                profile: "UNRESOLVED".to_string(),
+                crate_name: "UNRESOLVED".to_string(),
+                version: "UNRESOLVED".to_string(),
+                checksum: "UNRESOLVED".to_string(),
+            }],
         });
     }
 

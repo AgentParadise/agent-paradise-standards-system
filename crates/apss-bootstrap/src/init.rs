@@ -10,10 +10,6 @@ pub struct InitArgs {
     /// Can be specified multiple times.
     #[arg(long = "standard", short = 's')]
     standards: Vec<String>,
-
-    /// Initialize in an existing repo (don't create .gitignore entries).
-    #[arg(long)]
-    existing: bool,
 }
 
 pub fn run(args: InitArgs) -> i32 {
@@ -57,36 +53,30 @@ pub fn run(args: InitArgs) -> i32 {
 
     println!("Created {CONFIG_FILENAME}");
 
-    // Create .apss directory
+    // Create .apss directory structure
     if let Err(e) = std::fs::create_dir_all(".apss/bin") {
-        eprintln!("Failed to create .apss/ directory: {e}");
+        eprintln!("Failed to create .apss/bin directory: {e}");
+        return 1;
+    }
+    if let Err(e) = std::fs::create_dir_all(".apss/config") {
+        eprintln!("Failed to create .apss/config directory: {e}");
         return 1;
     }
 
-    // Add .gitignore entries if not --existing
-    if !args.existing {
-        let gitignore_path = Path::new(".gitignore");
-        let gitignore_entries = "\n# APSS build artifacts\n.apss/build/\n.apss/bin/\n";
-
-        if gitignore_path.exists() {
-            let existing = std::fs::read_to_string(gitignore_path).unwrap_or_default();
-            if !existing.contains(".apss/") {
-                if let Err(e) =
-                    std::fs::write(gitignore_path, format!("{existing}{gitignore_entries}"))
-                {
-                    eprintln!("Warning: failed to update .gitignore: {e}");
-                }
-            }
-        } else if let Err(e) = std::fs::write(gitignore_path, gitignore_entries.trim_start()) {
-            eprintln!("Warning: failed to create .gitignore: {e}");
+    // Self-contained gitignore: only build artifacts, not config
+    let apss_gitignore = Path::new(".apss/.gitignore");
+    if !apss_gitignore.exists() {
+        if let Err(e) = std::fs::write(apss_gitignore, "build/\nbin/\n") {
+            eprintln!("Warning: failed to create .apss/.gitignore: {e}");
         }
     }
 
     println!();
     println!("Next steps:");
     println!("  1. Edit {CONFIG_FILENAME} to configure your standards");
-    println!("  2. Run 'apss install' to build the project CLI");
-    println!("  3. Run 'apss run <standard> <command>' to use it");
+    println!("  2. Optionally extract configs to .apss/config/<standard>.toml");
+    println!("  3. Run 'apss install' to build the project CLI");
+    println!("  4. Run 'apss run <standard> <command>' to use it");
 
     0
 }
