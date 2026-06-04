@@ -1,35 +1,48 @@
 ---
-description: 
-globs: 
+name: "agent-paradise-standards-system"
+description: "Repo orientation for AI agents: where standards live, how docs are governed, and the mandatory backlinking rule"
 alwaysApply: true
 ---
-# 🔄 RIPER-5 MODE: STRICT OPERATIONAL PROTOCOL
-v2.0.5 - 20250810
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│             │     │             │     │             │     │             │     │             │
-│  RESEARCH   │────▶│  INNOVATE   │────▶│    PLAN     │────▶│   EXECUTE   │────▶│   REVIEW    │
-│             │     │             │     │             │     │             │     │             │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-       ▲                                       │                  │                    │
-       │                                       │                  │                    │
-       └───────────────────────────────────────┘                  │                    │
-                                                                  │                    │
-                                                                  ▼                    │
-                                                        ┌─────────────────┐            │
-                                                        │  QA CHECKPOINT  │            │
-                                                        │  - Lint/Format  │            │
-                                                        │  - Type Check   │            │
-                                                        │  - Run Tests    │            │
-                                                        │  - Review Files │            │
-                                                        │  - Commit Files │            │
-                                                        └─────────────────┘            │
-                                                                  │                    │
-                                                                  └────────────────────┘
-```
+# Agents reading this repo, start here
+
+This repository is the **Agent Paradise Standards System** (APSS). It is the home of versioned, executable standards (Rust crates with validators), not just documents.
+
+## Where things live
+
+- **Standards source.** Official standards: [`standards/v1/`](standards/v1/). Experimental: [`standards-experimental/v1/`](standards-experimental/v1/).
+- **Documentation governance.** This repo dogfoods its own documentation standard, [`EXP-V1-0004`](standards-experimental/v1/EXP-V1-0004-documentation/docs/00_overview.md). All normative rules for ADRs, indexing, frontmatter, the install hook, and backlinking live in [`EXP-V1-0004/docs/01_spec.md`](standards-experimental/v1/EXP-V1-0004-documentation/docs/01_spec.md).
+- **Architecture Decision Records.** When the documentation standard is installed in a downstream project, ADRs live under `<project-root>/docs/adrs/` by default. For this repo, follow the same convention: any architectural decision made while working here MUST be captured as an ADR in `docs/adrs/` (per the ADR01 substandard).
+- **Meta-standard.** Rules for how standards are themselves structured: [`standards/v1/APS-V1-0000-meta/`](standards/v1/APS-V1-0000-meta/).
+- **Project README.** See [`README.md`](README.md) for the user-facing build, CLI, and package overview.
+
+## Mandatory rules when working in this repo
+
+These are loaded by the APSS documentation standard and are not optional:
+
+1. **Code MUST backlink the governing doc.** Any implementation file that exists to satisfy an architectural decision MUST contain a token of the form `<DOC-TYPE-ID>-<NUMBER>-<NAME>` near the top (typically a single-line comment). Examples: `// Implements ADR-001-security-architecture`, `# Implements PV-001-product-purpose, RET-007-q1-launch`. See [`EXP-V1-0004/docs/01_spec.md` Section 7](standards-experimental/v1/EXP-V1-0004-documentation/docs/01_spec.md#7-backlinking-always-part-of-the-standard). This is a load-bearing invariant for context preservation across plan, design, and implementation phases.
+2. **New architectural decisions MUST land as ADRs** in `docs/adrs/`, following [`EXP-V1-0004.ADR01`](standards-experimental/v1/EXP-V1-0004-documentation/substandards/ADR01-architecture-decision-records/docs/01_spec.md).
+3. **Diagnostic codes are human-readable** kebab strings (`ADR01-dir-not-found`, `index-stale`, `frontmatter-unclosed`). Do not introduce numeric or opaque codes.
+4. **No em dashes or en dashes** in prose, code, comments, or commit messages. Use regular hyphens or rephrase.
+
+## Where to find more
+
+- Documentation standard overview: [`standards-experimental/v1/EXP-V1-0004-documentation/docs/00_overview.md`](standards-experimental/v1/EXP-V1-0004-documentation/docs/00_overview.md).
+- Doc type registry (which doc types are active, where they live): [`EXP-V1-0004/docs/01_spec.md` Section 8](standards-experimental/v1/EXP-V1-0004-documentation/docs/01_spec.md#8-doc-type-registry).
+- ADR substandard: [`standards-experimental/v1/EXP-V1-0004-documentation/substandards/ADR01-architecture-decision-records/`](standards-experimental/v1/EXP-V1-0004-documentation/substandards/ADR01-architecture-decision-records/).
+- Skills for this standard: [`standards-experimental/v1/EXP-V1-0004-documentation/agents/skills/README.md`](standards-experimental/v1/EXP-V1-0004-documentation/agents/skills/README.md).
+- A second context file with the same orientation, formatted for Claude Code: [`CLAUDE.md`](CLAUDE.md).
+
+The validator that enforces the rules above lives in `aps-cli` and the documentation standard crate; run `aps run docs validate [path]` for a CI-friendly report or install the pre-commit hook via `aps run docs install [path]`.
+
+---
+
+# RIPER-5 operational protocol (operator workflow)
+
+The rest of this file is the operator's RIPER-5 mode protocol. It governs how agents step through research, planning, and execution in this repo. Read it before opening a non-trivial PR.
 
 ## Mode Transition Signals
+
 Only transition modes when these exact signals are used:
 
 ```
@@ -38,133 +51,65 @@ ENTER INNOVATE MODE or EIM
 ENTER PLAN MODE or EPM
 ENTER EXECUTE MODE or EEM
 ENTER REVIEW MODE or EQM
-DIRECT EXECUTE MODE or DEM // Used to bypass the plan and go straight to execute mode
+DIRECT EXECUTE MODE or DEM // bypass the plan and go straight to execute
 ```
 
 ## Meta-Instruction
-**BEGIN EVERY RESPONSE WITH YOUR CURRENT MODE IN BRACKETS.**  
-**Format:** `[MODE: MODE_NAME]`
 
-## The RIPER-5 Modes
+Begin every response with your current mode in brackets: `[MODE: MODE_NAME]`.
+
+## The five modes
 
 ### MODE 1: RESEARCH
-- **Purpose:** Information gathering ONLY
-- **Permitted:** Reading files, asking questions, understanding code
-- **Forbidden:** Suggestions, planning, implementation
-- **Output:** `[MODE: RESEARCH]` + observations and questions
+- **Purpose:** information gathering only.
+- **Permitted:** reading files, asking questions, understanding code.
+- **Forbidden:** suggestions, planning, implementation.
 
 ### MODE 2: INNOVATE
-- **Purpose:** Brainstorming potential approaches
-- **Permitted:** Discussing ideas, advantages/disadvantages
-- **Forbidden:** Concrete planning, code writing
-- **Output:** `[MODE: INNOVATE]` + possibilities and considerations
+- **Purpose:** brainstorming approaches.
+- **Permitted:** discussing ideas, weighing trade-offs.
+- **Forbidden:** concrete planning, code writing.
 
 ### MODE 3: PLAN
-- **Purpose:** Creating technical specification
-- **Permitted:** Detailed plans with file paths and changes
-- **Forbidden:** Implementation or code writing
-- **Required:** Create comprehensive `PROJECT-PLAN_YYYYMMDD_<TASK-NAME>.md` with milestones. The milestones should consist of tasks with empty checkboxes to be filled in when the task is complete. (NEVER Commit the PROJECT-PLANs)
-- **Output:** `[MODE: PLAN]` + specifications and implementation details
-- **ADRs** Any architecture decisions should be captured in an Architecture Decision Record in `/docs/adrs/`
-- **Test Driven Development:** Always keep testing in mind and add tests first, then implement features. Thinking with testing in mind first, also created better software design because it's designed to be easily testable. "Testing code is as important as Production code."
+- **Purpose:** producing a technical specification.
+- **Permitted:** detailed plans with file paths and changes.
+- **Forbidden:** implementation or code writing.
+- **Required:** a comprehensive `PROJECT-PLAN_YYYYMMDD_<TASK-NAME>.md` with milestones whose tasks have empty checkboxes. NEVER commit the `PROJECT-PLAN_*` file.
+- **ADRs:** any architectural decision made here MUST be captured as an ADR (see the rules above).
+- **TDD:** keep testing in mind; add tests first, then implement.
 
 ### MODE 4: EXECUTE
-- **Purpose:** Implementing the approved plan exactly
-- **Permitted:** Implementing detailed plan tasks, running QA checkpoints
-- **Forbidden:** Deviations from plan, creative additions
-- **Required:** After each milestone, run QA checkpoint and commit changes
-- **Output:** `[MODE: EXECUTE]` + implementation matching the plan
-- During execute, please use TODO comments for things that can be improved or changed in the future and use "FIXME" comments for things that are breaking the app.
+- **Purpose:** implementing the approved plan exactly.
+- **Permitted:** implementing the plan, running the QA checkpoint.
+- **Forbidden:** deviations or creative additions.
+- **Required:** run the QA checkpoint after each milestone and commit before moving on.
+- Use `TODO` comments for future improvements and `FIXME` for breaking issues.
 
 ### MODE 5: REVIEW
-- **Purpose:** Validate implementation against plan
-- **Permitted:** Line-by-line comparison
-- **Required:** Flag ANY deviation with `:warning: DEVIATION DETECTED: [description]`
-- **Output:** `[MODE: REVIEW]` + comparison and verdict
+- **Purpose:** validate the implementation against the plan.
+- **Required:** flag ANY deviation with `:warning: DEVIATION DETECTED: [description]`.
 
-## Python Tooling
-
-**ALWAYS use `uv` for Python package management. NEVER use `pip` directly.**
-
-```bash
-# Installing packages
-uv pip install <package>
-uv pip install -e .  # editable install
-
-# Running Python in project context
-uv run python script.py
-uv run pytest
-
-# Syncing dependencies
-uv sync
-```
-
-## QA Checkpoint Process
+## QA Checkpoint
 
 After each milestone in EXECUTE mode:
-1. Run linter with auto-formatting
-2. Run type checks
-3. Run tests
-4. Review changes with git MCP server
-5. Commit changes with conventional commit messages before moving to next milestone
 
-**python** for python, you can run all of the checks together with `poetry run poe check-fix`
+1. Run the linter with auto-format.
+2. Run type checks.
+3. Run tests.
+4. Review changes.
+5. Commit using conventional commit messages.
 
-```bash
-# Run all checks and auto-format code
-python scripts/qa_checkpoint.py
+For Python projects in this org, use `uv` for package management (not `pip` directly). Composite check: `poetry run poe check-fix` or `python scripts/qa_checkpoint.py`.
 
-# Run checks and commit using conventional commit format
-python scripts/qa_checkpoint.py --commit "Complete Milestone X" --conventional-commit
-```
+## Commit format
 
-## Git MCP Server for Clean Commits
+Conventional commits: `type(scope): description`. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`.
 
-Use the git MCP server to review files and make logical commits:
+## Critical guidelines
 
-```
-[MODE: EXECUTE]
-
-Let's use the git MCP server to review files and make logical commits with commit lint based messages:
-```
-
-1. Review current status and changes:
-```bash
-mcp_git_git_status <repo_path>
-mcp_git_git_diff_unstaged <repo_path>
-```
-
-2. Make logical commits using conventional commit format:
-```bash
-# Stage related files
-mcp_git_git_add <repo_path> ["file1.py", "file2.py"]
-
-DO NOT Commit anything. Provide the Git Commit message and let me commit.
-```
-
-### Conventional Commit Format
-
-Format: `type(scope): description`
-
-Types:
-- `feat`: New features
-- `fix`: Bug fixes
-- `docs`: Documentation
-- `style`: Formatting changes
-- `refactor`: Code restructuring
-- `test`: Test changes
-- `chore`: Maintenance
-
-### Files to Exclude
-- Temporary files
-- Draft project plans
-- Build artifacts
-- Cache files
-
-## Critical Guidelines
-- Never transition between modes without explicit permission
-- Always declare current mode at the start of every response
-- Follow the plan with 100% fidelity in EXECUTE mode
-- Flag even the smallest deviation in REVIEW mode
-- Return to PLAN mode if any implementation issue requires deviation
-- Use conventional commit messages for all commits
+- Never transition between modes without explicit permission.
+- Always declare current mode at the start of every response.
+- Follow the plan with 100% fidelity in EXECUTE mode.
+- Flag even the smallest deviation in REVIEW mode.
+- Return to PLAN mode if any implementation issue forces a deviation.
+- Use conventional commit messages for all commits.

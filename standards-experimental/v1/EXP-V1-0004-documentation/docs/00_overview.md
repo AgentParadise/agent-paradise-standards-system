@@ -1,42 +1,63 @@
 ---
 name: "Documentation and Context Engineering"
-description: "Context engineering for technical docs: structured indexes, agent context files, and ADR enforcement"
+description: "Validated documentation structure that turns docs into machine-readable data for indexes, search, vectorization, generation, and agent context"
 ---
 
-# EXP-V1-0004 — Documentation and Context Engineering
+# EXP-V1-0004 - Documentation and Context Engineering
 
-A configurable standard for context engineering within a project's technical documentation directory. The docs root defaults to `docs/` but is configurable. Every Markdown file carries YAML front matter, and the standard auto-generates `## Index` tables from that metadata — making docs structured, searchable, and machine-readable for validators, generators, vectorization, and fast navigation by both humans and AI agents.
+A configurable, growing doc type registry plus an installable git hook that keeps a project's documentation structure provably correct on every commit. The standard is opinionated by default, configurable by exception, and never an unconditional hard-break.
 
-## Problem
+The point is not "consistent docs". The point is that once structure is guaranteed by a hook, the docs become reliable data that downstream tooling can stand on.
 
-- Technical documentation lacks structure, making it hard for agents and developers to find the right document quickly.
-- Documentation drifts out of sync with actual file contents, making indexes unreliable.
-- No standard way for AI agents to orient themselves within a project's docs from a fresh start.
+## Why this matters
 
-## Solution
+Validated structure is the prerequisite for every interesting thing you want to do over documentation:
 
-The standard enforces structure and frontmatter-driven indexing across the docs directory:
+- **Automated validation.** A pre-commit hook refuses commits whose docs drift out of structure, so "the docs are mostly correct" stops being a hope.
+- **Generation tooling.** Index tables, navigation, doc-type templates, and per-directory context files can be generated from frontmatter because the frontmatter is known to be present and well-formed.
+- **Vectorize any directory.** With frontmatter and stable per-file metadata guaranteed, a docs tree can be embedded directly. No per-repo schema discovery, no preprocessing.
+- **Semantic lookups and progressive disclosure.** Agents and humans can ask "what's the current Purpose and Vision?" or "list ADRs that supersede ADR-007" without scraping prose, because doc identifiers and statuses are first-class fields.
+- **Context engineering for AI agents.** Per-directory `CLAUDE.md` and `AGENTS.md` files plus a normative root self-reference give a fresh-context agent enough to orient itself in one read.
+- **Backlinking across plan, design, and implementation.** Implementation files are required to backlink the governing doc (ADR, Purpose and Vision, ...) so context is never lost across phases.
 
-1. **Frontmatter + Auto-Generated Indexes (DOC02)** — Every `.md` file has YAML front matter (`name`, `description`, configurable fields). Every directory has a `README.md` with an auto-generated `## Index` table built from that metadata. `CLAUDE.md` and `AGENTS.md` per directory provide lightweight context pointers for AI agents.
+Consistency and process are by-products. The unlock is treating docs as structured data with a hook-enforced contract.
 
-2. **Root Context (DOC03)** — Repository root has `CLAUDE.md` and `AGENTS.md` that reference the docs location, ensuring agents always find docs from a fresh start.
+## What the standard provides
 
-Domain-specific rules live in **substandards** that inherit the parent's index format:
+1. **A configurable doc type registry.** Each doc type (ADR, Purpose and Vision, Retrospectives, and future additions) is implemented as a substandard with its own frontmatter and validation rules. Adding a new doc type does not require changing the parent spec. The registry is enumerated in [01_spec.md](01_spec.md#8-doc-type-registry).
+2. **A single central config file** at `.apss/config.toml`. Every rule is default on. A project switches one off by setting `disable = true` in the smallest scope that contains it. There are no scattered per-feature `optional` flags.
+3. **Frontmatter-driven indexing.** Every `.md` file under the docs root carries YAML frontmatter. Every directory `README.md` gets an auto-generated `## Index` table built from that frontmatter. The dry-run output and the written output are byte-identical for the same input.
+4. **An installable hook contract.** Installing the standard installs a git pre-commit hook that auto-refreshes indexes, runs the validator against staged docs, and blocks the commit on errors. The hook and the standalone CLI call the same validator, so behavior is identical. The contract is specified in [01_spec.md Section 9](01_spec.md#9-install-contract-hook--validator--index).
+5. **A backlinking rule that applies across every doc type.** Code files that implement a governed doc MUST reference it by identifier. The validator flags missing and dead references. Backlinking is part of the standard, not a per-doc-type opt-in.
+6. **Human-readable diagnostic codes.** All codes are kebab strings such as `index-stale`, `frontmatter-unclosed`, `ADR01-dir-not-found`, `PV01-missing-vision-section`. Numeric codes are not used.
 
-3. **ADR Enforcement ([EXP-V1-0004.ADR01](../substandards/ADR01-architecture-decision-records/docs/00_overview.md))** — Architecture Decision Records inside the docs directory with enforced naming, lifecycle status, required topics, and dead reference detection.
+## Shipped doc types
+
+| Doc type | Substandard | Default location | Why it exists |
+|----------|-------------|------------------|---------------|
+| Architecture Decision Records | [`EXP-V1-0004.ADR01`](../substandards/ADR01-architecture-decision-records/docs/00_overview.md) | `docs/adrs/` | Append-only record of architectural decisions with lifecycle status. |
+| Purpose and Vision | `EXP-V1-0004.PV01` | `docs/PURPOSE.md` | North Star document agents read during plan and design to stay aligned with the project's intent. |
+| Retrospectives | `EXP-V1-0004.RET01` | `docs/retrospectives/` | Append-only record of what was learned, by period or by milestone. |
+
+Doc types are activated by their `[docs.<type>]` block in `.apss/config.toml`. Default on, switchable off.
 
 ## Configuration
 
-All settings live in `.apss/config.toml` under the `[docs]` section. Zero-config works — all defaults are sensible.
+All settings live in `.apss/config.toml` under the `[docs]` section. Zero-config works; defaults are documented in [01_spec.md Section 3](01_spec.md#3-configuration). A complete example is in [examples/config.toml](../examples/config.toml).
 
 ## CLI
 
 ```bash
+aps run docs install [path]          # Install hook + default config (idempotent)
+aps run docs uninstall [path]        # Remove hook (config preserved)
 aps run docs validate [path]         # Validate documentation structure
-aps run docs index [path]            # Preview auto-generated indexes
+aps run docs index [path]            # Preview auto-generated indexes (dry run)
 aps run docs index [path] --write    # Write indexes into README.md files
+aps run docs hook --staged           # Hook entry point used by pre-commit
 ```
+
+The install contract, the validator contract, the index generator contract, and the per-doc-type definition of "valid structure" are all normative and live in [01_spec.md](01_spec.md).
 
 ## Category
 
-Governance — consistency and process, enabling automated validation, index generation, vectorization of any docs directory, and structured context engineering for AI agents.
+Governance. Inputs: a project's documentation tree. Outputs: a validated, indexable, vector-ready docs tree plus a hook that keeps it that way.

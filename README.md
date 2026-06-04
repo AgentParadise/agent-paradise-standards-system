@@ -5,6 +5,8 @@
 
 **Executable, evolvable standards for agentic engineering.** APS standards are versioned Rust crates with automated validation, not static documents.
 
+> AI agents working in this repo: read [`AGENTS.md`](AGENTS.md) and [`CLAUDE.md`](CLAUDE.md) first. They cover where standards live, the documentation governance rules (ADRs, indexing, backlinking), and the mandatory project conventions.
+
 ## Available Standards
 
 ### Official
@@ -19,7 +21,7 @@
 |----------|-------------|-----|
 | [EXP-V1-0002 TODO Tracker](standards-experimental/v1/EXP-V1-0002-todo-tracker/docs/00_overview.md) | Scans TODO/FIXME comments, enforces issue references | `aps run todos scan` |
 | [EXP-V1-0003 Fitness Functions](standards-experimental/v1/EXP-V1-0003-fitness-functions/docs/00_overview.md) | Declarative architecture fitness thresholds against topology artifacts | `aps run fitness validate .` |
-| [EXP-V1-0004 Documentation](standards-experimental/v1/EXP-V1-0004-documentation/docs/00_overview.md) | Documentation consistency: ADR enforcement, README indexes, agent context | `aps run docs validate .` |
+| [EXP-V1-0004 Documentation](standards-experimental/v1/EXP-V1-0004-documentation/docs/00_overview.md) | Configurable doc type registry (ADRs, Purpose and Vision, Retrospectives), frontmatter-driven indexing, mandatory backlinking, installable pre-commit hook | `aps run docs validate .` |
 
 ### Governance
 
@@ -75,7 +77,7 @@ agent-paradise-standards-system/
 │   ├── aps-core/                      # Core engine (diagnostics, discovery, templates)
 │   └── aps-cli/                       # CLI: aps run, aps v1 validate/create/promote
 ├── standards/v1/
-│   ├── APS-V1-0000-meta/             # Meta-standard (v1.1.0) — defines all V1 rules
+│   ├── APS-V1-0000-meta/             # Meta-standard (v1.1.0); defines all V1 rules
 │   └── APS-V1-0001-code-topology/    # Code topology + 5 substandards
 ├── standards-experimental/v1/
 │   ├── EXP-V1-0001-code-topology/    # Promoted → APS-V1-0001 (historical)
@@ -91,7 +93,7 @@ agent-paradise-standards-system/
 |------|-----------|-----------|---------|
 | **Standard** | `APS-V1-XXXX` | Full: `docs/`, `examples/`, `tests/`, `agents/skills/`, `src/` | Produces artifacts, defines rules |
 | **Substandard** | `APS-V1-XXXX.YY##` | Reduced: `docs/`, `src/` | Consumes parent artifacts, produces further output |
-| **Experiment** | `EXP-V1-XXXX` | Full (same as standard) | Incubating — not enforced on consumers |
+| **Experiment** | `EXP-V1-XXXX` | Full (same as standard) | Incubating; not enforced on consumers |
 
 Substandards inherit agent context and examples from their parent. Their `docs/01_spec.md` serves as agent-readable knowledge about what they consume and produce.
 
@@ -134,12 +136,14 @@ cargo run -p aps-cli -- v1 validate repo
 
 ## Documentation
 
-- [Meta-Standard Spec (v1.1.0)](standards/v1/APS-V1-0000-meta/docs/01_spec.md) — Normative rules for all V1 packages
-- [Code Topology Overview](standards/v1/APS-V1-0001-code-topology/docs/00_overview.md) — Architecture metrics and visualization
-- [Fitness Functions Overview](standards-experimental/v1/EXP-V1-0003-fitness-functions/docs/00_overview.md) — Declarative fitness thresholds
-- [Templates](standards/v1/APS-V1-0000-meta/templates/README.md) — Package scaffolding
-- [Experimental Standards](standards-experimental/v1/README.md) — Incubation and promotion
+- [Agent orientation: `AGENTS.md`](AGENTS.md) and [`CLAUDE.md`](CLAUDE.md): where standards live, ADR convention, mandatory backlinking rule.
+- [Meta-Standard Spec (v1.1.0)](standards/v1/APS-V1-0000-meta/docs/01_spec.md): normative rules for all V1 packages.
+- [Code Topology Overview](standards/v1/APS-V1-0001-code-topology/docs/00_overview.md): architecture metrics and visualization.
+- [Fitness Functions Overview](standards-experimental/v1/EXP-V1-0003-fitness-functions/docs/00_overview.md): declarative fitness thresholds.
+- [Documentation Standard Overview](standards-experimental/v1/EXP-V1-0004-documentation/docs/00_overview.md) and [Spec](standards-experimental/v1/EXP-V1-0004-documentation/docs/01_spec.md): doc type registry, indexing, backlinking, install hook contract.
+- [Templates](standards/v1/APS-V1-0000-meta/templates/README.md): package scaffolding.
+- [Experimental Standards](standards-experimental/v1/README.md): incubation and promotion.
 
 ## License
 
-MIT — See [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE) for details.
