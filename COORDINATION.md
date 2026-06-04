@@ -69,3 +69,34 @@ If either session needs to touch a file the other owns, append a
 note to the bottom of this file under a dated heading explaining what
 and why; the other session will reconcile on its next pass. Both
 sessions push commits incrementally to `apss_config-standard`.
+
+## Reconciliation notes (for the merge-back pass)
+
+### 2026-06-04 (Claude 2)
+
+- Claude 1's CF01 `01_spec.md` rewrite uses section anchors that
+  match Claude 2's sibling files: §3 slug registry, §5 contribution
+  schema, §6 validation delegation, §7 substandard nesting, §8
+  install seam, §10 QA checks. The sibling files in this commit can
+  be folded into those section numbers directly during the
+  reconciliation pass. While folding, drop the duplicated
+  "Terminology" header from each sibling file; the meta `01_spec.md`
+  Terminology section covers them.
+- Placeholder for the binary name. Claude 1 used `<bootstrap>`;
+  Claude 2 used `<binary>`. Either is fine pending repo issue 64;
+  the reconciliation pass should pick one and substitute globally.
+  Recommendation: `<bootstrap>` since it tracks the existing
+  "bootstrap binary" prose in DI01 §3.
+- The CF01 universal `version:` key in
+  `03_contribution_schema.md` §3.1 overlaps with Claude 1's
+  rewrite of section 2 (standards list shape). Confirm that the
+  apss.yaml shape Claude 1 specs accepts a `version:` key at the
+  same scope (per-standard top of the section) so the two specs
+  agree. If Claude 1's shape puts version under a different key
+  (e.g. `[standards.<slug>.version]` flattened to a YAML
+  property), the reconciliation pass should choose one location
+  and update the sibling spec accordingly.
+- New error codes introduced by Claude 2's sibling files are
+  prefixed `CF_` and `DI_` as appropriate; they extend rather than
+  conflict with the existing tables in CF01 `01_spec.md` §6 and
+  DI01 `01_spec.md` §10.
