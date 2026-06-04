@@ -15,7 +15,7 @@ pub fn validate_root_context(
     diagnostics: &mut Diagnostics,
 ) {
     let root_config = &docs_config.root_context;
-    if !root_config.enabled {
+    if root_config.disable {
         return;
     }
 

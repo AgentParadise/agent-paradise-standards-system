@@ -46,11 +46,14 @@ pub fn validate(_repo_root: &Path) -> Diagnostics {
 pub fn document_missing_diagnostic(location: &Path) -> Diagnostic {
     Diagnostic::error(
         error_codes::DOCUMENT_MISSING,
-        format!("Purpose and Vision document not found: {}", location.display()),
+        format!(
+            "Purpose and Vision document not found: {}",
+            location.display()
+        ),
     )
     .with_path(location)
     .with_hint(format!(
-        "Create the file at '{}' or set docs.purpose_and_vision.disable = true in .apss/config.toml",
+        "Create the file at '{}' or set docs.purpose-and-vision.disable = true in apss.yaml",
         location.display()
     ))
 }

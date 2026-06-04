@@ -88,7 +88,7 @@ pub enum DocError {
 }
 
 impl DocValidator {
-    /// Load the validator, reading config from `.apss/config.toml`.
+    /// Load the validator, reading config from `apss.yaml`.
     ///
     /// If the config file does not exist, all defaults are used.
     pub fn load(repo_root: &Path) -> Result<Self, DocError> {
@@ -111,7 +111,7 @@ impl DocValidator {
     pub fn validate(&self) -> aps_core::Diagnostics {
         let mut diagnostics = aps_core::Diagnostics::new();
 
-        if !self.docs_config.enabled {
+        if self.docs_config.disable {
             return diagnostics;
         }
 

@@ -23,10 +23,14 @@ defined by the parent standard (EXP-V1-0004).
 # Validate ADRs (runs as part of docs validate)
 aps run docs validate .
 
-# Configure required ADR keywords
-# .apss/config.toml
-[docs.adr]
-required_adr_keywords = ["security", "testing", "deployment"]
+# Configure required ADR keywords in apss.yaml at the repo root
+# (config is owned by APS-V1-0000.CF01; the docs standard contributes the docs: block)
+docs:
+  adr:
+    required_adr_keywords:
+      - security
+      - testing
+      - deployment
 ```
 
 ## Error Codes

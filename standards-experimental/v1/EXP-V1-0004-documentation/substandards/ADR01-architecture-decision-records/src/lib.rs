@@ -55,7 +55,7 @@ pub struct AdrValidator {
 
 impl AdrValidator {
     /// Load the ADR validator from a repository root.
-    /// Reads `.apss/config.toml` for configuration.
+    /// Reads `apss.yaml` for configuration.
     pub fn load(repo_root: &Path) -> Result<Self, config::ConfigError> {
         let apss_config = config::load_config(repo_root)?;
         Ok(Self {
@@ -76,7 +76,7 @@ impl AdrValidator {
     pub fn validate(&self) -> Diagnostics {
         let mut diagnostics = Diagnostics::new();
 
-        if !self.config.enabled || !self.config.adr.enabled {
+        if self.config.disable || self.config.adr.disable {
             return diagnostics;
         }
 
@@ -91,7 +91,7 @@ impl AdrValidator {
                 )
                 .with_path(&adr_dir)
                 .with_hint(format!(
-                    "Create the directory at '{}' or configure docs.adr.directory in .apss/config.toml",
+                    "Create the directory at '{}' or configure docs.adr.directory in apss.yaml",
                     adr_dir.display()
                 )),
             );
@@ -110,7 +110,7 @@ impl AdrValidator {
                             self.config.adr.naming_pattern
                         ),
                     )
-                    .with_hint("Check docs.adr.naming_pattern in .apss/config.toml"),
+                    .with_hint("Check docs.adr.naming_pattern in apss.yaml"),
                 );
                 return diagnostics;
             }
@@ -144,7 +144,7 @@ impl AdrValidator {
         validate_adr_context_files(&adr_dir, &mut diagnostics);
 
         // ADR01-009: Scan source files for dead ADR references
-        if self.config.adr.backlinking {
+        if !self.config.backlinking.disable {
             validate_adr_references(
                 &self.repo_root,
                 &adr_dir,

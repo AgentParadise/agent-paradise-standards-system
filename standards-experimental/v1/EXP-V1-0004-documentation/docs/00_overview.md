@@ -25,7 +25,7 @@ Consistency and process are by-products. The unlock is treating docs as structur
 ## What the standard provides
 
 1. **A configurable doc type registry.** Each doc type (ADR, Purpose and Vision, Retrospectives, and future additions) is implemented as a substandard with its own frontmatter and validation rules. Adding a new doc type does not require changing the parent spec. The registry is enumerated in [01_spec.md](01_spec.md#8-doc-type-registry).
-2. **A single central config file** at `.apss/config.toml`. Every rule is default on. A project switches one off by setting `disable = true` in the smallest scope that contains it. There are no scattered per-feature `optional` flags.
+2. **A single shared config file** at `apss.yaml`, owned by the meta-standard (APS-V1-0000.CF01). This standard registers the slug `docs` and contributes the `docs:` section schema. Every rule is default on. A project switches one off by setting `disable: true` in the smallest scope that contains it. There are no scattered per-feature `optional` flags.
 3. **Frontmatter-driven indexing.** Every `.md` file under the docs root carries YAML frontmatter. Every directory `README.md` gets an auto-generated `## Index` table built from that frontmatter. The dry-run output and the written output are byte-identical for the same input.
 4. **An installable hook contract.** Installing the standard installs a git pre-commit hook that auto-refreshes indexes, runs the validator against staged docs, and blocks the commit on errors. The hook and the standalone CLI call the same validator, so behavior is identical. The contract is specified in [01_spec.md Section 9](01_spec.md#9-install-contract-hook--validator--index).
 5. **A backlinking rule that applies across every doc type.** Code files that implement a governed doc MUST reference it by identifier. The validator flags missing and dead references. Backlinking is part of the standard, not a per-doc-type opt-in.
@@ -40,11 +40,11 @@ Consistency and process are by-products. The unlock is treating docs as structur
 | Retrospectives | [`EXP-V1-0004.RETRO01`](../substandards/RETRO01-retrospectives/docs/01_spec.md) | `docs/retrospectives/` | Append-only record of what was learned, by period or by milestone. |
 
 
-Doc types are activated by their `[docs.<type>]` block in `.apss/config.toml`. Default on, switchable off.
+Doc types are activated by their `docs.<slug>` key in `apss.yaml` (kebab-case slugs match each substandard's `substandard.toml`). Default on, switchable off.
 
 ## Configuration
 
-All settings live in `.apss/config.toml` under the `[docs]` section. Zero-config works; defaults are documented in [01_spec.md Section 3](01_spec.md#3-configuration). A complete example is in [examples/config.toml](../examples/config.toml).
+All settings live in the `docs:` section of the project's root `apss.yaml` (owned by APS-V1-0000.CF01). Zero-config works; defaults are documented in [01_spec.md Section 3](01_spec.md#3-configuration). A complete example is in [examples/apss.yaml](../examples/apss.yaml).
 
 ## CLI
 

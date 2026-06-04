@@ -32,7 +32,7 @@ The installer MUST be idempotent. Running it twice MUST be equivalent to running
 Steps, in order:
 
 1. **Resolve target.** If `<repo-root>` is omitted, use `git rev-parse --show-toplevel`. Fail with `install-no-git-root` if not in a git repository.
-2. **Write default config.** Create `.apss/config.toml` from the documented default when it does not exist. When it exists, MUST NOT overwrite it. `--force` MAY rewrite the config file but MUST back up the existing file to `.apss/config.toml.bak.<timestamp>` first. `--no-config` skips this step entirely.
+2. **Ensure the `docs` block in `apss.yaml`.** Configuration lives in a single root-level `apss.yaml` owned by the meta-standard (APS-V1-0000.CF01); this standard contributes only the `docs:` block. If `apss.yaml` does not exist, delegate creation to the CF01 installer. If `apss.yaml` exists, MUST NOT overwrite it; instead, add a `docs:` block populated with the Section 3.3 defaults when one is absent and otherwise leave the existing block untouched. `--force` MAY rewrite the `docs:` block but MUST back up `apss.yaml` to `apss.yaml.bak.<timestamp>` first. `--no-config` skips this step entirely.
 3. **Install the pre-commit hook.** Write `.git/hooks/pre-commit` (mode `0755`). If the hook file does not exist, create it with the apss block as its only content. If it exists:
    - The hook MUST insert a block delimited by the sentinels:
      ```
@@ -51,7 +51,7 @@ Steps, in order:
 
 - Locate the pre-commit hook and remove the entire `# >>> apss-docs-hook >>>` to `# <<< apss-docs-hook <<<` block, including the sentinels.
 - Leave the rest of `.git/hooks/pre-commit` intact.
-- Leave `.apss/config.toml` intact (config is the operator's, not the installer's).
+- Leave `apss.yaml` and its `docs:` block intact (config is the operator's, not the installer's).
 - Be a no-op when the sentinels are not present.
 
 ### 1.3 Install-related diagnostics
@@ -60,7 +60,7 @@ Steps, in order:
 |------|----------|-------------|
 | `install-no-git-root` | error | The target path is not inside a git repository. |
 | `install-hook-write-failed` | error | Could not write `.git/hooks/pre-commit`. |
-| `install-config-conflict` | error | `.apss/config.toml` exists and `--force` was not specified. |
+| `install-config-conflict` | error | `apss.yaml` exists with a `docs:` block and `--force` was not specified. |
 
 ---
 
@@ -86,7 +86,7 @@ enum ValidationScope {
 - `Full`: walk the entire docs root and every active doc type directory. Used by `aps run docs validate` and by CI.
 - `Changed`: only inspect docs touched by `staged_paths`. The hook MUST use this scope. The validator MUST still load enough surrounding state (for example, the doc type directories themselves) to detect dead backlinks introduced by the change set.
 
-When `scope = Changed` and the staged set contains a `.apss/config.toml` modification, the validator MUST run the `Full` set of checks; config changes can invalidate the entire tree.
+When `scope = Changed` and the staged set contains an `apss.yaml` modification, the validator MUST run the `Full` set of checks; config changes can invalidate the entire tree.
 
 ### 2.3 Output: `ValidationReport`
 
@@ -186,7 +186,7 @@ The installed `.git/hooks/pre-commit` block MUST do nothing more than call this 
 ### 4.2 Steps (normative)
 
 1. **Resolve scope.** `repo_root = git rev-parse --show-toplevel`; `staged = git diff --cached --name-only --diff-filter=ACMR`. If `repo_root` is missing, exit `2` with `hook-not-in-repo`.
-2. **Load config.** If `.apss/config.toml` fails to load, emit `invalid-config-toml` and exit `2`. The hook MUST NOT proceed with defaults when the config file exists but is malformed; the operator should fix it before committing.
+2. **Load config.** If `apss.yaml` fails to load, emit `invalid-apss-yaml` and exit `2`. The hook MUST NOT proceed with defaults when the config file exists but is malformed; the operator should fix it before committing. (The hook reads the `docs` block out of the file the meta-validator already cascade-resolved.)
 3. **Refresh indexes.** Compute the set of docs directories whose contents appear in `staged`. Call the index generator with `mode = Write` for that set. For each rewritten `README.md`, the hook MUST run `git add <path>` so the regenerated index is part of the commit. If a write fails, exit `2`.
 4. **Validate.** Call `validate(repo_root, config, Changed { staged_paths: staged })`.
 5. **Report.** Print all error and warning diagnostics in human readable form (color when TTY, plain otherwise). When stdout is being piped, also write the `machine_readable` JSON to a temporary file referenced in the human output, so CI can pick it up.
@@ -204,7 +204,7 @@ The installed `.git/hooks/pre-commit` block MUST do nothing more than call this 
 ### 4.4 Escape hatches
 
 - `git commit --no-verify` continues to skip the hook entirely. This is a human operator escape hatch. The standard MUST NOT teach agents to use `--no-verify`.
-- Setting `docs.disable = true` in `.apss/config.toml` is the supported way to keep the hook installed but silent for a temporary period (for example, during a large migration).
+- Setting `docs.disable: true` in `apss.yaml` is the supported way to keep the hook installed but silent for a temporary period (for example, during a large migration).
 
 ### 4.5 Hook diagnostics
 

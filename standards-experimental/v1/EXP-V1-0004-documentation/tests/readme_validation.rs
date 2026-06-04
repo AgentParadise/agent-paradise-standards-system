@@ -138,7 +138,7 @@ fn test_readme_disabled_skips_all() {
     // No README at all
 
     let mut config = DocsConfig::default();
-    config.readme.enabled = false;
+    config.readme.disable = true;
 
     let mut diagnostics = Diagnostics::new();
     validate_readmes(dir.path(), &config, &mut diagnostics);
@@ -226,7 +226,7 @@ fn test_full_validator_disabled() {
     let dir = tempdir().unwrap();
 
     let mut config = DocsConfig::default();
-    config.enabled = false;
+    config.disable = true;
 
     let validator = DocValidator::with_config(dir.path(), config);
     let diagnostics = validator.validate();

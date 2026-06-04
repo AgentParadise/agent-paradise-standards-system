@@ -1,0 +1,57 @@
+# Example apss.yaml for a project adopting EXP-V1-0004 (Documentation).
+#
+# Configuration lives in a single root-level apss.yaml owned by the
+# meta-standard (APS-V1-0000.CF01). The documentation standard registers
+# the slug "docs" and contributes this docs: section.
+#
+# Copy the relevant pieces into your project's apss.yaml and customize.
+# Every section is default-on; set `disable: true` to opt out of one
+# section without disabling the rest (see parent spec section 3.4).
+#
+# Substandard keys use the substandard's kebab-case slug (matches its
+# substandard.toml). Scalar field names inside each section are
+# snake_case (matches the Rust struct contract).
+
+schema: "apss.config/v1"
+
+docs:
+  disable: false
+  root: "docs"
+
+  index:
+    disable: false
+    auto_generate: true
+    frontmatter_fields: ["name", "description"]
+
+  context_files:
+    require_claude_md: true
+    require_agents_md: true
+
+  backlinking:
+    disable: false
+    file_types: ["rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "kt", "rb", "sh", "yaml", "yml", "toml", "json", "md"]
+
+  adr:
+    disable: false
+    directory: "adrs"
+    naming_pattern: "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+    required_adr_keywords: ["security", "testing"]
+
+  purpose-and-vision:
+    disable: false
+    location: "docs/vision.md"
+
+  retrospectives:
+    disable: false
+    directory: "docs/retrospectives"
+    naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+    append_only: true
+
+  readme:
+    disable: false
+    max_depth: -1
+    exclude_dirs: ["node_modules", ".git", "target", "vendor", ".topology"]
+
+  root_context:
+    disable: false
+    docs_reference_pattern: "docs/"

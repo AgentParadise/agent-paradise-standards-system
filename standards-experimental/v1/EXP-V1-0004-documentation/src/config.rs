@@ -1,23 +1,44 @@
-//! Configuration deserialization for `.apss/config.toml`.
+//! Configuration deserialization for the `docs` section of `apss.yaml`.
 //!
-//! All fields use `#[serde(default)]` so a missing config file or partial
-//! config produces sensible defaults (zero-config works out of the box).
+//! Per the unified-config brief (2026-06-04), APSS configuration lives in a
+//! single `apss.yaml` at the project root owned by the meta-standard (CF01).
+//! EXP-V1-0004 registers the `docs` section; this module deserialises that
+//! section into [`DocsConfig`] and exposes the loader that reads
+//! `apss.yaml`, picks the `docs` key, and applies defaults for missing
+//! fields. Other top-level sections (`fitness`, `topology`, ...) belong to
+//! other standards and are tolerated here; the meta-standard's validator
+//! enforces uniqueness, registry membership, and unknown-section errors.
+//!
+//! All fields use `#[serde(default)]` so a missing `apss.yaml` or a missing
+//! `docs:` block produces sensible defaults (zero-config works out of the
+//! box).
 
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
+/// Default config file name at the project root.
+///
+/// Single source of truth so the CLI, the validator, and the hint strings all
+/// agree. Changing this path is a CF01 contract change; do not flip without
+/// updating the meta-standard.
+pub const CONFIG_FILENAME: &str = "apss.yaml";
+
 /// Top-level APSS configuration file.
+///
+/// Only the `docs` section is consumed here; other standards' sections are
+/// permissive at deserialisation time so a docs-only validator does not
+/// reject a fitness or topology block.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ApssConfig {
     #[serde(default)]
     pub docs: DocsConfig,
 }
 
-/// The `[docs]` section.
+/// The `docs` section of `apss.yaml`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct DocsConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
+    #[serde(default = "default_false")]
+    pub disable: bool,
     #[serde(default = "default_docs_root")]
     pub root: String,
     #[serde(default)]
@@ -30,27 +51,98 @@ pub struct DocsConfig {
     pub readme: ReadmeConfig,
     #[serde(default)]
     pub root_context: RootContextConfig,
+    #[serde(default)]
+    pub backlinking: BacklinkingConfig,
+    #[serde(default, rename = "purpose-and-vision")]
+    pub purpose_and_vision: PurposeVisionConfig,
+    #[serde(default)]
+    pub retrospectives: RetrospectivesConfig,
 }
 
 impl Default for DocsConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            disable: false,
             root: default_docs_root(),
             index: IndexConfig::default(),
             context_files: ContextFilesConfig::default(),
             adr: AdrConfig::default(),
             readme: ReadmeConfig::default(),
             root_context: RootContextConfig::default(),
+            backlinking: BacklinkingConfig::default(),
+            purpose_and_vision: PurposeVisionConfig::default(),
+            retrospectives: RetrospectivesConfig::default(),
         }
     }
 }
 
-/// The `[docs.index]` section - controls `## Index` generation in README.md files.
+/// The `docs.backlinking` section of `apss.yaml`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct BacklinkingConfig {
+    #[serde(default = "default_false")]
+    pub disable: bool,
+    #[serde(default = "default_backlinking_file_types")]
+    pub file_types: Vec<String>,
+}
+
+impl Default for BacklinkingConfig {
+    fn default() -> Self {
+        Self {
+            disable: false,
+            file_types: default_backlinking_file_types(),
+        }
+    }
+}
+
+/// The `docs.purpose-and-vision` section of `apss.yaml`.
+///
+/// The YAML key is `purpose-and-vision` (kebab); the Rust field on
+/// [`DocsConfig`] is `purpose_and_vision` (snake) bridged by
+/// `#[serde(rename)]`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PurposeVisionConfig {
+    #[serde(default = "default_false")]
+    pub disable: bool,
+    #[serde(default = "default_vision_location")]
+    pub location: String,
+}
+
+impl Default for PurposeVisionConfig {
+    fn default() -> Self {
+        Self {
+            disable: false,
+            location: default_vision_location(),
+        }
+    }
+}
+
+/// The `[docs.retrospectives]` section.
+#[derive(Debug, Clone, Deserialize)]
+pub struct RetrospectivesConfig {
+    #[serde(default = "default_false")]
+    pub disable: bool,
+    #[serde(default = "default_retrospectives_directory")]
+    pub directory: String,
+    #[serde(default = "default_retrospectives_naming_pattern")]
+    pub naming_pattern: String,
+}
+
+impl Default for RetrospectivesConfig {
+    fn default() -> Self {
+        Self {
+            disable: false,
+            directory: default_retrospectives_directory(),
+            naming_pattern: default_retrospectives_naming_pattern(),
+        }
+    }
+}
+
+// ─── ADR pattern constants ────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct IndexConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
+    #[serde(default = "default_false")]
+    pub disable: bool,
     #[serde(default = "default_true")]
     pub auto_generate: bool,
     #[serde(default = "default_frontmatter_fields")]
@@ -60,7 +152,7 @@ pub struct IndexConfig {
 impl Default for IndexConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            disable: false,
             auto_generate: true,
             frontmatter_fields: default_frontmatter_fields(),
         }
@@ -88,8 +180,8 @@ impl Default for ContextFilesConfig {
 /// The `[docs.adr]` section.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdrConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
+    #[serde(default = "default_false")]
+    pub disable: bool,
     #[serde(default = "default_adr_directory")]
     pub directory: String,
     #[serde(default = "default_adr_naming_pattern")]
@@ -98,18 +190,15 @@ pub struct AdrConfig {
     /// For each keyword, at least one file matching `ADR-\d{3,5}-<keyword>\.md` must exist.
     #[serde(default)]
     pub required_adr_keywords: Vec<String>,
-    #[serde(default = "default_true")]
-    pub backlinking: bool,
 }
 
 impl Default for AdrConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            disable: false,
             directory: default_adr_directory(),
             naming_pattern: default_adr_naming_pattern(),
             required_adr_keywords: Vec::new(),
-            backlinking: true,
         }
     }
 }
@@ -117,8 +206,8 @@ impl Default for AdrConfig {
 /// The `[docs.readme]` section.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReadmeConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
+    #[serde(default = "default_false")]
+    pub disable: bool,
     #[serde(default = "default_max_depth")]
     pub max_depth: i32,
     #[serde(default = "default_exclude_dirs")]
@@ -128,7 +217,7 @@ pub struct ReadmeConfig {
 impl Default for ReadmeConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            disable: false,
             max_depth: default_max_depth(),
             exclude_dirs: default_exclude_dirs(),
         }
@@ -138,8 +227,8 @@ impl Default for ReadmeConfig {
 /// The `[docs.root_context]` section.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RootContextConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
+    #[serde(default = "default_false")]
+    pub disable: bool,
     #[serde(default = "default_docs_reference_pattern")]
     pub docs_reference_pattern: String,
 }
@@ -147,7 +236,7 @@ pub struct RootContextConfig {
 impl Default for RootContextConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            disable: false,
             docs_reference_pattern: default_docs_reference_pattern(),
         }
     }
@@ -205,6 +294,10 @@ pub fn adr_stem_pattern_from_naming(naming_pattern: &str) -> String {
 
 // ─── Default value functions ───────────────────────────────────────────────
 
+fn default_false() -> bool {
+    false
+}
+
 fn default_true() -> bool {
     true
 }
@@ -243,12 +336,45 @@ fn default_docs_reference_pattern() -> String {
     "docs/".to_string()
 }
 
+fn default_backlinking_file_types() -> Vec<String> {
+    vec![
+        "rs".to_string(),
+        "py".to_string(),
+        "ts".to_string(),
+        "tsx".to_string(),
+        "js".to_string(),
+        "jsx".to_string(),
+        "go".to_string(),
+        "java".to_string(),
+        "kt".to_string(),
+        "rb".to_string(),
+        "sh".to_string(),
+        "yaml".to_string(),
+        "yml".to_string(),
+        "toml".to_string(),
+        "json".to_string(),
+        "md".to_string(),
+    ]
+}
+
+fn default_vision_location() -> String {
+    "docs/vision.md".to_string()
+}
+
+fn default_retrospectives_directory() -> String {
+    "docs/retrospectives".to_string()
+}
+
+fn default_retrospectives_naming_pattern() -> String {
+    "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md".to_string()
+}
+
 // ─── Loading ───────────────────────────────────────────────────────────────
 
-/// Load the APSS config from `.apss/config.toml` relative to the given root.
+/// Load the APSS config from `apss.yaml` relative to the given root.
 /// Returns default config if the file does not exist.
 pub fn load_config(repo_root: &Path) -> Result<ApssConfig, ConfigError> {
-    let config_path = repo_root.join(".apss").join("config.toml");
+    let config_path = repo_root.join(CONFIG_FILENAME);
     if !config_path.exists() {
         return Ok(ApssConfig::default());
     }
@@ -256,10 +382,11 @@ pub fn load_config(repo_root: &Path) -> Result<ApssConfig, ConfigError> {
         path: config_path.clone(),
         source: e,
     })?;
-    let config: ApssConfig = toml::from_str(&content).map_err(|e| ConfigError::ParseError {
-        path: config_path,
-        source: e,
-    })?;
+    let config: ApssConfig =
+        serde_yaml::from_str(&content).map_err(|e| ConfigError::ParseError {
+            path: config_path,
+            source: e,
+        })?;
     Ok(config)
 }
 
@@ -287,7 +414,7 @@ pub enum ConfigError {
     #[error("failed to parse config at {path}: {source}")]
     ParseError {
         path: PathBuf,
-        source: toml::de::Error,
+        source: serde_yaml::Error,
     },
 }
 

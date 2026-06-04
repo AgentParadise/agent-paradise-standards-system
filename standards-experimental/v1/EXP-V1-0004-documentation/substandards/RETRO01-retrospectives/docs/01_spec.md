@@ -21,7 +21,7 @@ The append-only rule is the key invariant: a retrospective is a record of what w
 
 A directory MUST exist at `docs.retrospectives.directory` (default: `docs/retrospectives/`).
 
-Diagnostic: `RETRO01-dir-not-found` (error). Hint: "Create the directory at `<directory>` or set `docs.retrospectives.disable = true` in `.apss/config.toml`."
+Diagnostic: `RETRO01-dir-not-found` (error). Hint: "Create the directory at `<directory>` or set `docs.retrospectives.disable = true` in `apss.yaml`."
 
 The retrospective directory inherits the parent rules: it MUST contain a `README.md` with a `## Index` section (auto generated from frontmatter) and per directory `CLAUDE.md` and `AGENTS.md`.
 
@@ -43,7 +43,7 @@ A retrospective file MUST be reachable from the directory's `## Index` section o
 
 Diagnostics:
 - `RETRO01-naming-mismatch` (error): a file does not match the regex.
-- `RETRO01-invalid-naming-regex` (error): the configured regex itself is not valid. Hint: "Check `docs.retrospectives.naming_pattern` in `.apss/config.toml`."
+- `RETRO01-invalid-naming-regex` (error): the configured regex itself is not valid. Hint: "Check `docs.retrospectives.naming_pattern` in `apss.yaml`."
 
 ## 4. Frontmatter (RETRO01-frontmatter-missing, RETRO01-frontmatter-field-missing)
 
@@ -111,12 +111,13 @@ Configuration: `docs.retrospectives.append_only = true` (default). Setting it to
 
 ## 8. Configuration
 
-```toml
-[docs.retrospectives]
-disable        = false
-directory      = "docs/retrospectives"
-naming_pattern = "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
-append_only    = true
+```yaml
+docs:
+  retrospectives:
+    disable:        false
+    directory:      docs/retrospectives
+    naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+    append_only:    true
 ```
 
 ## 9. Error Codes

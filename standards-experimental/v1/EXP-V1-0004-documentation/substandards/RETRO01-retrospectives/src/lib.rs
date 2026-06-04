@@ -58,7 +58,7 @@ pub fn dir_not_found_diagnostic(dir: &Path) -> Diagnostic {
     )
     .with_path(dir)
     .with_hint(format!(
-        "Create the directory at '{}' or set docs.retrospectives.disable = true in .apss/config.toml",
+        "Create the directory at '{}' or set docs.retrospectives.disable = true in apss.yaml",
         dir.display()
     ))
 }

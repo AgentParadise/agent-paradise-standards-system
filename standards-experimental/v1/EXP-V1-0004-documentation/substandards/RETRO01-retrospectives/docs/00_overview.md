@@ -53,15 +53,18 @@ We shipped ...
 
 ## Configuration
 
-```toml
-[docs.retrospectives]
-disable        = false
-directory      = "docs/retrospectives"
-naming_pattern = "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
-append_only    = true
+In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers the key `retrospectives` under the parent `docs` slug:
+
+```yaml
+docs:
+  retrospectives:
+    disable: false
+    directory: docs/retrospectives
+    naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+    append_only: true
 ```
 
-`append_only = false` disables the append-only check. It is on by default because retros are a historical record, not a working document.
+`append_only: false` disables the append-only check. It is on by default because retros are a historical record, not a working document.
 
 ## Error Codes
 

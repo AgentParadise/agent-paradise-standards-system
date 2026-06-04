@@ -200,7 +200,7 @@ fn test_adr_disabled() {
     // No ADR directory at all
 
     let mut config = DocsConfig::default();
-    config.adr.enabled = false;
+    config.adr.disable = true;
 
     let validator = AdrValidator::with_config(dir.path(), config);
     let diagnostics = validator.validate();
@@ -637,8 +637,11 @@ fn test_no_dead_references_when_backlinking_disabled() {
     // Dead reference, but backlinking is disabled
     fs::write(src_dir.join("main.rs"), "// ADR-999-ghost\nfn main() {}\n").unwrap();
 
+    // Backlinking is parent-level under docs.backlinking now (unified
+    // config 2026-06-04); the per-substandard adr.backlinking flag was
+    // removed.
     let mut config = DocsConfig::default();
-    config.adr.backlinking = false;
+    config.backlinking.disable = true;
 
     let validator = AdrValidator::with_config(dir.path(), config);
     let diagnostics = validator.validate();

@@ -14,7 +14,7 @@ use walkdir::WalkDir;
 /// Validate README, CLAUDE.md, AGENTS.md presence and index freshness.
 pub fn validate_readmes(repo_root: &Path, docs_config: &DocsConfig, diagnostics: &mut Diagnostics) {
     let readme_config = &docs_config.readme;
-    if !readme_config.enabled {
+    if readme_config.disable {
         return;
     }
 
@@ -27,7 +27,7 @@ pub fn validate_readmes(repo_root: &Path, docs_config: &DocsConfig, diagnostics:
             )
             .with_path(&docs_root)
             .with_hint(format!(
-                "Create '{}' or configure docs.root in .apss/config.toml",
+                "Create '{}' or configure docs.root in apss.yaml",
                 docs_root.display()
             )),
         );
@@ -75,7 +75,7 @@ pub fn validate_readmes(repo_root: &Path, docs_config: &DocsConfig, diagnostics:
                 )
                 .with_path(dir),
             );
-        } else if docs_config.index.enabled {
+        } else if !docs_config.index.disable {
             // Validate index freshness
             validate_readme_index(&readme_path, dir, docs_config, diagnostics);
         }

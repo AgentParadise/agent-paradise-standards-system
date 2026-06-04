@@ -9,9 +9,9 @@ description = "Documentation and Context Engineering - ADR enforcement, README/i
 
 [dependencies]
 aps-core.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-toml.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_yaml.workspace = true
 walkdir.workspace = true
 thiserror.workspace = true
 regex = "1"

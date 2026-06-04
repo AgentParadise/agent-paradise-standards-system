@@ -7,25 +7,26 @@ description: "Example configuration and compliant project structure for EXP-V1-0
 
 ## Example Configuration
 
-A minimal `.apss/config.toml` for a project adopting the documentation standard:
+Configuration lives in a single root-level `apss.yaml` owned by the meta-standard (APS-V1-0000.CF01). This standard registers the slug `docs` and contributes the `docs:` section. A minimal apss.yaml for a project adopting the documentation standard:
 
-```toml
-schema = "apss.config/v1"
+```yaml
+schema: apss.config/v1
 
-[docs]
-root = "docs"
-
-[docs.adr]
-directory = "adrs"
-required_adr_keywords = ["security"]
+docs:
+  root: docs
+  adr:
+    directory: adrs
+    required_adr_keywords:
+      - security
 ```
+
+The full default `docs:` section (every key) is in [`apss.yaml`](apss.yaml).
 
 ## Example Compliant Directory Structure
 
 ```
 my-project/
-├── .apss/
-│   └── config.toml              # APSS configuration
+├── apss.yaml                    # APSS configuration (meta-standard owned)
 ├── docs/
 │   ├── README.md                # Has ## Index auto-generated
 │   ├── CLAUDE.md                # "See README.md for index"
@@ -36,11 +37,13 @@ my-project/
 │       ├── AGENTS.md
 │       ├── ADR-001-initial-architecture.md
 │       └── ADR-002-auth-strategy.md
-├── CLAUDE.md                    # Root context - references docs/
+├── CLAUDE.md                    # Root context, references docs/
 ├── AGENTS.md                    # Root agent context
 └── src/
     └── ...
 ```
+
+(The `.apss/` dotdir, if it exists, holds generated artifacts only such as cached indexes; it MUST NOT hold configuration.)
 
 ## Example ADR Front Matter
 

@@ -48,19 +48,22 @@ We will not ...
 
 ## Configuration
 
-```toml
-[docs.purpose_and_vision]
-disable  = false
-location = "docs/vision.md"
+In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers the kebab-case key `purpose-and-vision` under the parent `docs` slug:
+
+```yaml
+docs:
+  purpose-and-vision:
+    disable: false
+    location: docs/vision.md
 ```
 
-Disabling: set `disable = true`. Backlinking from `CLAUDE.md` and `AGENTS.md` is enforced by the parent standard's DOC03-self-reference check, not by this substandard.
+Disabling: set `disable: true`. Backlinking from `CLAUDE.md` and `AGENTS.md` is enforced by the parent standard's DOC03-self-reference check, not by this substandard.
 
 ## Error Codes
 
 | Code | Severity | Description |
 |------|----------|-------------|
-| `PV01-document-missing` | error | No file at `docs.purpose_and_vision.location`. |
+| `PV01-document-missing` | error | No file at `docs.purpose-and-vision.location`. |
 | `PV01-frontmatter-missing` | error | Document lacks frontmatter. |
 | `PV01-frontmatter-field-missing` | error | Document missing `name`, `description`, or `status`. |
 | `PV01-missing-purpose-section` | error | Document missing `## Purpose` heading. |

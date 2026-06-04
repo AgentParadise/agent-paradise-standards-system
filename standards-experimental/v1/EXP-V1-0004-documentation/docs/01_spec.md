@@ -15,7 +15,7 @@ description: "Normative rules for documentation structure, the doc type registry
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119).
 
-When this standard says a rule is "default-on, switchable-off", it means the rule is part of the standard, applied unconditionally unless a specific `disable` flag in `.apss/config.toml` turns it off for that one project. Defaults are opinionated. Configuration is by exception, not by accumulation of optional flags.
+When this standard says a rule is "default-on, switchable-off", it means the rule is part of the standard, applied unconditionally unless a specific `disable` flag in `apss.yaml` turns it off for that one project. Defaults are opinionated. Configuration is by exception, not by accumulation of optional flags.
 
 ---
 
@@ -24,7 +24,7 @@ When this standard says a rule is "default-on, switchable-off", it means the rul
 This standard defines the structure of a project's technical documentation directory and the install contract for the tooling that enforces it. The unlocks are:
 
 1. **Frontmatter driven indexing.** Every Markdown file under the docs root carries YAML front matter, and the standard auto-generates `## Index` tables from that metadata. Validated structure is the prerequisite for semantic lookups, progressive disclosure, vectorize any directory pipelines, and any other tooling that wants to operate on docs as data.
-2. **A configurable, growing doc type registry.** Each doc type (ADR, Purpose and Vision, Retrospectives, and future additions) is defined as a substandard that lives under `substandards/` and inherits the parent's frontmatter and index format. Doc types are default on; a project disables a doc type by flipping one flag in `.apss/config.toml`.
+2. **A configurable, growing doc type registry.** Each doc type (ADR, Purpose and Vision, Retrospectives, and future additions) is defined as a substandard that lives under `substandards/` and inherits the parent's frontmatter and index format. Doc types are default on; a project disables a doc type by flipping one flag in `apss.yaml`.
 3. **Installable enforcement.** Installing the standard into a project installs git commit hooks that auto-update the doc index, validate structure against the config, and fail the commit when the structure is inaccurate or incomplete. The contract for that hook is normative and is specified in Section 9.
 
 The documentation root defaults to `docs/`. The base parent standard enforces:
@@ -34,9 +34,21 @@ The documentation root defaults to `docs/`. The base parent standard enforces:
 
 Doc-type specific rules (ADR, Purpose and Vision, Retrospectives, future types) live in substandards. The current registry is defined in Section 8.
 
-### 1.1 Relationship to APS-V1-0000
+### 1.1 Relationship to APS-V1-0000 and the unified APSS config
 
-This standard complements APS-V1-0000's requirement for `docs/01_spec.md` by enforcing broader documentation structure beyond the standard package itself. Both standards share the `.apss/config.toml` config file.
+This standard plugs into the unified APSS configuration model owned by the meta-standard APS-V1-0000 (via its CF01 substandard). Project-level configuration for every APSS standard lives in a single file at the repository root, `apss.yaml`, whose top-level structure and slug registry are owned by CF01. Each standard registers a unique short slug and contributes a config-section schema; the meta-validator aggregates and delegates validation of each namespaced section to its owner.
+
+This standard:
+
+1. Registers the slug `docs`.
+2. Contributes the schema for the `docs` section of `apss.yaml` (Section 3 below).
+3. Validates its own section: the parent validator validates the `docs` block and its core sub-blocks (`index`, `context_files`, `readme`, `root_context`, `backlinking`); each substandard validates its own nested key (`adr`, `purpose-and-vision`, `retrospectives`).
+
+Substandards do NOT register their own top-level slugs. They nest under the `docs` key as namespaced sub-sections (`docs.adr`, `docs.purpose-and-vision`, `docs.retrospectives`); the nesting convention is normative and is owned by the meta-standard.
+
+The `.apss/` dotdir, when it exists, holds GENERATED artifacts (such as cached indexes and validator state) only. It MUST NOT hold configuration. Earlier drafts of this standard placed configuration at `.apss/config.toml`; that location is superseded by `apss.yaml` at the repository root. Tooling MUST NOT continue to read `.apss/config.toml`; presence of that file is not a deprecation alias.
+
+This standard complements APS-V1-0000's requirement for a per-package `docs/01_spec.md` by enforcing broader documentation structure across the project's docs root, beyond each standard package's own spec file.
 
 ---
 
@@ -47,7 +59,7 @@ This standard complements APS-V1-0000's requirement for `docs/01_spec.md` by enf
 - **Context file**: `CLAUDE.md` or `AGENTS.md`, one per directory, providing AI agents with lightweight orientation to that directory.
 - **Docs root**: The project's technical documentation directory. Default `docs/`, configurable via `docs.root`.
 - **Doc type**: A class of document with its own structure rules (ADR, Purpose and Vision, Retrospective, ...). Each doc type is implemented as a substandard.
-- **Doc type registry**: The set of `[docs.<type>]` config sections that declare which doc types are active in a given project. See Section 8.
+- **Doc type registry**: The set of `docs.<type>` keys in `apss.yaml` that declare which doc types are active in a given project. See Section 8.
 - **Backlink**: A reference from an implementation file to the governing doc (ADR, Purpose and Vision, ...) that it implements. Backlinking is part of every doc type, not a per type opt in. See Section 7.
 
 ---
@@ -56,79 +68,107 @@ This standard complements APS-V1-0000's requirement for `docs/01_spec.md` by enf
 
 ### 3.1 Config Location
 
-Project-level configuration MUST be located at `.apss/config.toml` relative to the repository root.
+Project-level configuration MUST be located at `apss.yaml` relative to the repository root. The file is owned by the meta-standard (APS-V1-0000.CF01); this standard registers and contributes the `docs` section.
+
+Configuration MUST NOT be placed at `.apss/config.toml`. The `.apss/` dotdir is reserved for GENERATED artifacts (cached indexes, validator state) only.
+
+Monorepo cascade: a nested `apss.yaml` inside a sub-package layers over the root file using the meta-standard's cascade rules (nearer file overrides root values). Cascade resolution is owned by CF01; this standard inherits whatever the meta-validator produces and validates the merged `docs` block.
 
 ### 3.2 Default Behavior
 
-If `.apss/config.toml` does not exist, the validator MUST apply the documented defaults. The validator MUST NOT error on a missing config file. Zero-config works; every flag defaults to the recommended setting. All features are default on and can only be disabled via explicit configuration.
+If `apss.yaml` does not exist, or it exists but contains no `docs` key, the validator MUST apply the documented defaults. The validator MUST NOT error on a missing config file or a missing `docs` section. Zero-config works; every flag defaults to the recommended setting. All features are default on and can only be disabled via explicit configuration.
 
 ### 3.3 Schema
 
-The schema is normative. Fields not listed here MUST be rejected with `unknown-config-field`.
+The schema is normative. Keys not listed here under the `docs` section MUST be rejected with `unknown-config-field`. The schema below shows the `docs` block as it appears inside `apss.yaml`; the surrounding top-level structure (schema declaration, project identity, standard activation) is owned by CF01.
 
-```toml
-schema = "apss.config/v1"
+```yaml
+docs:
+  disable: false                  # Master kill switch for the whole doc standard
+  root: docs                      # Documentation root directory
 
-[docs]
-disable = false                   # Master kill switch for the whole doc standard
-root    = "docs"                  # Documentation root directory
+  index:
+    disable: false                # Stop enforcing `## Index` in README.md files
+    auto_generate: true           # Allow the CLI / hook to (re)write indexes
+    frontmatter_fields:           # Columns rendered in index tables
+      - name
+      - description
 
-[docs.index]
-disable             = false       # Stop enforcing `## Index` in README.md files
-auto_generate       = true        # Allow the CLI / hook to (re)write indexes
-frontmatter_fields  = ["name", "description"]  # Columns rendered in index tables
+  context_files:
+    require_claude_md: true       # Require CLAUDE.md per docs directory
+    require_agents_md: true       # Require AGENTS.md per docs directory
 
-[docs.context_files]
-require_claude_md = true          # Require CLAUDE.md per docs directory
-require_agents_md = true          # Require AGENTS.md per docs directory
+  readme:
+    disable: false
+    max_depth: -1                 # -1 means unlimited depth
+    exclude_dirs:
+      - node_modules
+      - .git
+      - target
+      - vendor
+      - .topology
 
-[docs.readme]
-disable      = false
-max_depth    = -1                 # -1 means unlimited depth
-exclude_dirs = ["node_modules", ".git", "target", "vendor", ".topology"]
+  root_context:
+    disable: false
+    docs_reference_pattern: docs/ # Pattern checked in root CLAUDE.md / AGENTS.md
 
-[docs.root_context]
-disable                 = false
-docs_reference_pattern  = "docs/" # Pattern checked in root CLAUDE.md / AGENTS.md
+  backlinking:
+    disable: false                # Backlinking applies to every doc type when not disabled
+    file_types:
+      - rs
+      - py
+      - ts
+      - tsx
+      - js
+      - jsx
+      - go
+      - java
+      - kt
+      - rb
+      - sh
+      - yaml
+      - yml
+      - toml
+      - json
+      - md
 
-[docs.backlinking]
-disable     = false               # Backlinking applies to every doc type when enabled
-file_types  = ["rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "kt", "rb", "sh", "yaml", "yml", "toml", "json", "md"]
+  # Doc type registry (substandards). Each `docs.<slug>` key opts that doc type into
+  # validation. Default on. Substandard specs own the keys below the `disable` line.
+  # Substandard keys use the substandard's kebab-case slug (matches `substandard.toml`).
 
-# ── Doc type registry (substandards) ─────────────────────────────────────
-# Each [docs.<type>] block opts that doc type into validation. Default on.
-# Substandard specs own the fields below the `disable` line.
+  adr:
+    disable: false
+    directory: adrs
+    naming_pattern: "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+    required_adr_keywords: []
 
-[docs.adr]
-disable             = false
-directory           = "adrs"
-naming_pattern      = "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
-required_adr_keywords = []
+  purpose-and-vision:
+    disable: false
+    location: docs/vision.md      # Default file path. See PV01.
 
-[docs.purpose_and_vision]
-disable   = false
-location  = "docs/vision.md"      # Default file path. See PV01.
-
-[docs.retrospectives]
-disable        = false
-directory      = "docs/retrospectives"
-naming_pattern = "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+  retrospectives:
+    disable: false
+    directory: docs/retrospectives
+    naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 ```
 
 ### 3.4 Configurability rules
 
-- Every rule listed in this spec is on by default. A project disables one rule by setting `disable = true` in the smallest scope that contains it (a single `[docs.<section>]` block, or the global `[docs]` block to disable all doc validation).
+- Every rule listed in this spec is on by default. A project disables one rule by setting `disable: true` in the smallest scope that contains it (a single nested key under `docs`, or the top-level `docs.disable` to disable all doc validation).
 - There MUST NOT be per feature `optional` flags scattered through the spec. The shape is always: a `disable` flag at the top of the relevant section, plus that section's content.
-- Adding a new doc type does not require changing this spec. A new substandard MAY claim a `[docs.<type>]` block; the parent standard MUST tolerate unknown `[docs.<type>]` blocks for forward compatibility, even though it MUST reject unknown scalar fields inside known sections.
+- Adding a new doc type does not require changing this spec. A new substandard MAY claim its own `docs.<slug>` key; the parent standard MUST tolerate unknown `docs.<slug>` keys for forward compatibility, even though it MUST reject unknown scalar fields inside known sections.
+- Substandard keys use the substandard's kebab-case slug (for example `purpose-and-vision`, not `purpose_and_vision`). Scalar field names inside each section remain snake_case to match the Rust struct contract.
 
 ### 3.5 Loading and validation of the config file itself
 
 The CLI and hook MUST emit a single human-readable diagnostic, never a panic, when the config file is malformed:
 
-- `invalid-config-toml`: `.apss/config.toml` is not valid TOML. Severity: error.
-- `unknown-config-field`: a known section contains an unknown scalar field. Severity: error.
+- `invalid-apss-yaml`: `apss.yaml` is not valid YAML. Severity: error.
+- `unknown-config-field`: a known section under `docs` contains an unknown scalar field. Severity: error.
 
 Both diagnostics MUST include the file path, the offending field or token, and a one-line hint.
+
+The parent meta-validator (CF01) is responsible for top-level structural diagnostics (missing required core sections, unknown top-level sections, slug registry violations); this standard's validator owns diagnostics scoped to the `docs` section.
 
 ---
 
@@ -247,7 +287,7 @@ Diagnostic: `root-self-reference-missing` (warning). The validator MUST check fo
 
 - The literal token `APSS` or the phrase `Agent Paradise Standards System`.
 - The docs root path (matching `docs.root_context.docs_reference_pattern`).
-- Each active doc type's location (`docs.adr.directory`, `docs.purpose_and_vision.location`, ...).
+- Each active doc type's location (`docs.adr.directory`, `docs.purpose-and-vision.location`, ...).
 
 ### 6.4 DOC03-skills-format
 
@@ -302,11 +342,11 @@ The standard does not require code files to be auto generated with backlinks. It
 
 The parent standard defines the doc type registry. Each doc type is implemented as a substandard under `substandards/`. The shipped doc types are:
 
-| Doc type | Substandard | Default location | Config block |
-|----------|-------------|------------------|--------------|
-| Architecture Decision Records | `EXP-V1-0004.ADR01` | `docs/adrs/` | `[docs.adr]` |
-| Purpose and Vision | `EXP-V1-0004.PV01` | `docs/vision.md` | `[docs.purpose_and_vision]` |
-| Retrospectives | `EXP-V1-0004.RETRO01` | `docs/retrospectives/` | `[docs.retrospectives]` |
+| Doc type | Substandard | Default location | Config key in `apss.yaml` |
+|----------|-------------|------------------|---------------------------|
+| Architecture Decision Records | `EXP-V1-0004.ADR01` | `docs/adrs/` | `docs.adr` |
+| Purpose and Vision | `EXP-V1-0004.PV01` | `docs/vision.md` | `docs.purpose-and-vision` |
+| Retrospectives | `EXP-V1-0004.RETRO01` | `docs/retrospectives/` | `docs.retrospectives` |
 
 ### 8.1 Lifecycle status (shared)
 
@@ -324,7 +364,7 @@ ADRs are never revised; they are superseded. Retrospectives are append only. Pur
 A new doc type is added by:
 
 1. Creating a substandard under `substandards/<ID>-<slug>/`.
-2. Defining its `[docs.<type>]` config block. The block MUST start with `disable = false`. Any further fields are owned by the substandard.
+2. Defining its nested key under `docs` in `apss.yaml`, using the substandard's kebab-case slug (so `docs.<slug>`). The block MUST start with `disable: false`. Any further fields are owned by the substandard. Substandards do NOT register their own top-level slug in the meta-standard registry.
 3. Registering the doc type in this section's table.
 4. Defining the substandard's diagnostic codes using the human readable scheme described in Section 10.
 
@@ -352,10 +392,10 @@ aps run docs uninstall [<repo-root>]
 Behavior:
 
 - `install` MUST:
-  1. Create `.apss/config.toml` from the documented defaults if it does not exist. If it does exist, MUST NOT overwrite it.
+  1. If `apss.yaml` does not exist, ask the meta-standard's installer (CF01) to create it with the project's selected standards. If `apss.yaml` exists, MUST NOT overwrite it; only add a `docs:` block if missing, leaving every other section untouched. The added `docs:` block uses the documented defaults from Section 3.3.
   2. Install the git pre-commit hook described in Section 9.4. If a pre-commit hook already exists, MUST insert an `apss-docs-hook` block delimited by sentinel comments rather than replace the user's hook.
   3. Print the resolved doc type registry so the operator sees which doc types just became active.
-- `uninstall` MUST remove only the `apss-docs-hook` block from the pre-commit hook and MUST leave `.apss/config.toml` and the rest of the hook intact.
+- `uninstall` MUST remove only the `apss-docs-hook` block from the pre-commit hook and MUST leave `apss.yaml` (and its `docs:` block) and the rest of the hook intact.
 - Both commands MUST be idempotent.
 
 ### 9.2 Validator contract
@@ -365,7 +405,7 @@ The validator is the source of truth. The hook and the standalone CLI MUST call 
 **Inputs**:
 
 - `repo_root: Path`: absolute path to the repository root.
-- `config: ApssConfig`: parsed `.apss/config.toml`, with defaults applied for any missing fields.
+- `config: ApssConfig`: the merged `docs` block from `apss.yaml` (after CF01 cascade resolution), with defaults applied for any missing fields.
 - `scope: ValidationScope`: one of:
   - `Full`: walk the entire docs root and every doc type directory.
   - `Changed { staged_paths: Vec<PathBuf> }`: only inspect docs touched by the staged change set; the hook MUST use this scope.
@@ -448,8 +488,8 @@ Existing numeric or composite codes (for example, `ADR01-001`) MAY be retained a
 
 | Code | Severity | Domain | Description |
 |------|----------|--------|-------------|
-| `invalid-config-toml` | error | Config | `.apss/config.toml` is not valid TOML. |
-| `unknown-config-field` | error | Config | A known section contains an unknown scalar field. |
+| `invalid-apss-yaml` | error | Config | `apss.yaml` is not valid YAML. |
+| `unknown-config-field` | error | Config | A known section under `docs` contains an unknown scalar field. |
 | `readme-missing` | error | DOC02 | Directory missing `README.md`. |
 | `claude-md-missing` | warning | DOC02 | Directory missing `CLAUDE.md`. |
 | `agents-md-missing` | warning | DOC02 | Directory missing `AGENTS.md`. |
@@ -488,7 +528,7 @@ Every command MUST emit the same diagnostics shape as the validator (Section 9.2
 
 ## Appendix A: Validation Checklist
 
-- [ ] `.apss/config.toml` valid, or absent for defaults.
+- [ ] `apss.yaml` valid, or absent for defaults; the `docs:` block (if present) parses against Section 3.3.
 - [ ] Every docs directory has `README.md` with a valid `## Index` section.
 - [ ] `.md` files under the docs root have closed frontmatter with the configured fields.
 - [ ] `CLAUDE.md` and `AGENTS.md` present per docs directory.

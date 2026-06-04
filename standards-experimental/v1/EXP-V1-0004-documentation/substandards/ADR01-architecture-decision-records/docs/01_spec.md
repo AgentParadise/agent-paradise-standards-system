@@ -15,7 +15,7 @@ Key words: MUST, MUST NOT, SHOULD, SHALL per [RFC 2119](https://www.rfc-editor.o
 
 The docs root (default `docs/`) MUST contain an ADR directory (default `adrs/`).
 
-- Configurable via `docs.adr.directory` in `.apss/config.toml`
+- Configurable via `docs.adr.directory` in `apss.yaml`
 - Full path: `<docs.root>/<docs.adr.directory>/` (e.g., `docs/adrs/`)
 - The ADR directory SHOULD contain a `README.md` with a `## Index` section listing all ADRs (managed by the parent standard's index generation)
 
@@ -34,7 +34,7 @@ Every `.md` file in the ADR directory (excluding `README.md`, `CLAUDE.md`, `AGEN
 
 - The number MUST be zero-padded to at least 3 digits (maximum 5 digits)
 - The name MUST use kebab-case (lowercase letters, digits, hyphens)
-- Configurable via `docs.adr.naming_pattern` in `.apss/config.toml`
+- Configurable via `docs.adr.naming_pattern` in `apss.yaml`
 
 ## 3. Front Matter (ADR01-missing-frontmatter, ADR01-invalid-status)
 
@@ -62,9 +62,10 @@ status: accepted
 
 Projects MAY configure required ADR topics via `docs.adr.required_adr_keywords`:
 
-```toml
-[docs.adr]
-required_adr_keywords = ["security", "testing", "deployment"]
+```yaml
+docs:
+  adr:
+    required_adr_keywords: ["security", "testing", "deployment"]
 ```
 
 For each keyword, at least one file whose stem matches the configured
@@ -74,7 +75,7 @@ customises the prefix (e.g., `DEC-...`) gets a keyword check that follows
 its convention. The number prefix is flexible; only the keyword suffix is
 enforced.
 
-**Example:** With `required_adr_keywords = ["security"]`, any of these satisfy the requirement:
+**Example:** With `required_adr_keywords: ["security"]`, any of these satisfy the requirement:
 - `ADR-001-security.md`
 - `ADR-042-security.md`
 
@@ -87,7 +88,7 @@ the ADR they implement so context is never lost across plan, design, and impl.
 The disable flag exists only as a per-project escape hatch; it is not the
 intended default.
 
-When `docs.adr.backlinking` is enabled (default: `true`), implementation files that are governed by an ADR SHOULD contain a reference to the ADR identifier.
+When `docs.backlinking.disable` is `false`, implementation files that are governed by an ADR SHOULD contain a reference to the ADR identifier.
 
 **ADR identifier format:** `ADR-XXX-<name>` (the filename without `.md`)
 
@@ -119,7 +120,7 @@ deleted. Live references to an ADR whose status is `superseded` or
 
 **Severity:** warning (ADR01-dead-reference, ADR01-superseded-reference)
 
-**Controlled by:** `docs.adr.backlinking` in `.apss/config.toml`
+**Controlled by:** `docs.backlinking.disable` in `apss.yaml`
 
 ## 7. Required ADR Headers (ADR01-missing-header)
 
@@ -168,16 +169,14 @@ or `BACKLINK` do not produce false `ADR01-context-missing-guidance` warnings.
 
 ## 9. Configuration
 
-```toml
-[docs.adr]
-disable = false                                   # Default-on; set true to skip ADR validation
-directory = "adrs"                                # ADR directory name under docs root
-naming_pattern = "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md" # File naming regex
-required_adr_keywords = []                         # Required topic keywords
-backlinking = true                                 # Enforce backlinks in implementation files
+```yaml
+docs:
+  adr:
+    disable:               false                    # Default-on; set true to skip ADR validation
+    directory:             "adrs"                   # ADR directory name under docs root
+    naming_pattern:        "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md" # File naming regex
+    required_adr_keywords: []                       # Required topic keywords
 ```
-
-Backlinking is part of the standard (parent spec section 7); the `backlinking` flag here exists only for projects that need a temporary opt-out. Default is on.
 
 ## 10. ADR Template
 

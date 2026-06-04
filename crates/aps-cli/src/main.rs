@@ -1052,19 +1052,37 @@ fn dispatch_fitness(
 }
 
 /// Load docs config from a custom path (for `--config` flag).
+///
+/// Mirrors `documentation::config::load_config` but works against an
+/// arbitrary path so operators can point `aps run docs validate` at a
+/// non-default `apss.yaml`. YAML format per the unified-config brief
+/// (2026-06-04); other top-level sections owned by other standards are
+/// tolerated and ignored.
 fn load_docs_config(
     path: &str,
 ) -> Result<documentation::config::ApssConfig, documentation::config::ConfigError> {
+    let path_buf = std::path::PathBuf::from(path);
     let content = std::fs::read_to_string(path).map_err(|e| {
         documentation::config::ConfigError::ReadError {
-            path: std::path::PathBuf::from(path),
+            path: path_buf.clone(),
             source: e,
         }
     })?;
-    toml::from_str(&content).map_err(|e| documentation::config::ConfigError::ParseError {
-        path: std::path::PathBuf::from(path),
-        source: e,
-    })
+    let root: serde_yaml::Value = serde_yaml::from_str(&content).map_err(|e| {
+        documentation::config::ConfigError::ParseError {
+            path: path_buf.clone(),
+            source: e,
+        }
+    })?;
+    let docs_value = root.get("docs").cloned().unwrap_or(serde_yaml::Value::Null);
+    let docs: documentation::config::DocsConfig =
+        serde_yaml::from_value(docs_value).map_err(|e| {
+            documentation::config::ConfigError::ParseError {
+                path: path_buf,
+                source: e,
+            }
+        })?;
+    Ok(documentation::config::ApssConfig { docs })
 }
 
 /// Dispatch documentation standard commands.
