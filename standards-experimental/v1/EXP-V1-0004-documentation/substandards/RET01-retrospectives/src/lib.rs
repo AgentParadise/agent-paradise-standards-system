@@ -26,12 +26,7 @@ pub mod error_codes {
 pub const ALLOWED_STATUSES: &[&str] = &["proposed", "active", "deprecated", "superseded"];
 
 /// Required H2 section titles in a retrospective.
-pub const REQUIRED_SECTIONS: &[&str] = &[
-    "Context",
-    "What Went Well",
-    "What Did Not",
-    "Followups",
-];
+pub const REQUIRED_SECTIONS: &[&str] = &["Context", "What Went Well", "What Did Not", "Followups"];
 
 /// Default directory relative to the repo root.
 pub const DEFAULT_DIRECTORY: &str = "docs/retrospectives";

@@ -5,8 +5,8 @@
 //! drift before the implementation arrives.
 
 use documentation_retrospectives::{
-    error_codes, ALLOWED_STATUSES, APPEND_REGION_SENTINEL, DEFAULT_DIRECTORY,
-    DEFAULT_NAMING_PATTERN, REQUIRED_SECTIONS,
+    ALLOWED_STATUSES, APPEND_REGION_SENTINEL, DEFAULT_DIRECTORY, DEFAULT_NAMING_PATTERN,
+    REQUIRED_SECTIONS, error_codes,
 };
 
 #[test]
@@ -21,7 +21,10 @@ fn error_codes_use_human_readable_scheme() {
         error_codes::MISSING_SECTION,
         error_codes::HISTORY_MODIFIED,
     ] {
-        assert!(code.starts_with("RET01-"), "code missing RET01- prefix: {code}");
+        assert!(
+            code.starts_with("RET01-"),
+            "code missing RET01- prefix: {code}"
+        );
     }
 }
 

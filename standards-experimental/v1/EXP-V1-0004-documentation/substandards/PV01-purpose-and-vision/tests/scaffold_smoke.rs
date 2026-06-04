@@ -6,7 +6,7 @@
 //! arrives.
 
 use documentation_purpose_and_vision::{
-    error_codes, ALLOWED_STATUSES, DEFAULT_LOCATION, REQUIRED_SECTIONS,
+    ALLOWED_STATUSES, DEFAULT_LOCATION, REQUIRED_SECTIONS, error_codes,
 };
 
 #[test]
@@ -22,7 +22,10 @@ fn error_codes_use_human_readable_scheme() {
         error_codes::SUPERSEDED_WITHOUT_POINTER,
         error_codes::DEPRECATED_ACTIVE,
     ] {
-        assert!(code.starts_with("PV01-"), "code missing PV01- prefix: {code}");
+        assert!(
+            code.starts_with("PV01-"),
+            "code missing PV01- prefix: {code}"
+        );
         assert!(
             !code.contains(char::is_uppercase) || code.starts_with("PV01-"),
             "code has unexpected uppercase: {code}"
