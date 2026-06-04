@@ -1,7 +1,10 @@
 # ADR 0002 - Promote MT01 and MD01 from `incubating` to `active`
 
-**Status**: Accepted
+**Status**: Accepted (superseded in part by [ADR 0003](./0003-six-dimension-promotion.md))
 **Decision Date**: 2026-04-16
+**Last updated**: 2026-06-05
+
+> **Update (2026-06-05):** ADR 0003 promoted ST01, SC01, LG01, and AC01 from `incubating` to `active`. Wherever this ADR refers to those four dimensions as `incubating`, the current truth lives in ADR 0003 and Appendix D. PF01 and AV01 remain `incubating` per ADR 0003.
 
 ## Problem
 
@@ -9,7 +12,7 @@ APS-V1-0002 v1.0.0 shipped with every dimension declared `incubating` because R3
 
 ## Decision
 
-Promote **MT01 (Maintainability)** and **MD01 (Modularity & Coupling)** from `incubating` to `active`. All other dimensions remain `incubating` pending follow-on work.
+Promote **MT01 (Maintainability)** and **MD01 (Modularity & Coupling)** from `incubating` to `active`. Other dimensions (ST01, SC01, LG01, AC01) are promoted to active in a subsequent change (see ADR 0003), while PF01 and AV01 remain `incubating`.
 
 ## Evidence of R1-R5 Satisfaction
 
@@ -26,7 +29,7 @@ Promote **MT01 (Maintainability)** and **MD01 (Modularity & Coupling)** from `in
 With MT01 and MD01 active, the engine enters **strict-artifact mode** for their rules (per §3.3 R3 and §12 `PROMOTION_REQUIREMENT_UNMET`):
 
 - A rule on an active dimension whose source artifact is missing now produces a failing `RuleResult` rather than `Skip`. The dimension promised this data exists; its absence is a contract violation.
-- Incubating dimensions (ST01, SC01, LG01, AC01, PF01, AV01) continue to skip silently on missing artifacts.
+- Incubating dimensions continue to skip silently on missing artifacts. **At the time of writing this ADR (2026-04-16), that set was `{ST01, SC01, LG01, AC01, PF01, AV01}`. Per ADR 0003 (2026-06-04), only `{PF01, AV01}` remain incubating today.**
 
 Source of truth: `DimensionCode::promotion_status()` in `architecture-fitness/src/lib.rs`. This MUST remain in sync with the Status column of §1.4 and the Status row of Appendix D.
 
@@ -41,11 +44,12 @@ Source of truth: `DimensionCode::promotion_status()` in `architecture-fitness/sr
 ## Consequences
 
 - Projects using APS-V1-0002 with MT01 or MD01 rules MUST run APS-V1-0001 topology generation before `apss run fitness validate`; otherwise rules fail rather than skip.
-- Incubating dimensions remain advisory. The composite system fitness score reflects only enforced dimensions (MT01 + MD01) by default, per §6.1. Users who want incubating scores in the composite set `include_incubating = true`.
+- Incubating dimensions remain advisory. The composite system fitness score reflects only enforced dimensions by default per §6.1. At the time of this ADR the enforced set was `{MT01, MD01}`; per [ADR 0003](./0003-six-dimension-promotion.md) it is now `{MT01, MD01, ST01, SC01, LG01, AC01}`. Users who want incubating scores in the composite set `include_incubating = true`.
 - Future dimension promotions follow this same pattern: land producer + schema + reference crate + ADR in a single bounded change.
 
 ## References
 
 - APS-V1-0002 spec §1.4 (Substandard classifications), §3.3 (R1-R5), §3.4 (Lifecycle), §3.5 (Artifact Contracts), §12 (Error Codes), Appendix D (Current Implementation Status)
+- [ADR 0003](./0003-six-dimension-promotion.md) - subsequent promotion of ST01, SC01, LG01, AC01 to `active`
 - APS-V1-0001 schemas at `standards/v1/APS-V1-0001-code-topology/schemas/`
 - Reference crates at `standards/v1/APS-V1-0002-architecture-fitness/substandards/0002-MT01-maintainability/` and `.../0002-MD01-modularity/`

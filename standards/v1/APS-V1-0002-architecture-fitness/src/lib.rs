@@ -876,9 +876,16 @@ impl FitnessValidator {
             all_stale.extend(stale);
         }
 
-        // Evaluate structural rules (stub - always skipped)
+        // Evaluate structural rules. The evaluator delegates to the
+        // dependency-graph path for the three documented patterns
+        // (forbidden_import / required_import / layer_enforcement); track
+        // non-Skip results so stale-exception detection sees them.
         for rule in &self.config.rules.structural {
-            results.push(self.evaluate_structural_rule(rule));
+            let result = self.evaluate_structural_rule(rule);
+            if result.status != RuleStatus::Skip {
+                evaluated_rule_ids.push(rule.id.clone());
+            }
+            results.push(result);
         }
 
         // Detect stale exceptions - only for rules that were fully evaluated.
@@ -1382,16 +1389,106 @@ impl FitnessValidator {
         }
     }
 
-    /// Evaluate a structural rule (stub - pattern catalog not yet implemented).
+    /// Evaluate a structural rule.
+    ///
+    /// Maps the documented pattern catalog (`forbidden_import`,
+    /// `required_import`, `layer_enforcement`) onto the dependency-graph
+    /// evaluator (`evaluate_dependency_rule`). Both `forbidden_import` and
+    /// `layer_enforcement` enforce the "no edge from `from` to `to`"
+    /// invariant; `required_import` enforces the dual "every `from` node has
+    /// at least one edge into `to`" invariant. Patterns outside the catalog
+    /// produce a failing `RuleResult` with field `pattern` and entity
+    /// `INVALID_STRUCTURAL_PATTERN:<name>` (§12).
+    ///
+    /// CK class-level metrics (DIT, CBO, LCOM) are out of scope for this
+    /// evaluator and remain a scoped follow-on; per ADR 0003 they ship with
+    /// a class-level analyzer.
     fn evaluate_structural_rule(&self, rule: &StructuralRule) -> RuleResult {
-        RuleResult {
-            rule_id: rule.id.clone(),
-            rule_name: rule.name.clone(),
-            dimension: rule.dimension.clone().or_else(|| Some("ST01".to_string())),
-            status: RuleStatus::Skip,
-            violations: vec![],
-            exceptions_used: 0,
-            total_entities: None,
+        let dimension = rule
+            .dimension
+            .clone()
+            .or_else(|| Some("ST01".to_string()));
+
+        let dep_rule_type = match rule.pattern.as_str() {
+            "forbidden_import" | "layer_enforcement" => "forbidden",
+            "required_import" => "required",
+            _ => {
+                return RuleResult {
+                    rule_id: rule.id.clone(),
+                    rule_name: rule.name.clone(),
+                    dimension,
+                    status: RuleStatus::Fail,
+                    violations: vec![Violation {
+                        entity: format!(
+                            "{}:{}",
+                            error_codes::INVALID_STRUCTURAL_PATTERN,
+                            rule.pattern
+                        ),
+                        field: "pattern".to_string(),
+                        actual: 0.0,
+                        threshold: 0.0,
+                        direction: ThresholdDirection::Max,
+                        excepted: false,
+                    }],
+                    exceptions_used: 0,
+                    total_entities: None,
+                };
+            }
+        };
+
+        let (from, to) = match (rule.from.clone(), rule.to.clone()) {
+            (Some(f), Some(t)) => (f, t),
+            _ => {
+                // Pattern requires from + to; missing matchers are a hard
+                // config error (INVALID_RULE) at evaluation time.
+                return RuleResult {
+                    rule_id: rule.id.clone(),
+                    rule_name: rule.name.clone(),
+                    dimension,
+                    status: RuleStatus::Fail,
+                    violations: vec![Violation {
+                        entity: format!("{}:missing from/to", rule.id),
+                        field: "from/to".to_string(),
+                        actual: 0.0,
+                        threshold: 0.0,
+                        direction: ThresholdDirection::Max,
+                        excepted: false,
+                    }],
+                    exceptions_used: 0,
+                    total_entities: None,
+                };
+            }
+        };
+
+        let transient = DependencyRule {
+            id: rule.id.clone(),
+            name: rule.name.clone(),
+            dimension: dimension.clone(),
+            rule_type: dep_rule_type.to_string(),
+            from,
+            to,
+            circular: false,
+            severity: rule.severity,
+        };
+
+        // Delegate to the dependency-graph evaluator; on I/O / parse error
+        // collapse to a Skip so a structural rule cannot bring down the
+        // whole report (the underlying error is surfaced via the dependency
+        // path the next time it runs).
+        match self.evaluate_dependency_rule(&transient) {
+            Ok((mut result, _stale, _matched)) => {
+                result.dimension = dimension;
+                result
+            }
+            Err(_) => RuleResult {
+                rule_id: rule.id.clone(),
+                rule_name: rule.name.clone(),
+                dimension,
+                status: RuleStatus::Skip,
+                violations: vec![],
+                exceptions_used: 0,
+                total_entities: None,
+            },
         }
     }
 
