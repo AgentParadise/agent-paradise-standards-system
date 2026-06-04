@@ -16,10 +16,10 @@ A "standard of standards" that defines how ADRs should be structured across all 
 
 ### Key Features
 
-- **Progressive disclosure** — Index with summaries, drill into details on demand
-- **Searchable** — Simple command to query ADRs across standards
-- **Context-efficient** — Designed for agentic consumption (minimal tokens for max understanding)
-- **Adoptable** — Other standards implement THIS standard for their ADRs
+- **Progressive disclosure** - Index with summaries, drill into details on demand
+- **Searchable** - Simple command to query ADRs across standards
+- **Context-efficient** - Designed for agentic consumption (minimal tokens for max understanding)
+- **Adoptable** - Other standards implement THIS standard for their ADRs
 
 ### Rough Structure
 
@@ -47,7 +47,7 @@ A "standard of standards" that defines how ADRs should be structured across all 
 
 ### Problem
 
-The 3D force-directed visualization becomes unusable ("hairball") for large codebases (600+ modules). Tested on `agentic-engineering-framework` with 609 modules — completely unnavigable.
+The 3D force-directed visualization becomes unusable ("hairball") for large codebases (600+ modules). Tested on `agentic-engineering-framework` with 609 modules - completely unnavigable.
 
 ### Proposed Solutions
 
@@ -56,16 +56,16 @@ The 3D force-directed visualization becomes unusable ("hairball") for large code
 | **Package-level aggregation** | Show packages as collapsed nodes first, expand on click to reveal modules | Medium |
 | **LOD (Level of Detail)** | Hide distant/low-coupling nodes when zoomed out, reveal on zoom | Medium |
 | **Edge bundling** | Group parallel edges going to same area into bundles | High |
-| **Focus mode (N-hop)** | Click node → show only N-hop neighbors, fade/hide rest | Low |
+| **Focus mode (N-hop)** | Click node -> show only N-hop neighbors, fade/hide rest | Low |
 | **Smart filter defaults** | Auto-detect module count, start with higher coupling threshold for large graphs | Low |
 | **Hierarchical layout** | Tree/radial layout by directory structure instead of pure force-directed | Medium |
 | **WebGL instancing** | Use instanced rendering for 1000s of nodes (current approach won't scale) | High |
 
 ### Quick Wins
 
-1. **Focus mode** — Lowest effort, highest impact for exploration
-2. **Smart filter defaults** — Trivial to implement, immediate UX improvement
-3. **Package-level view** — `clusters.html` already does this, could make it the default for large codebases
+1. **Focus mode** - Lowest effort, highest impact for exploration
+2. **Smart filter defaults** - Trivial to implement, immediate UX improvement
+3. **Package-level view** - `clusters.html` already does this, could make it the default for large codebases
 
 ### Open Questions
 
@@ -78,4 +78,3 @@ The 3D force-directed visualization becomes unusable ("hairball") for large code
 ## Other Ideas
 
 *(Add future ideas here as they arise)*
-

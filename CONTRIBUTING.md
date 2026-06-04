@@ -28,8 +28,8 @@ git push origin my-feature-branch
 
 ### Prerequisites
 
-- **Rust 1.85+** — Install via [rustup](https://rustup.rs/)
-- **Just** — Task runner: `cargo install just`
+- **Rust 1.85+** - Install via [rustup](https://rustup.rs/)
+- **Just** - Task runner: `cargo install just`
 
 ### Useful Commands
 
@@ -68,10 +68,10 @@ standards-experimental/v1/EXP-V1-XXXX-my-idea/
 
 Every standard must include:
 
-- **`docs/01_spec.md`** — Core specification
-- **`examples/`** — At least one working example
-- **`tests/`** — Automated validation tests
-- **`agents/skills/`** — Agent capability definitions
+- **`docs/01_spec.md`** - Core specification
+- **`examples/`** - At least one working example
+- **`tests/`** - Automated validation tests
+- **`agents/skills/`** - Agent capability definitions
 
 ### 3. Validate Your Work
 
@@ -138,17 +138,16 @@ See [AGENTS.md](AGENTS.md) for the RIPER-5 operational protocol designed for AI 
 
 Key points:
 - Always declare your current mode
-- Follow the Research → Innovate → Plan → Execute → Review flow
+- Follow the Research -> Innovate -> Plan -> Execute -> Review flow
 - Use `just check` after Execute mode
 - Commit with conventional messages
 
 ## Getting Help
 
-- **Issues** — Bug reports and feature requests
-- **Discussions** — Questions and ideas
-- **PRs** — Code contributions
+- **Issues** - Bug reports and feature requests
+- **Discussions** - Questions and ideas
+- **PRs** - Code contributions
 
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
-

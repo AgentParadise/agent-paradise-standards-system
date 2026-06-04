@@ -40,3 +40,5 @@ aps-topology-3d.html
 coupling-3d.html
 .topology/
 topology-3d.html
+.env
+.claude/settings.local.json

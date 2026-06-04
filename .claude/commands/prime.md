@@ -97,10 +97,10 @@ agent-paradise-standards-system/
 
 ### Architecture Principles
 
-1. **Filesystem is canonical** — `standards/v1/**` + metadata files are the source of truth
-2. **Registries are derived** — Generated views, not authoritative
-3. **Code is the standard** — Rust crates + protos ARE the standard, not docs
-4. **Self-validating** — Each standard can validate itself and consumers
+1. **Filesystem is canonical** - `standards/v1/**` + metadata files are the source of truth
+2. **Registries are derived** - Generated views, not authoritative
+3. **Code is the standard** - Rust crates + protos ARE the standard, not docs
+4. **Self-validating** - Each standard can validate itself and consumers
 
 ### Key Traits
 
@@ -212,10 +212,10 @@ Every standard/substandard MUST include:
 **Stack:** Rust 2024 Edition, Cargo workspace, Clap CLI, Handlebars templates
 
 ### Structure Understanding
-- `crates/aps-core/` — Core engine with discovery, templates, diagnostics, versioning
-- `crates/aps-cli/` — Command-line interface built with Clap
-- `standards/v1/` — Official standards (currently APS-V1-0000-meta)
-- `standards-experimental/v1/` — Incubating experiments
+- `crates/aps-core/` - Core engine with discovery, templates, diagnostics, versioning
+- `crates/aps-cli/` - Command-line interface built with Clap
+- `standards/v1/` - Official standards (currently APS-V1-0000-meta)
+- `standards-experimental/v1/` - Incubating experiments
 - Meta-standard (APS-V1-0000) defines structure for all V1 packages
 
 ### Ready to Work On
@@ -227,4 +227,3 @@ Based on this context, I can now help with:
 - Working with templates and package scaffolding
 - Understanding and modifying the meta-standard specification
 - Debugging package discovery and validation issues
-

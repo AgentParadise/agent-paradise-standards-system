@@ -232,7 +232,6 @@ source_type: api_ref
 |-------|-------|
 | Requested Version | {requested_version} |
 | Resolved Version | {resolved_version} |
-| Version Range | {VERSION_RANGE or "—"} |
+| Version Range | {VERSION_RANGE or "-"} |
 | Source Type | {source_type} |
 | Scraped At | {timestamp} |
-

@@ -478,6 +478,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "documentation-purpose-and-vision"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "documentation",
+ "tempfile",
+]
+
+[[package]]
+name = "documentation-retrospectives"
+version = "0.1.0"
+dependencies = [
+ "aps-core",
+ "documentation",
+ "regex",
+ "tempfile",
+]
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
