@@ -6,6 +6,14 @@
 //!
 //! ⚠️ EXPERIMENTAL: This standard is in incubation and may change significantly.
 
+pub const ID: &str = "EXP-V1-0003";
+pub const SLUG: &str = "fitness";
+pub const NAME: &str = "Architecture Fitness Functions";
+pub const DESCRIPTION: &str = "Declarative architectural assertions";
+pub const COMMANDS: &str = "validate";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const ALIASES: &[&str] = &["fitness-functions", "exp-v1-0003"];
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

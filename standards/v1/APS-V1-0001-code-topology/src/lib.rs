@@ -30,6 +30,14 @@
 //!
 //! ⚠️ EXPERIMENTAL: This standard is in incubation and may change significantly.
 
+pub const ID: &str = "APS-V1-0001";
+pub const SLUG: &str = "topology";
+pub const NAME: &str = "Code Topology and Coupling Analysis";
+pub const DESCRIPTION: &str = "Architectural metrics and visualization";
+pub const COMMANDS: &str = "analyze, validate, diff, report, viz";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const ALIASES: &[&str] = &["topo", "code-topology", "exp-v1-0001"];
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;

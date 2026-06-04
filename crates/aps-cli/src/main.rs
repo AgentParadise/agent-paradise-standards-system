@@ -662,12 +662,10 @@ fn allocate_next_experiment_id(repo_root: &std::path::Path) -> String {
 //
 // Per-standard identity (ID, SLUG, NAME, etc.) is owned by each standard's
 // crate as `pub const`s. The CLI references those constants here so the
-// registry, the dispatch arms, and any future promoted-to-APS rename stay in
+// The registry, the dispatch arms, and any future promoted-to-APS rename stay in
 // one place rather than scattered as duplicated string literals (this is the
 // `aps run` magic-string cleanup mandated by the operator review).
 
-const TOPOLOGY_SLUG: &str = "topology";
-const FITNESS_SLUG: &str = "fitness";
 
 /// Information about a registered standard.
 #[allow(dead_code)]
@@ -681,28 +679,28 @@ struct StandardCliInfo {
     aliases: &'static [&'static str],
 }
 
-/// Central registry of all available standards. The docs entry pulls every
-/// field from `documentation::*` constants so an EXP -> APS promotion only
+/// Central registry of all available standards. The entries pull fields
+/// from the standard's crate constants so an EXP -> APS promotion only
 /// updates the standard crate, not the CLI.
 fn all_standards() -> &'static [StandardCliInfo] {
     &[
         StandardCliInfo {
-            id: "EXP-V1-0001",
-            slug: TOPOLOGY_SLUG,
-            name: "Code Topology",
-            description: "Architectural metrics and visualization",
-            commands: "analyze, validate, diff, report, viz",
-            version: "0.1.0",
-            aliases: &["topo", "code-topology", "exp-v1-0001"],
+            id: code_topology::ID,
+            slug: code_topology::SLUG,
+            name: code_topology::NAME,
+            description: code_topology::DESCRIPTION,
+            commands: code_topology::COMMANDS,
+            version: code_topology::VERSION,
+            aliases: code_topology::ALIASES,
         },
         StandardCliInfo {
-            id: "EXP-V1-0003",
-            slug: FITNESS_SLUG,
-            name: "Architecture Fitness Functions",
-            description: "Declarative architectural assertions",
-            commands: "validate",
-            version: "0.1.0",
-            aliases: &["fitness-functions", "exp-v1-0003"],
+            id: fitness_functions::ID,
+            slug: fitness_functions::SLUG,
+            name: fitness_functions::NAME,
+            description: fitness_functions::DESCRIPTION,
+            commands: fitness_functions::COMMANDS,
+            version: fitness_functions::VERSION,
+            aliases: fitness_functions::ALIASES,
         },
         StandardCliInfo {
             id: documentation::ID,
@@ -737,8 +735,8 @@ fn dispatch_standard_cli(
     let cmd_args = if args.len() > 1 { &args[1..] } else { &[] };
 
     match info.slug {
-        TOPOLOGY_SLUG => dispatch_topology(command, cmd_args, repo_root, verbose),
-        FITNESS_SLUG => dispatch_fitness(command, cmd_args, repo_root, verbose),
+        code_topology::SLUG => dispatch_topology(command, cmd_args, repo_root, verbose),
+        fitness_functions::SLUG => dispatch_fitness(command, cmd_args, repo_root, verbose),
         documentation::SLUG => dispatch_docs(command, cmd_args, repo_root, verbose),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
@@ -756,10 +754,10 @@ fn dispatch_topology(
 ) -> ExitCode {
     match command {
         "--help" | "-h" | "help" => {
-            println!("Code Topology (EXP-V1-0001) v0.1.0");
+            println!("{} ({}) v{}", code_topology::NAME, code_topology::ID, code_topology::VERSION);
             println!();
             println!("USAGE:");
-            println!("    aps run topology <COMMAND> [OPTIONS]");
+            println!("    aps run {} <COMMAND> [OPTIONS]", code_topology::SLUG);
             println!();
             println!("COMMANDS:");
             println!("    analyze <path>     Analyze codebase and generate .topology/");
@@ -905,10 +903,10 @@ fn dispatch_fitness(
 ) -> ExitCode {
     match command {
         "--help" | "-h" | "help" => {
-            println!("Architecture Fitness Functions (EXP-V1-0003) v0.1.0");
+            println!("{} ({}) v{}", fitness_functions::NAME, fitness_functions::ID, fitness_functions::VERSION);
             println!();
             println!("USAGE:");
-            println!("    aps run fitness <COMMAND> [OPTIONS]");
+            println!("    aps run {} <COMMAND> [OPTIONS]", fitness_functions::SLUG);
             println!();
             println!("COMMANDS:");
             println!("    validate <path>    Validate fitness rules against topology artifacts");
@@ -2052,7 +2050,7 @@ total_dependencies = {}
     //       "crates::aps-cli::src::main" -> slice "crates::aps-cli"
     fn get_slice_id(module_id: &str) -> String {
         // Split by the appropriate separator and take first two segments.
-        // Path-like IDs (containing '/') use '/' — this avoids splitting inside
+        // Path-like IDs (containing '/') use '/' - this avoids splitting inside
         // Next.js catch-all routes like [[...slug]] where '.' is literal.
         let separator = if module_id.contains('/') {
             "/"
@@ -3056,7 +3054,7 @@ fn generate_vsa_placeholder() -> String {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>VSA Visualization — No Configuration</title>
+<title>VSA Visualization - No Configuration</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a2e; color: #ccc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
   .card { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 48px; max-width: 560px; text-align: center; }
@@ -3070,7 +3068,7 @@ fn generate_vsa_placeholder() -> String {
 <div class="card">
   <h1>No VSA Configuration Found</h1>
   <p>The VSA (Vertical Slice Architecture) visualization requires a <code>vsa.yaml</code> file in your repository root to identify which bounded contexts to display.</p>
-  <p>Without this file, all modules would appear as vertical slices — which is misleading for non-VSA packages.</p>
+  <p>Without this file, all modules would appear as vertical slices - which is misleading for non-VSA packages.</p>
   <pre>
 # vsa.yaml (version 1)
 version: 1
@@ -3112,7 +3110,7 @@ fn get_slice_from_id(module_id: &str) -> String {
         return parts.first().unwrap_or(&module_id).to_string();
     }
 
-    // Handle path-like IDs (containing '/') — split on '/' to avoid breaking
+    // Handle path-like IDs (containing '/') - split on '/' to avoid breaking
     // Next.js catch-all routes like [[...slug]] where '.' is literal.
     let separator = if module_id.contains('/') { "/" } else { "." };
     let parts: Vec<&str> = module_id.split(separator).collect();
@@ -3164,7 +3162,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
         Ok(Some(config)) => {
             if verbose {
                 println!(
-                    "  Found vsa.yaml (v{}) — root: {}",
+                    "  Found vsa.yaml (v{}) - root: {}",
                     config.version,
                     config.normalized_root()
                 );
@@ -3447,7 +3445,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                         serde_json::to_string_pretty(&vsa_modules).unwrap_or_default();
                     code_topology_viz::vsa::generate(&modules_json)
                 } else {
-                    // No vsa.yaml — render placeholder
+                    // No vsa.yaml - render placeholder
                     generate_vsa_placeholder()
                 };
 
