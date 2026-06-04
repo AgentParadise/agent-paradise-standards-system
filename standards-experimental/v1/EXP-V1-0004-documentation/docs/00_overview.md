@@ -86,7 +86,10 @@ amount of project-wide infrastructure:
    `docs` and contributes the `docs:` section schema. Every rule is
    default on. A project switches one off by setting `disable: true`
    in the smallest scope that contains it. There are no scattered
-   per-feature `optional` flags.
+   per-feature `optional` flags. Absence of a key equals the default
+   value: a project that adopts every default writes nothing into
+   `apss.yaml`, and `disable: false` is the default the validator
+   applies for absence and MUST NOT appear in real configs or examples.
 2. **An installable hook contract.** Installing the standard installs
    a git pre-commit hook that auto-refreshes indexes, runs the
    validator against staged docs, and blocks the commit on errors.
@@ -94,11 +97,17 @@ amount of project-wide infrastructure:
    [`01_spec.md` Section 9](01_spec.md#9-install-contract-hook--validator--index)
    and reproduced in full in
    [`02_install_contract.md`](02_install_contract.md).
-3. **Per-directory and per-repo context files.** `CLAUDE.md` and
-   `AGENTS.md` are required at the docs root, at the repository root,
-   and in every docs subdirectory. The root files MUST reference APSS,
-   the docs root, and every active doc type's location so a
-   fresh-context agent can orient itself in one read.
+3. **Per-directory and per-repo context files.** `AGENTS.md` is the
+   canonical agent context file; `CLAUDE.md` ships alongside it as a
+   symlink (Gemini reads `AGENTS.md` natively, so the standard ships
+   no `GEMINI.md`). Both are required at the docs root, at the
+   repository root, and in every docs subdirectory. The root files MUST
+   reference APSS, the docs root, and every active doc type's location
+   so a fresh-context agent can orient itself in one read. For the
+   docs-area context files the substandard ships templates and the
+   installer creates them when absent without ever overwriting an
+   existing file (see [`02_install_contract.md`](02_install_contract.md)
+   Section 1.5).
 4. **A backlinking rule that applies across every doc type.** Code
    files that implement a governed doc MUST reference it by identifier.
    The validator flags missing and dead references. Backlinking is part

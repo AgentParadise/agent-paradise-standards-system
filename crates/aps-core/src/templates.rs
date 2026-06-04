@@ -3,10 +3,10 @@
 //! Provides utilities for rendering templates with variable substitution.
 
 use handlebars::Handlebars;
-use walkdir::DirEntry;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use walkdir::DirEntry;
 
 /// Template rendering engine.
 pub struct TemplateEngine {
@@ -79,7 +79,6 @@ impl TemplateEngine {
 
                 !is_hidden_path(entry)
             })
-            .into_iter()
             .filter_map(|e| e.ok())
         {
             let rel_path = entry
@@ -158,11 +157,11 @@ fn should_render_as_template(path: &Path) -> bool {
 
 /// Check whether a skeleton path points to a hidden entry.
 fn is_hidden_path(entry: &DirEntry) -> bool {
-    entry
-        .path()
-        .components()
-        .skip(1)
-        .any(|component| component.as_os_str().to_string_lossy().starts_with('.'))
+    // Walkdir's filter_entry already prunes descendants of a directory we reject,
+    // so it is enough to look at the entry's own file name. Checking the full
+    // path's components misclassifies any walk that lives under a temp directory
+    // whose own name starts with a dot (for example `/tmp/.tmpXXXX/...`).
+    entry.file_name().to_string_lossy().starts_with('.')
 }
 
 /// Context for rendering a standard package template.

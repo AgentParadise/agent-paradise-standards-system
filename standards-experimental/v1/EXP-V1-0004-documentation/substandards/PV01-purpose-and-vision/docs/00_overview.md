@@ -64,18 +64,22 @@ We are the project that ...
 ## Configuration
 
 In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers
-the kebab-case key `north-star` under the parent `docs` slug:
+the kebab-case key `north-star` under the parent `docs` slug. Per the
+parent standard's absence-equals-enabled convention (Section 3.2 of
+the parent spec), a project adopting every default writes nothing for
+this substandard. To override the default location:
 
 ```yaml
 docs:
   north-star:
-    disable: false
-    location: docs/north-star.md
+    location: docs/my-north-star.md
 ```
 
-Disabling: set `disable: true`. Backlinking from `CLAUDE.md` and
-`AGENTS.md` is enforced by the parent standard's DOC03-self-reference
-check, not by this substandard.
+Disabling: set `disable: true`. Writing `disable: false` is the
+default the validator applies for absence and MUST NOT appear in real
+configs. Backlinking from `CLAUDE.md` and `AGENTS.md` is enforced by
+the parent standard's DOC03-self-reference check, not by this
+substandard.
 
 ## Why three sections, not two and not four
 

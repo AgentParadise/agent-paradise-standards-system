@@ -11,7 +11,7 @@ Already landed on the branch before this note (do not redo):
 - `1784797` re-home EXP-V1-0004 config to the `docs` section of `apss.yaml`.
 - `67b62ca` catch trailing `.apss/config.toml` refs in `aps-cli/src/main.rs`.
 - `9f17982` align ADR01 with canonical ADR community resource (templates
-  for `docs/adrs/README.md`, `AGENTS.md`, `CLAUDE.md`/`GEMINI.md` symlinks,
+  for `docs/adrs/README.md`, `AGENTS.md`, `CLAUDE.md` symlink,
   `ADR-000-template.md`; spec/install-contract wiring).
 
 Remaining Addendum 2 items, split below.
@@ -118,3 +118,108 @@ session reconciles on its next pass.
 
 - 2026-06-05 (Claude): Coordination note + North Star Option C selection
   pushed. PV01 spec rewrites in progress.
+- 2026-06-05 (Claude): Operator corrections 1 and 2 applied to specs.
+  See "Operator corrections 2026-06-05" below for the Codex follow-up
+  list that lands the matching mechanical changes.
+
+## Operator corrections 2026-06-05
+
+Two corrections from the operator after the first North Star spec
+rewrite, plus a reinforcement on the install contract.
+
+### Correction 1: absence-equals-enabled convention
+
+Modelled on environment variables. The empty section is the happy
+path. `disable: false` is the default the validator applies for
+absence and MUST NOT appear in any real or example config. A key is
+written only to opt out (`disable: true`) or to override a non-
+`disable` default.
+
+Spec text updated in this commit:
+
+- Parent `docs/01_spec.md` Section 3.2 (renamed "Default Behavior
+  (absence equals enabled)") with the explicit rule and the two
+  reasons a key gets written.
+- Section 3.3 schema example rewritten to show empty-section happy
+  paths instead of `disable: false` boilerplate; every default-on
+  surface now says "# disable defaults to false" as a comment, not as
+  a YAML field.
+- Section 3.4 carries the new rule for tooling and examples.
+- Section 8.2 (adding a new doc type) no longer instructs new
+  substandards to start their config block with `disable: false`.
+- Parent `docs/00_overview.md` bullet 1 of "What else this standard
+  provides" carries the convention.
+- PV01 `docs/00_overview.md` and `docs/01_spec.md` Section 7 rewritten
+  to recommend empty-section default and to forbid `disable: false`.
+- RETRO01 `docs/00_overview.md` Configuration block rewritten the
+  same way.
+
+### Correction 2: AGENTS canonical, no GEMINI.md
+
+`AGENTS.md` is the canonical agent context file. `CLAUDE.md` is the
+ONLY symlink. Gemini reads `AGENTS.md` natively, so the standard ships
+NO `GEMINI.md` anywhere.
+
+Spec text updated in this commit:
+
+- Parent `docs/02_install_contract.md` Section 1.4 inventory: the
+  ADR01 inventory lists `README.md`, `AGENTS.md`, `CLAUDE.md`
+  (symlink), `ADR-000-template.md`. No `GEMINI.md`. The intro
+  paragraph carries the AGENTS-canonical statement and forbids the
+  installer from adding a `GEMINI.md`.
+- Parent `docs/02_install_contract.md` Section 1.5 (new, normative):
+  the AGENTS.md and CLAUDE.md scaffolding contract. Create-if-missing
+  on first install, never overwrite on any subsequent run (full
+  stop), validation checks existence only, root context files stay
+  project specific. This is the operator reinforcement landed
+  verbatim as its own contract rule.
+- Section 2.5 of the install contract carries the existence-only
+  validator rule and points back to Section 1.5.
+- Parent `docs/01_spec.md` Section 5.2 rewritten to make AGENTS.md
+  canonical, CLAUDE.md a symlink, and to forbid GEMINI.md.
+- ADR01 `docs/00_overview.md` template list rewritten without
+  GEMINI.md, with the create-if-missing never-overwrite call out.
+- ADR01 template file
+  `templates/docs/adrs/AGENTS.md` rewritten to drop the GEMINI.md
+  reference and to state the install contract rule in the file
+  itself.
+- Parent `docs/00_overview.md` bullet 3 updated for AGENTS-canonical
+  framing and Section 1.5 pointer.
+
+### Codex follow-up list (mechanical pieces)
+
+The spec is now the source of truth. Codex owns the mechanical sweeps
+that bring code, tests, and examples into line:
+
+1. **Delete the ADR01 GEMINI.md symlink.**
+   `git rm standards-experimental/v1/EXP-V1-0004-documentation/substandards/ADR01-architecture-decision-records/templates/docs/adrs/GEMINI.md`
+   (it is currently a symlink to `AGENTS.md`). The directory now ships
+   only `README.md`, `AGENTS.md`, `CLAUDE.md` symlink, and
+   `ADR-000-template.md`.
+2. **Sweep `examples/apss.yaml`.** Remove every `disable: false` line.
+   The example MUST show empty sections (or no section at all) for
+   defaults a project adopts. The example may keep overrides like
+   `directory:` and `naming_pattern:` if they illustrate a non-default
+   value; if they show the default value, prefer commenting them out
+   with a "# default; remove to keep using the default" annotation.
+3. **Sweep `tests/config_parsing.rs`.** Tests that asserted parsing of
+   `disable: false` blocks can stay since they exercise the parser's
+   tolerance, but at least one new test MUST assert that an empty
+   `docs: {}` block, a missing `docs` block, and a missing `apss.yaml`
+   all resolve to identical default configs (the absence-equals-
+   enabled invariant in code).
+4. **No change required in `src/config.rs`.** The Rust struct
+   `Default` impls already encode the same absence-equals-enabled
+   behaviour at deserialisation; this is a YAML-author convention, not
+   a Rust ABI change. If a doc comment on a `Default` impl still says
+   "the example config writes `disable: false`", update the doc
+   comment.
+5. **`cargo fmt --all` and `cargo clippy --workspace -- -D warnings`**
+   pass before pushing. CI runs the no-`--all-targets` form for
+   clippy, matching local invocation.
+
+Boundary unchanged from the earlier split: Codex keeps PV01
+`src/lib.rs` (`DEFAULT_LOCATION`, `REQUIRED_SECTIONS`, the two
+renamed diagnostic code constants), the matching scaffold smoke
+tests, and the `purpose_and_vision` -> `north_star` field rename in
+`src/config.rs`. Claude keeps spec text and contract text.

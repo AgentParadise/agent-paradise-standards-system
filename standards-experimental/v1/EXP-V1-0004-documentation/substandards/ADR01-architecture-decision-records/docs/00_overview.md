@@ -106,22 +106,29 @@ guidance.
 ## Templates this substandard ships
 
 When the docs install runs in a repo that lacks them, the installer
-creates the following files (never overwriting):
+creates the following files (create-if-missing, never overwrite):
 
 - `docs/adrs/README.md` - the ADR directory README, summarising what an
   ADR is, when to write one, the lifecycle, and the naming convention.
-- `docs/adrs/AGENTS.md` - the AGENTS.md context block describing the ADR
-  backlinking rule and the location of ADRs. `CLAUDE.md` and `GEMINI.md`
-  in the same directory are symlinks to `AGENTS.md`, per the repo's
-  agent-context convention.
+- `docs/adrs/AGENTS.md` - the canonical agent-context block for the ADR
+  directory, carrying the ADR location, when-to-use guidance, the
+  parent-level backlink rule, and a reference back to this substandard
+  spec. `AGENTS.md` is the canonical file; Gemini reads it natively, so
+  this substandard ships no `GEMINI.md`.
+- `docs/adrs/CLAUDE.md` - a symlink to the adjacent `AGENTS.md`, so
+  Claude Code follows the symlink and reads the same content.
 - `docs/adrs/ADR-000-template.md` - a Nygard-style ADR template with the
   required frontmatter and `## Context`, `## Decision`, `## Consequences`
   sections.
 
 The source templates ship inside this substandard at
 `templates/`. The install contract (parent standard,
-`docs/02_install_contract.md`) defines the copy-on-install behaviour and
-the diagnostics for write conflicts.
+`docs/02_install_contract.md` Section 1.5) is normative on the
+create-if-missing, never-overwrite behaviour: an existing
+`AGENTS.md` or `CLAUDE.md` in a project's docs-area directory is
+never modified by the installer regardless of how it differs from
+the shipped template; the validator checks only that the files exist
+and have well-formed frontmatter.
 
 ## Quick Start
 

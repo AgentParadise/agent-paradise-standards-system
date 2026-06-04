@@ -69,11 +69,16 @@ Steps, in order:
 
 Each substandard's templates ship inside the substandard's crate at
 `templates/<relative-target-path>` and are materialised verbatim into the
-target repository at the corresponding path under the docs root. Symlinks
-in the source tree (for example `CLAUDE.md` and `GEMINI.md` symlinks to
-`AGENTS.md` in the ADR templates) are preserved on filesystems that
-support symlinks; on Windows the installer MUST instead copy the link
-target's contents.
+target repository at the corresponding path under the docs root.
+
+`AGENTS.md` is the canonical agent context file. `CLAUDE.md` ships as
+a symlink to the adjacent `AGENTS.md` (Claude Code follows the symlink
+and reads the AGENTS.md content). Gemini reads `AGENTS.md` natively, so
+this standard ships NO `GEMINI.md`; agents that want a separate Gemini
+context file are out of scope and MUST NOT be added by the installer.
+Symlinks in the source tree (the `CLAUDE.md` symlink to `AGENTS.md`)
+are preserved on filesystems that support symlinks; on Windows the
+installer MUST instead copy the link target's contents.
 
 The shipped inventory at the time of this contract:
 
@@ -83,12 +88,10 @@ The shipped inventory at the time of this contract:
     write one, the lifecycle (`status` field), and the project naming
     convention.
   - `AGENTS.md` - the canonical agent-context block for the ADR
-    directory: where ADRs live, when to use one, and the parent-level
-    backlink rule.
-  - `CLAUDE.md` (symlink to `AGENTS.md`) - so Claude Code reads the
-    same context.
-  - `GEMINI.md` (symlink to `AGENTS.md`) - so Gemini reads the same
-    context.
+    directory: where ADRs live, when to use one, the parent-level
+    backlink rule, and references back to the ADR01 substandard spec.
+  - `CLAUDE.md` (symlink to `AGENTS.md`) - so Claude Code follows the
+    symlink and reads the AGENTS.md content.
   - `ADR-000-template.md` - Nygard-style template with the required
     frontmatter (`name`, `description`, `status`) and the `## Context`,
     `## Decision`, `## Consequences` sections.
@@ -103,6 +106,58 @@ The shipped inventory at the time of this contract:
 All substandard templates MUST live under `<substandard-crate>/templates/`
 inside the standard package, version-controlled alongside the
 substandard's spec, so the installer ships a single coherent bundle.
+
+### 1.5 AGENTS.md and CLAUDE.md scaffolding (create-if-missing, never-overwrite)
+
+This is a normative contract rule, broken out of Section 1.4 because
+the operator surface depends on it being unambiguous.
+
+**Scope.** This rule covers every `AGENTS.md` and every adjacent
+`CLAUDE.md` symlink under the docs root that the standard's templates
+target. The shipped templates today are the docs-area files at
+`docs/adrs/AGENTS.md` and `docs/adrs/CLAUDE.md` (ADR01 substandard);
+future substandards add to this list through Section 1.4.
+
+**Scaffold when absent.** When the installer runs and the target
+`AGENTS.md` does not exist, the installer MUST actively scaffold it
+from the substandard's template, including the explanatory context the
+template carries (for ADR01: what ADRs are, where they live, when to
+write one, the backlink rule, and a reference back to the ADR01
+substandard spec). The installer MUST also create the adjacent
+`CLAUDE.md` as a symlink to the just-created `AGENTS.md` (on Windows,
+copy the AGENTS.md content into `CLAUDE.md` instead). This is a real
+install step, not a validation warning.
+
+**Never overwrite.** When the target `AGENTS.md` already exists, the
+installer MUST NOT overwrite or modify it. Full stop. `--force` does
+not change this rule. The existing file MAY have different content
+from the standard template; that is the project's business and is
+not the installer's call to reconcile. The same rule applies to an
+existing `CLAUDE.md`, whether it is a regular file or a symlink with
+a different target. The installer MUST emit
+`install-template-conflict` (warning) for each existing file it
+skipped, naming both the template and the target so the operator can
+diff them manually.
+
+**Validation checks existence only.** The validator (Section 2.5)
+checks that `AGENTS.md` and `CLAUDE.md` are present at the configured
+locations. The validator MUST NOT compare an existing file's content
+against the shipped template. An `AGENTS.md` that differs from the
+template passes validation as long as it exists and carries valid
+frontmatter per the parent indexing rules (Section 4 of `01_spec.md`).
+Content drift between the template and an existing project file is the
+project's business, not the validator's.
+
+**Root context files (DOC03) stay project-specific.** The repository
+root `AGENTS.md` and root `CLAUDE.md` carry project-specific
+orientation and are owned by the project, not the standard. The
+parent's DOC03 self-reference check (`01_spec.md` Section 6.3)
+verifies only that the root files reference APSS, the docs root, and
+the active doc type locations; the standard does not ship a template
+for the root `AGENTS.md` and the installer MUST NOT scaffold it. The
+substandard-supplied docs-area `AGENTS.md` files (for example
+`docs/adrs/AGENTS.md`) are the ones that carry the explanatory context
+about ADRs, doc types, and the backlink rule.
 
 ---
 
@@ -170,6 +225,17 @@ The validator MUST enforce, for each active doc type:
 - **Retrospectives (`EXP-V1-0004.RETRO01`)**: directory exists, each file matches the naming regex, files are append only (`Changed` scope: no historical retro file appears in the staged diff with content modifications outside the appended sections), and required sections are present.
 
 For every doc type, the validator MUST also enforce the parent rules: frontmatter present and well formed, README index present and up to date, per directory context files present.
+
+**Existence-only check for `AGENTS.md` and `CLAUDE.md`.** Per Section
+1.5, the validator MUST verify that the substandard's docs-area
+`AGENTS.md` and the adjacent `CLAUDE.md` exist at the configured
+locations. The validator MUST NOT compare the on-disk file's content
+against the substandard's shipped template. A project that has
+authored its own `AGENTS.md` content for a docs subdirectory passes
+validation as long as the file is present and carries valid
+frontmatter per Section 4 of `01_spec.md`. The installer's
+`install-template-conflict` warning is the surface for content
+divergence; the validator stays silent on it.
 
 ---
 

@@ -53,18 +53,18 @@ We shipped ...
 
 ## Configuration
 
-In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers the key `retrospectives` under the parent `docs` slug:
+In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers the key `retrospectives` under the parent `docs` slug. Per the parent standard's absence-equals-enabled convention (Section 3.2 of the parent spec), a project adopting every default for this substandard writes nothing under `docs.retrospectives`. The substandard is opt-out, not opt-in.
+
+To override the default directory or naming pattern:
 
 ```yaml
 docs:
   retrospectives:
-    disable: false
-    directory: docs/retrospectives
+    directory: docs/learnings
     naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
-    append_only: true
 ```
 
-`append_only: false` disables the append-only check. It is on by default because retros are a historical record, not a working document.
+To disable the substandard entirely, set `disable: true`. Writing `disable: false` is the default the validator applies for absence and MUST NOT appear in real configs. `append_only: false` disables the append-only check; it defaults to `true` because retros are a historical record, not a working document.
 
 ## Error Codes
 

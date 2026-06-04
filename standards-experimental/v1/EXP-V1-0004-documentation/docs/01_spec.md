@@ -103,21 +103,49 @@ Configuration MUST NOT be placed under `.apss/`. The `.apss/` dotdir is reserved
 
 Monorepo cascade: a nested `apss.yaml` inside a sub-package layers over the root file using the meta-standard's cascade rules (nearer file overrides root values). Cascade resolution is owned by CF01; this standard inherits whatever the meta-validator produces and validates the merged `docs` block.
 
-### 3.2 Default Behavior
+### 3.2 Default Behavior (absence equals enabled)
 
-If `apss.yaml` does not exist, or it exists but contains no `docs` key, the validator MUST apply the documented defaults. The validator MUST NOT error on a missing config file or a missing `docs` section. Zero-config works; every flag defaults to the recommended setting. All features are default on and can only be disabled via explicit configuration.
+The standard follows an absence-equals-enabled convention modelled on
+environment variables. If `apss.yaml` does not exist, or it exists but
+contains no `docs` key, or a `docs` block exists but a given
+sub-section is absent, the validator MUST apply the documented
+defaults for the absent surface. The validator MUST NOT error on a
+missing config file, a missing `docs` section, or a missing
+sub-section. Zero-config works; every flag defaults to the recommended
+setting and every feature defaults to enabled.
+
+A key only appears in `apss.yaml` to do one of two things:
+
+1. Opt OUT of a default-on rule with `disable: true`.
+2. Override a non-`disable` default value (for example, change
+   `docs.adr.directory` from `adrs` to `architecture/decisions`).
+
+A `disable: false` line is therefore never the right thing to write
+into a real or example config: it is the default that the validator
+already applies for absence. Tooling and documentation MUST NOT
+generate `disable: false` boilerplate, and operators reading examples
+MUST be shown the empty-section happy path, not a `disable: false`
+crutch. The smallest valid `apss.yaml` for a project that adopts every
+default of this standard is:
+
+```yaml
+docs: {}
+```
+
+or simply no `apss.yaml` at all (CF01 owns whether the file is
+required for other reasons).
 
 ### 3.3 Schema
 
-The schema is normative. Keys not listed here under the `docs` section MUST be rejected with `unknown-config-field`. The schema below shows the `docs` block as it appears inside `apss.yaml`; the surrounding top-level structure (schema declaration, project identity, standard activation) is owned by CF01.
+The schema is normative. Keys not listed here under the `docs` section MUST be rejected with `unknown-config-field`. The schema below shows the `docs` block as it appears inside `apss.yaml`. Every line below is a default that the validator applies for absence; per Section 3.2 a project only writes a key to opt out (`disable: true`) or to override a non-`disable` value. The surrounding top-level structure (schema declaration, project identity, standard activation) is owned by CF01.
 
 ```yaml
 docs:
-  disable: false                  # Master kill switch for the whole doc standard
+  # disable defaults to false (absence enables the whole doc standard).
   root: docs                      # Documentation root directory
 
   index:
-    disable: false                # Stop enforcing `## Index` in README.md files
+    # disable defaults to false.
     auto_generate: true           # Allow the CLI / hook to (re)write indexes
     frontmatter_fields:           # Columns rendered in index tables
       - name
@@ -128,7 +156,7 @@ docs:
     require_agents_md: true       # Require AGENTS.md per docs directory
 
   readme:
-    disable: false
+    # disable defaults to false.
     max_depth: -1                 # -1 means unlimited depth
     exclude_dirs:
       - node_modules
@@ -138,11 +166,11 @@ docs:
       - .topology
 
   root_context:
-    disable: false
+    # disable defaults to false.
     docs_reference_pattern: docs/ # Pattern checked in root CLAUDE.md / AGENTS.md
 
   backlinking:
-    disable: false                # Backlinking applies to every doc type when not disabled
+    # disable defaults to false. Backlinking applies to every doc type when not disabled.
     file_types:
       - rs
       - py
@@ -161,22 +189,23 @@ docs:
       - json
       - md
 
-  # Doc type registry (substandards). Each `docs.<slug>` key opts that doc type into
-  # validation. Default on. Substandard specs own the keys below the `disable` line.
-  # Substandard keys use the substandard's kebab-case slug (matches `substandard.toml`).
+  # Doc type registry (substandards). Each `docs.<slug>` key is default
+  # on. To opt a single doc type out, write `docs.<slug>.disable: true`;
+  # otherwise the empty section is the happy path. Substandard keys use
+  # the substandard's kebab-case slug (matches `substandard.toml`).
 
   adr:
-    disable: false
+    # disable defaults to false.
     directory: adrs
     naming_pattern: "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
     required_adr_keywords: []
 
   north-star:
-    disable: false
+    # disable defaults to false.
     location: docs/north-star.md  # Default file path. See PV01.
 
   retrospectives:
-    disable: false
+    # disable defaults to false.
     directory: docs/retrospectives
     naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 ```
@@ -184,7 +213,8 @@ docs:
 ### 3.4 Configurability rules
 
 - Every rule listed in this spec is on by default. A project disables one rule by setting `disable: true` in the smallest scope that contains it (a single nested key under `docs`, or the top-level `docs.disable` to disable all doc validation).
-- There MUST NOT be per feature `optional` flags scattered through the spec. The shape is always: a `disable` flag at the top of the relevant section, plus that section's content.
+- `disable: false` is the default the validator applies for absence and MUST NOT be written into real or example configs. Examples in this spec and in `examples/apss.yaml` MUST show empty sections (or no section at all) for surfaces a project does not override.
+- There MUST NOT be per feature `optional` flags scattered through the spec. The shape is always: an implicit default-on with `disable: true` as the opt-out, plus that section's content.
 - Adding a new doc type does not require changing this spec. A new substandard MAY claim its own `docs.<slug>` key; the parent standard MUST tolerate unknown `docs.<slug>` keys for forward compatibility, even though it MUST reject unknown scalar fields inside known sections.
 - Substandard keys use the substandard's kebab-case slug (for example `north-star`, not `north_star`). Scalar field names inside each section remain snake_case to match the Rust struct contract.
 
@@ -300,7 +330,14 @@ Diagnostic: `readme-missing` (error).
 
 ### 5.2 DOC02-context-files
 
-Directories under the docs root MUST contain `CLAUDE.md` and `AGENTS.md`, each with front matter and a short pointer to the directory README:
+Directories under the docs root MUST contain `AGENTS.md` and an
+adjacent `CLAUDE.md`. `AGENTS.md` is the canonical agent context file
+and carries the orientation prose; `CLAUDE.md` is a symlink to the
+adjacent `AGENTS.md` (on filesystems that do not support symlinks, a
+verbatim copy of the `AGENTS.md` content). The standard ships no
+`GEMINI.md`; Gemini reads `AGENTS.md` natively.
+
+A minimal `AGENTS.md` for a docs subdirectory:
 
 ```markdown
 ---
@@ -311,7 +348,20 @@ description: "AI context for <directory name>"
 See [README.md](README.md) for the index and overview of this directory.
 ```
 
-Diagnostics: `claude-md-missing`, `agents-md-missing` (warning).
+The validator MUST check existence only. An `AGENTS.md` that already
+exists with project-specific content passes validation as long as its
+frontmatter is well-formed per Section 4; the validator MUST NOT
+compare on-disk content against any shipped template. The installer's
+template-conflict warning (see `02_install_contract.md` Section 1.5)
+is the surface for content drift.
+
+Substandards MAY ship a templated `AGENTS.md` for their own docs-area
+directories (for example ADR01 ships `docs/adrs/AGENTS.md` with ADR
+context and a `CLAUDE.md` symlink); the install contract's
+create-if-missing, never-overwrite rule applies in full.
+
+Diagnostics: `agents-md-missing` (warning), `claude-md-missing`
+(warning).
 
 ---
 
@@ -414,7 +464,7 @@ ADRs are never revised; they are superseded. Retrospectives are append only. Nor
 A new doc type is added by:
 
 1. Creating a substandard under `substandards/<ID>-<slug>/`.
-2. Defining its nested key under `docs` in `apss.yaml`, using the substandard's kebab-case slug (so `docs.<slug>`). The block MUST start with `disable: false`. Any further fields are owned by the substandard. Substandards do NOT register their own top-level slug in the meta-standard registry.
+2. Documenting its nested key under `docs` in `apss.yaml`, using the substandard's kebab-case slug (so `docs.<slug>`). Per Section 3.2 the validator MUST treat the absence of `docs.<slug>` as default-on; the substandard's spec MUST NOT instruct projects to write `disable: false`. Any non-`disable` fields are owned by the substandard. Substandards do NOT register their own top-level slug in the meta-standard registry.
 3. Registering the doc type in this section's table.
 4. Defining the substandard's diagnostic codes using the human readable scheme described in Section 10.
 
