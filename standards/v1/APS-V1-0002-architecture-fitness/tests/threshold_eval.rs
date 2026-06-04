@@ -648,7 +648,7 @@ scope = "function"
 #[test]
 fn insufficient_budget_exception_not_reported_as_stale() {
     // Regression: an exception whose budget is exceeded (metric > budget) should NOT
-    // be flagged as EntityNotFound stale. The entity exists and is matched — it just
+    // be flagged as EntityNotFound stale. The entity exists and is matched - it just
     // needs a tighter budget. Only "now passing" or truly absent entities are stale.
     let dir = setup_fixture(
         r#"
@@ -684,7 +684,7 @@ issue = "#99"
     // The exception exists but the budget is insufficient (35 > 30), so it fails.
     assert_eq!(report.summary.failed, 1);
     assert!(!report.results[0].violations[0].excepted);
-    // But the exception should NOT be reported as stale — the entity is still there.
+    // But the exception should NOT be reported as stale - the entity is still there.
     assert_eq!(
         report.stale_exceptions.len(),
         0,

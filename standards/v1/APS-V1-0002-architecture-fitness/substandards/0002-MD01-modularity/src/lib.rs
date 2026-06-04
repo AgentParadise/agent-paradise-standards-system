@@ -1,4 +1,4 @@
-//! APS-V1-0002.MD01 — Modularity and Coupling Dimension
+//! APS-V1-0002.MD01 - Modularity and Coupling Dimension
 //!
 //! Reference substandard for module-level coupling governance. Evaluates
 //! Martin's package metrics (Afferent/Efferent Coupling, Instability, Distance
@@ -23,7 +23,7 @@ pub const DIMENSION_VERSION: &str = "1.0.0";
 ///
 /// Thresholds are drawn from:
 /// - **Ce ≤ 20**: Martin (2003), *Agile Software Development*, §20 "Package
-///   Design" — high fan-out signals tight coupling and brittle modules.
+///   Design" - high fan-out signals tight coupling and brittle modules.
 /// - **0.1 ≤ I ≤ 0.9**: Martin (1994), *OO Design Quality Metrics*. The extremes
 ///   (I = 0 rigid, I = 1 volatile) are both architectural smells.
 /// - **D ≤ 0.7**: Martin (1994). Distance > 0.7 puts a module in the Zone of

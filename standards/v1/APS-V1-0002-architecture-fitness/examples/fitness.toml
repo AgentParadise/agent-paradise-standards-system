@@ -1,4 +1,4 @@
-# Example fitness.toml — Architecture Fitness Functions (APS-V1-0002)
+# Example fitness.toml - Architecture Fitness Functions (APS-V1-0002)
 #
 # Multi-dimensional architectural governance configuration.
 # Evaluated against .topology/metrics/ artifacts produced by APS-V1-0001.
@@ -7,7 +7,7 @@
 #   - Cognitive complexity: 15 (SonarQube default)
 #   - Cyclomatic complexity: 10 (McCabe/NIST SP 500-235)
 #   - File LOC: 500 (catches bloat without penalizing moderate files)
-#   - Fan-out (Ce): 20 (efferent coupling — catches tight coupling)
+#   - Fan-out (Ce): 20 (efferent coupling - catches tight coupling)
 #   - Distance from Main Sequence: 0.7 (catches Zone of Pain / Uselessness)
 
 [config]

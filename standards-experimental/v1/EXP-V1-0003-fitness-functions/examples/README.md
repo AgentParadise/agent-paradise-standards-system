@@ -24,7 +24,7 @@ aps run fitness validate .
 
 ## Adapting for Your Codebase
 
-1. **Adjust thresholds** — Set `max`/`min` values appropriate for your codebase
-2. **Set field paths** — Use dot-notation to target nested metrics (e.g., `metrics.cognitive`)
-3. **Configure excludes** — Skip test files, generated code, or vendored dependencies
-4. **Add exceptions** — Track existing violations with issue references
+1. **Adjust thresholds** - Set `max`/`min` values appropriate for your codebase
+2. **Set field paths** - Use dot-notation to target nested metrics (e.g., `metrics.cognitive`)
+3. **Configure excludes** - Skip test files, generated code, or vendored dependencies
+4. **Add exceptions** - Track existing violations with issue references

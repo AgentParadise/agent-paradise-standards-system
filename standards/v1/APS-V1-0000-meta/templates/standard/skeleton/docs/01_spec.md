@@ -1,4 +1,4 @@
-# {{id}} — {{name}} (Canonical Specification)
+# {{id}} - {{name}} (Canonical Specification)
 
 **Version**: {{version}}
 **Status**: Active

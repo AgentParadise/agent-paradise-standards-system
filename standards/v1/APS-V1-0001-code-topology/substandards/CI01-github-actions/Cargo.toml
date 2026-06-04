@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "GitHub Actions CI integration for Code Topology — generates workflow templates and checks"
+description = "GitHub Actions CI integration for Code Topology - generates workflow templates and checks"
 
 [dependencies]
 code-topology = { path = "../.." }

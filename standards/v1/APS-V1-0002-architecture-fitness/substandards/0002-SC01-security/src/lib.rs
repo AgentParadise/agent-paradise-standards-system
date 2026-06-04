@@ -1,4 +1,4 @@
-//! APS-V1-0002.SC01 — Security Dimension
+//! APS-V1-0002.SC01 - Security Dimension
 //!
 //! Governs dependency vulnerability scanning via adapters for cargo-audit,
 //! npm audit, pip-audit, and custom security scanners. Maps CVSS severity

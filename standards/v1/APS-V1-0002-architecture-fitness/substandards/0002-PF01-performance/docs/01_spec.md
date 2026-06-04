@@ -1,4 +1,4 @@
-# APS-V1-0002.PF01 — Performance Dimension
+# APS-V1-0002.PF01 - Performance Dimension
 
 **Version**: 1.0.0
 **Parent**: APS-V1-0002 (Architecture Fitness Functions)

@@ -1,7 +1,7 @@
 //! TypeScript and TSX language grammars for tree-sitter based analysis.
 //!
 //! Both `TypeScriptGrammar` (`.ts`) and `TsxGrammar` (`.tsx`) share identical
-//! queries and complexity rules — TSX is TypeScript plus JSX syntax, and JSX
+//! queries and complexity rules - TSX is TypeScript plus JSX syntax, and JSX
 //! nodes do not affect cyclomatic complexity.
 //!
 //! ## Complexity Rules
@@ -16,7 +16,7 @@
 //! - logical operators (&& and ||)
 //!
 //! **Does NOT increase CC:**
-//! - optional chaining (`?.`) — idiomatic null-safety, no penalty
+//! - optional chaining (`?.`) - idiomatic null-safety, no penalty
 
 use std::path::Path;
 
@@ -189,7 +189,7 @@ const TS_NESTING_NODES: &[&str] = &[
 ];
 
 const TS_IGNORED_NODES: &[&str] = &[
-    "optional_chain", // ?. operator — idiomatic null-safety, no CC penalty
+    "optional_chain", // ?. operator - idiomatic null-safety, no CC penalty
 ];
 
 // ============================================================================

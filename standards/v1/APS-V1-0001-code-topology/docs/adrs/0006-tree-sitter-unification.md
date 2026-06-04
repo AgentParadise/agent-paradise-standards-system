@@ -8,10 +8,10 @@
 
 The Code Topology standard (EXP-V1-0001) needs to support multiple programming languages for complexity analysis. The initial implementation used `syn` for Rust parsing, which provided excellent Rust-specific semantics but created several challenges:
 
-1. **Different parsing approaches per language** — Each language would need its own parsing library (syn for Rust, tree-sitter-python for Python, etc.)
-2. **Duplicated complexity logic** — Cyclomatic, Cognitive, and Halstead calculations would need to be reimplemented for each parser
-3. **Inconsistent behavior** — Different parsers might compute metrics differently
-4. **High barrier to add new languages** — Each language requires significant implementation effort
+1. **Different parsing approaches per language** - Each language would need its own parsing library (syn for Rust, tree-sitter-python for Python, etc.)
+2. **Duplicated complexity logic** - Cyclomatic, Cognitive, and Halstead calculations would need to be reimplemented for each parser
+3. **Inconsistent behavior** - Different parsers might compute metrics differently
+4. **High barrier to add new languages** - Each language requires significant implementation effort
 
 Since this is an experimental standard with no downstream dependencies yet, we have the opportunity to standardize the approach before adoption.
 
@@ -65,23 +65,23 @@ pub trait Grammar: Send + Sync {
 
 ### Positive
 
-- **Consistent metrics** — Same complexity calculation logic for all languages
-- **Easy to add languages** — New language = ~200 lines of queries + rules
-- **Single testing strategy** — Test the shared engine once
-- **Better maintainability** — Bug fixes apply to all languages
-- **Config-driven extension** — Future languages could be defined via TOML (per spec §8.3)
+- **Consistent metrics** - Same complexity calculation logic for all languages
+- **Easy to add languages** - New language = ~200 lines of queries + rules
+- **Single testing strategy** - Test the shared engine once
+- **Better maintainability** - Bug fixes apply to all languages
+- **Config-driven extension** - Future languages could be defined via TOML (per spec §8.3)
 
 ### Negative
 
-- **Loss of syn's Rust-specific semantics** — Tree-sitter provides less semantic understanding than syn
-- **Tree-sitter version management** — Grammar versions need to be pinned together
-- **Query complexity** — Tree-sitter queries can be complex to write and debug
+- **Loss of syn's Rust-specific semantics** - Tree-sitter provides less semantic understanding than syn
+- **Tree-sitter version management** - Grammar versions need to be pinned together
+- **Query complexity** - Tree-sitter queries can be complex to write and debug
 
 ### Mitigations
 
-1. **Version pinning** — All tree-sitter grammars are pinned in `Cargo.toml` workspace dependencies
-2. **Query testing** — Each grammar includes tests that verify queries parse successfully
-3. **Regression testing** — Rust output is compared against baseline to detect drift
+1. **Version pinning** - All tree-sitter grammars are pinned in `Cargo.toml` workspace dependencies
+2. **Query testing** - Each grammar includes tests that verify queries parse successfully
+3. **Regression testing** - Rust output is compared against baseline to detect drift
 
 ## Alternatives Considered
 

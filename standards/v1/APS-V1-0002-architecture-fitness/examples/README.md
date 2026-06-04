@@ -1,4 +1,4 @@
-# Architecture Fitness Functions — Examples
+# Architecture Fitness Functions - Examples
 
 This directory contains examples demonstrating valid usage of APS-V1-0002.
 

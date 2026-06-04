@@ -1,4 +1,4 @@
-# Agent Skills — 3D Force-Directed Projector
+# Agent Skills - 3D Force-Directed Projector
 
 ## Available Skills
 

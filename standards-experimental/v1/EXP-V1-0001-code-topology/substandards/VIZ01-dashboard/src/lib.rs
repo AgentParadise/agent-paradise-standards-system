@@ -5,11 +5,11 @@
 //!
 //! ## Visualization Types
 //!
-//! - **3D Force-Directed** — Coupling relationships as a 3D graph
-//! - **CodeCity** — 3D city metaphor (buildings = modules, height = complexity)
-//! - **Package Clusters** — 2D force-directed package relationships
-//! - **VSA Diagram** — Vertical Slice Architecture matrix
-//! - **Dashboard Index** — Landing page linking to all visualizations
+//! - **3D Force-Directed** - Coupling relationships as a 3D graph
+//! - **CodeCity** - 3D city metaphor (buildings = modules, height = complexity)
+//! - **Package Clusters** - 2D force-directed package relationships
+//! - **VSA Diagram** - Vertical Slice Architecture matrix
+//! - **Dashboard Index** - Landing page linking to all visualizations
 //!
 //! ## Usage
 //!

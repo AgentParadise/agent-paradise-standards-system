@@ -49,7 +49,7 @@ fn toml_to_json(toml_str: &str) -> Value {
 
 #[test]
 fn fitness_report_matches_schema() {
-    // Minimal fixture: two MT01 rules, one failing — exercises dimensions,
+    // Minimal fixture: two MT01 rules, one failing - exercises dimensions,
     // system_fitness, summary, results, and a violation record.
     let dir = TempDir::new().unwrap();
     let root = dir.path();
@@ -112,7 +112,7 @@ fn example_fitness_toml_matches_config_schema() {
     let schema = compile(CONFIG_SCHEMA);
     let errors = format_errors(&schema, &value);
     assert!(errors.is_empty(), "schema errors: {errors:#?}");
-    // Sanity — make sure the example path we think we're using is valid.
+    // Sanity - make sure the example path we think we're using is valid.
     assert!(
         Path::new("examples/fitness.toml").is_relative(),
         "example path shape"

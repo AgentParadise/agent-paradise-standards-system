@@ -1,4 +1,4 @@
-# Examples — Code Topology and Coupling Analysis
+# Examples - Code Topology and Coupling Analysis
 
 This directory contains sample artifacts demonstrating the Code Topology standard.
 
@@ -36,17 +36,17 @@ sample-topology/
 | db     | 5          | 7         | 0.5         | 0.3      |
 | utils  | 1          | 0         | 0.0         | 1.0 ⚠️   |
 
-- **api**: Fully unstable (I=1.0) but on main sequence (D=0.0) — good!
-- **crypto**: In "Zone of Pain" (concrete + stable) — may be rigid
-- **utils**: In "Zone of Pain" — many depend on it, hard to change
+- **api**: Fully unstable (I=1.0) but on main sequence (D=0.0) - good!
+- **crypto**: In "Zone of Pain" (concrete + stable) - may be rigid
+- **utils**: In "Zone of Pain" - many depend on it, hard to change
 
 ### Hotspots
 
 Functions with highest complexity:
 
-1. `typescript:api/handlers::processRequest` — CC=12, Cog=18 ⚠️
-2. `rust:auth::validator::validate_token` — CC=8, Cog=12
-3. `typescript:api/handlers::validateInput` — CC=6, Cog=8
+1. `typescript:api/handlers::processRequest` - CC=12, Cog=18 ⚠️
+2. `rust:auth::validator::validate_token` - CC=8, Cog=12
+3. `typescript:api/handlers::validateInput` - CC=6, Cog=8
 
 ### Coupling Matrix
 

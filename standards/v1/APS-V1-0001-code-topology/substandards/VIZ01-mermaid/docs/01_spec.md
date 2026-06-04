@@ -1,4 +1,4 @@
-# APS-V1-0001.VIZ01 — Mermaid Diagram Projector (Specification)
+# APS-V1-0001.VIZ01 - Mermaid Diagram Projector (Specification)
 
 **Version**: 0.1.0
 **Status**: Promoted
@@ -30,8 +30,8 @@ The projector reads `.topology/` artifacts and produces diagrams suitable for em
 
 ## 4. Required Input Artifacts
 
-- `graphs/coupling-matrix.json` — Module coupling coefficients
-- `metrics/modules.json` — Module-level metrics (recommended, for styling)
+- `graphs/coupling-matrix.json` - Module coupling coefficients
+- `metrics/modules.json` - Module-level metrics (recommended, for styling)
 
 ## 5. Configuration
 

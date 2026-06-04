@@ -1,5 +1,5 @@
 {
-  "_comment": "Example system-level fitness composite — shows how dimension scores aggregate into a single architectural health assessment",
+  "_comment": "Example system-level fitness composite - shows how dimension scores aggregate into a single architectural health assessment",
   "system_fitness": {
     "score": 0.78,
     "min_score": 0.70,
@@ -31,10 +31,10 @@
       }
     },
     "tradeoff_analysis": {
-      "insight": "Maintainability improved (+0.03) likely due to complexity refactoring, but modularity regressed (-0.05) — new dependencies added between modules. Security remains the weakest dimension at 0.60. Net system score declined by 0.03.",
+      "insight": "Maintainability improved (+0.03) likely due to complexity refactoring, but modularity regressed (-0.05) - new dependencies added between modules. Security remains the weakest dimension at 0.60. Net system score declined by 0.03.",
       "recommendations": [
-        "Investigate MD01 regression — check coupling changes in recent commits",
-        "SC01 at 0.60 is below healthy threshold — prioritize dependency vulnerability resolution",
+        "Investigate MD01 regression - check coupling changes in recent commits",
+        "SC01 at 0.60 is below healthy threshold - prioritize dependency vulnerability resolution",
         "MT01 improvement validates recent refactoring effort"
       ]
     }

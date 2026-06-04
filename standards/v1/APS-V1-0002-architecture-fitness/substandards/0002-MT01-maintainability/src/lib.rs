@@ -1,4 +1,4 @@
-//! APS-V1-0002.MT01 — Maintainability Dimension
+//! APS-V1-0002.MT01 - Maintainability Dimension
 //!
 //! Reference substandard for function-level maintainability governance.
 //! Evaluates McCabe cyclomatic complexity, SonarSource cognitive complexity,

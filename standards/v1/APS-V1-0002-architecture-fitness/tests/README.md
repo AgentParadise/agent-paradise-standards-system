@@ -1,4 +1,4 @@
-# Tests — Architecture Fitness Functions
+# Tests - Architecture Fitness Functions
 
 ## Test Strategy
 

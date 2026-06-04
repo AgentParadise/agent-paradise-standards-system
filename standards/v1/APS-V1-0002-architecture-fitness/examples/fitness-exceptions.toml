@@ -1,4 +1,4 @@
-# Example fitness-exceptions.toml — Tracked Violations
+# Example fitness-exceptions.toml - Tracked Violations
 #
 # Each exception represents acknowledged technical debt with a mandatory
 # issue reference. Exception budgets can only shrink over time (ratchet).

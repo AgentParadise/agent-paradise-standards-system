@@ -7,17 +7,17 @@
 ## Context
 
 The Code Topology standard defines artifacts stored in `.topology/` that serve as the contract between:
-- **Producers** (language adapters) — Generate artifacts from source code
-- **Consumers** (projectors) — Read artifacts to create visualizations
+- **Producers** (language adapters) - Generate artifacts from source code
+- **Consumers** (projectors) - Read artifacts to create visualizations
 
 The artifact interface is the most important part of this standard. We need to decide how to formally define these schemas.
 
 ### Options Considered
 
-1. **JSON Examples Only** — Define schemas via example JSON in spec
-2. **JSON Schema** — Use JSON Schema for validation
-3. **Rust Structs** — Define in Rust with serde, derive JSON
-4. **Protobuf** — Define in proto3, generate for multiple languages
+1. **JSON Examples Only** - Define schemas via example JSON in spec
+2. **JSON Schema** - Use JSON Schema for validation
+3. **Rust Structs** - Define in Rust with serde, derive JSON
+4. **Protobuf** - Define in proto3, generate for multiple languages
 
 ## Decision
 
@@ -25,17 +25,17 @@ The artifact interface is the most important part of this standard. We need to d
 
 ### Rationale
 
-1. **Meta-standard alignment** — APS-V1-0000 §9 specifies "Protobuf definitions are the canonical machine contract"
+1. **Meta-standard alignment** - APS-V1-0000 §9 specifies "Protobuf definitions are the canonical machine contract"
 
-2. **Language-agnostic** — Proto can generate bindings for Rust, Python, TypeScript, Go, C++, matching our polyglot focus
+2. **Language-agnostic** - Proto can generate bindings for Rust, Python, TypeScript, Go, C++, matching our polyglot focus
 
-3. **Self-documenting** — Field documentation lives with the schema, not scattered across files
+3. **Self-documenting** - Field documentation lives with the schema, not scattered across files
 
-4. **Versionable** — Proto evolution rules (field numbers, `optional`) ensure backward compatibility
+4. **Versionable** - Proto evolution rules (field numbers, `optional`) ensure backward compatibility
 
-5. **Validatable** — Tools can validate artifacts against compiled proto descriptors
+5. **Validatable** - Tools can validate artifacts against compiled proto descriptors
 
-6. **Compact option** — Proto binary format available for large topologies (100K+ functions)
+6. **Compact option** - Proto binary format available for large topologies (100K+ functions)
 
 ### File Structure
 

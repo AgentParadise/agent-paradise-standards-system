@@ -1,22 +1,22 @@
-//! APS-V1-0002 — Architecture Fitness Functions
+//! APS-V1-0002 - Architecture Fitness Functions
 //!
 //! Comprehensive architectural governance framework based on evolutionary architecture
-//! principles (Ford et al., 2017). Provides declarative fitness functions — automated
-//! assertions on architectural properties — organized into composable dimensional
+//! principles (Ford et al., 2017). Provides declarative fitness functions - automated
+//! assertions on architectural properties - organized into composable dimensional
 //! substandards.
 //!
 //! This is the assertion layer on top of APS-V1-0001's measurement layer.
 //!
 //! ## Dimensions
 //!
-//! - **MT01** — Maintainability (complexity, Halstead, LOC, MI)
-//! - **MD01** — Modularity (coupling, instability, abstractness, main sequence)
-//! - **ST01** — Structural Integrity (ArchUnit-style checks, CK metrics)
-//! - **SC01** — Security (vulnerability scanning)
-//! - **LG01** — Legality (license compliance)
-//! - **AC01** — Accessibility (WCAG / a11y)
-//! - **PF01** — Performance (load testing, benchmarks)
-//! - **AV01** — Availability (chaos engineering, uptime)
+//! - **MT01** - Maintainability (complexity, Halstead, LOC, MI)
+//! - **MD01** - Modularity (coupling, instability, abstractness, main sequence)
+//! - **ST01** - Structural Integrity (ArchUnit-style checks, CK metrics)
+//! - **SC01** - Security (vulnerability scanning)
+//! - **LG01** - Legality (license compliance)
+//! - **AC01** - Accessibility (WCAG / a11y)
+//! - **PF01** - Performance (load testing, benchmarks)
+//! - **AV01** - Availability (chaos engineering, uptime)
 //!
 //! Promoted from EXP-V1-0003 with expanded scope.
 
@@ -363,9 +363,9 @@ pub struct ThresholdRule {
     pub source: String,
     /// JSON field to evaluate.
     pub field: String,
-    /// Upper bound — violation if value > max.
+    /// Upper bound - violation if value > max.
     pub max: Option<f64>,
-    /// Lower bound — violation if value < min.
+    /// Lower bound - violation if value < min.
     pub min: Option<f64>,
     /// Entity granularity: "module", "file", "function", "class", "slice", "system".
     pub scope: String,
@@ -770,7 +770,7 @@ pub enum FitnessError {
 
 // ─── Validator ──────────────────────────────────────────────────────────────
 
-/// Fitness function validator — evaluates rules against topology artifacts.
+/// Fitness function validator - evaluates rules against topology artifacts.
 #[derive(Debug)]
 pub struct FitnessValidator {
     config: FitnessConfig,
@@ -876,18 +876,18 @@ impl FitnessValidator {
             all_stale.extend(stale);
         }
 
-        // Evaluate structural rules (stub — always skipped)
+        // Evaluate structural rules (stub - always skipped)
         for rule in &self.config.rules.structural {
             results.push(self.evaluate_structural_rule(rule));
         }
 
-        // Detect stale exceptions — only for rules that were fully evaluated.
+        // Detect stale exceptions - only for rules that were fully evaluated.
         // Skipped rules (missing artifact) should not trigger EntityNotFound.
         // Use matched_exceptions (not just excepted ones) so insufficient-budget
         // exceptions are not falsely reported as EntityNotFound.
         for (rule_id, entities) in &self.exceptions.rules {
             if !evaluated_rule_ids.contains(rule_id) {
-                continue; // Rule was skipped or doesn't exist — don't flag exceptions as stale
+                continue; // Rule was skipped or doesn't exist - don't flag exceptions as stale
             }
             let matched = matched_exceptions.get(rule_id);
             for entity in entities.keys() {
@@ -954,7 +954,7 @@ impl FitnessValidator {
     /// Returns `(result, stale_exceptions, matched_exception_entities, entity_count)` where
     /// `matched_exception_entities` contains every entity path that had *any* exception
     /// entry (whether the budget was sufficient or not). This is used by `validate()` for
-    /// accurate stale-exception detection — an insufficient-budget exception is not stale.
+    /// accurate stale-exception detection - an insufficient-budget exception is not stale.
     fn evaluate_threshold_rule(
         &self,
         rule: &ThresholdRule,
@@ -966,7 +966,7 @@ impl FitnessValidator {
 
         // Strict-artifact enforcement (§3.3 R3, §12 PROMOTION_REQUIREMENT_UNMET):
         // When the rule belongs to an `active` dimension, a missing source
-        // artifact is a hard failure — the dimension promised this data exists.
+        // artifact is a hard failure - the dimension promised this data exists.
         // When `incubating`, the rule silently skips.
         if !artifact_path.exists() {
             let promotion = rule
@@ -1059,7 +1059,7 @@ impl FitnessValidator {
             if violated {
                 // Check for exception
                 let excepted = if let Some(exc) = self.exceptions.get(&rule.id, entity_path) {
-                    // Record match regardless of budget — prevents false EntityNotFound stale
+                    // Record match regardless of budget - prevents false EntityNotFound stale
                     matched_exception_entities.insert(entity_path.clone());
                     // If exception has a value budget, check it
                     if let Some(budget) = exc.value {
@@ -1087,7 +1087,7 @@ impl FitnessValidator {
                     excepted,
                 });
             } else {
-                // Entity passes — check if there's a now-stale exception
+                // Entity passes - check if there's a now-stale exception
                 if self.exceptions.get(&rule.id, entity_path).is_some() {
                     stale.push(StaleException {
                         rule_id: rule.id.clone(),
@@ -1382,7 +1382,7 @@ impl FitnessValidator {
         }
     }
 
-    /// Evaluate a structural rule (stub — pattern catalog not yet implemented).
+    /// Evaluate a structural rule (stub - pattern catalog not yet implemented).
     fn evaluate_structural_rule(&self, rule: &StructuralRule) -> RuleResult {
         RuleResult {
             rule_id: rule.id.clone(),
@@ -1589,7 +1589,7 @@ impl FitnessValidator {
                 .collect();
 
             if dim_results.is_empty() {
-                // Enabled but no rules — evaluated with perfect score
+                // Enabled but no rules - evaluated with perfect score
                 dimensions.insert(
                     code.as_str().to_string(),
                     DimensionResult {
@@ -1697,7 +1697,7 @@ impl FitnessValidator {
 /// Extract entities from a topology artifact JSON.
 ///
 /// Supports three shapes:
-/// - **Wrapped object**: `{ "functions": [{ "id": "...", ... }, ...] }` — auto-detected
+/// - **Wrapped object**: `{ "functions": [{ "id": "...", ... }, ...] }` - auto-detected
 ///   from scope (`"function"` → `"functions"` key, `"module"` → `"modules"`, etc.).
 ///   Falls back to checking for a single array-valued key if scope doesn't match.
 /// - **Flat object**: `{ "entity_path": { "field": value, ... }, ... }`
@@ -1723,7 +1723,7 @@ fn extract_entities(artifact: &serde_json::Value, scope: &str) -> Vec<(String, s
                 }
             }
 
-            // Step 3: Fallback heuristic — if exactly one key has an array value, unwrap it
+            // Step 3: Fallback heuristic - if exactly one key has an array value, unwrap it
             let array_entries: Vec<_> = map.iter().filter(|(_, v)| v.is_array()).collect();
             if array_entries.len() == 1 {
                 if let serde_json::Value::Array(arr) = array_entries[0].1 {

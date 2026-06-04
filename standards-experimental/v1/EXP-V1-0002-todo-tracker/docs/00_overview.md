@@ -1,22 +1,22 @@
-# TODO/FIXME Tracker — Overview
+# TODO/FIXME Tracker - Overview
 
 ## What is this?
 
 **EXP-V1-0002** defines a standard format for tracking TODO and FIXME comments in source code, with validation that they reference GitHub issues. It enables:
 
-- **Action item tracking** — Discover all pending work across the codebase
-- **Issue enforcement** — Ensure every TODO/FIXME is tracked in GitHub
-- **AI agent visibility** — Structured artifacts for automated reasoning
-- **Technical debt management** — Prevent orphaned comments
+- **Action item tracking** - Discover all pending work across the codebase
+- **Issue enforcement** - Ensure every TODO/FIXME is tracked in GitHub
+- **AI agent visibility** - Structured artifacts for automated reasoning
+- **Technical debt management** - Prevent orphaned comments
 
 ## Why does it matter?
 
 As codebases scale (especially with AI agents contributing), maintaining visibility into pending work becomes critical. This standard provides:
 
-1. **Committed artifacts** — Version-controlled TODO snapshots
-2. **Language-agnostic format** — Same structure for Rust, TypeScript, Python
-3. **AI-consumable data** — Structured JSON for agent reasoning
-4. **Configurable enforcement** — Warn or error on untracked items
+1. **Committed artifacts** - Version-controlled TODO snapshots
+2. **Language-agnostic format** - Same structure for Rust, TypeScript, Python
+3. **AI-consumable data** - Structured JSON for agent reasoning
+4. **Configurable enforcement** - Warn or error on untracked items
 
 ## Quick Example
 
@@ -92,19 +92,19 @@ missing_issue = "warn"  # warn | error | off
 ## Use Cases
 
 ### For Developers
-- **Discover work** — See all pending TODOs at a glance
-- **Track progress** — Monitor TODO count over time
-- **Prevent orphans** — Ensure every TODO has an issue
+- **Discover work** - See all pending TODOs at a glance
+- **Track progress** - Monitor TODO count over time
+- **Prevent orphans** - Ensure every TODO has an issue
 
 ### For AI Agents
-- **Understand backlog** — Read `.todo-tracker/items.json` to see pending work
-- **Prioritize tasks** — Group by issue number or file
-- **Validate compliance** — Check all TODOs are tracked
+- **Understand backlog** - Read `.todo-tracker/items.json` to see pending work
+- **Prioritize tasks** - Group by issue number or file
+- **Validate compliance** - Check all TODOs are tracked
 
 ### For Teams
-- **Code reviews** — Catch untracked TODOs in PRs
-- **CI/CD** — Fail builds on untracked items
-- **Sprint planning** — Visualize technical debt
+- **Code reviews** - Catch untracked TODOs in PRs
+- **CI/CD** - Fail builds on untracked items
+- **Sprint planning** - Visualize technical debt
 
 ## Getting Started
 
@@ -203,7 +203,7 @@ Metadata about the scan:
 - Configuration snapshot
 
 ### items.json (Core Artifact)
-**This is the standard** — all TODO/FIXME items with:
+**This is the standard** - all TODO/FIXME items with:
 - Location (file, line, column)
 - Issue reference (if present)
 - Description
@@ -264,7 +264,7 @@ jobs:
 
 ## Status
 
-**Experimental** — This standard is in incubation. Feedback welcome!
+**Experimental** - This standard is in incubation. Feedback welcome!
 
 ### What's Working
 - ✅ Artifact schema defined
@@ -284,9 +284,9 @@ jobs:
 
 ## Related Standards
 
-- **EXP-V1-0001 (Code Topology)** — Can cross-reference TODOs with complexity metrics
-- **Consumer SDK** — Can be adopted via `.aps/manifest.toml`
-- **CI/CD Substandards** — GitHub Actions integration
+- **EXP-V1-0001 (Code Topology)** - Can cross-reference TODOs with complexity metrics
+- **Consumer SDK** - Can be adopted via `.aps/manifest.toml`
+- **CI/CD Substandards** - GitHub Actions integration
 
 ## Learn More
 

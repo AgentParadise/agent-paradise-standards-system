@@ -20,7 +20,7 @@ aps_major = "v1"
 [ownership]
 maintainers = ["MyOrg/my-team"]
 
-# Promotion metadata — added after promotion, do not edit manually
+# Promotion metadata - added after promotion, do not edit manually
 # [promotion]
 # promoted_to = "APS-V1-YYYY"
 # promoted_at = "YYYY-MM-DD"

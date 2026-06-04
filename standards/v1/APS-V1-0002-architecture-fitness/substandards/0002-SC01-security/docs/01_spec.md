@@ -1,4 +1,4 @@
-# APS-V1-0002.SC01 — Security Dimension
+# APS-V1-0002.SC01 - Security Dimension
 
 **Version**: 1.0.0
 **Parent**: APS-V1-0002 (Architecture Fitness Functions)
@@ -9,7 +9,7 @@
 
 This substandard governs **dependency vulnerability scanning and supply chain safety**. It asserts that known security vulnerabilities in dependencies are detected, tracked, and resolved.
 
-**Data source**: Security scanner output via adapter. No native topology integration — all data comes from external tools.
+**Data source**: Security scanner output via adapter. No native topology integration - all data comes from external tools.
 
 ## 2. Adapter Contract
 
@@ -46,10 +46,10 @@ This substandard governs **dependency vulnerability scanning and supply chain sa
 
 | CVSS Score | Fitness Severity |
 |-----------|-----------------|
-| 9.0–10.0 (Critical) | error |
-| 7.0–8.9 (High) | error |
-| 4.0–6.9 (Medium) | warning |
-| 0.1–3.9 (Low) | warning |
+| 9.0-10.0 (Critical) | error |
+| 7.0-8.9 (High) | error |
+| 4.0-6.9 (Medium) | warning |
+| 0.1-3.9 (Low) | warning |
 
 ## 3. Default Rules
 

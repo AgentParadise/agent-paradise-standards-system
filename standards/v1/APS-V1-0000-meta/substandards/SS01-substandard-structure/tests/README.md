@@ -1,4 +1,4 @@
-# Tests — APS-V1-0000.SS01
+# Tests - APS-V1-0000.SS01
 
 ## Test Requirements
 

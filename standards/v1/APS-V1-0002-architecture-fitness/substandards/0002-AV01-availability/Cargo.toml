@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Availability Dimension — substandard of APS-V1-0002"
+description = "Availability Dimension - substandard of APS-V1-0002"
 
 [dependencies]
 architecture-fitness = { path = "../.." }

@@ -1,4 +1,4 @@
-//! APS-V1-0002.LG01 — Legality Dimension
+//! APS-V1-0002.LG01 - Legality Dimension
 //!
 //! Governs open-source license compliance via adapters for cargo-deny,
 //! license-checker, and custom license scanners. Categorizes licenses as

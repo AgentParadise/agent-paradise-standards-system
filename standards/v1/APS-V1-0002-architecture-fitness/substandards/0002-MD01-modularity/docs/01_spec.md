@@ -1,4 +1,4 @@
-# APS-V1-0002.MD01 — Modularity and Coupling Dimension
+# APS-V1-0002.MD01 - Modularity and Coupling Dimension
 
 **Version**: 1.0.0
 **Parent**: APS-V1-0002 (Architecture Fitness Functions)
@@ -7,10 +7,10 @@
 
 ## 1. Scope
 
-This substandard governs **module-level coupling and dependency structure** — the separation of concerns, dependency directionality, and architectural balance that enable independent evolution of system components.
+This substandard governs **module-level coupling and dependency structure** - the separation of concerns, dependency directionality, and architectural balance that enable independent evolution of system components.
 
 **Data sources**:
-- `.topology/metrics/` artifacts produced by APS-V1-0001 (native — no adapter)
+- `.topology/metrics/` artifacts produced by APS-V1-0001 (native - no adapter)
 - VSA adapter output for slice-level metrics (optional, via adapter)
 
 ## 2. Metrics Owned
@@ -117,7 +117,7 @@ A (Abstractness)
    0.0          I          1.0
 ```
 
-- **Zone of Pain** (D > 0.5, low A, low I): Concrete modules that many others depend on. Rigid — any change risks cascading failures. Resolution: add abstractions (interfaces/traits).
+- **Zone of Pain** (D > 0.5, low A, low I): Concrete modules that many others depend on. Rigid - any change risks cascading failures. Resolution: add abstractions (interfaces/traits).
 - **Zone of Uselessness** (D > 0.5, high A, high I): Abstract modules nobody depends on. Over-engineered. Resolution: remove unused abstractions or consolidate.
 
 Modules on or near the Main Sequence (D < 0.3) are well-balanced.
@@ -155,7 +155,7 @@ Dimension score formula:
 MD01_score = 1.0 - (unexcepted_violations / total_entities_evaluated)
 ```
 
-MD01 is typically the most actionable dimension — coupling violations have clear remediation paths (extract interface, reduce dependencies, break cycles).
+MD01 is typically the most actionable dimension - coupling violations have clear remediation paths (extract interface, reduce dependencies, break cycles).
 
 ## 7. Topology Artifact Mapping
 

@@ -1,4 +1,4 @@
-# Examples — 3D Force-Directed Projector
+# Examples - 3D Force-Directed Projector
 
 ## Sample Outputs
 
@@ -6,8 +6,8 @@
 
 Contains example renderings:
 
-- `scene.json` — WebGL scene description
-- `coupling.html` — Self-contained HTML viewer (when available)
+- `scene.json` - WebGL scene description
+- `coupling.html` - Self-contained HTML viewer (when available)
 
 ## Usage Examples
 

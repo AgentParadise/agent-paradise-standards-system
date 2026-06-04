@@ -1,4 +1,4 @@
-//! APS-V1-0002.ST01 — Structural Integrity Dimension
+//! APS-V1-0002.ST01 - Structural Integrity Dimension
 //!
 //! Governs ArchUnit-style structural checks and CK object-oriented metrics:
 //! DIT, CBO, RFC, WMC, LCOM. Includes pattern detection for god classes,

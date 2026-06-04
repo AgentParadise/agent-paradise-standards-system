@@ -1,7 +1,7 @@
-//! APS-V1-0002.AC01 — Accessibility Dimension
+//! APS-V1-0002.AC01 - Accessibility Dimension
 //!
 //! Governs web accessibility compliance (WCAG) via adapters for axe-core,
-//! pa11y, and Lighthouse. Opt-in dimension — requires web frontend.
+//! pa11y, and Lighthouse. Opt-in dimension - requires web frontend.
 
 // Phase 2: Rust implementation will be added here.
 

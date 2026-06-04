@@ -1,4 +1,4 @@
-# APS-V1-0002.MT01 — Maintainability Dimension
+# APS-V1-0002.MT01 - Maintainability Dimension
 
 **Version**: 1.0.0
 **Parent**: APS-V1-0002 (Architecture Fitness Functions)
@@ -7,9 +7,9 @@
 
 ## 1. Scope
 
-This substandard governs **function-level and file-level maintainability** — the ability to understand, modify, and extend code without introducing defects.
+This substandard governs **function-level and file-level maintainability** - the ability to understand, modify, and extend code without introducing defects.
 
-**Data source**: `.topology/metrics/` artifacts produced by APS-V1-0001 (Code Topology). No adapter required — all metrics are computed natively by the topology standard.
+**Data source**: `.topology/metrics/` artifacts produced by APS-V1-0001 (Code Topology). No adapter required - all metrics are computed natively by the topology standard.
 
 ## 2. Metrics Owned
 
@@ -90,7 +90,7 @@ Dimension score formula:
 MT01_score = 1.0 - (unexcepted_violations / total_entities_evaluated)
 ```
 
-The Maintainability Index provides a secondary composite signal — files with MI < 20 are strongly correlated with difficult-to-maintain code regardless of individual metric values.
+The Maintainability Index provides a secondary composite signal - files with MI < 20 are strongly correlated with difficult-to-maintain code regardless of individual metric values.
 
 ## 5. Interactions with Other Dimensions
 

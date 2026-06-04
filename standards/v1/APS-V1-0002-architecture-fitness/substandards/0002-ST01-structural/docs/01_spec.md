@@ -1,4 +1,4 @@
-# APS-V1-0002.ST01 — Structural Integrity Dimension
+# APS-V1-0002.ST01 - Structural Integrity Dimension
 
 **Version**: 1.0.0
 **Parent**: APS-V1-0002 (Architecture Fitness Functions)
@@ -7,7 +7,7 @@
 
 ## 1. Scope
 
-This substandard governs **structural design quality** — ArchUnit-style checks, class-level design metrics, layer enforcement, and pattern detection. It ensures that code organization follows intended architectural patterns.
+This substandard governs **structural design quality** - ArchUnit-style checks, class-level design metrics, layer enforcement, and pattern detection. It ensures that code organization follows intended architectural patterns.
 
 **Data sources**:
 - AST analysis for structural pattern checks
