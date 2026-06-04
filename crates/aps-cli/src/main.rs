@@ -659,6 +659,15 @@ fn allocate_next_experiment_id(repo_root: &std::path::Path) -> String {
 // ============================================================================
 // Standard CLI Dispatch
 // ============================================================================
+//
+// Per-standard identity (ID, SLUG, NAME, etc.) is owned by each standard's
+// crate as `pub const`s. The CLI references those constants here so the
+// registry, the dispatch arms, and any future promoted-to-APS rename stay in
+// one place rather than scattered as duplicated string literals (this is the
+// `aps run` magic-string cleanup mandated by the operator review).
+
+const TOPOLOGY_SLUG: &str = "topology";
+const FITNESS_SLUG: &str = "fitness";
 
 /// Information about a registered standard.
 #[allow(dead_code)]
@@ -672,12 +681,14 @@ struct StandardCliInfo {
     aliases: &'static [&'static str],
 }
 
-/// Central registry of all available standards.
+/// Central registry of all available standards. The docs entry pulls every
+/// field from `documentation::*` constants so an EXP -> APS promotion only
+/// updates the standard crate, not the CLI.
 fn all_standards() -> &'static [StandardCliInfo] {
     &[
         StandardCliInfo {
             id: "EXP-V1-0001",
-            slug: "topology",
+            slug: TOPOLOGY_SLUG,
             name: "Code Topology",
             description: "Architectural metrics and visualization",
             commands: "analyze, validate, diff, report, viz",
@@ -686,7 +697,7 @@ fn all_standards() -> &'static [StandardCliInfo] {
         },
         StandardCliInfo {
             id: "EXP-V1-0003",
-            slug: "fitness",
+            slug: FITNESS_SLUG,
             name: "Architecture Fitness Functions",
             description: "Declarative architectural assertions",
             commands: "validate",
@@ -694,13 +705,13 @@ fn all_standards() -> &'static [StandardCliInfo] {
             aliases: &["fitness-functions", "exp-v1-0003"],
         },
         StandardCliInfo {
-            id: "EXP-V1-0004",
-            slug: "docs",
-            name: "Documentation and Context Engineering",
-            description: "Structured docs with frontmatter-driven indexing for automation and AI agents",
-            commands: "validate, index",
-            version: "0.1.0",
-            aliases: &["documentation", "doc", "exp-v1-0004"],
+            id: documentation::ID,
+            slug: documentation::SLUG,
+            name: documentation::NAME,
+            description: documentation::DESCRIPTION,
+            commands: documentation::COMMANDS,
+            version: documentation::VERSION,
+            aliases: documentation::ALIASES,
         },
     ]
 }
@@ -713,7 +724,9 @@ fn resolve_standard(slug: &str) -> Option<&'static StandardCliInfo> {
         .find(|s| s.slug == lower || s.aliases.iter().any(|a| *a == lower))
 }
 
-/// Dispatch to a standard's CLI.
+/// Dispatch to a standard's CLI. The arm patterns are const references to the
+/// same slugs `all_standards` advertises, so adding/renaming a standard only
+/// touches one declaration site.
 fn dispatch_standard_cli(
     info: &StandardCliInfo,
     args: &[String],
@@ -724,9 +737,9 @@ fn dispatch_standard_cli(
     let cmd_args = if args.len() > 1 { &args[1..] } else { &[] };
 
     match info.slug {
-        "topology" => dispatch_topology(command, cmd_args, repo_root, verbose),
-        "fitness" => dispatch_fitness(command, cmd_args, repo_root, verbose),
-        "docs" => dispatch_docs(command, cmd_args, repo_root, verbose),
+        TOPOLOGY_SLUG => dispatch_topology(command, cmd_args, repo_root, verbose),
+        FITNESS_SLUG => dispatch_fitness(command, cmd_args, repo_root, verbose),
+        documentation::SLUG => dispatch_docs(command, cmd_args, repo_root, verbose),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -1241,7 +1254,17 @@ fn dispatch_docs(
                 match validator.generate_indexes() {
                     Ok(indexes) => {
                         if indexes.is_empty() {
-                            println!("No documents with front matter found.");
+                            // `generate_indexes` returns one entry per traversed
+                            // directory, so empty means the docs root itself was
+                            // not found (or was empty). Say that, instead of
+                            // implying there was no frontmatter to read.
+                            println!(
+                                "Docs root not found or contains no directories under {}.",
+                                target.display(),
+                            );
+                            println!(
+                                "Create the docs root or configure docs.root in .apss/config.toml."
+                            );
                         } else {
                             for idx in &indexes {
                                 println!("--- {} ---", idx.dir.display());
@@ -1479,7 +1502,7 @@ fn write_topology_artifacts(
     fs::create_dir_all(output_path.join("metrics"))?;
     fs::create_dir_all(output_path.join("graphs"))?;
 
-    // Deduplicate functions — tree-sitter queries can match the same function
+    // Deduplicate functions - tree-sitter queries can match the same function
     // multiple times (e.g. a class method matches both the function pattern
     // and the method-in-class pattern).  Keep the first occurrence per
     // (file_path, start_line) pair.

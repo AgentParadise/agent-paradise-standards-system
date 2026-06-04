@@ -8,11 +8,16 @@ use crate::frontmatter::{self, FrontMatter};
 use std::path::Path;
 
 /// A single entry in the generated index.
+///
+/// Keeps the parsed front matter so the renderer can look up any field
+/// listed in `docs.index.frontmatter_fields`, not just `name` and
+/// `description`.
 #[derive(Debug, Clone)]
 pub struct IndexEntry {
     pub filename: String,
     pub name: String,
     pub description: String,
+    pub frontmatter: Option<FrontMatter>,
 }
 
 /// Result of index generation for a directory.
@@ -73,6 +78,7 @@ pub fn generate_index(dir: &Path, config: &IndexConfig) -> Result<GeneratedIndex
             filename,
             name,
             description,
+            frontmatter: fm,
         });
     }
 
@@ -106,7 +112,10 @@ fn render_index_table(entries: &[IndexEntry], config: &IndexConfig) -> String {
             ));
         }
     } else {
-        // Custom fields: always start with a linked name column, then remaining fields
+        // Custom fields: start with a linked name column, then render every
+        // remaining configured field by looking it up in the parsed
+        // front matter (rather than emitting empty cells for anything other
+        // than `description`).
         out.push_str("| Document |");
         for field in fields.iter().filter(|f| f.as_str() != "name") {
             let title = capitalize(field);
@@ -123,11 +132,7 @@ fn render_index_table(entries: &[IndexEntry], config: &IndexConfig) -> String {
         for entry in entries {
             out.push_str(&format!("| [{}]({})", entry.name, entry.filename));
             for field in fields.iter().filter(|f| f.as_str() != "name") {
-                let val = if field == "description" {
-                    &entry.description
-                } else {
-                    ""
-                };
+                let val = entry_field_value(entry, field);
                 out.push_str(&format!(" | {val}"));
             }
             out.push_str(" |\n");
@@ -135,6 +140,21 @@ fn render_index_table(entries: &[IndexEntry], config: &IndexConfig) -> String {
     }
 
     out
+}
+
+/// Look up a configured frontmatter field on an entry. Special-cases
+/// `description` so the dedicated column reads from the same source as the
+/// default two-column renderer; everything else comes from the parsed
+/// frontmatter map.
+fn entry_field_value<'a>(entry: &'a IndexEntry, field: &str) -> &'a str {
+    if field == "description" {
+        return &entry.description;
+    }
+    entry
+        .frontmatter
+        .as_ref()
+        .and_then(|fm| fm.get(field))
+        .unwrap_or("")
 }
 
 /// Extract the `## Index` section from a README's content.
@@ -224,14 +244,17 @@ pub fn update_readme_index(
     let generated = generate_index(dir, config)?;
     let new_content = match find_index_section(&content) {
         Some((start, end)) => {
+            // Splice the freshly generated index over the old section and
+            // guarantee a blank line separator before the following content.
+            // `generate_index` produces markdown ending in one `\n`; if the
+            // trailing content does not already start with a newline we add
+            // one so we never produce a run-on like `|\n## Footer`, which
+            // breaks the next header's parse in strict markdown.
             let mut result = String::with_capacity(content.len());
             let trailing_content = &content[end..];
             result.push_str(&content[..start]);
             result.push_str(&generated.markdown);
-            if !generated.markdown.ends_with('\n')
-                && !trailing_content.is_empty()
-                && !trailing_content.starts_with('\n')
-            {
+            if !trailing_content.is_empty() && !trailing_content.starts_with('\n') {
                 result.push('\n');
             }
             result.push_str(trailing_content);

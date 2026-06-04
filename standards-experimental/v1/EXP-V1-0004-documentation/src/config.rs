@@ -46,7 +46,7 @@ impl Default for DocsConfig {
     }
 }
 
-/// The `[docs.index]` section — controls `## Index` generation in README.md files.
+/// The `[docs.index]` section - controls `## Index` generation in README.md files.
 #[derive(Debug, Clone, Deserialize)]
 pub struct IndexConfig {
     #[serde(default = "default_true")]
@@ -67,7 +67,7 @@ impl Default for IndexConfig {
     }
 }
 
-/// The `[docs.context_files]` section — CLAUDE.md and AGENTS.md per directory.
+/// The `[docs.context_files]` section - CLAUDE.md and AGENTS.md per directory.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ContextFilesConfig {
     #[serde(default = "default_true")]
@@ -167,11 +167,40 @@ pub fn default_adr_filename_pattern() -> String {
     format!(r"{ADR_STEM_PATTERN}\.md")
 }
 
-/// Build a regex pattern that matches an ADR filename ending with a specific keyword.
-/// Used by required-keyword validation (ADR01-004).
-pub fn adr_keyword_filename_pattern(keyword: &str) -> String {
-    let escaped = regex::escape(keyword);
-    format!(r"^ADR-\d{{3,5}}-{escaped}\.md$")
+/// Return whether `filename` matches the configured ADR naming pattern AND
+/// has a stem ending in `-<keyword>`. Used by the
+/// `ADR01-missing-required-keyword` check to honour `docs.adr.naming_pattern`
+/// rather than silently assuming the default `ADR-` prefix.
+///
+/// The keyword is compared literally (no regex semantics, no escaping needed),
+/// so values like `c++` work without surprises.
+pub fn adr_filename_has_keyword(naming_re: &regex::Regex, filename: &str, keyword: &str) -> bool {
+    if !naming_re.is_match(filename) {
+        return false;
+    }
+    let Some(stem) = filename.strip_suffix(".md") else {
+        return false;
+    };
+    let suffix = format!("-{keyword}");
+    stem.ends_with(&suffix) || stem == keyword
+}
+
+/// Derive the bare ADR stem pattern (filename without trailing `\.md`) from a
+/// configured `docs.adr.naming_pattern`. Used to scan source files for
+/// ADR references (`ADR01-dead-reference`) so reference extraction stays
+/// aligned with the configured filename convention.
+///
+/// Strips a trailing `\.md`, `\.md$`, or `$` so the result describes only the
+/// stem; falls back to the input untouched when no such suffix is present.
+pub fn adr_stem_pattern_from_naming(naming_pattern: &str) -> String {
+    let mut s = naming_pattern.trim_start_matches('^').to_string();
+    if let Some(stripped) = s.strip_suffix('$') {
+        s = stripped.to_string();
+    }
+    if let Some(stripped) = s.strip_suffix(r"\.md") {
+        s = stripped.to_string();
+    }
+    s
 }
 
 // ─── Default value functions ───────────────────────────────────────────────
@@ -281,20 +310,87 @@ mod tests {
         assert!(!re.is_match("ADR-001-security")); // no .md
     }
 
-    #[test]
-    fn keyword_pattern_matches_expected() {
-        let re = regex::Regex::new(&adr_keyword_filename_pattern("security")).unwrap();
-        assert!(re.is_match("ADR-001-security.md"));
-        assert!(re.is_match("ADR-99999-security.md"));
-        assert!(!re.is_match("ADR-001-testing.md")); // wrong keyword
-        assert!(!re.is_match("ADR-01-security.md")); // too few digits
-        assert!(!re.is_match("ADR-123456-security.md")); // too many digits
+    fn default_naming_re() -> regex::Regex {
+        regex::Regex::new(&format!("^{}$", default_adr_filename_pattern())).unwrap()
     }
 
     #[test]
-    fn keyword_pattern_escapes_metacharacters() {
-        let re = regex::Regex::new(&adr_keyword_filename_pattern("c++")).unwrap();
-        assert!(re.is_match("ADR-001-c++.md"));
-        assert!(!re.is_match("ADR-001-cpp.md"));
+    fn filename_keyword_matches_expected() {
+        let re = default_naming_re();
+        assert!(adr_filename_has_keyword(
+            &re,
+            "ADR-001-security.md",
+            "security"
+        ));
+        assert!(adr_filename_has_keyword(
+            &re,
+            "ADR-99999-security.md",
+            "security"
+        ));
+        assert!(!adr_filename_has_keyword(
+            &re,
+            "ADR-001-testing.md",
+            "security"
+        )); // wrong keyword
+        assert!(!adr_filename_has_keyword(
+            &re,
+            "ADR-01-security.md",
+            "security"
+        )); // too few digits
+        assert!(!adr_filename_has_keyword(
+            &re,
+            "ADR-123456-security.md",
+            "security"
+        )); // too many digits
+    }
+
+    #[test]
+    fn filename_keyword_handles_metacharacters_literally() {
+        // The keyword is compared as a literal string, so regex metacharacters
+        // like `+` do not need escaping.
+        let custom = regex::Regex::new(r"^ADR-\d{3,5}-[a-zA-Z0-9+-]+\.md$").unwrap();
+        assert!(adr_filename_has_keyword(&custom, "ADR-001-c++.md", "c++"));
+        assert!(!adr_filename_has_keyword(&custom, "ADR-001-cpp.md", "c++"));
+    }
+
+    #[test]
+    fn filename_keyword_follows_custom_naming() {
+        // A project that customises naming_pattern (e.g., DEC- prefix) gets a
+        // keyword check that matches its convention, not the silent default.
+        let custom = regex::Regex::new(r"^DEC-\d{3,5}-[a-zA-Z0-9-]+\.md$").unwrap();
+        assert!(adr_filename_has_keyword(
+            &custom,
+            "DEC-001-security.md",
+            "security"
+        ));
+        assert!(!adr_filename_has_keyword(
+            &custom,
+            "ADR-001-security.md",
+            "security"
+        ));
+    }
+
+    #[test]
+    fn stem_pattern_strips_md_suffix() {
+        assert_eq!(
+            adr_stem_pattern_from_naming(r"ADR-\d{3,5}-[a-zA-Z0-9-]+\.md"),
+            r"ADR-\d{3,5}-[a-zA-Z0-9-]+",
+        );
+    }
+
+    #[test]
+    fn stem_pattern_strips_anchors_and_md() {
+        assert_eq!(
+            adr_stem_pattern_from_naming(r"^ADR-\d{3,5}-[a-zA-Z0-9-]+\.md$"),
+            r"ADR-\d{3,5}-[a-zA-Z0-9-]+",
+        );
+    }
+
+    #[test]
+    fn stem_pattern_passthrough_when_no_md_suffix() {
+        assert_eq!(
+            adr_stem_pattern_from_naming(r"ADR-\d{3,5}-[a-zA-Z0-9-]+"),
+            r"ADR-\d{3,5}-[a-zA-Z0-9-]+",
+        );
     }
 }

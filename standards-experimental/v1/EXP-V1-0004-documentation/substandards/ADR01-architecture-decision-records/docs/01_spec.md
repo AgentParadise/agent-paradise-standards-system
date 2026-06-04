@@ -11,7 +11,7 @@ description: "Normative rules for Architecture Decision Record validation"
 
 Key words: MUST, MUST NOT, SHOULD, SHALL per [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
-## 1. ADR Directory (ADR01-001)
+## 1. ADR Directory (ADR01-dir-not-found)
 
 The docs root (default `docs/`) MUST contain an ADR directory (default `adrs/`).
 
@@ -19,7 +19,7 @@ The docs root (default `docs/`) MUST contain an ADR directory (default `adrs/`).
 - Full path: `<docs.root>/<docs.adr.directory>/` (e.g., `docs/adrs/`)
 - The ADR directory SHOULD contain a `README.md` with a `## Index` section listing all ADRs (managed by the parent standard's index generation)
 
-## 2. Naming Convention (ADR01-002)
+## 2. Naming Convention (ADR01-invalid-naming)
 
 Every `.md` file in the ADR directory (excluding `README.md`, `CLAUDE.md`, `AGENTS.md`) MUST match the configured naming pattern.
 
@@ -36,7 +36,7 @@ Every `.md` file in the ADR directory (excluding `README.md`, `CLAUDE.md`, `AGEN
 - The name MUST use kebab-case (lowercase letters, digits, hyphens)
 - Configurable via `docs.adr.naming_pattern` in `.apss/config.toml`
 
-## 3. Front Matter (ADR01-003)
+## 3. Front Matter (ADR01-missing-frontmatter, ADR01-invalid-status)
 
 Every ADR file MUST contain a YAML front matter block with:
 
@@ -46,7 +46,7 @@ Every ADR file MUST contain a YAML front matter block with:
 | `description` | YES | One-line summary of the decision |
 | `status` | YES | Lifecycle status: `proposed`, `accepted`, `deprecated`, or `superseded` |
 
-ADRs should not be revised — they should be superseded by a new ADR. The `status` field enables agents and tooling to skip superseded decisions and focus on active ones.
+ADRs should not be revised - they should be superseded by a new ADR. The `status` field enables agents and tooling to skip superseded decisions and focus on active ones.
 
 **Example:**
 
@@ -58,7 +58,7 @@ status: accepted
 ---
 ```
 
-## 4. Required ADR Keywords (ADR01-004)
+## 4. Required ADR Keywords (ADR01-missing-required-keyword)
 
 Projects MAY configure required ADR topics via `docs.adr.required_adr_keywords`:
 
@@ -67,7 +67,12 @@ Projects MAY configure required ADR topics via `docs.adr.required_adr_keywords`:
 required_adr_keywords = ["security", "testing", "deployment"]
 ```
 
-For each keyword, at least one file matching `ADR-\d{3,5}-<keyword>\.md` MUST exist. The number prefix is flexible — only the keyword suffix is enforced.
+For each keyword, at least one file whose stem matches the configured
+`docs.adr.naming_pattern` and ends in `-<keyword>` MUST exist. The
+keyword matcher is derived from `naming_pattern`, so a project that
+customises the prefix (e.g., `DEC-...`) gets a keyword check that follows
+its convention. The number prefix is flexible; only the keyword suffix is
+enforced.
 
 **Example:** With `required_adr_keywords = ["security"]`, any of these satisfy the requirement:
 - `ADR-001-security.md`
@@ -75,7 +80,12 @@ For each keyword, at least one file matching `ADR-\d{3,5}-<keyword>\.md` MUST ex
 
 This mechanism lets the standard grow a base set of required architectural topics as the project matures.
 
-## 5. Backlinking (ADR01-005)
+## 5. Backlinking (ADR01-missing-backlink, reserved)
+
+Backlinking is an always-on part of the standard: implementation files reference
+the ADR they implement so context is never lost across plan, design, and impl.
+The disable flag exists only as a per-project escape hatch; it is not the
+intended default.
 
 When `docs.adr.backlinking` is enabled (default: `true`), implementation files that are governed by an ADR SHOULD contain a reference to the ADR identifier.
 
@@ -91,33 +101,39 @@ This enables bidirectional discovery:
 - From code → ADR: developers and agents find the governing decision
 - From ADR → code: `grep ADR-001-security` finds all implementing files
 
-## 6. Dead ADR Reference Detection (ADR01-009)
+## 6. Dead ADR Reference Detection (ADR01-dead-reference, ADR01-superseded-reference)
 
-When backlinking is enabled, the validator scans source files across the repository for `ADR-XXX-<name>` patterns and checks that each referenced ADR actually exists in the ADR directory.
+When backlinking is enabled, the validator scans source files across the
+repository for ADR identifiers and checks that each referenced ADR actually
+exists in the ADR directory. The reference-extraction regex is derived from
+the configured `docs.adr.naming_pattern`, so projects that customise the
+prefix (e.g., `DEC-...`) still get their references scanned.
 
-This catches stale references to ADRs that have been renamed, renumbered, or deleted.
+This catches stale references to ADRs that have been renamed, renumbered, or
+deleted. Live references to an ADR whose status is `superseded` or
+`deprecated` are flagged separately as `ADR01-superseded-reference`.
 
 **Scanned file types:** `.rs`, `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.java`, `.kt`, `.rb`, `.sh`, `.yaml`, `.yml`, `.toml`, `.json`, `.md`
 
 **Excluded from scanning:** Hidden directories, configured `exclude_dirs`, and files inside the ADR directory itself.
 
-**Severity:** warning (ADR01-009)
+**Severity:** warning (ADR01-dead-reference, ADR01-superseded-reference)
 
 **Controlled by:** `docs.adr.backlinking` in `.apss/config.toml`
 
-## 7. Required ADR Headers (ADR01-010)
+## 7. Required ADR Headers (ADR01-missing-header)
 
 Every ADR file SHOULD contain the standard ADR section headers:
 
-- `## Context` — the forces at play
-- `## Decision` — the change being proposed or made
-- `## Consequences` — what happens as a result
+- `## Context` - the forces at play
+- `## Decision` - the change being proposed or made
+- `## Consequences` - what happens as a result
 
 Header matching is case-insensitive and tolerates extra whitespace.
 
-**Severity:** warning (ADR01-010)
+**Severity:** warning (ADR01-missing-header)
 
-## 8. ADR Context Files (ADR01-007, ADR01-008)
+## 8. ADR Context Files (ADR01-missing-context-file, ADR01-context-missing-guidance)
 
 The ADR directory MUST contain `CLAUDE.md` and `AGENTS.md` files that provide guidance on how ADRs should be referenced in implementation code.
 
@@ -142,8 +158,11 @@ Use `grep ADR-001-security` to find all files implementing a given ADR.
 ```
 
 **Severity:**
-- Missing file: error (ADR01-007)
-- File exists but lacks referencing guidance: warning (ADR01-008)
+- Missing file: error (ADR01-missing-context-file)
+- File exists but lacks referencing guidance: warning (ADR01-context-missing-guidance)
+
+Guidance detection is case-insensitive, so casing variants like `Reference`
+or `BACKLINK` do not produce false `ADR01-context-missing-guidance` warnings.
 
 ---
 
@@ -176,17 +195,21 @@ Projects MAY customize the template. An example template is provided in the stan
 
 ## 11. Error Codes
 
+Codes follow the form `ADR01-<verb-phrase>`. The substandard prefix keeps the
+rule domain visible; the suffix reads as plain English in CLI output. This
+matches the operator invariant for human-readable codes.
+
 | Code | Severity | Description |
 |------|----------|-------------|
-| ADR01-001 | error | ADR directory does not exist |
-| ADR01-002 | error | File does not match naming pattern |
-| ADR01-003 | error | Missing or incomplete front matter |
-| ADR01-004 | error | Required ADR keyword not satisfied |
-| ADR01-005 | — | Reserved (backlink enforcement not feasible as forward scan) |
-| ADR01-006 | error | Invalid naming regex in configuration |
-| ADR01-007 | error | ADR directory missing CLAUDE.md or AGENTS.md |
-| ADR01-008 | warning | ADR context file lacks ADR referencing guidance |
-| ADR01-009 | warning | Source file references non-existent ADR (dead reference) |
-| ADR01-010 | warning | ADR file missing required section header |
-| ADR01-011 | error | ADR missing or invalid `status` field |
-| ADR01-012 | warning | Source file references a superseded or deprecated ADR |
+| ADR01-dir-not-found | error | ADR directory does not exist |
+| ADR01-invalid-naming | error | File does not match naming pattern |
+| ADR01-missing-frontmatter | error | Missing or incomplete front matter |
+| ADR01-missing-required-keyword | error | Required ADR keyword not satisfied |
+| ADR01-missing-backlink | - | Reserved (forward backlink enforcement not feasible) |
+| ADR01-invalid-naming-regex | error | Invalid naming regex in configuration |
+| ADR01-missing-context-file | error | ADR directory missing CLAUDE.md or AGENTS.md |
+| ADR01-context-missing-guidance | warning | ADR context file lacks ADR referencing guidance |
+| ADR01-dead-reference | warning | Source file references non-existent ADR (dead reference) |
+| ADR01-missing-header | warning | ADR file missing required section header |
+| ADR01-invalid-status | error | ADR missing or invalid `status` field |
+| ADR01-superseded-reference | warning | Source file references a superseded or deprecated ADR |

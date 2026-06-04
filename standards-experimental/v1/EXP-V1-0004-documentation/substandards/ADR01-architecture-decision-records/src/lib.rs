@@ -9,25 +9,42 @@ use documentation::config::{self, DocsConfig};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 use walkdir::WalkDir;
 
-/// Error codes emitted by the ADR substandard.
+/// Substandard identifier.
+pub const SUBSTANDARD_ID: &str = "EXP-V1-0004.ADR01";
+
+/// Diagnostic codes emitted by the ADR substandard.
+///
+/// Codes use the form `ADR01-<verb-phrase>` so the substandard prefix stays
+/// visible while the suffix is descriptive in CLI output. Matches the operator
+/// invariant for human-readable codes (example: `ADR01-dir-not-found`).
 pub mod error_codes {
-    pub const MISSING_ADR_DIR: &str = "ADR01-001";
-    pub const INVALID_ADR_NAMING: &str = "ADR01-002";
-    pub const MISSING_ADR_FRONTMATTER: &str = "ADR01-003";
-    pub const MISSING_REQUIRED_ADR: &str = "ADR01-004";
-    /// Reserved — not emitted. Forward backlink enforcement is not feasible;
-    /// use ADR01-009 (dead reference detection) for reference integrity instead.
-    pub const MISSING_ADR_BACKLINK: &str = "ADR01-005";
-    pub const INVALID_NAMING_REGEX: &str = "ADR01-006";
-    pub const MISSING_ADR_CONTEXT_FILE: &str = "ADR01-007";
-    pub const ADR_CONTEXT_MISSING_GUIDANCE: &str = "ADR01-008";
-    pub const DEAD_ADR_REFERENCE: &str = "ADR01-009";
-    pub const MISSING_ADR_HEADER: &str = "ADR01-010";
-    pub const INVALID_ADR_STATUS: &str = "ADR01-011";
-    pub const SUPERSEDED_ADR_REFERENCE: &str = "ADR01-012";
+    /// ADR directory does not exist at the configured path.
+    pub const MISSING_ADR_DIR: &str = "ADR01-dir-not-found";
+    /// ADR filename does not match the configured naming pattern.
+    pub const INVALID_ADR_NAMING: &str = "ADR01-invalid-naming";
+    /// ADR file is missing required front matter fields (name, description).
+    pub const MISSING_ADR_FRONTMATTER: &str = "ADR01-missing-frontmatter";
+    /// A configured required-keyword ADR is missing from the directory.
+    pub const MISSING_REQUIRED_ADR: &str = "ADR01-missing-required-keyword";
+    /// Reserved - not emitted. Forward backlink enforcement is not feasible;
+    /// use `ADR01-dead-reference` for reference integrity instead.
+    pub const MISSING_ADR_BACKLINK: &str = "ADR01-missing-backlink";
+    /// The configured naming pattern is not a valid regex.
+    pub const INVALID_NAMING_REGEX: &str = "ADR01-invalid-naming-regex";
+    /// ADR directory is missing CLAUDE.md or AGENTS.md.
+    pub const MISSING_ADR_CONTEXT_FILE: &str = "ADR01-missing-context-file";
+    /// ADR CLAUDE.md or AGENTS.md does not document how code references ADRs.
+    pub const ADR_CONTEXT_MISSING_GUIDANCE: &str = "ADR01-context-missing-guidance";
+    /// Source file references an ADR identifier that has no matching file.
+    pub const DEAD_ADR_REFERENCE: &str = "ADR01-dead-reference";
+    /// ADR file is missing a required section header (Context, Decision, Consequences).
+    pub const MISSING_ADR_HEADER: &str = "ADR01-missing-header";
+    /// ADR file is missing the `status` field, or its value is not a valid lifecycle state.
+    pub const INVALID_ADR_STATUS: &str = "ADR01-invalid-status";
+    /// Source file references an ADR whose status is superseded or deprecated.
+    pub const SUPERSEDED_ADR_REFERENCE: &str = "ADR01-superseded-reference";
 }
 
 /// ADR validator that loads config and runs all ADR checks.
@@ -82,7 +99,7 @@ impl AdrValidator {
         }
 
         // Compile naming pattern
-        let naming_regex = match Regex::new(&format!("^{}$", &self.config.adr.naming_pattern)) {
+        let naming_regex = match Regex::new(&format!("^{}$", self.config.adr.naming_pattern)) {
             Ok(re) => re,
             Err(e) => {
                 diagnostics.push(
@@ -102,7 +119,7 @@ impl AdrValidator {
         // Collect ADR files
         let adr_files = collect_adr_files(&adr_dir);
 
-        // ADR01-002: Validate naming convention
+        // ADR01-invalid-naming: Validate naming convention
         validate_naming(
             &adr_dir,
             &adr_files,
@@ -111,11 +128,17 @@ impl AdrValidator {
             &mut diagnostics,
         );
 
-        // ADR01-003: Validate front matter
+        // ADR01-missing-frontmatter / ADR01-invalid-status: Validate front matter
         validate_frontmatter(&adr_dir, &adr_files, &mut diagnostics);
 
-        // ADR01-004: Check required ADR keywords
-        validate_required_keywords(&adr_dir, &adr_files, &self.config, &mut diagnostics);
+        // ADR01-missing-required-keyword: Check required ADR keywords
+        validate_required_keywords(
+            &adr_dir,
+            &adr_files,
+            &naming_regex,
+            &self.config,
+            &mut diagnostics,
+        );
 
         // ADR01-007/008: Check ADR context files (CLAUDE.md, AGENTS.md)
         validate_adr_context_files(&adr_dir, &mut diagnostics);
@@ -284,28 +307,26 @@ fn validate_frontmatter(adr_dir: &Path, adr_files: &[String], diagnostics: &mut 
     }
 }
 
-/// ADR01-004: For each keyword in `required_adr_keywords`, at least one file
-/// matching `ADR-\d{3,5}-<keyword>\.md` must exist.
+/// For each keyword in `required_adr_keywords`, at least one ADR file whose
+/// stem ends in `-<keyword>` (and which matches the configured naming pattern)
+/// must exist. Emits `ADR01-missing-required-keyword` when missing.
 fn validate_required_keywords(
     adr_dir: &Path,
     adr_files: &[String],
+    naming_regex: &Regex,
     config: &DocsConfig,
     diagnostics: &mut Diagnostics,
 ) {
     for keyword in &config.adr.required_adr_keywords {
-        let pattern = config::adr_keyword_filename_pattern(keyword);
-        let re = match Regex::new(&pattern) {
-            Ok(re) => re,
-            Err(_) => continue,
-        };
-
-        let exists = adr_files.iter().any(|f| re.is_match(f));
+        let exists = adr_files
+            .iter()
+            .any(|f| config::adr_filename_has_keyword(naming_regex, f, keyword));
         if !exists {
             diagnostics.push(
                 Diagnostic::error(
                     error_codes::MISSING_REQUIRED_ADR,
                     format!(
-                        "Required ADR keyword '{keyword}' not satisfied — no file matching 'ADR-*-{keyword}.md' found in {}",
+                        "Required ADR keyword '{keyword}' not satisfied - no file matching the configured naming pattern with stem ending '-{keyword}' found in {}",
                         adr_dir.display()
                     ),
                 )
@@ -319,17 +340,21 @@ fn validate_required_keywords(
     }
 }
 
-/// Keyword fragments that indicate the file contains ADR backlinking guidance.
+/// Lowercase keyword fragments that indicate the file contains ADR backlinking
+/// guidance. Matched against a lowercased copy of the file so casing variants
+/// like `Reference` and `BACKLINK` do not produce false `ADR01-context-missing-guidance`
+/// warnings.
 const ADR_REFERENCE_KEYWORDS: &[&str] = &[
-    "ADR-",
+    "adr-",
     "backlink",
     "reference",
     "comment block",
     "comment at the top",
 ];
 
-/// ADR01-007/008: The ADR directory must contain CLAUDE.md and AGENTS.md with
-/// guidance on how ADRs should be referenced in implementation files.
+/// The ADR directory must contain CLAUDE.md and AGENTS.md with guidance on how
+/// ADRs should be referenced in implementation files. Emits
+/// `ADR01-missing-context-file` and `ADR01-context-missing-guidance`.
 fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
     for filename in ["CLAUDE.md", "AGENTS.md"] {
         let path = adr_dir.join(filename);
@@ -348,12 +373,14 @@ fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
             continue;
         }
 
-        // Check that the file contains ADR referencing guidance
+        // Check that the file contains ADR referencing guidance.
+        // Normalise to lowercase so casing variants do not produce false warnings.
         let Ok(content) = std::fs::read_to_string(&path) else {
             continue;
         };
+        let lowered = content.to_ascii_lowercase();
 
-        let has_guidance = ADR_REFERENCE_KEYWORDS.iter().any(|kw| content.contains(kw));
+        let has_guidance = ADR_REFERENCE_KEYWORDS.iter().any(|kw| lowered.contains(kw));
 
         if !has_guidance {
             diagnostics.push(
@@ -373,17 +400,15 @@ fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
     }
 }
 
-// ─── Dead ADR reference scanning (ADR01-009) ─────────────────────────────
+// ─── Dead ADR reference scanning (ADR01-dead-reference) ──────────────────
 
-/// Regex for extracting ADR identifiers from text (compiled once).
-/// Derives from the single source of truth in the parent config module.
-static ADR_REFERENCE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(documentation::config::ADR_STEM_PATTERN).unwrap());
-
-/// Extract ADR identifiers from text. Matches patterns like `ADR-001-security`
-/// (the filename stem without `.md`).
-fn extract_adr_references(content: &str) -> Vec<String> {
-    ADR_REFERENCE_RE
+/// Extract ADR identifiers from text using a regex derived from the configured
+/// naming pattern (filename stem, without the trailing `\.md`). This keeps
+/// reference extraction consistent with the configured filename convention so
+/// projects that customise the prefix (e.g., `DEC-`) still get their
+/// references scanned.
+fn extract_adr_references(content: &str, stem_re: &Regex) -> Vec<String> {
+    stem_re
         .find_iter(content)
         .map(|m| m.as_str().to_string())
         .collect()
@@ -439,6 +464,16 @@ fn validate_adr_references(
         return;
     }
 
+    // Build the reference-extraction regex from the configured naming pattern
+    // so projects that customise the prefix still get backlink scanning. On
+    // regex error fall back to skipping (ADR01-invalid-naming-regex would have
+    // been emitted earlier from the same pattern).
+    let stem_pattern = config::adr_stem_pattern_from_naming(&config.adr.naming_pattern);
+    let stem_re = match Regex::new(&stem_pattern) {
+        Ok(re) => re,
+        Err(_) => return,
+    };
+
     let statuses = adr_statuses(adr_dir, adr_files);
     let exclude: HashSet<&str> = config
         .readme
@@ -478,7 +513,7 @@ fn validate_adr_references(
         }
 
         // Skip files inside the ADR directory (they reference themselves).
-        // Walking from canonical_repo means paths are already canonical — no per-file canonicalize.
+        // Walking from canonical_repo means paths are already canonical - no per-file canonicalize.
         if path.starts_with(&canonical_adr_dir) {
             continue;
         }
@@ -487,7 +522,7 @@ fn validate_adr_references(
             continue;
         };
 
-        let refs = extract_adr_references(&content);
+        let refs = extract_adr_references(&content, &stem_re);
         for adr_ref in refs {
             if !valid_stems.contains(&adr_ref) {
                 diagnostics.push(
@@ -600,6 +635,11 @@ mod tests {
         assert_eq!(codes.len(), unique.len(), "error codes must be unique");
     }
 
+    fn default_stem_re() -> Regex {
+        let stem = config::adr_stem_pattern_from_naming(&config::default_adr_filename_pattern());
+        Regex::new(&stem).expect("default ADR stem regex must compile")
+    }
+
     #[test]
     fn extract_adr_references_finds_patterns() {
         let content = r#"
@@ -607,25 +647,36 @@ mod tests {
             // Also see ADR-042-testing for context
             let x = 42; // not an ADR reference
         "#;
-        let refs = extract_adr_references(content);
+        let refs = extract_adr_references(content, &default_stem_re());
         assert_eq!(refs, vec!["ADR-001-security", "ADR-042-testing"]);
     }
 
     #[test]
     fn extract_adr_references_ignores_short_numbers() {
-        // ADR-01-foo has only 2 digits — should not match (minimum 3)
+        // ADR-01-foo has only 2 digits - should not match (minimum 3)
         let content = "// ADR-01-short";
-        let refs = extract_adr_references(content);
+        let refs = extract_adr_references(content, &default_stem_re());
         assert!(refs.is_empty());
     }
 
     #[test]
     fn extract_adr_references_handles_inline() {
         let content = "# see ADR-001-auth for rationale, and ADR-002-db for schema";
-        let refs = extract_adr_references(content);
+        let refs = extract_adr_references(content, &default_stem_re());
         assert_eq!(refs.len(), 2);
         assert_eq!(refs[0], "ADR-001-auth");
         assert_eq!(refs[1], "ADR-002-db");
+    }
+
+    #[test]
+    fn extract_adr_references_follows_custom_naming() {
+        // A project that customises naming_pattern to `DEC-...` should have its
+        // references picked up by the stem regex derived from that pattern.
+        let stem = config::adr_stem_pattern_from_naming(r"DEC-\d{3,5}-[a-zA-Z0-9-]+\.md");
+        let re = Regex::new(&stem).unwrap();
+        let content = "// Implements DEC-042-payments\n// Old ref ADR-001-auth";
+        let refs = extract_adr_references(content, &re);
+        assert_eq!(refs, vec!["DEC-042-payments"]);
     }
 
     #[test]
@@ -694,14 +745,14 @@ mod tests {
     #[test]
     fn extract_adr_references_accepts_five_digit_numbers() {
         let content = "// ADR-99999-max-digits";
-        let refs = extract_adr_references(content);
+        let refs = extract_adr_references(content, &default_stem_re());
         assert_eq!(refs, vec!["ADR-99999-max-digits"]);
     }
 
     #[test]
     fn extract_adr_references_rejects_six_digit_numbers() {
         let content = "// ADR-123456-too-long";
-        let refs = extract_adr_references(content);
+        let refs = extract_adr_references(content, &default_stem_re());
         assert!(refs.is_empty());
     }
 }

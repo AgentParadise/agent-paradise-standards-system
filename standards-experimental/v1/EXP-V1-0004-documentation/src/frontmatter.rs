@@ -32,22 +32,42 @@ impl FrontMatter {
 
 /// Parse YAML front matter from a string.
 ///
-/// Returns `None` if the content does not start with a `---` block.
-/// Returns `Err` if the block exists but cannot be parsed.
+/// Returns `None` if the content does not begin with a delimiter line that is
+/// exactly `---` (LF or CRLF terminated). Markdown horizontal rules like
+/// `----` therefore do not look like front matter, so they no longer produce
+/// false `Unclosed` errors.
+///
+/// Returns `Err` if a valid opening delimiter is found but the closing
+/// delimiter is missing.
 pub fn parse_frontmatter(content: &str) -> Result<Option<FrontMatter>, FrontMatterError> {
     let trimmed = content.trim_start();
-    if !trimmed.starts_with("---") {
+
+    // Require the opener to be exactly `---` followed by a line break. This
+    // rules out `----` rules and inline dashes while still tolerating CRLF.
+    let after_open = if let Some(rest) = trimmed.strip_prefix("---\n") {
+        rest
+    } else if let Some(rest) = trimmed.strip_prefix("---\r\n") {
+        rest
+    } else {
         return Ok(None);
+    };
+
+    // Walk the remaining lines to find a delimiter line that is exactly `---`,
+    // so we accept both LF and CRLF and never mistake a longer rule like
+    // `----` for the close.
+    let mut consumed = 0usize;
+    let mut close_pos = None;
+    for line in after_open.split_inclusive('\n') {
+        let body = line.trim_end_matches(['\r', '\n']);
+        if body == "---" {
+            close_pos = Some(consumed);
+            break;
+        }
+        consumed += line.len();
     }
 
-    // Find the closing `---` (handle both LF and CRLF line endings)
-    let after_open = &trimmed[3..];
-    let close_pos = after_open
-        .find("\n---")
-        .or_else(|| after_open.find("\r\n---"))
-        .ok_or(FrontMatterError::Unclosed)?;
-
-    let yaml_block = &after_open[..close_pos].trim();
+    let close_pos = close_pos.ok_or(FrontMatterError::Unclosed)?;
+    let yaml_block = after_open[..close_pos].trim();
     if yaml_block.is_empty() {
         return Ok(Some(FrontMatter::default()));
     }
@@ -108,4 +128,55 @@ pub enum FrontMatterError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_lf_delimited_block() {
+        let src = "---\nname: foo\ndescription: bar\n---\nbody\n";
+        let fm = parse_frontmatter(src).unwrap().expect("fm present");
+        assert_eq!(fm.name(), Some("foo"));
+        assert_eq!(fm.description(), Some("bar"));
+    }
+
+    #[test]
+    fn parses_crlf_delimited_block() {
+        let src = "---\r\nname: foo\r\n---\r\nbody\r\n";
+        let fm = parse_frontmatter(src).unwrap().expect("fm present");
+        assert_eq!(fm.name(), Some("foo"));
+    }
+
+    #[test]
+    fn rejects_quadruple_dash_rule() {
+        // A markdown horizontal rule starts with `----`, not exactly `---`,
+        // so it must not look like a front matter opener.
+        let src = "----\nNot front matter, just a horizontal rule.\n";
+        assert!(parse_frontmatter(src).unwrap().is_none());
+    }
+
+    #[test]
+    fn rejects_inline_dashes_without_newline() {
+        // `--- name: foo` on the same line is not a delimiter line.
+        let src = "--- inline\nname: foo\n";
+        assert!(parse_frontmatter(src).unwrap().is_none());
+    }
+
+    #[test]
+    fn closing_delimiter_only_matches_exact_line() {
+        // A `----` rule inside the YAML region must not be mistaken for the
+        // closing delimiter; closure must be exactly `---` on its own line.
+        let src = "---\nname: foo\n----\ndescription: still inside\n---\nbody\n";
+        let fm = parse_frontmatter(src).unwrap().expect("fm present");
+        assert_eq!(fm.description(), Some("still inside"));
+    }
+
+    #[test]
+    fn unclosed_block_returns_error() {
+        let src = "---\nname: foo\n";
+        let err = parse_frontmatter(src).expect_err("expected unclosed error");
+        assert!(matches!(err, FrontMatterError::Unclosed));
+    }
 }

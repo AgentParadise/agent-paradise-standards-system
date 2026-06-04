@@ -1,4 +1,4 @@
-//! EXP-V1-0004 — Documentation and Context Engineering
+//! EXP-V1-0004 - Documentation and Context Engineering
 //!
 //! Enforces documentation consistency across projects: ADR naming and front matter,
 //! directory-level README indexes auto-generated from front matter, and AI context
@@ -15,29 +15,59 @@ pub mod readme;
 use config::{DocsConfig, load_config};
 use std::path::{Path, PathBuf};
 
+// ─── Identity ──────────────────────────────────────────────────────────────
+//
+// Single source of truth for the standard's identifying metadata. Centralised
+// so promotion (EXP-V1-0004 to APS-V1-XXXX) is a single-place change rather
+// than a sweep across the CLI, registry, tests, and docs.
+
+/// Canonical standard identifier.
+pub const ID: &str = "EXP-V1-0004";
+/// CLI slug used in `aps run <slug>` and as the matching key for dispatch.
+pub const SLUG: &str = "docs";
+/// Human-readable standard name.
+pub const NAME: &str = "Documentation and Context Engineering";
+/// Short standard description (shown by `aps run --list`).
+pub const DESCRIPTION: &str =
+    "Structured docs with frontmatter-driven indexing for automation and AI agents";
+/// Comma-separated CLI subcommands.
+pub const COMMANDS: &str = "validate, index";
+/// Semver version, sourced from the Cargo package.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Slug aliases accepted by `resolve_standard`.
+pub const ALIASES: &[&str] = &["documentation", "doc", "exp-v1-0004"];
+
 // ─── Error Codes ────────────────────────────────────────────────────────────
 
-/// Error codes for documentation validation.
+/// Diagnostic codes emitted by the documentation validators.
+///
+/// Parent-standard codes follow the lowercase kebab form `<area>-<short-name>`
+/// (e.g., `readme-missing`, `index-stale`). Substandard codes keep their
+/// substandard prefix (`ADR01-dir-not-found`). This matches the operator
+/// invariant for human-readable codes and the format normatively defined in
+/// the parent spec's section 10.
 pub mod error_codes {
     // README / index sub-domain (DOC02)
     /// Directory is missing README.md.
-    pub const MISSING_README: &str = "MISSING_README";
+    pub const MISSING_README: &str = "readme-missing";
     /// Directory is missing CLAUDE.md.
-    pub const MISSING_CLAUDE_MD: &str = "MISSING_CLAUDE_MD";
+    pub const MISSING_CLAUDE_MD: &str = "claude-md-missing";
     /// Directory is missing AGENTS.md.
-    pub const MISSING_AGENTS_MD: &str = "MISSING_AGENTS_MD";
+    pub const MISSING_AGENTS_MD: &str = "agents-md-missing";
     /// README.md is missing the ## Index section.
-    pub const MISSING_INDEX: &str = "MISSING_INDEX";
+    pub const MISSING_INDEX: &str = "index-missing";
     /// README.md ## Index section is out of date.
-    pub const STALE_INDEX: &str = "STALE_INDEX";
+    pub const STALE_INDEX: &str = "index-stale";
 
     // Root context (DOC03)
     /// Repository root is missing CLAUDE.md.
-    pub const MISSING_ROOT_CLAUDE_MD: &str = "MISSING_ROOT_CLAUDE_MD";
+    pub const MISSING_ROOT_CLAUDE_MD: &str = "root-claude-md-missing";
     /// Repository root is missing AGENTS.md.
-    pub const MISSING_ROOT_AGENTS_MD: &str = "MISSING_ROOT_AGENTS_MD";
+    pub const MISSING_ROOT_AGENTS_MD: &str = "root-agents-md-missing";
     /// Root CLAUDE.md does not reference documentation location.
-    pub const MISSING_DOCS_REFERENCE: &str = "MISSING_DOCS_REFERENCE";
+    /// (Parent spec calls this `root-self-reference-missing`; the broader
+    /// self-reference rule is enforced by Claude 2's context-file content.)
+    pub const MISSING_DOCS_REFERENCE: &str = "root-self-reference-missing";
 }
 
 // ─── DocValidator ──────────────────────────────────────────────────────────
@@ -109,7 +139,7 @@ impl DocValidator {
     /// Write auto-generated indexes into README.md files.
     ///
     /// Returns the number of files updated. Respects `docs.index.auto_generate`
-    /// — returns 0 without writing if auto-generation is disabled.
+    /// - returns 0 without writing if auto-generation is disabled.
     pub fn write_indexes(&self) -> Result<usize, DocError> {
         if !self.docs_config.index.auto_generate {
             return Ok(0);
