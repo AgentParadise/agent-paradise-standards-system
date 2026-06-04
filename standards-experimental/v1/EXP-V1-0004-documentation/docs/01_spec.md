@@ -5,7 +5,7 @@ description: "Normative rules for documentation structure, the doc type registry
 
 # EXP-V1-0004 - Documentation and Context Engineering (Canonical Specification)
 
-**Version**: 0.2.0
+**Version**: 0.1.0
 **Status**: Experimental
 **Category**: Governance
 
