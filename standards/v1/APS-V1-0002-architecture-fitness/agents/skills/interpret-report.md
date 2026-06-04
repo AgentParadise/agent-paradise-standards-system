@@ -18,7 +18,10 @@ User: "explain fitness report" | "what are the violations" | "show system fitnes
 
 1. Read `fitness-report.json`
 2. Present the system-level fitness score prominently
-3. Show per-dimension scores with visual indicators (bar chart)
+3. Show per-dimension scores with visual indicators (bar chart). For each
+   dimension surface its `promotion_status` (`active` / `incubating`) and
+   `enforcement` (`enforced` / `advisory`) so users can tell which findings
+   would block CI vs which are advisory only.
 4. If trend data is available, show deltas and highlight regressions
 5. For failed rules, list each violation with:
    - Entity path

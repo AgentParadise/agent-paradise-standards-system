@@ -60,14 +60,23 @@ LG01 = 0.15    # License compliance critical for libraries
 
 ### Service (balanced across all concerns)
 ```toml
+[system_fitness]
+include_incubating = true   # PF01 is incubating; opt it into the composite
+
 [system_fitness.weights]
 MT01 = 0.20
 MD01 = 0.20
 ST01 = 0.15
 SC01 = 0.20    # Security is elevated for services
 LG01 = 0.10
-PF01 = 0.15    # Performance matters for services
+PF01 = 0.15    # Performance matters for services (incubating per ADR 0003)
 ```
+
+Note: PF01 is `incubating` because there is no universal latency / throughput
+threshold. The weight above only contributes to the composite when
+`include_incubating = true`; otherwise PF01's weight is silently dropped and
+the remaining weights are renormalised. Projects that want PF01 to block CI
+also need a per-project ADR setting concrete SLOs.
 
 ### Frontend (user-facing quality focus)
 ```toml

@@ -29,16 +29,16 @@ Fitness functions catch this drift automatically, continuously, on every commit.
 
 Architecture has multiple dimensions. Each dimension is governed by a substandard:
 
-| Substandard | Dimension | What It Protects |
-|-------------|-----------|-----------------|
-| **MT01** | Maintainability | Readability, testability, complexity |
-| **MD01** | Modularity & Coupling | Separation of concerns, dependency structure |
-| **ST01** | Structural Integrity | Design patterns, class design, layer enforcement |
-| **SC01** | Security | Vulnerability freedom, supply chain safety |
-| **LG01** | Legality | License compliance, IP safety |
-| **AC01** | Accessibility | WCAG compliance (opt-in) |
-| **PF01** | Performance | Latency, throughput regression (opt-in) |
-| **AV01** | Availability | Resilience, uptime (opt-in) |
+| Substandard | Dimension | What It Protects | Status |
+|-------------|-----------|------------------|--------|
+| **MT01** | Maintainability | Readability, testability, complexity | active (default) |
+| **MD01** | Modularity & Coupling | Separation of concerns, dependency structure | active (default) |
+| **ST01** | Structural Integrity | Design patterns, class design, layer enforcement | active (default) |
+| **SC01** | Security | Vulnerability freedom, supply chain safety | active (default) |
+| **LG01** | Legality | License compliance, IP safety | active (default) |
+| **AC01** | Accessibility | WCAG compliance | active (opt-in) |
+| **PF01** | Performance | Latency, throughput regression | incubating (opt-in) |
+| **AV01** | Availability | Resilience, uptime | incubating (opt-in) |
 
 Dimensions are composable - enable what matters for your project, disable what doesn't.
 
@@ -172,17 +172,17 @@ issue = "#138"
 
 **Official** - Promoted from EXP-V1-0003.
 
-### Phase 1 (Current)
-- Normative specification complete
-- Full metrics catalog with 20+ metrics
-- Directory structure and substandard scaffolding
+### Active dimensions (six)
 
-### Phase 2 (Next)
-- Rust implementation (migrating + extending EXP-V1-0003 core)
-- Dimensional scoring engine
-- System-level fitness calculation
-- Adapter framework
-- CLI commands
+MT01, MD01, ST01, SC01, LG01 are default-enabled and active; AC01 is opt-in and active (see ADR 0003). PF01 and AV01 remain incubating because their thresholds are project-specific. Active dimensions run in strict-artifact mode: missing source artifacts (or adapter outputs) fail with `PROMOTION_REQUIREMENT_UNMET` rather than silently skipping. See [01_spec.md §3.3](./01_spec.md) for the R1-R5 promotion gate and [Appendix D](./01_spec.md#appendix-d-current-implementation-status) for per-dimension R1-R5 disclosure.
+
+### Shipped
+
+- Normative specification with rule format, exception format, report format
+- Full metrics catalog with 20+ metrics, formulas, authors, and cited thresholds
+- Reference Rust implementation (dimensional scoring engine, system-level composite, adapter contract, trend tracking, strict-artifact enforcement)
+- JSON Schemas for fitness.toml, fitness-exceptions.toml, fitness-report.json with example round-trip tests
+- CLI integration via `aps run fitness validate`
 
 ## Related Standards
 

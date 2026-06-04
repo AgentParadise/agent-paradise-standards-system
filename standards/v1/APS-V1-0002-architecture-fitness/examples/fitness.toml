@@ -16,8 +16,10 @@ exceptions = "fitness-exceptions.toml"
 severity_default = "error"
 
 # --- Dimensions ---
-# Default-enabled: MT01, MD01, ST01, SC01, LG01
-# Opt-in: AC01, PF01, AV01
+# Active (six): MT01, MD01, ST01, SC01, LG01 (default-enabled) and AC01 (opt-in).
+# Incubating (two): PF01, AV01 (opt-in). Incubating dimensions run rules in
+# advisory mode and are excluded from the system composite unless
+# `system_fitness.include_incubating = true`.
 [dimensions]
 AC01 = false            # No web frontend in this project
 PF01 = false            # No load test infrastructure yet

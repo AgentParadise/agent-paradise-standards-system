@@ -42,6 +42,6 @@ interpret-report     → read fitness-report.json, explain findings
 3. Fix violations or add tracked exceptions with issue references
 
 ### Tradeoff analysis
-1. Run `validate-fitness` with `--previous` to see trends
+1. Run `validate-fitness` with `--previous-report` to see trends
 2. Use `interpret-report` to understand dimension deltas
 3. Focus on dimensions with declining scores

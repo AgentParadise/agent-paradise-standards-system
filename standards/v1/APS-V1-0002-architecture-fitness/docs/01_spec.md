@@ -972,7 +972,7 @@ aps run fitness report <path> --format human|json
 | `--report <path>` | Write JSON report to file |
 | `--dimensions <list>` | Comma-separated dimension codes to evaluate |
 | `--format <fmt>` | Output format: `human` or `json` (default: `human`) |
-| `--previous <path>` | Path to previous report for trend analysis |
+| `--previous-report <path>` | Path to previous report for trend analysis. Resolved relative to the validate target. `--previous` is accepted as a back-compat alias. |
 
 ---
 
