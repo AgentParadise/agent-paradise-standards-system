@@ -11,6 +11,8 @@ description: "Normative rules for Architecture Decision Record validation"
 
 Key words: MUST, MUST NOT, SHOULD, SHALL per [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
+This substandard's vocabulary, lifecycle, naming guidance, and shipped template default to the canonical community resource at <https://github.com/architecture-decision-record/architecture-decision-record>. The Michael Nygard template referenced in section 7 of this spec is the one cited by that resource. See ADR01 overview (`docs/00_overview.md`) for the cited definitions of ADR, AD, ADL, ASR, AKM and the four characteristics of a good ADR.
+
 ## 1. ADR Directory (ADR01-dir-not-found)
 
 The docs root (default `docs/`) MUST contain an ADR directory (default `adrs/`).

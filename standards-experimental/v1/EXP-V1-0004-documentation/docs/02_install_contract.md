@@ -42,8 +42,9 @@ Steps, in order:
      ```
    - The block MUST be placed at the end of any existing `#!` shebang block and before any user-defined hook body, so that a user hook that exits early does not skip APSS validation.
    - Re-running the installer MUST replace the existing apss block in place rather than appending a duplicate. Detection is by sentinel match.
-4. **Print the resolved doc type registry.** After install completes, the CLI MUST print a one-line summary of every active doc type and its resolved location, so the operator immediately sees what just became enforced.
-5. **Exit code.** `0` on success, `2` on any unrecoverable install error. Diagnostics MUST use the human readable scheme.
+4. **Materialise template files for active doc types.** Every active doc type substandard MAY ship a set of starter files (directory READMEs, agent-context files, document templates). The installer MUST copy these into the target repository for each active doc type whose target directory either does not exist or is empty of the substandard's templated files. Copying MUST NOT overwrite an existing target file under any circumstance. `--force` does NOT change this rule for template files: an existing file is always preserved. The installer MUST emit `install-template-conflict` (warning) for each existing file it skipped, naming both the template and the target so the operator can compare manually. See Section 1.4 for the per-substandard template inventory.
+5. **Print the resolved doc type registry.** After install completes, the CLI MUST print a one-line summary of every active doc type, its resolved location, and the templates it materialised, so the operator immediately sees what just became enforced.
+6. **Exit code.** `0` on success, `2` on any unrecoverable install error. Diagnostics MUST use the human readable scheme.
 
 ### 1.2 `uninstall` semantics
 
@@ -61,6 +62,47 @@ Steps, in order:
 | `install-no-git-root` | error | The target path is not inside a git repository. |
 | `install-hook-write-failed` | error | Could not write `.git/hooks/pre-commit`. |
 | `install-config-conflict` | error | `apss.yaml` exists with a `docs:` block and `--force` was not specified. |
+| `install-template-conflict` | warning | A template file was skipped because the target already exists. The target path and the template path MUST appear in the message so the operator can reconcile manually. |
+| `install-template-write-failed` | error | Could not write a template file the installer attempted to create. |
+
+### 1.4 Template inventory per active doc type
+
+Each substandard's templates ship inside the substandard's crate at
+`templates/<relative-target-path>` and are materialised verbatim into the
+target repository at the corresponding path under the docs root. Symlinks
+in the source tree (for example `CLAUDE.md` and `GEMINI.md` symlinks to
+`AGENTS.md` in the ADR templates) are preserved on filesystems that
+support symlinks; on Windows the installer MUST instead copy the link
+target's contents.
+
+The shipped inventory at the time of this contract:
+
+- **EXP-V1-0004.ADR01 (Architecture Decision Records)** ships, relative
+  to the ADR directory resolved from `docs.adr.directory`:
+  - `README.md` - directory README summarising what an ADR is, when to
+    write one, the lifecycle (`status` field), and the project naming
+    convention.
+  - `AGENTS.md` - the canonical agent-context block for the ADR
+    directory: where ADRs live, when to use one, and the parent-level
+    backlink rule.
+  - `CLAUDE.md` (symlink to `AGENTS.md`) - so Claude Code reads the
+    same context.
+  - `GEMINI.md` (symlink to `AGENTS.md`) - so Gemini reads the same
+    context.
+  - `ADR-000-template.md` - Nygard-style template with the required
+    frontmatter (`name`, `description`, `status`) and the `## Context`,
+    `## Decision`, `## Consequences` sections.
+
+- **EXP-V1-0004.PV01 (North Star: Mission, Vision, Position)** and
+  **EXP-V1-0004.RETRO01 (Retrospectives)** MAY ship their own
+  templates following the same convention; the shipped inventory for
+  these is documented in their respective substandard specs and is
+  out of scope for the install-contract surface beyond the rule "copy
+  what the substandard ships at `templates/`, skip on conflict".
+
+All substandard templates MUST live under `<substandard-crate>/templates/`
+inside the standard package, version-controlled alongside the
+substandard's spec, so the installer ships a single coherent bundle.
 
 ---
 
