@@ -1,4 +1,4 @@
-# Architecture Decision Records — Agent Context
+# Architecture Decision Records - Agent Context
 
 When working on files governed by an ADR, always reference the ADR identifier
 in a comment block at the top of the file.

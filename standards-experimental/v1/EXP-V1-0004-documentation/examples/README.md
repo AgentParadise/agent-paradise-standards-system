@@ -36,7 +36,7 @@ my-project/
 │       ├── AGENTS.md
 │       ├── ADR-001-initial-architecture.md
 │       └── ADR-002-auth-strategy.md
-├── CLAUDE.md                    # Root context — references docs/
+├── CLAUDE.md                    # Root context - references docs/
 ├── AGENTS.md                    # Root agent context
 └── src/
     └── ...

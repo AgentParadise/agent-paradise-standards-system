@@ -1,7 +1,7 @@
 # Example .apss/config.toml for EXP-V1-0004 documentation standard.
 #
 # Copy this file to your project's .apss/config.toml and customize.
-# All fields are optional — omitted values use sensible defaults.
+# All fields are optional - omitted values use sensible defaults.
 
 schema = "apss.config/v1"
 

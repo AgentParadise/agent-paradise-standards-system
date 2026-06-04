@@ -36,8 +36,9 @@ Consistency and process are by-products. The unlock is treating docs as structur
 | Doc type | Substandard | Default location | Why it exists |
 |----------|-------------|------------------|---------------|
 | Architecture Decision Records | [`EXP-V1-0004.ADR01`](../substandards/ADR01-architecture-decision-records/docs/00_overview.md) | `docs/adrs/` | Append-only record of architectural decisions with lifecycle status. |
-| Purpose and Vision | `EXP-V1-0004.PV01` | `docs/PURPOSE.md` | North Star document agents read during plan and design to stay aligned with the project's intent. |
-| Retrospectives | `EXP-V1-0004.RET01` | `docs/retrospectives/` | Append-only record of what was learned, by period or by milestone. |
+| Purpose and Vision | [`EXP-V1-0004.PV01`](../substandards/PV01-purpose-and-vision/docs/01_spec.md) | `docs/vision.md` | North Star document agents read during plan and design to stay aligned with the project's intent. |
+| Retrospectives | [`EXP-V1-0004.RETRO01`](../substandards/RETRO01-retrospectives/docs/01_spec.md) | `docs/retrospectives/` | Append-only record of what was learned, by period or by milestone. |
+
 
 Doc types are activated by their `[docs.<type>]` block in `.apss/config.toml`. Default on, switchable off.
 

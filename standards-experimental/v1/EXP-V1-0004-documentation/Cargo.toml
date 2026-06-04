@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Documentation and Context Engineering — ADR enforcement, README/index validation, agent context (Experimental)"
+description = "Documentation and Context Engineering - ADR enforcement, README/index validation, agent context (Experimental)"
 
 [dependencies]
 aps-core.workspace = true

@@ -335,13 +335,13 @@ fn test_adr_context_files_present_with_guidance() {
         !diagnostics
             .errors()
             .any(|d| d.code == error_codes::MISSING_ADR_CONTEXT_FILE),
-        "Context files are present — no missing-file errors expected"
+        "Context files are present - no missing-file errors expected"
     );
     assert!(
         !diagnostics
             .warnings()
             .any(|d| d.code == error_codes::ADR_CONTEXT_MISSING_GUIDANCE),
-        "Context files have guidance — no missing-guidance warnings expected"
+        "Context files have guidance - no missing-guidance warnings expected"
     );
 }
 
