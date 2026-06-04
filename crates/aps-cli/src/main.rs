@@ -1109,9 +1109,7 @@ fn dispatch_docs(
             println!("    index [path]       Generate or check README indexes from front matter");
             println!();
             println!("OPTIONS:");
-            println!(
-                "    --config <file>    Path to .apss/config.toml (default: <path>/.apss/config.toml)"
-            );
+            println!("    --config <file>    Path to apss.yaml (default: <path>/apss.yaml)");
             println!(
                 "    --write            Write generated indexes into README.md files (index only)"
             );
@@ -1309,9 +1307,7 @@ fn dispatch_docs(
                                 "Docs root not found or contains no directories under {}.",
                                 target.display(),
                             );
-                            println!(
-                                "Create the docs root or configure docs.root in .apss/config.toml."
-                            );
+                            println!("Create the docs root or configure docs.root in apss.yaml.");
                         } else {
                             for idx in &indexes {
                                 println!("--- {} ---", idx.dir.display());
