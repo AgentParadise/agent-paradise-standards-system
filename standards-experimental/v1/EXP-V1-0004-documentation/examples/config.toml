@@ -1,16 +1,17 @@
 # Example .apss/config.toml for EXP-V1-0004 documentation standard.
 #
 # Copy this file to your project's .apss/config.toml and customize.
-# All fields are optional - omitted values use sensible defaults.
+# Every section is default-on; set disable = true to opt out of one
+# section without disabling the rest (see parent spec section 3.4).
 
 schema = "apss.config/v1"
 
 [docs]
-enabled = true
+disable = false
 root = "docs"
 
 [docs.index]
-enabled = true
+disable = false
 auto_generate = true
 frontmatter_fields = ["name", "description"]
 
@@ -18,18 +19,31 @@ frontmatter_fields = ["name", "description"]
 require_claude_md = true
 require_agents_md = true
 
+[docs.backlinking]
+disable = false
+file_types = ["rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "kt", "rb", "sh", "yaml", "yml", "toml", "json", "md"]
+
 [docs.adr]
-enabled = true
+disable = false
 directory = "adrs"
 naming_pattern = "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 required_adr_keywords = ["security", "testing"]
-backlinking = true
+
+[docs.purpose_and_vision]
+disable = false
+location = "docs/vision.md"
+
+[docs.retrospectives]
+disable = false
+directory = "docs/retrospectives"
+naming_pattern = "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
+append_only = true
 
 [docs.readme]
-enabled = true
+disable = false
 max_depth = -1
 exclude_dirs = ["node_modules", ".git", "target", "vendor", ".topology"]
 
 [docs.root_context]
-enabled = true
+disable = false
 docs_reference_pattern = "docs/"

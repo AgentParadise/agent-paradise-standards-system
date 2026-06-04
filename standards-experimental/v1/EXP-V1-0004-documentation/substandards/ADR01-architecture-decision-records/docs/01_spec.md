@@ -170,12 +170,14 @@ or `BACKLINK` do not produce false `ADR01-context-missing-guidance` warnings.
 
 ```toml
 [docs.adr]
-enabled = true                                    # Enable/disable ADR validation
+disable = false                                   # Default-on; set true to skip ADR validation
 directory = "adrs"                                # ADR directory name under docs root
 naming_pattern = "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md" # File naming regex
 required_adr_keywords = []                         # Required topic keywords
 backlinking = true                                 # Enforce backlinks in implementation files
 ```
+
+Backlinking is part of the standard (parent spec section 7); the `backlinking` flag here exists only for projects that need a temporary opt-out. Default is on.
 
 ## 10. ADR Template
 
