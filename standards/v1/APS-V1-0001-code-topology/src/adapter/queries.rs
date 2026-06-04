@@ -71,10 +71,8 @@ pub fn extract_functions(
                     body_source = text.to_string();
                     end_line = node.end_position().row as u32 + 1;
                 }
-                "visibility" | "public" => {
-                    if text == "pub" || text == "public" {
-                        visibility = Visibility::Public;
-                    }
+                "visibility" | "public" if text == "pub" || text == "public" => {
+                    visibility = Visibility::Public;
                 }
                 _ => {}
             }
@@ -235,11 +233,9 @@ pub fn extract_imports(
                         }
                     }
                 }
-                "import.symbol" => {
+                "import.symbol" if !text.is_empty() && !symbols.contains(&text.to_string()) => {
                     // Individual symbol capture (fallback)
-                    if !text.is_empty() && !symbols.contains(&text.to_string()) {
-                        symbols.push(text.to_string());
-                    }
+                    symbols.push(text.to_string());
                 }
                 _ => {}
             }
