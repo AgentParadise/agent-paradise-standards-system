@@ -25,7 +25,9 @@
 
 mod vsa_config;
 
-use aps_core::discovery::{PackageType, count_packages, discover_v1_packages, find_package_by_id};
+use aps_core::discovery::{
+    PackageMetadata, PackageType, count_packages, discover_v1_packages, find_package_by_id,
+};
 use aps_core::versioning::BumpPart;
 use aps_core::{
     Diagnostic, Diagnostics, StandardContext, TemplateEngine, bump_version, generate_all_views,
@@ -34,7 +36,8 @@ use aps_core::{
 use aps_v1_0000_meta::{MetaStandard, Standard};
 use clap::Parser;
 use std::env;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 #[derive(Parser)]
@@ -122,6 +125,14 @@ enum V1Commands {
     },
     /// List all V1 packages
     List,
+    /// Create a local APSS bundle for a standard or substandard
+    Bundle {
+        /// Package ID to bundle, for example APS-V1-0001 or APS-V1-0000.DI01
+        id: String,
+        /// Output directory for bundle directories
+        #[arg(long, default_value = "target/apss-bundles")]
+        output: PathBuf,
+    },
 }
 
 #[derive(clap::Subcommand)]
@@ -613,8 +624,219 @@ fn main() -> ExitCode {
 
                 ExitCode::SUCCESS
             }
+            V1Commands::Bundle { id, output } => {
+                match create_local_bundle(&repo_root, &id, &output) {
+                    Ok(bundle_dir) => {
+                        println!("Created APSS bundle: {}", bundle_dir.display());
+                        println!(
+                            "Install locally with: apss install --bundle-dir {}",
+                            bundle_dir.display()
+                        );
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("Error creating APSS bundle: {error}");
+                        ExitCode::FAILURE
+                    }
+                }
+            }
         },
     }
+}
+
+fn create_local_bundle(
+    repo_root: &Path,
+    id: &str,
+    output_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut package = find_package_by_id(repo_root, id).ok_or_else(|| {
+        format!("package '{id}' not found in standards/v1 or standards-experimental/v1")
+    })?;
+    let metadata = package.load_metadata()?.clone();
+    let bundle_name = format!(
+        "{}-{}-{}.apss",
+        metadata.id(),
+        metadata_slug(&metadata),
+        metadata.version()
+    );
+    let bundle_dir = output_dir.join(bundle_name);
+
+    if bundle_dir.exists() {
+        fs::remove_dir_all(&bundle_dir)?;
+    }
+    fs::create_dir_all(&bundle_dir)?;
+
+    let package_relative = package.path.strip_prefix(repo_root)?.to_path_buf();
+    let package_output = bundle_dir.join(&package_relative);
+    copy_dir_filtered(&package.path, &package_output)?;
+
+    let core_relative = PathBuf::from("crates/aps-core");
+    let core_source = repo_root.join(&core_relative);
+    let core_output = bundle_dir.join(&core_relative);
+    copy_dir_filtered(&core_source, &core_output)?;
+
+    let mut workspace_members = vec![core_relative, package_relative.clone()];
+    workspace_members.extend(discover_cargo_members(&package.path, repo_root)?);
+    workspace_members.sort();
+    workspace_members.dedup();
+
+    let workspace_manifest = workspace_manifest_with_members(repo_root, &workspace_members)?;
+    fs::write(bundle_dir.join("Cargo.toml"), workspace_manifest)?;
+
+    let bundle_manifest = bundle_manifest(&metadata, &package, &package_relative);
+    fs::write(bundle_dir.join("bundle.toml"), bundle_manifest)?;
+
+    Ok(bundle_dir)
+}
+
+fn metadata_slug(metadata: &PackageMetadata) -> &str {
+    match metadata {
+        PackageMetadata::Standard(metadata) => &metadata.standard.slug,
+        PackageMetadata::Substandard(metadata) => &metadata.substandard.slug,
+        PackageMetadata::Experiment(metadata) => &metadata.experiment.slug,
+    }
+}
+
+fn metadata_kind(metadata: &PackageMetadata) -> &'static str {
+    match metadata {
+        PackageMetadata::Standard(_) => "standard",
+        PackageMetadata::Substandard(_) => "substandard",
+        PackageMetadata::Experiment(_) => "experiment",
+    }
+}
+
+fn bundle_manifest(
+    metadata: &PackageMetadata,
+    package: &aps_core::discovery::DiscoveredPackage,
+    package_relative: &Path,
+) -> String {
+    format!(
+        r#"schema = "apss.bundle/v1"
+id = "{}"
+name = "{}"
+slug = "{}"
+version = "{}"
+kind = "{}"
+metadata_file = "{}"
+
+[source]
+package_path = "{}"
+repository = "{}"
+
+[payload]
+metadata = "{}"
+docs = "docs"
+implementation = "."
+"#,
+        metadata.id(),
+        escape_toml_string(metadata.name()),
+        metadata_slug(metadata),
+        metadata.version(),
+        metadata_kind(metadata),
+        package.metadata_file,
+        escape_toml_string(&package_relative.display().to_string()),
+        env!("CARGO_PKG_REPOSITORY"),
+        package.metadata_file
+    )
+}
+
+fn discover_cargo_members(
+    package_path: &Path,
+    repo_root: &Path,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut members = Vec::new();
+    for entry in walkdir::WalkDir::new(package_path)
+        .into_iter()
+        .filter_entry(|entry| !should_skip_bundle_dir(entry.path()))
+    {
+        let entry = entry?;
+        if entry.file_type().is_dir() && should_skip_bundle_dir(entry.path()) {
+            continue;
+        }
+        if entry.file_type().is_file() && entry.file_name() == "Cargo.toml" {
+            let Some(parent) = entry.path().parent() else {
+                continue;
+            };
+            let relative = parent.strip_prefix(repo_root)?.to_path_buf();
+            members.push(relative);
+        }
+    }
+    Ok(members)
+}
+
+fn workspace_manifest_with_members(
+    repo_root: &Path,
+    members: &[PathBuf],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let source = fs::read_to_string(repo_root.join("Cargo.toml"))?;
+    let members_start = source.find("members = [").ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "workspace manifest does not contain members list",
+        )
+    })?;
+    let list_start = members_start + "members = [".len();
+    let list_end = source[list_start..]
+        .find(']')
+        .map(|offset| list_start + offset)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "workspace manifest members list is unterminated",
+            )
+        })?;
+
+    let mut replacement = String::from("members = [\n");
+    for member in members {
+        replacement.push_str(&format!("    \"{}\",\n", escape_toml_path(member)));
+    }
+    replacement.push(']');
+
+    let mut output = String::new();
+    output.push_str(&source[..members_start]);
+    output.push_str(&replacement);
+    output.push_str(&source[list_end + 1..]);
+    Ok(output)
+}
+
+fn copy_dir_filtered(source: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in walkdir::WalkDir::new(source)
+        .into_iter()
+        .filter_entry(|entry| !should_skip_bundle_dir(entry.path()))
+    {
+        let entry = entry?;
+        let path = entry.path();
+        let relative = path.strip_prefix(source)?;
+        let output_path = destination.join(relative);
+
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&output_path)?;
+        } else if entry.file_type().is_file() {
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(path, &output_path)?;
+        }
+    }
+    Ok(())
+}
+
+fn should_skip_bundle_dir(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    matches!(
+        name,
+        ".git" | ".apss" | "target" | "node_modules" | ".cargo" | "tmp" | "temporary"
+    )
+}
+
+fn escape_toml_path(path: &Path) -> String {
+    path.display().to_string().replace('\\', "\\\\")
+}
+
+fn escape_toml_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Find the repository root by looking for Cargo.toml with workspace config.

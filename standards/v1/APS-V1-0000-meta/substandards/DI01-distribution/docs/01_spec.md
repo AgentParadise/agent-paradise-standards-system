@@ -16,7 +16,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 This substandard defines:
 
-- How standards are packaged and published as independent Rust crates
+- How standards are packaged and published as APSS-native bundles
+- How Rust crates may be used inside bundles as implementation artifacts
 - The bootstrap CLI binary used for project onboarding (canonical binary name
   is being resolved in repo issue 64; this spec refers to it as the
   "bootstrap" where the name can be avoided)
@@ -29,37 +30,97 @@ This substandard defines:
 
 ---
 
-## 2. Standard Crate Publishing
+## 2. Standard Bundle Publishing
 
-### 2.1 Crate Naming Convention
+### 2.1 Distribution Boundary
 
-Standard crates MUST follow the naming pattern:
+Standards and substandards MUST be distributed as APSS-native bundles.
+The APSS CLI, bootstrap binary, GitHub Action, and language-specific
+wrappers MAY be distributed through crates.io, npm, binary releases, or other
+tooling package managers. A standard's Rust crate MUST NOT be the
+user-facing distribution unit unless the package is explicitly marked as a
+tooling crate or independent Rust library.
+
+This separates two concerns:
+
+- Tooling distribution installs the APSS tools.
+- Standard distribution installs APSS standards into a consumer repository.
+
+### 2.2 Bundle Naming Convention
+
+Bundle directories and archive filenames MUST follow:
+
+```
+APS-V1-NNNN-<slug>-<version>.apss
+```
+
+Where `NNNN` is the 4-digit standard ID, `<slug>` is the kebab-case slug,
+and `<version>` is the SemVer version from the package metadata.
+
+Examples:
+- `APS-V1-0001-code-topology-1.0.0.apss`
+- `APS-V1-0000.DI01-distribution-1.0.0.apss`
+
+### 2.3 Required Bundle Contents
+
+Every bundle MUST contain:
+
+- `bundle.toml`, the APSS bundle manifest
+- The source package metadata file, such as `standard.toml` or
+  `substandard.toml`
+- `docs/` when documentation exists in the source package
+- Runtime or validation artifacts required by the standard
+- Implementation source required to build or execute the standard
+
+Generated build outputs such as `target/` MUST NOT be included.
+
+### 2.4 Bundle Manifest
+
+`bundle.toml` MUST use this schema:
+
+```toml
+schema = "apss.bundle/v1"
+id = "APS-V1-0001"
+name = "Code Topology"
+slug = "code-topology"
+version = "1.0.0"
+kind = "standard"
+metadata_file = "standard.toml"
+
+[source]
+package_path = "standards/v1/APS-V1-0001-code-topology"
+repository = "https://github.com/AgentParadise/agent-paradise-standards-system"
+
+[payload]
+metadata = "standard.toml"
+docs = "docs"
+implementation = "."
+```
+
+Substandard bundles MUST set `kind = "substandard"` and use the substandard
+ID, name, slug, version, and `metadata_file = "substandard.toml"`.
+
+### 2.5 Implementation Crate Naming
+
+When a bundle contains a Rust implementation crate, the crate SHOULD follow
+the existing APSS naming convention:
 
 ```
 apss-v1-NNNN-<slug>
 ```
 
-Where `NNNN` is the 4-digit standard ID and `<slug>` is the kebab-case slug.
-
-Examples:
-- `apss-v1-0001-code-topology`
-- `apss-v1-0003-fitness-functions`
-
-### 2.2 Substandard Crate Naming
-
-Substandard crates MUST follow:
+Substandard implementation crates SHOULD follow:
 
 ```
 apss-v1-NNNN-<profile>-<slug>
 ```
 
-Examples:
-- `apss-v1-0001-rs01-rust`
-- `apss-v1-0001-ci01-github-actions`
+These names are implementation details used by composition and build
+generation. They are not the public standard package identifiers.
 
-### 2.3 Required Exports
+### 2.6 Required Exports
 
-Standard crates MUST export:
+Rust implementation crates used by bundles MUST export:
 
 ```rust
 pub fn register(registry: &mut dyn aps_core::StandardRegistry) {
@@ -67,13 +128,14 @@ pub fn register(registry: &mut dyn aps_core::StandardRegistry) {
 }
 ```
 
-### 2.4 Dependencies
+### 2.7 Dependencies
 
-Standard crates MUST depend on `aps-core` for shared traits.
+Rust implementation crates MUST depend on `aps-core` for shared traits.
 
-### 2.5 Configuration Export
+### 2.8 Configuration Export
 
-Standard crates MUST export a type implementing `StandardConfig` (or use `NoConfig`). See CF01 and meta-standard §8.3.
+Standard implementation crates MUST export a type implementing
+`StandardConfig` or use `NoConfig`. See CF01 and meta-standard Section 8.3.
 
 ---
 
@@ -125,8 +187,8 @@ contract. The pipeline below stitches the three together.
 
 1. Parse and validate `apss.toml` via CF01 (with cascade applied for
    workspaces). Refuse to proceed on any error-severity diagnostic.
-2. Resolve version ranges against the registry index, producing one
-   `ResolvedStandard` per `standards.<slug>` entry in the manifest.
+2. Resolve version ranges against the APSS bundle registry index, producing
+   one `ResolvedStandard` per `standards.<slug>` entry in the manifest.
 3. Write or update `apss.lock` (Section 5).
 4. For each `ResolvedStandard`, load its install contract
    (`docs/02_install_contract.md` in the standard's package) and ask it for
@@ -137,7 +199,8 @@ contract. The pipeline below stitches the three together.
    absent or `enabled: false` in the current manifest MUST have its
    uninstall contract invoked. Removal MUST leave operator data and source
    code untouched.
-7. Generate `.apss/build/Cargo.toml` with resolved dependencies.
+7. Generate `.apss/build/Cargo.toml` with resolved bundle implementation
+   dependencies.
 8. Generate `.apss/build/src/main.rs` with `register()` calls.
 9. Run `cargo build --release --manifest-path .apss/build/Cargo.toml`.
 10. Copy binary to `.apss/bin/<bootstrap>`.
@@ -176,7 +239,8 @@ The boundary between CF01 and DI01 is explicit:
 - CF01 hands DI01 an ordered list of `(slug, id, version, substandards)`
   tuples derived from the manifest, the cascade, and the slug registry.
 - DI01 returns a `ResolvedStandard` per tuple, containing the pinned
-  version, the checksum, and a source descriptor (registry, path, git).
+  version, the checksum, and a source descriptor (registry, bundle path,
+  git).
 - The installer then drives the per-standard install contracts using those
   `ResolvedStandard` values.
 - DI01 owns no knowledge of standard configuration content. CF01 owns no

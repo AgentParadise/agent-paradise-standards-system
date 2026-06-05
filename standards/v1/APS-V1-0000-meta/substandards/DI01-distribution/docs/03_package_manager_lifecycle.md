@@ -26,6 +26,7 @@ apss init
 apss add <standard>[@<version-req>]
 apss remove <standard>
 apss install
+apss install --bundle-dir <path>
 apss update [<standard>]
 apss validate
 apss status
@@ -69,7 +70,7 @@ Examples:
 
 ```text
 apss.toml
-apss.toml
+apss.lock
 ```
 
 The config SHOULD use a friendly header:
@@ -134,11 +135,16 @@ APSS MUST preserve non-managed content when updating a file that already exists.
 
 1. Read the APSS project config.
 2. Read `apss.lock` if present.
-3. Resolve missing packages or fail if `--locked` is set.
+3. Resolve missing APSS bundles or fail if `--locked` is set.
 4. Generate the repo-local build crate.
 5. Build the repo-local runtime.
 6. Install managed enforcement files, including hooks if enabled.
 7. Validate installation state.
+
+`apss install --bundle-dir <path>` SHOULD consume a local APSS bundle
+directory for distribution testing before registry publication exists. It
+MUST be treated as a local source and MUST NOT hide unresolved registry
+state in release-ready installs.
 
 ### 4.4 Update
 
@@ -152,22 +158,23 @@ APSS MUST preserve non-managed content when updating a file that already exists.
 
 ## 5. Lockfile Semantics
 
-`apss.lock` MUST pin exact standard package state.
+`apss.lock` MUST pin exact standard bundle state.
 
 Published registry entries SHOULD include:
 
 - Standard ID.
 - Slug.
-- Crate package name.
+- Bundle package name.
 - Exact version.
 - Registry source.
 - Checksum.
 - Enabled substandards.
 
-Local development entries MAY use path sources:
+Local development entries MAY use path or bundle sources:
 
 ```text
 path+file:///absolute/path/to/standard
+bundle+file:///absolute/path/to/APS-V1-0001-code-topology-1.0.0.apss
 ```
 
 Local path entries SHOULD be clearly marked as development sources. They are useful for testing, but they are not reproducible across machines unless the path source is available.

@@ -2,9 +2,9 @@
 
 ## Overview
 
-DI01 defines how APSS standards are packaged, distributed, resolved against
-a registry, installed into a project, and composed into a project-local CLI
-binary.
+DI01 defines how APSS standards are packaged as APSS bundles, distributed,
+resolved against a registry, installed into a project, and composed into a
+project-local CLI binary.
 
 DI01 owns the right half of the unified manifest model: given the
 `apss.toml` declared by the project (CF01), turn each `standards.<slug>`
@@ -26,15 +26,17 @@ Without a distribution mechanism:
 
 DI01 specifies:
 
-1. **Standard crate publishing.** Each standard is an independent Rust crate
-   on a registry.
+1. **Standard bundle publishing.** Each standard is published as an
+   APSS-native bundle. Rust crates are an implementation detail inside a
+   bundle, not the user-facing package format.
 2. **Bootstrap binary.** A lightweight, globally-installable CLI for `init`,
    `install`, `status`, and `run` dispatch. The canonical binary name is
    resolved separately in repo issue 64; this spec refers to it generically
    where the name can be avoided.
 3. **Composed binary.** A project-local binary generated from the manifest,
    containing only the standards the project declared as active.
-4. **Lockfile (`apss.lock`).** Pins exact versions for reproducible builds.
+4. **Lockfile (`apss.lock`).** Pins exact bundle versions and checksums for
+   reproducible builds.
 5. **Code generation.** A `.apss/build/` Rust crate generated from the
    resolved manifest.
 6. **CF01 to DI01 seam.** A small, explicit interface where CF01 hands DI01
