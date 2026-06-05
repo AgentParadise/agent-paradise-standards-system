@@ -1,5 +1,5 @@
 [package]
-name = "architecture-fitness-st01"
+name = "apss-v1-0002-st01-structural"
 version = "1.0.0"
 edition.workspace = true
 license.workspace = true
@@ -7,10 +7,15 @@ repository.workspace = true
 rust-version.workspace = true
 description = "Structural Integrity Dimension - substandard of APS-V1-0002"
 
+[lib]
+name = "architecture_fitness_st01"
+
 [dependencies]
-architecture-fitness = { path = "../.." }
+apss-core.workspace = true
+architecture-fitness = { package = "apss-v1-0002-architecture-fitness", path = "../.." }
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 tempfile = "3.14"

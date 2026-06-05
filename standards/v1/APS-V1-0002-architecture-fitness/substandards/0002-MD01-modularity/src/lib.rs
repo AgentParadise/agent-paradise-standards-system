@@ -68,6 +68,39 @@ severity = "error"
 /// `config.topology_dir`.
 pub const SOURCE_ARTIFACT: &str = "metrics/coupling.json";
 
+/// Register this substandard with the apss-core composition registry per
+/// APS-V1-0000.DI01. The engine lives in the parent crate, so the handler is
+/// a no-op.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "APS-V1-0002.MD01".to_string(),
+            slug: "modularity".to_string(),
+            name: DIMENSION_NAME.to_string(),
+            description: "Modularity and coupling dimension (Martin Ca, Ce, I, A, D)".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!(
+            "No composed CLI commands for architecture-fitness-md01; use the parent \
+             architecture-fitness via `apss run fitness validate`."
+        );
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,11 +1,14 @@
 [package]
-name = "architecture-fitness"
+name = "apss-v1-0002-architecture-fitness"
 version = "1.0.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Architecture Fitness Functions - comprehensive architectural governance framework"
+
+[lib]
+name = "architecture_fitness"
 
 [dependencies]
 apss-core.workspace = true

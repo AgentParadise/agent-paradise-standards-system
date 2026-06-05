@@ -289,6 +289,117 @@ dependencies = [
 ]
 
 [[package]]
+name = "apss-v1-0002-ac01-accessibility"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-v1-0002-architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-architecture-fitness"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "chrono",
+ "glob",
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-av01-availability"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-v1-0002-architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-lg01-legality"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-v1-0002-architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-md01-modularity"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-v1-0002-architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-mt01-maintainability"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-v1-0002-architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-pf01-performance"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-v1-0002-architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-sc01-security"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-v1-0002-architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0002-st01-structural"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-v1-0002-architecture-fitness",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "apss-v1-0002-todo-tracker"
 version = "0.1.0"
 dependencies = [
@@ -319,103 +430,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
-]
-
-[[package]]
-name = "architecture-fitness"
-version = "1.0.0"
-dependencies = [
- "apss-core",
- "chrono",
- "glob",
- "jsonschema",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "architecture-fitness-ac01"
-version = "1.0.0"
-dependencies = [
- "architecture-fitness",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "architecture-fitness-av01"
-version = "1.0.0"
-dependencies = [
- "architecture-fitness",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "architecture-fitness-lg01"
-version = "1.0.0"
-dependencies = [
- "architecture-fitness",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "architecture-fitness-md01"
-version = "1.0.0"
-dependencies = [
- "architecture-fitness",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "architecture-fitness-mt01"
-version = "1.0.0"
-dependencies = [
- "architecture-fitness",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "architecture-fitness-pf01"
-version = "1.0.0"
-dependencies = [
- "architecture-fitness",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "architecture-fitness-sc01"
-version = "1.0.0"
-dependencies = [
- "architecture-fitness",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "architecture-fitness-st01"
-version = "1.0.0"
-dependencies = [
- "architecture-fitness",
- "serde",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]

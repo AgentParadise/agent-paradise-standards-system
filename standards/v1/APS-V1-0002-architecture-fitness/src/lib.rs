@@ -1802,6 +1802,47 @@ impl FitnessValidator {
     }
 }
 
+// ─── DI01 CLI Composition ──────────────────────────────────────────────────
+
+/// Register this standard with the apss-core composition registry per
+/// APS-V1-0000.DI01 (Distribution). Required for the `apss-dev v1 validate`
+/// DI_MISSING_REGISTER_FN check.
+///
+/// The fitness CLI surface (`apss run fitness validate`) is dispatched by
+/// `crates/aps-cli/src/main.rs::dispatch_fitness_v2`, not registered here, so
+/// the handler is a no-op placeholder.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "APS-V1-0002".to_string(),
+            slug: "architecture-fitness".to_string(),
+            name: "Architecture Fitness Functions".to_string(),
+            description:
+                "Comprehensive architectural governance framework with dimensional substandards"
+                    .to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!(
+            "No composed CLI commands are registered for architecture-fitness; \
+             use `apss run fitness validate` via aps-cli."
+        );
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 // ─── Topology Artifact Helpers ──────────────────────────────────────────────
 
 /// Extract entities from a topology artifact JSON.
