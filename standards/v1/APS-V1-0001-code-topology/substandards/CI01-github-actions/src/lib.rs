@@ -40,7 +40,7 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
     registry.register(
         aps_core::registry::RegisteredStandard {
             id: "APS-V1-0001.CI01".to_string(),
-            slug: "ci01-github-actions".to_string(),
+            slug: "github-actions".to_string(),
             name: "GitHub Actions CI".to_string(),
             description: "GitHub Actions CI integration for code topology".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),

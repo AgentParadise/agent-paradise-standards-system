@@ -1079,8 +1079,8 @@ exclude_paths = ["target", ".git"]
 pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
     registry.register(
         aps_core::registry::RegisteredStandard {
-            id: "APS-V1-0001.LANG01".to_string(),
-            slug: "lang01-rust".to_string(),
+            id: "APS-V1-0001.RS01".to_string(),
+            slug: "rust-adapter".to_string(),
             name: "Rust Language Adapter".to_string(),
             description: "Rust language adapter for code topology".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),

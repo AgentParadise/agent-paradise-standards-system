@@ -77,7 +77,10 @@ pub trait StandardRegistry {
 pub trait CommandHandler: Send + Sync {
     /// Execute a command with the given arguments.
     ///
-    /// Returns the exit code (0 = success, 1 = error, 2 = warnings).
+    /// Returns the process exit code.
+    ///
+    /// Standard APSS codes are 0 for success, 1 for error, 2 for warning,
+    /// 3 for usage errors, and 5 for unavailable or unimplemented commands.
     fn execute(&self, command: &str, args: &[String], config: &toml::Value) -> i32;
 
     /// List available commands.
@@ -226,7 +229,7 @@ impl ProjectRunner {
     }
 
     fn print_usage(&self) {
-        eprintln!("APSS — Agent Paradise Standards System");
+        eprintln!("APSS  -  Agent Paradise Standards System");
         eprintln!();
         eprintln!("Usage: apss <command>");
         eprintln!();
@@ -297,10 +300,10 @@ mod tests {
                 apss_version: "v1".to_string(),
             },
             standards: BTreeMap::from([(
-                "topology".to_string(),
+                "code-topology".to_string(),
                 ResolvedStandard {
                     id: "APS-V1-0001".to_string(),
-                    slug: "topology".to_string(),
+                    slug: "code-topology".to_string(),
                     version_req: ">=1.0.0".to_string(),
                     enabled: true,
                     substandards: None,
@@ -319,7 +322,7 @@ mod tests {
         runner.register(
             RegisteredStandard {
                 id: "APS-V1-0001".to_string(),
-                slug: "topology".to_string(),
+                slug: "code-topology".to_string(),
                 name: "Code Topology".to_string(),
                 description: "Topology analysis".to_string(),
                 version: "1.0.0".to_string(),
@@ -328,7 +331,7 @@ mod tests {
             Box::new(MockHandler),
         );
 
-        let args: Vec<String> = ["run", "topology", "analyze", "."]
+        let args: Vec<String> = ["run", "code-topology", "analyze", "."]
             .iter()
             .map(|s| s.to_string())
             .collect();

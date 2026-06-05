@@ -39,7 +39,7 @@ pub enum ResolutionError {
 
     /// Version range conflict between root and child.
     #[error(
-        "version range conflict for standard '{slug}': root requires {root_req}, child requires {child_req} — no satisfying version exists"
+        "version range conflict for standard '{slug}': root requires {root_req}, child requires {child_req}  -  no satisfying version exists"
     )]
     VersionRangeConflict {
         slug: String,
@@ -162,7 +162,7 @@ pub fn merge_configs(
     let mut standards: BTreeMap<String, StandardEntry> = root.standards.clone();
     for (slug, child_entry) in &child.standards {
         if let Some(root_entry) = standards.get(slug) {
-            // Both root and child declare this standard — intersect version ranges
+            // Both root and child declare this standard  -  intersect version ranges
             let merged_version = format!("{}, {}", root_entry.version, child_entry.version);
             if semver::VersionReq::parse(&merged_version).is_err() {
                 return Err(ResolutionError::VersionRangeConflict {
@@ -175,7 +175,7 @@ pub fn merge_configs(
             merged_entry.version = merged_version;
             standards.insert(slug.clone(), merged_entry);
         } else {
-            // Only child declares this standard — add directly
+            // Only child declares this standard  -  add directly
             standards.insert(slug.clone(), child_entry.clone());
         }
     }
@@ -184,7 +184,7 @@ pub fn merge_configs(
     // RawToolConfig's Option<T> fields let us distinguish "child omitted this
     // field" (None → inherit from root) from "child explicitly set the default"
     // (Some(default) → still overrides root). This matters when, e.g., the root
-    // sets `offline = true` and a child wants to force `offline = false` —
+    // sets `offline = true` and a child wants to force `offline = false`  -
     // previously the OR-semantics made `false` unreachable.
     let root_tool = root.tool.clone().unwrap_or_default();
     let child_tool = child.tool.clone().unwrap_or_default();
@@ -250,7 +250,7 @@ pub fn validate_resolved(config: &ResolvedProjectConfig) -> Diagnostics {
 // Helpers
 // ============================================================================
 
-/// Convert a standard ID and slug to a crate name like `"apss-v1-0001-topology"`.
+/// Convert a standard ID and slug to a crate name like `"apss-v1-0001-code-topology"`.
 // TODO(DI01): Include slug in crate name per DI01 convention (apss-v1-NNNN-slug)
 fn standard_id_to_crate_name(id: &str, slug: &str) -> String {
     let prefix = id.to_lowercase().replace("aps-", "apss-");
@@ -270,11 +270,11 @@ schema = "apss.project/v1"
 name = "root"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0"
 
-[standards.topology.config]
+[standards.code-topology.config]
 output_dir = ".topology"
 
 [workspace]
@@ -293,11 +293,11 @@ schema = "apss.project/v1"
 name = "child-pkg"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0, <2.0.0"
 
-[standards.topology.config]
+[standards.code-topology.config]
 output_dir = ".custom-topology"
 "#,
         )
@@ -312,9 +312,9 @@ output_dir = ".custom-topology"
         assert_eq!(resolved.project.name, "root");
         assert_eq!(resolved.standards.len(), 1);
 
-        let topo = &resolved.standards["topology"];
+        let topo = &resolved.standards["code-topology"];
         assert_eq!(topo.id, "APS-V1-0001");
-        assert_eq!(topo.crate_name, "apss-v1-0001-topology");
+        assert_eq!(topo.crate_name, "apss-v1-0001-code-topology");
         assert!(topo.enabled);
     }
 
@@ -331,7 +331,7 @@ output_dir = ".custom-topology"
         )
         .unwrap();
 
-        let topo = &resolved.standards["topology"];
+        let topo = &resolved.standards["code-topology"];
         // Version requirements are intersected (root + child combined)
         assert_eq!(topo.version_req, ">=1.0.0, >=1.0.0, <2.0.0");
         // Child's config replaces root's
@@ -350,7 +350,7 @@ schema = "apss.project/v1"
 name = "root"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0"
 
@@ -384,7 +384,7 @@ apss_version = "v1"
 
         // Child inherits both standards from root
         assert_eq!(resolved.standards.len(), 2);
-        assert!(resolved.standards.contains_key("topology"));
+        assert!(resolved.standards.contains_key("code-topology"));
         assert!(resolved.standards.contains_key("fitness"));
     }
 
@@ -438,15 +438,15 @@ apss_version = "v1"
             },
             standards: BTreeMap::from([
                 (
-                    "topology".to_string(),
+                    "code-topology".to_string(),
                     ResolvedStandard {
                         id: "APS-V1-0001".to_string(),
-                        slug: "topology".to_string(),
+                        slug: "code-topology".to_string(),
                         version_req: ">=1.0.0".to_string(),
                         enabled: true,
                         substandards: None,
                         config: toml::Value::Table(Default::default()),
-                        crate_name: "apss-v1-0001-topology".to_string(),
+                        crate_name: "apss-v1-0001-code-topology".to_string(),
                     },
                 ),
                 (
@@ -458,7 +458,7 @@ apss_version = "v1"
                         enabled: true,
                         substandards: None,
                         config: toml::Value::Table(Default::default()),
-                        crate_name: "apss-v1-0001-topology".to_string(),
+                        crate_name: "apss-v1-0001-code-topology".to_string(),
                     },
                 ),
             ]),
@@ -604,8 +604,8 @@ bin_dir = ".apss/bin"
     #[test]
     fn test_standard_id_to_crate_name() {
         assert_eq!(
-            standard_id_to_crate_name("APS-V1-0001", "topology"),
-            "apss-v1-0001-topology"
+            standard_id_to_crate_name("APS-V1-0001", "code-topology"),
+            "apss-v1-0001-code-topology"
         );
         assert_eq!(
             standard_id_to_crate_name("APS-V1-0003", "fitness"),

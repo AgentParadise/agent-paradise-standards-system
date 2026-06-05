@@ -13,7 +13,7 @@ use crate::OutputFormat;
 ///
 /// Used in `apss.toml`:
 /// ```toml
-/// [standards.topology.config]
+/// [standards.code-topology.config]
 /// output_dir = ".topology"
 /// languages = ["rust", "python"]
 /// format = "json"
@@ -168,7 +168,7 @@ mod tests {
             .unwrap_or_else(|e| panic!("config.schema.json is invalid JSON: {e}"));
         assert_eq!(
             schema, expected,
-            "config.schema.json is stale — update it from TopologyConfig::json_schema()"
+            "config.schema.json is stale  -  update it from TopologyConfig::json_schema()"
         );
     }
 }

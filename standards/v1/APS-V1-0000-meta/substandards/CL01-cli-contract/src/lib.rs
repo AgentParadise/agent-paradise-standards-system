@@ -427,7 +427,7 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
     registry.register(
         aps_core::registry::RegisteredStandard {
             id: "APS-V1-0000.CL01".to_string(),
-            slug: "cl01-cli-contract".to_string(),
+            slug: "cli-contract".to_string(),
             name: "CLI Contract".to_string(),
             description: "CLI contract definitions for APS standards".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),

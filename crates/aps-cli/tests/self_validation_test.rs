@@ -56,14 +56,14 @@ fn test_repo_validation_via_cli() {
         .args(["v1", "validate", "repo"])
         .current_dir(&repo)
         .output()
-        .expect("Failed to execute aps v1 validate repo");
+        .expect("Failed to execute apss-dev v1 validate repo");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
         output.status.success(),
-        "aps v1 validate repo should succeed.\nstdout: {stdout}\nstderr: {stderr}"
+        "apss-dev v1 validate repo should succeed.\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
 

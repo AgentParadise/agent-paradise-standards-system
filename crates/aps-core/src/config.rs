@@ -156,7 +156,7 @@ pub struct ToolConfig {
 
 /// Raw, parse-time view of `[tool]` config. Every field is `Option<T>` so
 /// the cascading merge in `resolution` can distinguish "omitted by the user"
-/// from "explicitly set to the default value" — a distinction required for
+/// from "explicitly set to the default value"  -  a distinction required for
 /// child configs that intentionally re-set a boolean back to `false`.
 ///
 /// This type is only used at the parse boundary; resolution always produces
@@ -355,12 +355,12 @@ schema = "apss.project/v1"
 name = "my-service"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0, <2.0.0"
 substandards = ["RS01", "CI01"]
 
-[standards.topology.config]
+[standards.code-topology.config]
 output_dir = ".topology"
 languages = ["rust", "python"]
 
@@ -380,7 +380,7 @@ offline = true
         let config: ProjectConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.standards.len(), 2);
 
-        let topology = &config.standards["topology"];
+        let topology = &config.standards["code-topology"];
         assert_eq!(topology.id, "APS-V1-0001");
         assert!(topology.enabled);
         assert_eq!(topology.substandards.as_ref().unwrap(), &["RS01", "CI01"]);
@@ -405,12 +405,12 @@ schema = "apss.project/v1"
 name = "test"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0"
 "#;
         let config: ProjectConfig = toml::from_str(toml_str).unwrap();
-        let entry = &config.standards["topology"];
+        let entry = &config.standards["code-topology"];
         assert!(entry.enabled); // default true
         assert!(entry.substandards.is_none()); // default none = all
         assert!(entry.config.is_table()); // default empty table
@@ -458,7 +458,7 @@ apss_version = "v1"
         let config_dir = temp.path().join(".apss/config");
         std::fs::create_dir_all(&config_dir).unwrap();
         std::fs::write(
-            config_dir.join("topology.toml"),
+            config_dir.join("code-topology.toml"),
             "output_dir = \".topology\"\nlanguages = [\"rust\"]\n",
         )
         .unwrap();
@@ -472,16 +472,16 @@ apss_version = "v1"
 name = "test"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0"
-config = { include = ".apss/config/topology.toml" }
+config = { include = ".apss/config/code-topology.toml" }
 "#,
         )
         .unwrap();
 
         let config = parse_project_config(&config_path).unwrap();
-        let topo = &config.standards["topology"];
+        let topo = &config.standards["code-topology"];
         assert_eq!(topo.config["output_dir"].as_str().unwrap(), ".topology");
         assert_eq!(topo.config["languages"].as_array().unwrap().len(), 1);
     }
@@ -497,7 +497,7 @@ config = { include = ".apss/config/topology.toml" }
 name = "test"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0"
 config = { include = "nonexistent.toml" }
@@ -522,7 +522,7 @@ config = { include = "nonexistent.toml" }
 name = "test"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0"
 config = { include = "bad.toml" }
@@ -545,11 +545,11 @@ config = { include = "bad.toml" }
 name = "test"
 apss_version = "v1"
 
-[standards.topology]
+[standards.code-topology]
 id = "APS-V1-0001"
 version = ">=1.0.0"
 
-[standards.topology.config]
+[standards.code-topology.config]
 include = "some-value"
 other_key = "other-value"
 "#,
@@ -558,7 +558,7 @@ other_key = "other-value"
 
         // Should parse without trying to resolve as include
         let config = parse_project_config(&config_path).unwrap();
-        let topo = &config.standards["topology"];
+        let topo = &config.standards["code-topology"];
         assert_eq!(topo.config["include"].as_str().unwrap(), "some-value");
         assert_eq!(topo.config["other_key"].as_str().unwrap(), "other-value");
     }

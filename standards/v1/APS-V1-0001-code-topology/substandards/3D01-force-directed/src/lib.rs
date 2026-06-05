@@ -5,10 +5,10 @@
 //!
 //! ## Key Features
 //!
-//! - **Force-directed layout** — Tightly coupled modules cluster together
-//! - **Deterministic positions** — Saves layout positions for reproducibility
-//! - **Multiple formats** — WebGL scene, GLTF model, HTML viewer
-//! - **Metric-driven sizing** — Node size reflects complexity
+//! - **Force-directed layout**  -  Tightly coupled modules cluster together
+//! - **Deterministic positions**  -  Saves layout positions for reproducibility
+//! - **Multiple formats**  -  WebGL scene, GLTF model, HTML viewer
+//! - **Metric-driven sizing**  -  Node size reflects complexity
 //!
 //! ## Usage
 //!
@@ -1269,8 +1269,8 @@ impl ForceDirectedProjector {
 pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
     registry.register(
         aps_core::registry::RegisteredStandard {
-            id: "APS-V1-0001.3D01".to_string(),
-            slug: "3d01-force-directed".to_string(),
+            id: "APS-V1-0001.FD01".to_string(),
+            slug: "force-directed".to_string(),
             name: "3D Force Directed".to_string(),
             description: "3D force-directed topology visualization substandard".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),

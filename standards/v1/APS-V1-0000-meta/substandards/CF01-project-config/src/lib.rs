@@ -7,10 +7,10 @@
 //!
 //! CF01 validates two things:
 //!
-//! 1. **Consumer `apss.toml` files** — schema, field types, version requirements,
+//! 1. **Consumer `apss.toml` files**  -  schema, field types, version requirements,
 //!    cascading consistency, and standard-specific config blocks.
 //!
-//! 2. **Standard config compliance** — ensures every standard in the APS repo
+//! 2. **Standard config compliance**  -  ensures every standard in the APS repo
 //!    exports a `StandardConfig` implementation (or `NoConfig`).
 //!
 //! ## Quick Start
@@ -140,7 +140,7 @@ pub fn validate_project_config(path: &Path) -> Diagnostics {
 /// Parse and validate config fields (schema, project, standards) without lockfile checks.
 ///
 /// Used by both `validate_project_config` (adds lockfile) and `validate_child_config`
-/// (skips lockfile — in a workspace, the lockfile lives at the root).
+/// (skips lockfile  -  in a workspace, the lockfile lives at the root).
 fn validate_config_fields(path: &Path) -> Diagnostics {
     let mut diags = Diagnostics::new();
 
@@ -233,7 +233,7 @@ fn validate_config_fields(path: &Path) -> Diagnostics {
 /// Validate a child `apss.toml` in a workspace context.
 pub fn validate_child_config(child_path: &Path, root_config: &ProjectConfig) -> Diagnostics {
     // Use validate_config_fields (not validate_project_config) to skip lockfile
-    // checks — in a workspace, the lockfile lives at the root, not in each child.
+    // checks  -  in a workspace, the lockfile lives at the root, not in each child.
     let mut diags = validate_config_fields(child_path);
 
     let child_config = match config::parse_project_config(child_path) {
@@ -277,8 +277,8 @@ pub fn validate_child_config(child_path: &Path, root_config: &ProjectConfig) -> 
 /// a `config.schema.json` file, and that existing schema files are valid JSON.
 ///
 /// This enforces CF01's config surface validation codes:
-/// - `CF_MISSING_CONFIG_TYPE` — `src/config.rs` exists but no `config.schema.json`
-/// - `CF_CONFIG_SCHEMA_STALE` — `config.schema.json` exists but is invalid JSON
+/// - `CF_MISSING_CONFIG_TYPE`  -  `src/config.rs` exists but no `config.schema.json`
+/// - `CF_CONFIG_SCHEMA_STALE`  -  `config.schema.json` exists but is invalid JSON
 ///
 /// Full freshness checks (comparing schema file against `StandardConfig::json_schema()` output)
 /// are handled by per-standard tests, not this static validator.
@@ -414,7 +414,7 @@ fn validate_standards(config: &ProjectConfig, path: &Path, diags: &mut Diagnosti
             );
         }
 
-        // Check for duplicate IDs (skip if ID is empty — already reported above)
+        // Check for duplicate IDs (skip if ID is empty  -  already reported above)
         if !entry.id.is_empty() {
             if let Some(prev_slug) = seen_ids.insert(&entry.id, slug.as_str()) {
                 diags.push(
@@ -539,7 +539,7 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
     registry.register(
         aps_core::registry::RegisteredStandard {
             id: "APS-V1-0000.CF01".to_string(),
-            slug: "cf01-project-config".to_string(),
+            slug: "project-config".to_string(),
             name: "Project Configuration".to_string(),
             description: "Project configuration validation for APSS manifests".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -914,7 +914,7 @@ apss_version = "v1"
 
         let root_config = config::parse_project_config(&root_path).unwrap();
         let diags = validate_child_config(&child_path, &root_config);
-        // Child should NOT get CF_NO_LOCKFILE — lockfile lives at root
+        // Child should NOT get CF_NO_LOCKFILE  -  lockfile lives at root
         let lockfile_warnings = diags
             .iter()
             .filter(|d| d.code == error_codes::CF_NO_LOCKFILE)
@@ -975,7 +975,7 @@ apss_version = "v1"
     #[test]
     fn test_config_compliance_no_config_is_fine() {
         let temp = tempfile::tempdir().unwrap();
-        // No src/config.rs, no config.schema.json — standard with no config is fine
+        // No src/config.rs, no config.schema.json  -  standard with no config is fine
 
         let diags = validate_config_compliance(temp.path());
         assert!(!diags.has_errors());

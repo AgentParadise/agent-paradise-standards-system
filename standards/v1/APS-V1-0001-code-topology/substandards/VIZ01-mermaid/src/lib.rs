@@ -409,8 +409,8 @@ impl Projector for MermaidProjector {
 pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
     registry.register(
         aps_core::registry::RegisteredStandard {
-            id: "APS-V1-0001.VIZ01".to_string(),
-            slug: "viz01-mermaid".to_string(),
+            id: "APS-V1-0001.MM01".to_string(),
+            slug: "mermaid".to_string(),
             name: "Mermaid Visualization".to_string(),
             description: "Mermaid visualization substandard for code topology".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),

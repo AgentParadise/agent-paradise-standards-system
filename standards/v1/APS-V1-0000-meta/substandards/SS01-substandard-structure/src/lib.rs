@@ -1,4 +1,4 @@
-//! APS-V1-0000.SS01 — Substandard Structure
+//! APS-V1-0000.SS01  -  Substandard Structure
 //!
 //! This substandard defines the structural requirements for all APS substandards.
 //! Substandards are domain-specific extensions that inherit from a parent standard
@@ -90,7 +90,7 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
     registry.register(
         aps_core::registry::RegisteredStandard {
             id: "APS-V1-0000.SS01".to_string(),
-            slug: "ss01-substandard-structure".to_string(),
+            slug: "substandard-structure".to_string(),
             name: "Substandard Structure".to_string(),
             description: "Structural requirements for APS substandards".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
