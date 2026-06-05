@@ -53,8 +53,8 @@ pub struct DocsConfig {
     pub root_context: RootContextConfig,
     #[serde(default)]
     pub backlinking: BacklinkingConfig,
-    #[serde(default, rename = "purpose-and-vision")]
-    pub purpose_and_vision: PurposeVisionConfig,
+    #[serde(default, rename = "north-star")]
+    pub north_star: NorthStarConfig,
     #[serde(default)]
     pub retrospectives: RetrospectivesConfig,
 }
@@ -70,7 +70,7 @@ impl Default for DocsConfig {
             readme: ReadmeConfig::default(),
             root_context: RootContextConfig::default(),
             backlinking: BacklinkingConfig::default(),
-            purpose_and_vision: PurposeVisionConfig::default(),
+            north_star: NorthStarConfig::default(),
             retrospectives: RetrospectivesConfig::default(),
         }
     }
@@ -94,24 +94,23 @@ impl Default for BacklinkingConfig {
     }
 }
 
-/// The `docs.purpose-and-vision` section of `apss.yaml`.
+/// The `docs.north-star` section of `apss.yaml`.
 ///
-/// The YAML key is `purpose-and-vision` (kebab); the Rust field on
-/// [`DocsConfig`] is `purpose_and_vision` (snake) bridged by
-/// `#[serde(rename)]`.
+/// The YAML key is `north-star` (kebab); the Rust field on
+/// [`DocsConfig`] is `north_star` (snake) bridged by `#[serde(rename)]`.
 #[derive(Debug, Clone, Deserialize)]
-pub struct PurposeVisionConfig {
+pub struct NorthStarConfig {
     #[serde(default = "default_false")]
     pub disable: bool,
-    #[serde(default = "default_vision_location")]
+    #[serde(default = "default_north_star_location")]
     pub location: String,
 }
 
-impl Default for PurposeVisionConfig {
+impl Default for NorthStarConfig {
     fn default() -> Self {
         Self {
             disable: false,
-            location: default_vision_location(),
+            location: default_north_star_location(),
         }
     }
 }
@@ -357,8 +356,8 @@ fn default_backlinking_file_types() -> Vec<String> {
     ]
 }
 
-fn default_vision_location() -> String {
-    "docs/vision.md".to_string()
+fn default_north_star_location() -> String {
+    "docs/north-star.md".to_string()
 }
 
 fn default_retrospectives_directory() -> String {

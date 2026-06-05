@@ -43,10 +43,10 @@ fn assert_docs_defaults(docs: &documentation::config::DocsConfig) {
 
     assert!(!docs.backlinking.disable);
 
-    assert!(!docs.purpose_and_vision.disable);
+    assert!(!docs.north_star.disable);
     assert_eq!(
-        docs.purpose_and_vision.location,
-        expected.purpose_and_vision.location
+        docs.north_star.location,
+        expected.north_star.location
     );
 
     assert!(!docs.retrospectives.disable);

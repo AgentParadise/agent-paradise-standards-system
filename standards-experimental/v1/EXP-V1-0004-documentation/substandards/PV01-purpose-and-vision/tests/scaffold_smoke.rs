@@ -15,9 +15,9 @@ fn error_codes_use_human_readable_scheme() {
         error_codes::DOCUMENT_MISSING,
         error_codes::FRONTMATTER_MISSING,
         error_codes::FRONTMATTER_FIELD_MISSING,
-        error_codes::MISSING_PURPOSE_SECTION,
+        error_codes::MISSING_MISSION_SECTION,
         error_codes::MISSING_VISION_SECTION,
-        error_codes::MISSING_NON_GOALS_SECTION,
+        error_codes::MISSING_POSITION_SECTION,
         error_codes::INVALID_STATUS,
         error_codes::SUPERSEDED_WITHOUT_POINTER,
         error_codes::DEPRECATED_ACTIVE,
@@ -42,7 +42,7 @@ fn error_codes_use_human_readable_scheme() {
 
 #[test]
 fn required_sections_are_the_spec_three() {
-    assert_eq!(REQUIRED_SECTIONS, &["Purpose", "Vision", "Non-Goals"]);
+    assert_eq!(REQUIRED_SECTIONS, &["Mission", "Vision", "Position"]);
 }
 
 #[test]
@@ -54,6 +54,6 @@ fn allowed_statuses_match_lifecycle_vocabulary() {
 }
 
 #[test]
-fn default_location_is_docs_vision_md() {
-    assert_eq!(DEFAULT_LOCATION, "docs/vision.md");
+fn default_location_is_docs_north_star_md() {
+    assert_eq!(DEFAULT_LOCATION, "docs/north-star.md");
 }

@@ -15,35 +15,5 @@
 schema: "apss.config/v1"
 
 docs:
-  root: "docs"
-
-  index:
-    auto_generate: true
-    frontmatter_fields: ["name", "description"]
-
-  context_files:
-    require_claude_md: true
-    require_agents_md: true
-
-  backlinking:
-    file_types: ["rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "kt", "rb", "sh", "yaml", "yml", "toml", "json", "md"]
-
   adr:
-    directory: "adrs"
-    naming_pattern: "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
     required_adr_keywords: ["security", "testing"]
-
-  north-star:
-    location: "docs/vision.md"
-
-  retrospectives:
-    directory: "docs/retrospectives"
-    naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
-    append_only: true
-
-  readme:
-    max_depth: -1
-    exclude_dirs: ["node_modules", ".git", "target", "vendor", ".topology"]
-
-  root_context:
-    docs_reference_pattern: "docs/"
