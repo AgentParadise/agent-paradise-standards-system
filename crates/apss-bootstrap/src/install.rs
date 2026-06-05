@@ -218,8 +218,7 @@ pub fn run(args: InstallArgs) -> i32 {
 }
 
 fn generate_lockfile(config: &resolution::ResolvedProjectConfig) -> Lockfile {
-    // TODO(DI01): Use aps-core version, not bootstrap version
-    let mut lockfile = Lockfile::new(env!("CARGO_PKG_VERSION").to_string());
+    let mut lockfile = Lockfile::new(lockfile::APS_CORE_VERSION.to_string());
 
     for (slug, standard) in &config.standards {
         if !standard.enabled {
