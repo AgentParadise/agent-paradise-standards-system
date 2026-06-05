@@ -6,11 +6,11 @@
 //! This crate implements the `Standard` trait and provides validation rules
 //! that all V1 packages must satisfy.
 
-use aps_core::discovery::{DiscoveredPackage, discover_v1_packages};
-use aps_core::metadata::{
-    parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata,
+use apss_core::discovery::{DiscoveredPackage, discover_v1_packages};
+use apss_core::metadata::{
+    self, parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata,
 };
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Error codes for meta-standard validation.
@@ -24,6 +24,7 @@ pub mod error_codes {
     pub const MISSING_CARGO_TOML: &str = "MISSING_CARGO_TOML";
     pub const MISSING_SPEC_DOC: &str = "MISSING_SPEC_DOC";
     pub const MISSING_LIB_RS: &str = "MISSING_LIB_RS";
+    pub const MISSING_README: &str = "MISSING_README";
 
     // Content validation errors
     pub const EMPTY_EXAMPLES_DIR: &str = "EMPTY_EXAMPLES_DIR";
@@ -47,12 +48,16 @@ pub mod error_codes {
 
     // Package validation summary
     pub const PACKAGE_VALIDATION_FAILED: &str = "PACKAGE_VALIDATION_FAILED";
+
+    // Dependency policy errors
+    pub const UNAPPROVED_EXTERNAL_DEP: &str = "UNAPPROVED_EXTERNAL_DEP";
+    pub const DEP_NOT_WORKSPACE_INHERITED: &str = "DEP_NOT_WORKSPACE_INHERITED";
 }
 
 /// Required directories for standards and experiments (§5.1).
 pub const REQUIRED_STANDARD_DIRS: &[&str] = &["docs", "examples", "tests", "agents/skills", "src"];
 
-/// Required directories for substandards (§5.2) — reduced requirements.
+/// Required directories for substandards (§5.2)  -  reduced requirements.
 pub const REQUIRED_SUBSTANDARD_DIRS: &[&str] = &["docs", "src"];
 
 /// Metadata file options (one must exist).
@@ -158,6 +163,19 @@ impl MetaStandard {
             );
         }
 
+        // Check for package README index
+        let readme_path = path.join("README.md");
+        if !readme_path.exists() {
+            diagnostics.push(
+                Diagnostic::error(
+                    MISSING_README,
+                    "Missing README.md: packages must provide a root index",
+                )
+                .with_path(&readme_path)
+                .with_hint("Create README.md linking metadata, specs, examples, tests, and install guidance"),
+            );
+        }
+
         // Check for spec document
         let spec_path = path.join("docs/01_spec.md");
         if !spec_path.exists() {
@@ -168,7 +186,7 @@ impl MetaStandard {
             );
         }
 
-        // Content checks — only for standards and experiments (§5.1), not substandards (§5.2)
+        // Content checks  -  only for standards and experiments (§5.1), not substandards (§5.2)
         if !is_substandard {
             // §11.1: examples/ MUST contain at least one example
             let examples_dir = path.join("examples");
@@ -390,6 +408,117 @@ impl MetaStandard {
         }
     }
 
+    /// Validate dependency policy for a package.
+    ///
+    /// Standards MUST only depend on `apss-core` and workspace-inherited crates.
+    /// Any external dependency requires explicit approval in the package's
+    /// metadata file (`standard.toml`, `substandard.toml`, or `experiment.toml`)
+    /// with a documented rationale.
+    fn validate_dependencies(
+        &self,
+        path: &Path,
+        allowed_external: &[metadata::AllowedDependency],
+        diagnostics: &mut Diagnostics,
+    ) {
+        use error_codes::*;
+
+        let cargo_path = path.join("Cargo.toml");
+        if !cargo_path.exists() {
+            return;
+        }
+
+        let content = match std::fs::read_to_string(&cargo_path) {
+            Ok(c) => c,
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        INVALID_METADATA,
+                        format!("Failed to read Cargo.toml for dependency validation: {e}"),
+                    )
+                    .with_path(&cargo_path),
+                );
+                return;
+            }
+        };
+
+        let cargo_toml: toml::Value = match content.parse() {
+            Ok(v) => v,
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        INVALID_METADATA,
+                        format!("Failed to parse Cargo.toml for dependency validation: {e}"),
+                    )
+                    .with_path(&cargo_path),
+                );
+                return;
+            }
+        };
+
+        let allowed_names: Vec<&str> = allowed_external
+            .iter()
+            .map(|d| d.crate_name.as_str())
+            .collect();
+
+        for section in ["dependencies", "build-dependencies"] {
+            let Some(deps) = cargo_toml.get(section).and_then(|d| d.as_table()) else {
+                continue;
+            };
+
+            for (dep_name, dep_value) in deps {
+                // Workspace-inherited deps are fine  -  they're controlled at the workspace root
+                let is_workspace = dep_value
+                    .as_table()
+                    .and_then(|t| t.get("workspace"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                if is_workspace {
+                    continue;
+                }
+
+                // Path deps (workspace-internal crates) are fine
+                let is_path = dep_value.as_table().and_then(|t| t.get("path")).is_some();
+
+                if is_path {
+                    continue;
+                }
+
+                // apss-core is always allowed
+                if dep_name == "apss-core" {
+                    continue;
+                }
+
+                // Check if it's in the allowlist
+                if allowed_names.contains(&dep_name.as_str()) {
+                    continue;
+                }
+
+                // Check if it's a dev-dependency that leaked into [dependencies]
+                // (dev-deps are checked separately and are more lenient)
+                diagnostics.push(
+                Diagnostic::error(
+                    UNAPPROVED_EXTERNAL_DEP,
+                    format!(
+                        "External dependency '{dep_name}' in [{section}] is not in the approved allowlist"
+                    ),
+                )
+                .with_path(&cargo_path)
+                .with_hint(format!(
+                    "Add to [dependencies] in {}: [[dependencies.allowed_external]]\ncrate = \"{dep_name}\"\nrationale = \"<why this dep is needed>\"",
+                    if path.join("standard.toml").exists() {
+                        "standard.toml"
+                    } else if path.join("substandard.toml").exists() {
+                        "substandard.toml"
+                    } else {
+                        "experiment.toml"
+                    }
+                )),
+            );
+            }
+        }
+    }
+
     /// Validate a single discovered package.
     fn validate_discovered_package(
         &self,
@@ -429,14 +558,29 @@ impl Standard for MetaStandard {
         // Validate structure
         self.validate_structure(path, &mut diagnostics);
 
-        // Validate metadata based on package type
+        // Validate metadata and extract dependency policy
+        let dep_policy;
         if path.join("standard.toml").exists() {
             self.validate_standard_metadata(path, &mut diagnostics);
+            dep_policy = metadata::parse_standard_metadata(&path.join("standard.toml"))
+                .map(|m| m.dependencies)
+                .unwrap_or_default();
         } else if path.join("substandard.toml").exists() {
             self.validate_substandard_metadata(path, &mut diagnostics);
+            dep_policy = metadata::parse_substandard_metadata(&path.join("substandard.toml"))
+                .map(|m| m.dependencies)
+                .unwrap_or_default();
         } else if path.join("experiment.toml").exists() {
             self.validate_experiment_metadata(path, &mut diagnostics);
+            dep_policy = metadata::parse_experiment_metadata(&path.join("experiment.toml"))
+                .map(|m| m.dependencies)
+                .unwrap_or_default();
+        } else {
+            dep_policy = metadata::DependencyPolicy::default();
         }
+
+        // Validate dependency policy
+        self.validate_dependencies(path, &dep_policy.allowed_external, &mut diagnostics);
 
         diagnostics
     }
@@ -635,6 +779,34 @@ fn is_valid_semver(version: &str) -> bool {
     parts.iter().all(|p| p.parse::<u32>().is_ok())
 }
 
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "APS-V1-0000".to_string(),
+            slug: "meta".to_string(),
+            name: "Meta Standard".to_string(),
+            description: "Meta-standard for APS V1 package structure and validation".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for meta yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -709,6 +881,7 @@ mod tests {
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
 
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# Test").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(pkg_dir.join("examples/example.toml"), "# example").unwrap();
@@ -794,7 +967,7 @@ maintainers = ["Test"]
     fn test_validate_substandard_package() {
         let temp_dir = tempfile::tempdir().unwrap();
 
-        // Create minimal valid substandard structure (§5.2 — reduced requirements)
+        // Create minimal valid substandard structure (§5.2  -  reduced requirements)
         let pkg_dir = temp_dir
             .path()
             .join("standards/v1/APS-V1-0001-test/substandards/GH01-github");
@@ -802,6 +975,7 @@ maintainers = ["Test"]
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
 
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# GitHub Profile").unwrap();
         // Inline tests count as test coverage (§11.2)
         fs::write(
             pkg_dir.join("src/lib.rs"),
@@ -935,6 +1109,7 @@ maintainers = ["Test"]
         fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# Test Experiment").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
@@ -944,7 +1119,7 @@ maintainers = ["Test"]
             "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
         )
         .unwrap();
-        // examples/ is empty — should fail
+        // examples/ is empty  -  should fail
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);
         assert!(
@@ -964,6 +1139,7 @@ maintainers = ["Test"]
         fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# Test Experiment").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
@@ -973,7 +1149,7 @@ maintainers = ["Test"]
             "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
         )
         .unwrap();
-        // examples/ has ONLY a README — still fails
+        // examples/ has ONLY a README  -  still fails
         fs::write(pkg_dir.join("examples/README.md"), "# Examples").unwrap();
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);
@@ -994,6 +1170,7 @@ maintainers = ["Test"]
         fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# Test Experiment").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(pkg_dir.join("examples/example.toml"), "# ex").unwrap();

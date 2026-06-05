@@ -1,4 +1,4 @@
-//! Tests for `evaluate_structural_rule` — the ST01 substandard's three
+//! Tests for `evaluate_structural_rule` - the ST01 substandard's three
 //! documented pattern types (forbidden_import, required_import,
 //! layer_enforcement). The evaluator delegates to the dependency-graph path
 //! so it shares the same correctness story as `[[rules.dependency]]`.

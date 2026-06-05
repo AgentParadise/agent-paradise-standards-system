@@ -11,11 +11,25 @@
 //! - [`promotion`] - Experiment to standard promotion workflow
 //! - [`views`] - Derived views generator (registry.json, INDEX.md)
 //! - [`versioning`] - Version management for packages
+//! - [`config`] - Project configuration parsing (`APSS.yaml`)
+//! - [`standard_config`] - Typed configuration contract for standards
+//! - [`resolution`] - Cascading configuration resolution for monorepos
+//! - [`lockfile`] - Lockfile types for reproducible installations
+//! - [`registry`] - Dynamic standard composition and CLI dispatch
+//! - [`ecosystem`] - Identity of ecosystem crates vs. published standards
 
+pub mod config;
 pub mod diagnostics;
 pub mod discovery;
+pub mod distribution;
+pub mod ecosystem;
+pub mod lockfile;
 pub mod metadata;
+pub mod project_config_validation;
 pub mod promotion;
+pub mod registry;
+pub mod resolution;
+pub mod standard_config;
 pub mod templates;
 pub mod versioning;
 pub mod views;
@@ -28,3 +42,11 @@ pub use versioning::{
     is_valid_semver, parse_semver, validate_backwards_compat, validate_version,
 };
 pub use views::{Registry, ViewsError, generate_all_views, generate_registry};
+
+// Project configuration and distribution
+pub use config::{ConfigError, ProjectConfig, RawToolConfig, StandardEntry, ToolConfig};
+pub use ecosystem::{ECOSYSTEM_CRATE_NAMES, is_ecosystem_crate};
+pub use lockfile::{Lockfile, LockfileError};
+pub use registry::{CommandHandler, ProjectRunner, RegisteredStandard, StandardRegistry};
+pub use resolution::{ResolutionError, ResolvedProjectConfig, ResolvedStandard};
+pub use standard_config::{NoConfig, StandardConfig};

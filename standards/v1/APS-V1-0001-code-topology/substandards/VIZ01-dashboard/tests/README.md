@@ -10,7 +10,7 @@ Each visualization module includes unit tests that verify:
 Run tests with:
 
 ```bash
-cargo test -p code-topology-viz
+cargo test -p apss-v1-0001-viz01-dashboard
 ```
 
 ## Integration Tests

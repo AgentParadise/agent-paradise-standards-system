@@ -5,11 +5,11 @@
 //!
 //! ## Key Features
 //!
-//! - **Committable artifacts** — `.topology/` directory with metrics and graphs
-//! - **Complexity metrics** — Cyclomatic, Cognitive, Halstead, Martin's coupling
-//! - **Coupling matrix** — For 3D visualization of architecture
-//! - **Language adapters** — Polyglot support via tree-sitter
-//! - **Projector interface** — Substandards implement visualizations
+//! - **Committable artifacts**  -  `.topology/` directory with metrics and graphs
+//! - **Complexity metrics**  -  Cyclomatic, Cognitive, Halstead, Martin's coupling
+//! - **Coupling matrix**  -  For 3D visualization of architecture
+//! - **Language adapters**  -  Polyglot support via tree-sitter
+//! - **Projector interface**  -  Substandards implement visualizations
 //!
 //! ## Example
 //!
@@ -39,6 +39,7 @@ use std::path::PathBuf;
 // ============================================================================
 
 pub mod adapter;
+pub mod config;
 
 // ============================================================================
 // Error Codes
@@ -967,6 +968,34 @@ impl Default for CodeTopologyStandard {
 // ============================================================================
 // Tests
 // ============================================================================
+
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "APS-V1-0001".to_string(),
+            slug: "code-topology".to_string(),
+            name: "Code Topology".to_string(),
+            description: "Code topology analysis standard".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for code-topology yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {

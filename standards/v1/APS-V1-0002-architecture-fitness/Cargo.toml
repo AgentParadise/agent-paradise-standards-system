@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "Architecture Fitness Functions - comprehensive architectural governance framework"
 
 [dependencies]
-aps-core.workspace = true
+apss-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

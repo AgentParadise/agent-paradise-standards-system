@@ -4,7 +4,7 @@
 //!
 //! ⚠️ EXPERIMENTAL: This standard is in incubation and may change significantly.
 
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Error codes for this experiment's validation.

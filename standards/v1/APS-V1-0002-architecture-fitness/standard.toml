@@ -19,3 +19,8 @@ maintainers = ["AgentParadise"]
 [promotion]
 promoted_from = "EXP-V1-0003"
 promoted_at = "2026-04-15"
+
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "chrono"
+rationale = "RFC 3339 timestamps in fitness reports (e.g. report.timestamp)"

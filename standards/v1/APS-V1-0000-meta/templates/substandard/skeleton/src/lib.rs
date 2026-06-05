@@ -5,7 +5,7 @@
 //! Substandards provide specialized implementations of parent standards
 //! for specific platforms, use cases, or environments.
 
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Error codes for this substandard's validation.

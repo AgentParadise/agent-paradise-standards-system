@@ -6,42 +6,45 @@
 //!
 //! ```bash
 //! # Run a standard's CLI
-//! aps run topology analyze .
-//! aps run topology validate .topology/
-//! aps run --list
+//! apss-dev run topology analyze .
+//! apss-dev run topology validate .topology/
+//! apss-dev run --list
 //!
 //! # Validate the entire V1 repo structure
-//! aps v1 validate repo
+//! apss-dev v1 validate repo
 //!
 //! # Validate a specific standard
-//! aps v1 validate standard APS-V1-0000
+//! apss-dev v1 validate standard APS-V1-0000
 //!
 //! # Create a new standard
-//! aps v1 create standard my-new-standard
+//! apss-dev v1 create standard my-new-standard
 //!
 //! # List all packages
-//! aps v1 list
+//! apss-dev v1 list
 //! ```
 
 mod vsa_config;
 
-use aps_core::discovery::{PackageType, count_packages, discover_v1_packages, find_package_by_id};
-use aps_core::versioning::BumpPart;
-use aps_core::{
-    StandardContext, TemplateEngine, bump_version, generate_all_views, get_version,
-    promote_experiment,
-};
 use aps_v1_0000_meta::{MetaStandard, Standard};
+use apss_core::discovery::{
+    PackageMetadata, PackageType, count_packages, discover_v1_packages, find_package_by_id,
+};
+use apss_core::versioning::BumpPart;
+use apss_core::{
+    Diagnostic, Diagnostics, StandardContext, TemplateEngine, bump_version, generate_all_views,
+    get_version, promote_experiment,
+};
 use clap::Parser;
 use std::env;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[command(name = "aps")]
+#[command(name = "apss-dev")]
 #[command(version, about = "Agent Paradise Standards System CLI")]
 #[command(propagate_version = true)]
-#[command(after_help = "Use 'aps v1 --help' for V1 standards operations")]
+#[command(after_help = "Use 'apss-dev v1 --help' for V1 standards operations")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -122,6 +125,14 @@ enum V1Commands {
     },
     /// List all V1 packages
     List,
+    /// Create a local APSS bundle for a standard or substandard
+    Bundle {
+        /// Package ID to bundle, for example APS-V1-0001 or APS-V1-0000.DI01
+        id: String,
+        /// Output directory for bundle directories
+        #[arg(long, default_value = "target/apss-bundles")]
+        output: PathBuf,
+    },
 }
 
 #[derive(clap::Subcommand)]
@@ -173,6 +184,13 @@ enum ValidateTarget {
         /// Experiment ID (e.g., EXP-V1-0001)
         id: String,
     },
+    /// Validate an APSS.yaml project configuration file (CF01)
+    Config {
+        /// Path to APSS.yaml. If omitted, searches upward from the current directory.
+        path: Option<PathBuf>,
+    },
+    /// Validate standard crates for distribution compliance (DI01)
+    Distribution,
 }
 
 #[derive(clap::Subcommand)]
@@ -230,14 +248,14 @@ fn main() -> ExitCode {
                 );
                 println!("    Commands: validate");
                 println!();
-                println!("Use 'aps run <slug> --help' for command details.");
+                println!("Use 'apss-dev run <slug> --help' for command details.");
                 return ExitCode::SUCCESS;
             }
 
             let slug = standard.unwrap_or_default();
             if slug.is_empty() {
                 eprintln!(
-                    "Error: Standard slug required. Use 'aps run --list' to see available standards."
+                    "Error: Standard slug required. Use 'apss-dev run --list' to see available standards."
                 );
                 return ExitCode::FAILURE;
             }
@@ -247,7 +265,7 @@ fn main() -> ExitCode {
                 Some(info) => dispatch_standard_cli(&info, &args, &repo_root, cli.verbose),
                 None => {
                     eprintln!("Error: Unknown standard '{slug}'");
-                    eprintln!("Use 'aps run --list' to see available standards.");
+                    eprintln!("Use 'apss-dev run --list' to see available standards.");
                     ExitCode::FAILURE
                 }
             }
@@ -287,6 +305,45 @@ fn main() -> ExitCode {
                             eprintln!("Error: Experiment '{id}' not found");
                             return ExitCode::FAILURE;
                         }
+                    }
+                    ValidateTarget::Config { path } => {
+                        let config_path = match path {
+                            Some(path) => path,
+                            None => match apss_core::config::find_project_config(
+                                &std::env::current_dir().unwrap_or_else(|_| repo_root.clone()),
+                            ) {
+                                Some(path) => path,
+                                None => {
+                                    eprintln!("Error: No APSS.yaml found");
+                                    return ExitCode::FAILURE;
+                                }
+                            },
+                        };
+                        println!("Validating project config: {}", config_path.display());
+                        apss_project_config::validate_project_config(&config_path)
+                    }
+                    ValidateTarget::Distribution => {
+                        println!(
+                            "Validating distribution compliance for all standards in: {}",
+                            repo_root.display()
+                        );
+                        let packages = discover_v1_packages(&repo_root);
+                        let mut all_diags = Diagnostics::new();
+                        for package in &packages {
+                            let mut pkg_diags =
+                                apss_distribution::validate_publishable_standard(&package.path);
+                            pkg_diags.merge(apss_distribution::validate_release_readiness(
+                                &package.path,
+                            ));
+                            if !pkg_diags.is_empty() {
+                                all_diags.push(Diagnostic::info(
+                                    "DI_CHECKING",
+                                    format!("Checking: {}", package.path.display()),
+                                ));
+                                all_diags.merge(pkg_diags);
+                            }
+                        }
+                        all_diags
                     }
                 };
 
@@ -347,7 +404,7 @@ fn main() -> ExitCode {
                                 }
                             }
                             println!(
-                                "\nNext steps:\n  1. Add to Cargo.toml workspace members\n  2. Implement the Standard trait\n  3. Run: aps v1 validate standard {id}"
+                                "\nNext steps:\n  1. Add to Cargo.toml workspace members\n  2. Implement the Standard trait\n  3. Run: apss-dev v1 validate standard {id}"
                             );
                             ExitCode::SUCCESS
                         }
@@ -387,7 +444,7 @@ fn main() -> ExitCode {
                     }
 
                     let engine = TemplateEngine::new();
-                    let context = aps_core::SubstandardContext::new(&id, &name, &slug, &parent_id);
+                    let context = apss_core::SubstandardContext::new(&id, &name, &slug, &parent_id);
 
                     let skeleton_dir = repo_root
                         .join("standards/v1/APS-V1-0000-meta/templates/substandard/skeleton");
@@ -401,7 +458,7 @@ fn main() -> ExitCode {
                                 }
                             }
                             println!(
-                                "\nNext steps:\n  1. Add to Cargo.toml workspace members\n  2. Implement the profile-specific logic\n  3. Run: aps v1 validate substandard {id}"
+                                "\nNext steps:\n  1. Add to Cargo.toml workspace members\n  2. Implement the profile-specific logic\n  3. Run: apss-dev v1 validate substandard {id}"
                             );
                             ExitCode::SUCCESS
                         }
@@ -429,7 +486,7 @@ fn main() -> ExitCode {
                     }
 
                     let engine = TemplateEngine::new();
-                    let context = aps_core::ExperimentContext::new(&id, &name, &slug);
+                    let context = apss_core::ExperimentContext::new(&id, &name, &slug);
 
                     let skeleton_dir = repo_root
                         .join("standards/v1/APS-V1-0000-meta/templates/experiment/skeleton");
@@ -443,7 +500,7 @@ fn main() -> ExitCode {
                                 }
                             }
                             println!(
-                                "\nNext steps:\n  1. Add to Cargo.toml workspace members\n  2. Iterate on the experiment\n  3. When ready, use: aps v1 promote {id}"
+                                "\nNext steps:\n  1. Add to Cargo.toml workspace members\n  2. Iterate on the experiment\n  3. When ready, use: apss-dev v1 promote {id}"
                             );
                             ExitCode::SUCCESS
                         }
@@ -470,7 +527,10 @@ fn main() -> ExitCode {
                         println!("\nNext steps:");
                         println!("  1. Add to Cargo.toml workspace members");
                         println!("  2. Remove the old experiment from workspace");
-                        println!("  3. Run: aps v1 validate standard {}", result.standard_id);
+                        println!(
+                            "  3. Run: apss-dev v1 validate standard {}",
+                            result.standard_id
+                        );
                         ExitCode::SUCCESS
                     }
                     Err(e) => {
@@ -564,8 +624,219 @@ fn main() -> ExitCode {
 
                 ExitCode::SUCCESS
             }
+            V1Commands::Bundle { id, output } => {
+                match create_local_bundle(&repo_root, &id, &output) {
+                    Ok(bundle_dir) => {
+                        println!("Created APSS bundle: {}", bundle_dir.display());
+                        println!(
+                            "Install locally with: apss install --bundle-dir {}",
+                            bundle_dir.display()
+                        );
+                        ExitCode::SUCCESS
+                    }
+                    Err(error) => {
+                        eprintln!("Error creating APSS bundle: {error}");
+                        ExitCode::FAILURE
+                    }
+                }
+            }
         },
     }
+}
+
+fn create_local_bundle(
+    repo_root: &Path,
+    id: &str,
+    output_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut package = find_package_by_id(repo_root, id).ok_or_else(|| {
+        format!("package '{id}' not found in standards/v1 or standards-experimental/v1")
+    })?;
+    let metadata = package.load_metadata()?.clone();
+    let bundle_name = format!(
+        "{}-{}-{}.apss",
+        metadata.id(),
+        metadata_slug(&metadata),
+        metadata.version()
+    );
+    let bundle_dir = output_dir.join(bundle_name);
+
+    if bundle_dir.exists() {
+        fs::remove_dir_all(&bundle_dir)?;
+    }
+    fs::create_dir_all(&bundle_dir)?;
+
+    let package_relative = package.path.strip_prefix(repo_root)?.to_path_buf();
+    let package_output = bundle_dir.join(&package_relative);
+    copy_dir_filtered(&package.path, &package_output)?;
+
+    let core_relative = PathBuf::from("crates/apss-core");
+    let core_source = repo_root.join(&core_relative);
+    let core_output = bundle_dir.join(&core_relative);
+    copy_dir_filtered(&core_source, &core_output)?;
+
+    let mut workspace_members = vec![core_relative, package_relative.clone()];
+    workspace_members.extend(discover_cargo_members(&package.path, repo_root)?);
+    workspace_members.sort();
+    workspace_members.dedup();
+
+    let workspace_manifest = workspace_manifest_with_members(repo_root, &workspace_members)?;
+    fs::write(bundle_dir.join("Cargo.toml"), workspace_manifest)?;
+
+    let bundle_manifest = bundle_manifest(&metadata, &package, &package_relative);
+    fs::write(bundle_dir.join("bundle.toml"), bundle_manifest)?;
+
+    Ok(bundle_dir)
+}
+
+fn metadata_slug(metadata: &PackageMetadata) -> &str {
+    match metadata {
+        PackageMetadata::Standard(metadata) => &metadata.standard.slug,
+        PackageMetadata::Substandard(metadata) => &metadata.substandard.slug,
+        PackageMetadata::Experiment(metadata) => &metadata.experiment.slug,
+    }
+}
+
+fn metadata_kind(metadata: &PackageMetadata) -> &'static str {
+    match metadata {
+        PackageMetadata::Standard(_) => "standard",
+        PackageMetadata::Substandard(_) => "substandard",
+        PackageMetadata::Experiment(_) => "experiment",
+    }
+}
+
+fn bundle_manifest(
+    metadata: &PackageMetadata,
+    package: &apss_core::discovery::DiscoveredPackage,
+    package_relative: &Path,
+) -> String {
+    format!(
+        r#"schema = "apss.bundle/v1"
+id = "{}"
+name = "{}"
+slug = "{}"
+version = "{}"
+kind = "{}"
+metadata_file = "{}"
+
+[source]
+package_path = "{}"
+repository = "{}"
+
+[payload]
+metadata = "{}"
+docs = "docs"
+implementation = "."
+"#,
+        metadata.id(),
+        escape_toml_string(metadata.name()),
+        metadata_slug(metadata),
+        metadata.version(),
+        metadata_kind(metadata),
+        package.metadata_file,
+        escape_toml_string(&package_relative.display().to_string()),
+        env!("CARGO_PKG_REPOSITORY"),
+        package.metadata_file
+    )
+}
+
+fn discover_cargo_members(
+    package_path: &Path,
+    repo_root: &Path,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut members = Vec::new();
+    for entry in walkdir::WalkDir::new(package_path)
+        .into_iter()
+        .filter_entry(|entry| !should_skip_bundle_dir(entry.path()))
+    {
+        let entry = entry?;
+        if entry.file_type().is_dir() && should_skip_bundle_dir(entry.path()) {
+            continue;
+        }
+        if entry.file_type().is_file() && entry.file_name() == "Cargo.toml" {
+            let Some(parent) = entry.path().parent() else {
+                continue;
+            };
+            let relative = parent.strip_prefix(repo_root)?.to_path_buf();
+            members.push(relative);
+        }
+    }
+    Ok(members)
+}
+
+fn workspace_manifest_with_members(
+    repo_root: &Path,
+    members: &[PathBuf],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let source = fs::read_to_string(repo_root.join("Cargo.toml"))?;
+    let members_start = source.find("members = [").ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "workspace manifest does not contain members list",
+        )
+    })?;
+    let list_start = members_start + "members = [".len();
+    let list_end = source[list_start..]
+        .find(']')
+        .map(|offset| list_start + offset)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "workspace manifest members list is unterminated",
+            )
+        })?;
+
+    let mut replacement = String::from("members = [\n");
+    for member in members {
+        replacement.push_str(&format!("    \"{}\",\n", escape_toml_path(member)));
+    }
+    replacement.push(']');
+
+    let mut output = String::new();
+    output.push_str(&source[..members_start]);
+    output.push_str(&replacement);
+    output.push_str(&source[list_end + 1..]);
+    Ok(output)
+}
+
+fn copy_dir_filtered(source: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in walkdir::WalkDir::new(source)
+        .into_iter()
+        .filter_entry(|entry| !should_skip_bundle_dir(entry.path()))
+    {
+        let entry = entry?;
+        let path = entry.path();
+        let relative = path.strip_prefix(source)?;
+        let output_path = destination.join(relative);
+
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&output_path)?;
+        } else if entry.file_type().is_file() {
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(path, &output_path)?;
+        }
+    }
+    Ok(())
+}
+
+fn should_skip_bundle_dir(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    matches!(
+        name,
+        ".git" | ".apss" | "target" | "node_modules" | ".cargo" | "tmp" | "temporary"
+    )
+}
+
+fn escape_toml_path(path: &Path) -> String {
+    path.display().to_string().replace('\\', "\\\\")
+}
+
+fn escape_toml_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Find the repository root by looking for Cargo.toml with workspace config.
@@ -725,7 +996,7 @@ fn dispatch_topology(
             println!("Code Topology (EXP-V1-0001) v0.1.0");
             println!();
             println!("USAGE:");
-            println!("    aps run topology <COMMAND> [OPTIONS]");
+            println!("    apss-dev run topology <COMMAND> [OPTIONS]");
             println!();
             println!("COMMANDS:");
             println!("    analyze <path>     Analyze codebase and generate .topology/");
@@ -784,7 +1055,7 @@ fn dispatch_topology(
         "diff" => {
             if args.len() < 2 {
                 eprintln!("Error: diff requires two paths");
-                eprintln!("Usage: aps run topology diff <base> <target> [--format json]");
+                eprintln!("Usage: apss-dev run topology diff <base> <target> [--format json]");
                 return ExitCode::FAILURE;
             }
             let format = args
@@ -856,7 +1127,7 @@ fn dispatch_topology(
         }
         _ => {
             eprintln!("Error: Unknown topology command '{command}'");
-            eprintln!("Use 'aps run topology --help' for available commands.");
+            eprintln!("Use 'apss-dev run topology --help' for available commands.");
             ExitCode::FAILURE
         }
     }
@@ -874,7 +1145,7 @@ fn dispatch_fitness(
             println!("Architecture Fitness Functions (EXP-V1-0003) v0.1.0");
             println!();
             println!("USAGE:");
-            println!("    aps run fitness <COMMAND> [OPTIONS]");
+            println!("    apss-dev run fitness <COMMAND> [OPTIONS]");
             println!();
             println!("COMMANDS:");
             println!("    validate <path>    Validate fitness rules against topology artifacts");
@@ -1001,7 +1272,7 @@ fn dispatch_fitness(
         }
         other => {
             eprintln!("Error: Unknown fitness command '{other}'");
-            eprintln!("Use 'aps run fitness --help' for available commands.");
+            eprintln!("Use 'apss-dev run fitness --help' for available commands.");
             ExitCode::FAILURE
         }
     }
@@ -1219,7 +1490,7 @@ fn write_topology_artifacts(
     fs::create_dir_all(output_path.join("metrics"))?;
     fs::create_dir_all(output_path.join("graphs"))?;
 
-    // Deduplicate functions — tree-sitter queries can match the same function
+    // Deduplicate functions  -  tree-sitter queries can match the same function
     // multiple times (e.g. a class method matches both the function pattern
     // and the method-in-class pattern).  Keep the first occurrence per
     // (file_path, start_line) pair.
@@ -1769,7 +2040,7 @@ total_dependencies = {}
     //       "crates::aps-cli::src::main" -> slice "crates::aps-cli"
     fn get_slice_id(module_id: &str) -> String {
         // Split by the appropriate separator and take first two segments.
-        // Path-like IDs (containing '/') use '/' — this avoids splitting inside
+        // Path-like IDs (containing '/') use '/'  -  this avoids splitting inside
         // Next.js catch-all routes like [[...slug]] where '.' is literal.
         let separator = if module_id.contains('/') {
             "/"
@@ -1903,7 +2174,9 @@ fn topology_validate(path: &str, _verbose: bool) -> ExitCode {
 
     if errors > 0 {
         println!();
-        println!("{errors} error(s) found. Run 'aps run topology analyze' to generate artifacts.");
+        println!(
+            "{errors} error(s) found. Run 'apss-dev run topology analyze' to generate artifacts."
+        );
         ExitCode::FAILURE
     } else {
         println!();
@@ -2276,7 +2549,7 @@ fn topology_check(diff_file: Option<&str>, config: Option<&str>, _verbose: bool)
         Some(p) => p,
         None => {
             eprintln!("Error: diff file required");
-            eprintln!("Usage: aps run topology check <diff.json> [--config <file>]");
+            eprintln!("Usage: apss-dev run topology check <diff.json> [--config <file>]");
             return ExitCode::FAILURE;
         }
     };
@@ -2411,7 +2684,7 @@ fn topology_comment(diff_file: Option<&str>, _config: Option<&str>, _verbose: bo
         Some(p) => p,
         None => {
             eprintln!("Error: diff file required");
-            eprintln!("Usage: aps run topology comment <diff.json>");
+            eprintln!("Usage: apss-dev run topology comment <diff.json>");
             return ExitCode::FAILURE;
         }
     };
@@ -2537,7 +2810,7 @@ fn topology_report(path: &str, _verbose: bool) -> ExitCode {
 
     if !modules_path.exists() {
         eprintln!("Error: No topology artifacts found at {path}");
-        eprintln!("Run 'aps run topology analyze' first.");
+        eprintln!("Run 'apss-dev run topology analyze' first.");
         return ExitCode::FAILURE;
     }
 
@@ -2773,7 +3046,7 @@ fn generate_vsa_placeholder() -> String {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>VSA Visualization — No Configuration</title>
+<title>VSA Visualization  -  No Configuration</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #1a1a2e; color: #ccc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
   .card { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 48px; max-width: 560px; text-align: center; }
@@ -2787,7 +3060,7 @@ fn generate_vsa_placeholder() -> String {
 <div class="card">
   <h1>No VSA Configuration Found</h1>
   <p>The VSA (Vertical Slice Architecture) visualization requires a <code>vsa.yaml</code> file in your repository root to identify which bounded contexts to display.</p>
-  <p>Without this file, all modules would appear as vertical slices — which is misleading for non-VSA packages.</p>
+  <p>Without this file, all modules would appear as vertical slices  -  which is misleading for non-VSA packages.</p>
   <pre>
 # vsa.yaml (version 1)
 version: 1
@@ -2819,7 +3092,7 @@ fn get_slice_from_id(module_id: &str) -> String {
 
         // For crates, use crate name
         if parts.len() >= 2 && parts[0] == "crates" {
-            return parts[1].to_string(); // e.g., "aps-core"
+            return parts[1].to_string(); // e.g., "apss-core"
         }
 
         // Default: first two segments
@@ -2829,7 +3102,7 @@ fn get_slice_from_id(module_id: &str) -> String {
         return parts.first().unwrap_or(&module_id).to_string();
     }
 
-    // Handle path-like IDs (containing '/') — split on '/' to avoid breaking
+    // Handle path-like IDs (containing '/')  -  split on '/' to avoid breaking
     // Next.js catch-all routes like [[...slug]] where '.' is literal.
     let separator = if module_id.contains('/') { "/" } else { "." };
     let parts: Vec<&str> = module_id.split(separator).collect();
@@ -2858,7 +3131,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
     // Check for required artifacts
     if !modules_path.exists() {
         eprintln!("Error: No modules.json found at {}", modules_path.display());
-        eprintln!("Run 'aps run topology analyze' first.");
+        eprintln!("Run 'apss-dev run topology analyze' first.");
         return ExitCode::FAILURE;
     }
 
@@ -2867,7 +3140,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
             "Error: No coupling-matrix.json found at {}",
             coupling_path.display()
         );
-        eprintln!("Run 'aps run topology analyze' first.");
+        eprintln!("Run 'apss-dev run topology analyze' first.");
         return ExitCode::FAILURE;
     }
 
@@ -2881,7 +3154,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
         Ok(Some(config)) => {
             if verbose {
                 println!(
-                    "  Found vsa.yaml (v{}) — root: {}",
+                    "  Found vsa.yaml (v{})  -  root: {}",
                     config.version,
                     config.normalized_root()
                 );
@@ -3164,7 +3437,7 @@ fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, verbose: bool)
                         serde_json::to_string_pretty(&vsa_modules).unwrap_or_default();
                     code_topology_viz::vsa::generate(&modules_json)
                 } else {
-                    // No vsa.yaml — render placeholder
+                    // No vsa.yaml  -  render placeholder
                     generate_vsa_placeholder()
                 };
 

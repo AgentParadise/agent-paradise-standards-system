@@ -10,7 +10,7 @@ Each visualization module includes unit tests that verify:
 Run tests with:
 
 ```bash
-cargo test -p code-topology-viz
+cargo test --manifest-path standards-experimental/v1/EXP-V1-0001-code-topology/substandards/VIZ01-dashboard/Cargo.toml
 ```
 
 ## Integration Tests

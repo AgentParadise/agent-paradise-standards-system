@@ -5,8 +5,8 @@
 
 mod fixtures;
 
-use aps_core::templates::{ExperimentContext, StandardContext, TemplateEngine};
 use aps_v1_0000_meta::{MetaStandard, Standard};
+use apss_core::templates::{ExperimentContext, StandardContext, TemplateEngine};
 use fixtures::create_test_workspace;
 use std::fs;
 use std::path::Path;
@@ -50,6 +50,7 @@ edition = "2021"
 "#,
     )
     .unwrap();
+    fs::write(dir.join("README.md"), "# {{name}}\n").unwrap();
 
     fs::write(
         dir.join("src/lib.rs"),
@@ -58,7 +59,7 @@ edition = "2021"
     .unwrap();
     fs::write(
         dir.join("docs/01_spec.md"),
-        "# {{id}} — {{name}} (Canonical Specification)\n\n**Version**: {{version}}\n",
+        "# {{id}}  -  {{name}} (Canonical Specification)\n\n**Version**: {{version}}\n",
     )
     .unwrap();
 
@@ -104,6 +105,7 @@ edition = "2021"
 "#,
     )
     .unwrap();
+    fs::write(dir.join("README.md"), "# {{name}}\n").unwrap();
 
     fs::write(
         dir.join("src/lib.rs"),
@@ -112,7 +114,7 @@ edition = "2021"
     .unwrap();
     fs::write(
         dir.join("docs/01_spec.md"),
-        "# {{id}} — {{name}} (Experimental Specification)\n\n**Version**: {{version}}\n",
+        "# {{id}}  -  {{name}} (Experimental Specification)\n\n**Version**: {{version}}\n",
     )
     .unwrap();
 

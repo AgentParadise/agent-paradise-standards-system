@@ -1,170 +1,94 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-# 🔄 RIPER-5 MODE: STRICT OPERATIONAL PROTOCOL
-v2.0.5 - 20250810
+# AGENTS.md
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│             │     │             │     │             │     │             │     │             │
-│  RESEARCH   │────▶│  INNOVATE   │────▶│    PLAN     │────▶│   EXECUTE   │────▶│   REVIEW    │
-│             │     │             │     │             │     │             │     │             │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-       ▲                                       │                  │                    │
-       │                                       │                  │                    │
-       └───────────────────────────────────────┘                  │                    │
-                                                                  │                    │
-                                                                  ▼                    │
-                                                        ┌─────────────────┐            │
-                                                        │  QA CHECKPOINT  │            │
-                                                        │  - Lint/Format  │            │
-                                                        │  - Type Check   │            │
-                                                        │  - Run Tests    │            │
-                                                        │  - Review Files │            │
-                                                        │  - Commit Files │            │
-                                                        └─────────────────┘            │
-                                                                  │                    │
-                                                                  └────────────────────┘
-```
+Guidance for coding agents working in the Agent Paradise Standards System repository.
 
-## Mode Transition Signals
-Only transition modes when these exact signals are used:
+## Project Overview
 
-```
-ENTER RESEARCH MODE or ERM
-ENTER INNOVATE MODE or EIM
-ENTER PLAN MODE or EPM
-ENTER EXECUTE MODE or EEM
-ENTER REVIEW MODE or EQM
-DIRECT EXECUTE MODE or DEM // Used to bypass the plan and go straight to execute mode
-```
+Agent Paradise Standards System (APSS) is a Rust workspace for executable, versioned engineering standards. Standards are implemented as Rust crates, validated by the APS CLI, and documented as agent-readable specifications.
 
-## Meta-Instruction
-**BEGIN EVERY RESPONSE WITH YOUR CURRENT MODE IN BRACKETS.**  
-**Format:** `[MODE: MODE_NAME]`
+## Repository Layout
 
-## The RIPER-5 Modes
+- `crates/aps-core/` - core library for diagnostics, discovery, metadata, config, lockfiles, registry, and standard resolution.
+- `crates/aps-cli/` - `aps` CLI for running standards and managing V1 standard lifecycle commands.
+- `crates/apss-bootstrap/` - `apss` bootstrap CLI for consumer project initialization, installation, status, and dispatch.
+- `standards/v1/APS-V1-0000-meta/` - meta-standard defining structure, validation, config, CLI, distribution, experiment lifecycle, and promotion rules.
+- `standards/v1/` - official standards governed by the meta-standard.
+- `standards-experimental/v1/` - incubating experimental standards governed by the meta-standard.
+- `.github/workflows/` - CI, release gate, and release creation workflows.
 
-### MODE 1: RESEARCH
-- **Purpose:** Information gathering ONLY
-- **Permitted:** Reading files, asking questions, understanding code
-- **Forbidden:** Suggestions, planning, implementation
-- **Output:** `[MODE: RESEARCH]` + observations and questions
+## Setup Commands
 
-### MODE 2: INNOVATE
-- **Purpose:** Brainstorming potential approaches
-- **Permitted:** Discussing ideas, advantages/disadvantages
-- **Forbidden:** Concrete planning, code writing
-- **Output:** `[MODE: INNOVATE]` + possibilities and considerations
+- Install Rust with `rustup`; the workspace declares Rust `1.85` or newer.
+- Install Just with `cargo install just`.
+- Initialize local development with `just init`.
+- Fetch dependencies with `cargo fetch` when needed.
 
-### MODE 3: PLAN
-- **Purpose:** Creating technical specification
-- **Permitted:** Detailed plans with file paths and changes
-- **Forbidden:** Implementation or code writing
-- **Required:** Create comprehensive `PROJECT-PLAN_YYYYMMDD_<TASK-NAME>.md` with milestones. The milestones should consist of tasks with empty checkboxes to be filled in when the task is complete. (NEVER Commit the PROJECT-PLANs)
-- **Output:** `[MODE: PLAN]` + specifications and implementation details
-- **ADRs** Any architecture decisions should be captured in an Architecture Decision Record in `/docs/adrs/`
-- **Test Driven Development:** Always keep testing in mind and add tests first, then implement features. Thinking with testing in mind first, also created better software design because it's designed to be easily testable. "Testing code is as important as Production code."
+## Build And Test Commands
 
-### MODE 4: EXECUTE
-- **Purpose:** Implementing the approved plan exactly
-- **Permitted:** Implementing detailed plan tasks, running QA checkpoints
-- **Forbidden:** Deviations from plan, creative additions
-- **Required:** After each milestone, run QA checkpoint and commit changes
-- **Output:** `[MODE: EXECUTE]` + implementation matching the plan
-- During execute, please use TODO comments for things that can be improved or changed in the future and use "FIXME" comments for things that are breaking the app.
+- Run the standard local check suite: `just check`.
+- Auto-format and then lint: `just check-fix`.
+- Check formatting only: `cargo fmt --all --check`.
+- Format Rust code: `cargo fmt --all`.
+- Run clippy strictly: `cargo clippy --workspace --all-targets -- -D warnings`.
+- Type-check all targets: `cargo check --workspace --all-targets`.
+- Run tests: `cargo test --workspace`.
+- Build all crates: `cargo build --workspace`.
+- Build release artifacts: `cargo build --workspace --release`.
+- Run the full CI-equivalent recipe: `just ci`.
 
-### MODE 5: REVIEW
-- **Purpose:** Validate implementation against plan
-- **Permitted:** Line-by-line comparison
-- **Required:** Flag ANY deviation with `:warning: DEVIATION DETECTED: [description]`
-- **Output:** `[MODE: REVIEW]` + comparison and verdict
+## APS Validation Commands
 
-## Python Tooling
+- Validate all V1 standards: `just aps-validate`.
+- Validate all V1 standards directly: `cargo run -p aps-cli --bin apss-dev -- v1 validate repo`.
+- List discovered V1 packages: `just aps-list`.
+- Validate a specific package: `just aps-validate-pkg <APS-ID>`.
+- Create standards and experiments through the `aps-cli` recipes in `justfile`; do not hand-copy scaffold structures unless the CLI path is unsuitable.
 
-**ALWAYS use `uv` for Python package management. NEVER use `pip` directly.**
+## Code Style
 
-```bash
-# Installing packages
-uv pip install <package>
-uv pip install -e .  # editable install
+- Keep Rust formatted with `cargo fmt`.
+- Treat clippy warnings as failures; CI runs `-D warnings`.
+- Prefer small, focused changes that preserve existing crate boundaries.
+- Put shared engine behavior in `aps-core`, CLI user interactions in `aps-cli` or `apss-bootstrap`, and standard-specific behavior in the relevant standard crate.
+- Avoid adding new workspace dependencies unless they are clearly justified and compatible with the release/distribution rules.
+- Use `TODO` for intentional future improvements and `FIXME` only for known broken behavior.
+- No em dashes are allowed anywhere in the repo. Restructure sentences or use colons or commas instead.
 
-# Running Python in project context
-uv run python script.py
-uv run pytest
+## Testing Guidelines
 
-# Syncing dependencies
-uv sync
-```
+- Add or update tests for behavior changes.
+- Prefer targeted tests first, then run broader workspace checks when the change is complete.
+- For config or validation logic, cover success and diagnostic/error cases.
+- For generated files such as schemas, include freshness or round-trip tests when practical.
+- If touching standards, run `cargo run -p aps-cli --bin apss-dev -- v1 validate repo` before finishing.
 
-## QA Checkpoint Process
+## Standards Structure
 
-After each milestone in EXECUTE mode:
-1. Run linter with auto-formatting
-2. Run type checks
-3. Run tests
-4. Review changes with git MCP server
-5. Commit changes with conventional commit messages before moving to next milestone
+- Treat the meta-standard as the source of truth for how this repository works. It governs official standards, experimental standards, substandards, versioning, backwards compatibility, artifact definitions, validation criteria, promotion criteria, and automation expectations.
+- Standards are versioned so they can evolve over time. Major versions must remain backwards compatible within the guarantees defined by the meta-standard.
+- Standards may define substandards. Substandards are first-class governed units and must follow the structure, metadata, validation, and lifecycle rules defined by the meta-standard.
+- Standards should define artifacts when practical. Not every standard must produce artifacts, but artifact definitions are important because validators, queries, reports, and downstream automation can be built against them.
+- Standards should include executable code where it makes the standard enforceable or useful. Typical code includes validators, generators, artifact producers, query helpers, scaffolds, and automation that can run in git hooks, QA pipelines, and CI/CD pipelines.
+- Treat the meta-standard as the source of truth for experiment lifecycle rules, including experimental version bumps, validation criteria, promotion criteria, and removal from `standards-experimental/v1/` after promotion.
+- Official standards live under `standards/v1/APS-V1-XXXX-<slug>/`.
+- Substandards live under `standards/v1/APS-V1-XXXX-<slug>/substandards/<PROFILE>-<slug>/`.
+- Experimental standards live under `standards-experimental/v1/EXP-V1-XXXX-<slug>/`.
+- Experimental standards should be held to the same validation bar as official standards unless the meta-standard explicitly defines a narrower exception.
+- Fast validation that the meta-standard enforces should run in QA automation, such as CI checks or git hooks, when practical.
+- Standards and substandards should keep metadata files, `Cargo.toml`, docs, and implementation aligned.
+- When changing non-documentation files in a standard or substandard, check whether `standard.toml`, `substandard.toml`, and `Cargo.toml` versions need to be bumped.
 
-**python** for python, you can run all of the checks together with `poetry run poe check-fix`
+## Pull Request Guidelines
 
-```bash
-# Run all checks and auto-format code
-python scripts/qa_checkpoint.py
+- Use conventional commit messages: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, or `chore:`.
+- Before opening or updating a PR, run `just check`; if standards changed, also run `just aps-validate`.
+- Keep PR descriptions specific about changed standards, crates, tests, and validation commands.
+- Release PRs target `release` from `main` and need a `## Changelog` or `## Release Notes` section.
 
-# Run checks and commit using conventional commit format
-python scripts/qa_checkpoint.py --commit "Complete Milestone X" --conventional-commit
-```
+## Agent Operating Notes
 
-## Git MCP Server for Clean Commits
-
-Use the git MCP server to review files and make logical commits:
-
-```
-[MODE: EXECUTE]
-
-Let's use the git MCP server to review files and make logical commits with commit lint based messages:
-```
-
-1. Review current status and changes:
-```bash
-mcp_git_git_status <repo_path>
-mcp_git_git_diff_unstaged <repo_path>
-```
-
-2. Make logical commits using conventional commit format:
-```bash
-# Stage related files
-mcp_git_git_add <repo_path> ["file1.py", "file2.py"]
-
-DO NOT Commit anything. Provide the Git Commit message and let me commit.
-```
-
-### Conventional Commit Format
-
-Format: `type(scope): description`
-
-Types:
-- `feat`: New features
-- `fix`: Bug fixes
-- `docs`: Documentation
-- `style`: Formatting changes
-- `refactor`: Code restructuring
-- `test`: Test changes
-- `chore`: Maintenance
-
-### Files to Exclude
-- Temporary files
-- Draft project plans
-- Build artifacts
-- Cache files
-
-## Critical Guidelines
-- Never transition between modes without explicit permission
-- Always declare current mode at the start of every response
-- Follow the plan with 100% fidelity in EXECUTE mode
-- Flag even the smallest deviation in REVIEW mode
-- Return to PLAN mode if any implementation issue requires deviation
-- Use conventional commit messages for all commits
+- Read nearby files before editing; preserve established naming, module layout, and diagnostic conventions.
+- Do not commit changes unless the user explicitly asks.
+- Do not modify generated or build-output directories such as `target/`.
+- Do not rewrite unrelated files while addressing a focused issue.
+- If local changes already exist, treat them as user work and avoid overwriting them without confirmation.
