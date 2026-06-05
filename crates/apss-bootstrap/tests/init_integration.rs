@@ -29,6 +29,14 @@ fn test_init_creates_expected_layout() {
         apss_toml.contains("apss_version = \"v1\""),
         "missing apss_version line:\n{apss_toml}"
     );
+    assert!(
+        apss_toml.contains("[tool.hooks]"),
+        "missing [tool.hooks] section:\n{apss_toml}"
+    );
+    assert!(
+        apss_toml.contains("pre_commit = true"),
+        "missing default pre_commit hook setting:\n{apss_toml}"
+    );
 
     // .apss/bin is generated; .apss/config is intentionally not created
     // because configuration is user-owned and lives outside .apss/.

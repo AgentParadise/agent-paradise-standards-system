@@ -449,10 +449,26 @@ bin_dir = ".apss/bin"
 registry = "https://crates.io"
 offline = false
 log_level = "warn"
+
+[tool.hooks]
+pre_commit = true
 ```
 
 Every previously valid `apss.toml` activation field remains in `apss.toml`;
 only configuration stored under `.apss/` moves into the manifest.
+
+### 9.2.1 Tool hook settings
+
+`[tool.hooks]` controls APSS-managed local enforcement hooks.
+
+| Key | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `pre_commit` | bool | `true` | Installs or updates the managed pre-commit hook during `apss install`. |
+
+`pre_commit = false` is an explicit local escape hatch. Installers MUST emit
+a clear warning when it disables hook installation because commit-time APSS
+validation will not run until the setting is re-enabled or hooks are installed
+another way.
 
 ### 9.3 Transition behavior
 

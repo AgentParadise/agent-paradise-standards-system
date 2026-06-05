@@ -241,7 +241,15 @@ pub fn run(args: InstallArgs) -> i32 {
         return 1;
     }
 
-    if !args.no_hooks {
+    if args.no_hooks {
+        eprintln!(
+            "Warning: APSS pre-commit hook installation was skipped by --no-hooks. Validation will not run before commits until hooks are installed."
+        );
+    } else if !resolved.tool.hooks.pre_commit {
+        eprintln!(
+            "Warning: APSS pre-commit hook installation is disabled by [tool.hooks].pre_commit = false in {CONFIG_FILENAME}. Validation will not run before commits until this is re-enabled."
+        );
+    } else if should_install_pre_commit_hook(args.no_hooks, resolved.tool.hooks.pre_commit) {
         match install_pre_commit_hook(project_root, &output_binary) {
             Ok(Some(path)) => println!("Installed Git hook: {}", path.display()),
             Ok(None) => println!("Git hook install skipped: not a Git repository"),
@@ -254,6 +262,10 @@ pub fn run(args: InstallArgs) -> i32 {
 
     println!("\nDone! Run 'apss run <standard> <command>' to use your standards.");
     0
+}
+
+fn should_install_pre_commit_hook(no_hooks: bool, config_pre_commit: bool) -> bool {
+    !no_hooks && config_pre_commit
 }
 
 fn generate_lockfile(
@@ -495,6 +507,21 @@ mod tests {
         assert!(block.contains("\"$APSS_BOOTSTRAP\" validate"));
         assert!(block.contains("apss validate"));
         assert!(block.contains("\"$APSS_COMPOSED\" list"));
+    }
+
+    #[test]
+    fn hook_installation_defaults_to_enabled() {
+        assert!(should_install_pre_commit_hook(false, true));
+    }
+
+    #[test]
+    fn hook_installation_respects_cli_skip() {
+        assert!(!should_install_pre_commit_hook(true, true));
+    }
+
+    #[test]
+    fn hook_installation_respects_config_skip() {
+        assert!(!should_install_pre_commit_hook(false, false));
     }
 
     #[test]

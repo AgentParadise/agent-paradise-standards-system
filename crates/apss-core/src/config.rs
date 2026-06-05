@@ -152,6 +152,19 @@ pub struct ToolConfig {
     /// Log level for APSS operations. Default: `"warn"`.
     #[serde(default = "default_log_level")]
     pub log_level: String,
+
+    /// Managed enforcement hook configuration.
+    #[serde(default)]
+    pub hooks: HooksConfig,
+}
+
+/// Resolved managed hook configuration.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct HooksConfig {
+    /// Whether `apss install` installs or updates the managed pre-commit hook.
+    /// Default: `true`.
+    #[serde(default = "default_true")]
+    pub pre_commit: bool,
 }
 
 /// Raw, parse-time view of `[tool]` config. Every field is `Option<T>` so
@@ -168,6 +181,13 @@ pub struct RawToolConfig {
     pub registry: Option<String>,
     pub offline: Option<bool>,
     pub log_level: Option<String>,
+    pub hooks: Option<RawHooksConfig>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct RawHooksConfig {
+    pub pre_commit: Option<bool>,
 }
 
 impl RawToolConfig {
@@ -178,6 +198,18 @@ impl RawToolConfig {
             registry: self.registry.unwrap_or_else(default_registry),
             offline: self.offline.unwrap_or(false),
             log_level: self.log_level.unwrap_or_else(default_log_level),
+            hooks: self
+                .hooks
+                .map(RawHooksConfig::into_resolved)
+                .unwrap_or_default(),
+        }
+    }
+}
+
+impl RawHooksConfig {
+    pub fn into_resolved(self) -> HooksConfig {
+        HooksConfig {
+            pre_commit: self.pre_commit.unwrap_or(true),
         }
     }
 }
@@ -213,7 +245,14 @@ impl Default for ToolConfig {
             registry: default_registry(),
             offline: false,
             log_level: default_log_level(),
+            hooks: HooksConfig::default(),
         }
+    }
+}
+
+impl Default for HooksConfig {
+    fn default() -> Self {
+        Self { pre_commit: true }
     }
 }
 
@@ -376,6 +415,9 @@ exclude = ["packages/deprecated-*"]
 [tool]
 bin_dir = ".apss/bin"
 offline = true
+
+[tool.hooks]
+pre_commit = false
 "#;
         let config: ProjectConfig = toml::from_str(toml_str).unwrap();
         assert_eq!(config.standards.len(), 2);
@@ -394,6 +436,7 @@ offline = true
 
         let tool = config.tool.unwrap();
         assert_eq!(tool.offline, Some(true));
+        assert_eq!(tool.hooks.unwrap().pre_commit, Some(false));
     }
 
     #[test]
@@ -423,6 +466,7 @@ version = ">=1.0.0"
         assert_eq!(config.registry, "https://crates.io");
         assert!(!config.offline);
         assert_eq!(config.log_level, "warn");
+        assert!(config.hooks.pre_commit);
     }
 
     #[test]

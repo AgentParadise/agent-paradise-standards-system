@@ -7,7 +7,8 @@
 //! See `APS-V1-0000.CF01` for the normative specification.
 
 use crate::config::{
-    ConfigError, ProjectConfig, ProjectInfo, RawToolConfig, StandardEntry, ToolConfig,
+    ConfigError, ProjectConfig, ProjectInfo, RawHooksConfig, RawToolConfig, StandardEntry,
+    ToolConfig,
 };
 use crate::{Diagnostic, Diagnostics};
 use std::collections::BTreeMap;
@@ -188,11 +189,16 @@ pub fn merge_configs(
     // previously the OR-semantics made `false` unreachable.
     let root_tool = root.tool.clone().unwrap_or_default();
     let child_tool = child.tool.clone().unwrap_or_default();
+    let root_hooks = root_tool.hooks.clone().unwrap_or_default();
+    let child_hooks = child_tool.hooks.clone().unwrap_or_default();
     let merged_raw = RawToolConfig {
         bin_dir: child_tool.bin_dir.or(root_tool.bin_dir),
         registry: child_tool.registry.or(root_tool.registry),
         offline: child_tool.offline.or(root_tool.offline),
         log_level: child_tool.log_level.or(root_tool.log_level),
+        hooks: Some(RawHooksConfig {
+            pre_commit: child_hooks.pre_commit.or(root_hooks.pre_commit),
+        }),
     };
     let merged_tool = merged_raw.into_resolved();
 
@@ -514,6 +520,48 @@ offline = false
         .unwrap();
 
         assert!(!resolved.tool.offline);
+    }
+
+    #[test]
+    fn test_merge_tool_hooks_child_false_overrides_root_true() {
+        let root: ProjectConfig = toml::from_str(
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "root"
+apss_version = "v1"
+
+[workspace]
+members = ["packages/*"]
+
+[tool.hooks]
+pre_commit = true
+"#,
+        )
+        .unwrap();
+
+        let child: ProjectConfig = toml::from_str(
+            r#"
+schema = "apss.project/v1"
+[project]
+name = "child"
+apss_version = "v1"
+
+[tool.hooks]
+pre_commit = false
+"#,
+        )
+        .unwrap();
+
+        let resolved = merge_configs(
+            &root,
+            Path::new("apss.toml"),
+            &child,
+            Path::new("packages/a/apss.toml"),
+        )
+        .unwrap();
+
+        assert!(!resolved.tool.hooks.pre_commit);
     }
 
     #[test]

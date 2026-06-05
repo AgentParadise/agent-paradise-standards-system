@@ -217,7 +217,20 @@ The external cache approach is preferred because it speeds repeated installs whi
 
 ### 7.1 Git Hooks
 
-APSS MAY install managed git hooks during `apss install`.
+APSS SHOULD install managed git hooks during `apss install`.
+
+Hook installation is controlled by `[tool.hooks]` in `apss.toml`:
+
+```toml
+[tool.hooks]
+pre_commit = true
+```
+
+`pre_commit` defaults to `true`. If `pre_commit = false`, or if the user
+passes an install-time skip flag such as `--no-hooks`, the installer MUST emit
+a clear warning that commit-time APSS validation is disabled. The warning is
+intentional because disabling hooks should be temporary and reserved for cases
+where validation blocks urgent refactoring or recovery work.
 
 For consumer repositories, the default pre-commit hook SHOULD run:
 

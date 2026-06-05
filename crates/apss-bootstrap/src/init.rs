@@ -33,6 +33,9 @@ pub fn run(args: InitArgs) -> i32 {
 
     content.push_str(&format!("name = \"{project_name}\"\n"));
     content.push_str("apss_version = \"v1\"\n");
+    content.push_str("\n[tool.hooks]\n");
+    content.push_str("# Keep pre-commit validation enabled unless it is temporarily blocking critical refactoring.\n");
+    content.push_str("pre_commit = true\n");
 
     // Add declared standards
     if !args.standards.is_empty() {
