@@ -44,10 +44,7 @@ fn assert_docs_defaults(docs: &documentation::config::DocsConfig) {
     assert!(!docs.backlinking.disable);
 
     assert!(!docs.north_star.disable);
-    assert_eq!(
-        docs.north_star.location,
-        expected.north_star.location
-    );
+    assert_eq!(docs.north_star.location, expected.north_star.location);
 
     assert!(!docs.retrospectives.disable);
     assert_eq!(
