@@ -50,6 +50,7 @@ edition = "2021"
 "#,
     )
     .unwrap();
+    fs::write(dir.join("README.md"), "# {{name}}\n").unwrap();
 
     fs::write(
         dir.join("src/lib.rs"),
@@ -104,6 +105,7 @@ edition = "2021"
 "#,
     )
     .unwrap();
+    fs::write(dir.join("README.md"), "# {{name}}\n").unwrap();
 
     fs::write(
         dir.join("src/lib.rs"),

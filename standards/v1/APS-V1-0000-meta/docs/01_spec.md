@@ -183,6 +183,7 @@ Every official standard and experimental standard MUST include:
 
 ```
 <package>/
+├── README.md            # Package index
 ├── docs/
 ├── examples/
 ├── tests/
@@ -199,6 +200,7 @@ Every substandard MUST include:
 
 ```
 <package>/
+├── README.md            # Package index
 ├── docs/                # MUST contain 01_spec.md
 └── src/                 # Rust source
 ```
@@ -603,6 +605,13 @@ Every package MUST have automated test coverage. Tests MAY be provided via eithe
 
 At least one of these forms MUST be present. CI MUST run these tests for all packages.
 
+### 11.3 Package README
+
+Every standard, substandard, and experiment MUST include a root `README.md`.
+The README is the package index shown by source hosting tools and MUST link
+to the package metadata file, `docs/01_spec.md`, examples when present, tests
+or test coverage notes, and install or validation guidance.
+
 ---
 
 ## 12. Agent Skills Namespace
@@ -776,6 +785,7 @@ See ADR 0001 (Versioning Strategy) for detailed semantics.
 ### Standards and Experiments
 
 - [ ] `standard.toml` or `experiment.toml` with valid schema
+- [ ] `README.md` package index
 - [ ] `docs/01_spec.md` (normative spec)
 - [ ] `examples/` with at least one example
 - [ ] Test coverage (integration tests in `tests/` or inline `#[cfg(test)]`)
@@ -786,6 +796,7 @@ See ADR 0001 (Versioning Strategy) for detailed semantics.
 ### Substandards
 
 - [ ] `substandard.toml` with valid schema and parent reference
+- [ ] `README.md` package index
 - [ ] `docs/01_spec.md` (specifies consumed/produced artifacts)
 - [ ] Test coverage (integration tests in `tests/` or inline `#[cfg(test)]`)
 - [ ] `Cargo.toml` and `src/lib.rs` (Rust crate)

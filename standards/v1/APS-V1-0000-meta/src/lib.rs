@@ -24,6 +24,7 @@ pub mod error_codes {
     pub const MISSING_CARGO_TOML: &str = "MISSING_CARGO_TOML";
     pub const MISSING_SPEC_DOC: &str = "MISSING_SPEC_DOC";
     pub const MISSING_LIB_RS: &str = "MISSING_LIB_RS";
+    pub const MISSING_README: &str = "MISSING_README";
 
     // Content validation errors
     pub const EMPTY_EXAMPLES_DIR: &str = "EMPTY_EXAMPLES_DIR";
@@ -159,6 +160,19 @@ impl MetaStandard {
                 )
                 .with_path(path.join("src/lib.rs"))
                 .with_hint("Create src/lib.rs with the Standard trait implementation"),
+            );
+        }
+
+        // Check for package README index
+        let readme_path = path.join("README.md");
+        if !readme_path.exists() {
+            diagnostics.push(
+                Diagnostic::error(
+                    MISSING_README,
+                    "Missing README.md: packages must provide a root index",
+                )
+                .with_path(&readme_path)
+                .with_hint("Create README.md linking metadata, specs, examples, tests, and install guidance"),
             );
         }
 
@@ -867,6 +881,7 @@ mod tests {
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
 
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# Test").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(pkg_dir.join("examples/example.toml"), "# example").unwrap();
@@ -960,6 +975,7 @@ maintainers = ["Test"]
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
 
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# GitHub Profile").unwrap();
         // Inline tests count as test coverage (§11.2)
         fs::write(
             pkg_dir.join("src/lib.rs"),
@@ -1093,6 +1109,7 @@ maintainers = ["Test"]
         fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# Test Experiment").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
@@ -1122,6 +1139,7 @@ maintainers = ["Test"]
         fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# Test Experiment").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(pkg_dir.join("tests/test_basic.rs"), "// test").unwrap();
@@ -1152,6 +1170,7 @@ maintainers = ["Test"]
         fs::create_dir_all(pkg_dir.join("agents/skills")).unwrap();
         fs::create_dir_all(pkg_dir.join("src")).unwrap();
         fs::write(pkg_dir.join("docs/01_spec.md"), "# Spec").unwrap();
+        fs::write(pkg_dir.join("README.md"), "# Test Experiment").unwrap();
         fs::write(pkg_dir.join("src/lib.rs"), "// lib").unwrap();
         fs::write(pkg_dir.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
         fs::write(pkg_dir.join("examples/example.toml"), "# ex").unwrap();

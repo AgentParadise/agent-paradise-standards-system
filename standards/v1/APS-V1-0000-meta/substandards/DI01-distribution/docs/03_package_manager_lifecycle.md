@@ -219,13 +219,24 @@ The external cache approach is preferred because it speeds repeated installs whi
 
 APSS MAY install managed git hooks during `apss install`.
 
-The default pre-commit hook SHOULD run:
+For consumer repositories, the default pre-commit hook SHOULD run:
 
 ```bash
 apss validate
 ```
 
 If global `apss` is unavailable, the hook MAY fall back to repo-local `.apss/bin/apss` for checks that the repo-local runtime can perform.
+
+For an APSS standards repository, the managed pre-commit hook MUST run the
+meta-standard and distribution validators before allowing a commit:
+
+```bash
+cargo run -p aps-cli --bin apss-dev -- v1 validate repo
+cargo run -p aps-cli --bin apss-dev -- v1 validate distribution
+```
+
+This ensures the meta-standard validates every discovered standard,
+substandard, and experiment, and DI01 validates distribution readiness.
 
 Hooks MUST be managed in a way that preserves user-authored hook content.
 
