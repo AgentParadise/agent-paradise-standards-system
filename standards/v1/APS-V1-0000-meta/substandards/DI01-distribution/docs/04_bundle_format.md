@@ -50,7 +50,7 @@ The notice MUST say:
 Managed by APSS. Do not edit this generated file directly.
 ```
 
-Operator-owned configuration files, including `apss.toml`, MUST NOT use that
+Operator-owned configuration files, including `APSS.yaml`, MUST NOT use that
 notice because they are expected to be manually edited.
 
 ## Manifest

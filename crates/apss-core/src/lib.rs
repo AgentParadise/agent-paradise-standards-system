@@ -11,7 +11,7 @@
 //! - [`promotion`] - Experiment to standard promotion workflow
 //! - [`views`] - Derived views generator (registry.json, INDEX.md)
 //! - [`versioning`] - Version management for packages
-//! - [`config`] - Project configuration parsing (`apss.toml`)
+//! - [`config`] - Project configuration parsing (`APSS.yaml`)
 //! - [`standard_config`] - Typed configuration contract for standards
 //! - [`resolution`] - Cascading configuration resolution for monorepos
 //! - [`lockfile`] - Lockfile types for reproducible installations

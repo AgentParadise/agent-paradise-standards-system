@@ -20,7 +20,7 @@ sections 3 (bootstrap binary), 4 (installation workflow), 5
 
 RFC 2119 keywords apply. The placeholder `<bootstrap>` is used in CLI
 examples while repo issue 64 (APS vs APSS naming) is open. References
-to `apss.toml` in `01_spec.md` are superseded by `apss.toml` per the
+to `APSS.yaml` in `01_spec.md` are superseded by `APSS.yaml` per the
 migration note attached to CF01 `01_spec.md`.
 
 ---
@@ -29,14 +29,14 @@ migration note attached to CF01 `01_spec.md`.
 
 Configuration, distribution, and installation are one system. DI01
 owns the distribution edge (resolve, lockfile, registry,
-publishing). CF01 owns the manifest edge (apss.toml, slug registry,
+publishing). CF01 owns the manifest edge (APSS.yaml, slug registry,
 contribution schemas). The unified installer is the glue that reads
 the CF01 manifest and drives both the DI01 resolve step and each
 standard's install contract.
 
 ```
 +------------------+  resolve  +----------------+  install  +------------------+
-| apss.toml (CF01) | --------> | apss.lock      | --------> | per-standard     |
+| APSS.yaml (CF01) | --------> | apss.lock      | --------> | per-standard     |
 | slug registry    |  (DI01)   | composed bin   |  (per-std | install contracts|
 | schemas (CF01)   |           | bootstrap CLI  |  contract)|                  |
 +------------------+           +----------------+           +------------------+
@@ -48,18 +48,18 @@ extensions to the bootstrap CLI that drive the unified flow.
 
 ---
 
-## 2. apss.toml as the Resolve Input
+## 2. APSS.yaml as the Resolve Input
 
 ### 2.1 What Resolution Reads
 
-DI01 resolution reads the following from apss.toml:
+DI01 resolution reads the following from APSS.yaml:
 
 - The declared set of standards (per CF01
   `06_unified_install_seam.md` §1).
 - Each standard's optional `version:` semver requirement (universal
   key from `03_contribution_schema.md` §3.1).
 - The cascade-merged `tool` and `workspace` sections (per
-  `01_spec.md` §4 as rewritten in the apss.toml migration).
+  `01_spec.md` §4 as rewritten in the APSS.yaml migration).
 
 Resolution MUST NOT read any standard-owned keys; those are opaque
 to DI01 and are passed through to the per-standard install contract
@@ -71,7 +71,7 @@ Resolution writes:
 
 - `apss.lock` updates per `01_spec.md` §5.
 - A resolved-config blob at `.apss/install/resolved.toml` whose schema
-  mirrors apss.toml but with version pins replaced by resolved
+  mirrors APSS.yaml but with version pins replaced by resolved
   versions. This blob is consumed by per-standard install contracts.
   It is gitignored.
 
@@ -128,7 +128,7 @@ deterministic and reproducible.
 
 ### 3.3 Uninstall on Removal
 
-When a standard is removed from apss.toml or set to `disable: true`,
+When a standard is removed from APSS.yaml or set to `disable: true`,
 the unified installer MUST call that standard's `uninstall()` using
 the persisted `InstallReport` from the previous run (stored at
 `.apss/install/<slug>.json`).
@@ -170,13 +170,13 @@ under the unified model.
 
 | Command | Status | Description |
 |---------|--------|-------------|
-| `<bootstrap> init` | REFINED | Creates `apss.toml` and an initial `.gitignore` block for `.apss/`. |
+| `<bootstrap> init` | REFINED | Creates `APSS.yaml` and an initial `.gitignore` block for `.apss/`. |
 | `<bootstrap> install` | REFINED | Drives the full resolve and install flow described in §3. |
 | `<bootstrap> install --locked` | REFINED | Resolve must produce no lockfile change; per-standard install still runs. |
 | `<bootstrap> install --offline` | REFINED | Resolve uses cached crates only; per-standard install still runs (per-standard contracts MUST be offline-safe). |
 | `<bootstrap> install --dry-run` | NEW | Runs resolve and computes per-standard install diffs, but writes nothing. Prints the diff. |
 | `<bootstrap> install --update <slug>` | REFINED | Updates one standard, runs only that standard's `update()`. |
-| `<bootstrap> uninstall <slug>` | NEW | Runs one standard's `uninstall()`. Equivalent to removing the slug from apss.toml and re-running install, but does not require an edit. |
+| `<bootstrap> uninstall <slug>` | NEW | Runs one standard's `uninstall()`. Equivalent to removing the slug from APSS.yaml and re-running install, but does not require an edit. |
 | `<bootstrap> status` | REFINED | Reports installed versions AND the persisted install reports per standard. |
 | `<bootstrap> validate` | REFINED | Delegates to CF01 per the validation delegation protocol. |
 | `<bootstrap> config show <slug>` | REFINED | Reads resolved config from `.apss/install/resolved.toml` so the output matches what the installer actually used. |
@@ -185,7 +185,7 @@ under the unified model.
 ### 4.2 Removed Surface
 
 `<bootstrap> install` no longer has the responsibility "make
-`apss.toml` exist if missing"; that was `<bootstrap> init`'s job and
+`APSS.yaml` exist if missing"; that was `<bootstrap> init`'s job and
 remains so. Likewise, `install` MUST NOT touch the slug registry
 artifact directly; it consumes the artifact (regenerated by
 `<bootstrap> v1 generate slug-registry` per
@@ -201,14 +201,14 @@ my manifest" failure mode.
 The lockfile schema in `01_spec.md` §5.2 is unchanged. It is repeated
 here only to record one addition: the lockfile MAY include a
 `manifest_checksum` field whose value is the SHA-256 of the parsed
-apss.toml (after cascade resolution). The installer MUST compare
-this checksum against the current apss.toml on every run; a mismatch
+APSS.yaml (after cascade resolution). The installer MUST compare
+this checksum against the current APSS.yaml on every run; a mismatch
 in `--locked` mode is `DI_LOCKFILE_MANIFEST_DRIFT` and exits with
 code 1.
 
 | Code | Severity | Rule |
 |------|----------|------|
-| `DI_LOCKFILE_MANIFEST_DRIFT` | Error | apss.toml has changed since apss.lock was written; in `--locked` mode this is a hard fail. |
+| `DI_LOCKFILE_MANIFEST_DRIFT` | Error | APSS.yaml has changed since apss.lock was written; in `--locked` mode this is a hard fail. |
 | `DI_INSTALL_REPORT_CORRUPT` | Error | `.apss/install/<slug>.json` cannot be read or fails schema validation. The installer falls back to a fresh install for that standard and emits this code as a warning at the second occurrence. |
 | `DI_OUTPUT_DRIFT` | Warning | A previously installed output's on-disk checksum differs from the recorded checksum (user edited the file). Uninstall preserves the file per CF01 §2.5. |
 
@@ -247,7 +247,7 @@ These extend `01_spec.md` §9.2's required-checks list.
 
 ```
 project-root/
-  apss.toml                       # manifest (CF01)
+  APSS.yaml                       # manifest (CF01)
   apss.lock                       # resolution output (DI01 §5)
   .apss/
     bin/
@@ -264,7 +264,7 @@ project-root/
 
 `.apss/` is for generated artifacts only, per brief decision 1.
 Nothing under `.apss/` is configuration; nothing under `.apss/` is
-checked into version control. `apss.toml` and `apss.lock` ARE
+checked into version control. `APSS.yaml` and `apss.lock` ARE
 checked in (per `01_spec.md` §7).
 
 The unified installer MUST add `.apss/` to `.gitignore` on
@@ -286,7 +286,7 @@ The unified installer MUST add `.apss/` to `.gitignore` on
 
 DI01 MUST NOT interpret per-standard configuration. CF01 MUST NOT
 own version resolution. Per-standard install contracts MUST NOT
-read apss.toml or apss.lock directly; they receive what they need
+read APSS.yaml or apss.lock directly; they receive what they need
 through `InstallContext`.
 
 ---

@@ -252,9 +252,9 @@ aps-validate-distribution:
     cargo run -p aps-cli --bin apss-dev -- v1 validate distribution
     @echo '{{ GREEN }}✓ Distribution validation complete{{ NORMAL }}'
 
-# Validate an apss.toml project configuration file (CF01)
+# Validate an APSS.yaml project configuration file (CF01)
 [group('aps')]
-aps-validate-config path="apss.toml":
+aps-validate-config path="APSS.yaml":
     @echo '{{ YELLOW }}Validating project config (CF01): {{ path }}...{{ NORMAL }}'
     cargo run -p aps-cli --bin apss-dev -- v1 validate config {{ path }}
     @echo '{{ GREEN }}✓ Config validation complete{{ NORMAL }}'

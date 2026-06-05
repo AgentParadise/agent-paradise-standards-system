@@ -8,7 +8,7 @@ Sibling normative spec to `01_spec.md`, `02_slug_registry.md`, and
 `03_contribution_schema.md`. Equal precedence under
 APS-V1-0000 §1.1.
 
-This document defines how apss.toml is validated end to end across the
+This document defines how APSS.yaml is validated end to end across the
 meta-validator and the per-standard validators.
 
 ## Terminology
@@ -19,13 +19,13 @@ RFC 2119 keywords apply.
 
 ## 1. The Three Roles
 
-apss.toml validation has three roles, deliberately separated so that
+APSS.yaml validation has three roles, deliberately separated so that
 each standard owns its own contract surface and the meta-standard
 does not become a god object:
 
 1. **Meta-validator (CF01).** Owns the file: opens it, parses TOML,
    resolves the workspace cascade (see `01_spec.md` §4 as rewritten
-   by the apss.toml migration), checks reserved keys and the slug
+   by the APSS.yaml migration), checks reserved keys and the slug
    registry. Then routes each registered slug to its owning validator.
 2. **Standard validator (per slug).** Owns one top-level key. Receives
    the parsed config object (already deserialized into the standard's
@@ -100,12 +100,12 @@ this check is a no-op for that standard.
 
 ### 3.1 What CF01 Hands Off
 
-For each registered slug present in apss.toml, CF01 passes the
+For each registered slug present in APSS.yaml, CF01 passes the
 following to the owning validator:
 
 ```rust
 pub struct DelegatedSection<'a> {
-    /// Path to the apss.toml that produced this section.
+    /// Path to the APSS.yaml that produced this section.
     pub source_path: &'a Path,
 
     /// Resolved cascade level: 0 = workspace root, n = nth child.
@@ -184,8 +184,8 @@ settings validated.
 
 The meta-standard's default-on philosophy (`01_spec.md` §5, brief
 binding decision 5) requires that any active standard works without
-needing an apss.toml section. The flip side is that any top-level
-key in apss.toml MUST be one of:
+needing an APSS.yaml section. The flip side is that any top-level
+key in APSS.yaml MUST be one of:
 
 - a reserved CF01 key (see `02_slug_registry.md` §3.2),
 - a registered slug from the generated registry.
@@ -194,12 +194,12 @@ Anything else is an error:
 
 | Code | Severity | Rule |
 |------|----------|------|
-| `CF_UNKNOWN_TOP_LEVEL_KEY` | Error | A top-level key in apss.toml is neither reserved nor a registered slug. Diagnostic MUST include the closest registered slug as a suggestion if edit distance is below 3. |
+| `CF_UNKNOWN_TOP_LEVEL_KEY` | Error | A top-level key in APSS.yaml is neither reserved nor a registered slug. Diagnostic MUST include the closest registered slug as a suggestion if edit distance is below 3. |
 | `CF_UNKNOWN_NESTED_KEY` | Error | A key inside a registered section is not in that section's contribution schema (`additionalProperties: false`). |
 | `CF_UNKNOWN_SUBSTANDARD_KEY` | Error | A nested key under a registered slug claims to be a substandard but no substandard with that slug exists for the parent standard. |
 
 This is deliberate: unknown-key permissiveness is what makes config
-files rot over decades. apss.toml errors loudly on the first run after
+files rot over decades. APSS.yaml errors loudly on the first run after
 a typo is introduced.
 
 The `--allow-unknown-keys` flag MUST NOT exist. Migration paths for
@@ -210,7 +210,7 @@ emitted from `validate()`, not by relaxing the meta-validator.
 
 ## 5. Disabled and Missing Sections
 
-| State | apss.toml | Behavior |
+| State | APSS.yaml | Behavior |
 |-------|-----------|----------|
 | Active, default config | section absent | Standard runs with `Default` config. |
 | Active, overridden | section present, no `disable` | Standard runs with section merged onto `Default`. |
@@ -219,7 +219,7 @@ emitted from `validate()`, not by relaxing the meta-validator.
 
 Section presence is never required. The meta-validator MUST NOT
 emit `CF_EMPTY_STANDARDS` or any similar diagnostic just because
-apss.toml has no sections for active standards: that is the
+APSS.yaml has no sections for active standards: that is the
 expected state for greenfield projects.
 
 ---
@@ -230,7 +230,7 @@ The CF01 validation delegation is exposed at the CLI through:
 
 ```
 <bootstrap> v1 validate                # full repo + project pass
-<bootstrap> v1 validate --project      # only apss.toml + sections
+<bootstrap> v1 validate --project      # only APSS.yaml + sections
 <bootstrap> v1 validate --slug <slug>  # only one section, useful for editor LSPs
 ```
 
@@ -266,10 +266,10 @@ unchanged at steps 6 and 7 respectively.
 
 ## 8. Worked Example
 
-Consumer apss.toml:
+Consumer APSS.yaml:
 
-```toml
-schema: apss.config/v1
+```yaml
+schema: apss.project/v1
 
 project:
   name: my-service

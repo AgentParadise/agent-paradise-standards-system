@@ -1,7 +1,7 @@
 //! Typed configuration contract for APS standards.
 //!
 //! Standards that accept runtime configuration via `[standards.<slug>.config]`
-//! in `apss.toml` MUST implement the [`StandardConfig`] trait. Standards that
+//! in `APSS.yaml` MUST implement the [`StandardConfig`] trait. Standards that
 //! accept no configuration MUST use the [`NoConfig`] marker type.
 //!
 //! See meta-standard §8.3 for the normative specification.

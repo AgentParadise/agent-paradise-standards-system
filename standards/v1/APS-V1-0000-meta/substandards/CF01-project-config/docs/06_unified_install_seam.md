@@ -11,7 +11,7 @@ This document specifies the CF01 side of the unified installer
 introduced by Addendum 1 of the operator brief (2026-06-04 22:47):
 
 > The unification extends to THREE concerns, not two: configuration
-> plus distribution plus installation are one system. apss.toml is
+> plus distribution plus installation are one system. APSS.yaml is
 > the MANIFEST, not just settings.
 
 DI01 owns the resolve and publish ends; CF01 owns the manifest;
@@ -25,16 +25,16 @@ examples while repo issue 64 (APS vs APSS naming) is open.
 
 ---
 
-## 1. apss.toml as Manifest
+## 1. APSS.yaml as Manifest
 
-apss.toml plays the role of an npm `package.json`'s `dependencies`
+APSS.yaml plays the role of an npm `package.json`'s `dependencies`
 field for the APSS ecosystem. CF01 owns the manifest surface; DI01
 owns version resolution and lockfile production.
 
 The manifest is the union of:
 
 1. **Activation declarations.** Every standard whose slug appears as
-   a key in apss.toml (active or disabled) is part of the project's
+   a key in APSS.yaml (active or disabled) is part of the project's
    declared set. Active standards that have no section are still in
    the declared set: the default-on philosophy (`01_spec.md` §5)
    means active membership is inferred from the resolved standards
@@ -47,10 +47,10 @@ The manifest is the union of:
 How the "declared set" is computed is intentionally explicit:
 
 ```
-declared_set = explicit_keys(apss.toml) UNION baseline_active_set
+declared_set = explicit_keys(APSS.yaml) UNION baseline_active_set
 ```
 
-`explicit_keys(apss.toml)` is the set of registered slugs present as
+`explicit_keys(APSS.yaml)` is the set of registered slugs present as
 top-level keys (excluding reserved CF01 keys). `baseline_active_set`
 is the set of standards a project ships with by default; for the
 APSS standards repository it equals the set of all standards
@@ -61,7 +61,7 @@ MUST list every standard the project adopts.
 For an external consumer project (not the APSS repo itself):
 
 - A standard is active if and only if its slug appears as a top-level
-  key in apss.toml AND that section is not `disable: true`.
+  key in APSS.yaml AND that section is not `disable: true`.
 - A substandard is active if its parent is active AND the substandard
   section is not `disable: true`.
 
@@ -69,7 +69,7 @@ For the APSS standards repository:
 
 - Every shipped standard is active by default (so meta-validation
   always runs across the whole tree).
-- apss.toml in the APSS repo MAY exist but is not required; if
+- APSS.yaml in the APSS repo MAY exist but is not required; if
   present, sections override defaults.
 
 This split is the resolution of an apparent contradiction in
@@ -82,7 +82,7 @@ itself opts in to everything.
 
 ### 2.1 Purpose
 
-A single installer command reads apss.toml and installs (or updates,
+A single installer command reads APSS.yaml and installs (or updates,
 or uninstalls) every active standard's installable artifacts. The
 brief calls this `apss install`; CF01 specs it as the unified
 installer regardless of the final binary name.
@@ -91,7 +91,7 @@ installer regardless of the final binary name.
 
 The installer consumes:
 
-- apss.toml (the manifest, owned by CF01),
+- APSS.yaml (the manifest, owned by CF01),
 - apss.lock if present (owned by DI01),
 - the local on-disk copies of standard crates (or the registry, per
   DI01 §2),
@@ -110,14 +110,14 @@ The installer produces:
 ### 2.4 Idempotency
 
 The installer MUST be idempotent. Running it twice with the same
-apss.toml and the same standard versions MUST produce the same
+APSS.yaml and the same standard versions MUST produce the same
 filesystem state (modulo timestamps that are not under version
 control). Per-standard install contracts MUST also be idempotent;
 see §3.2.
 
 ### 2.5 Uninstall on Removal
 
-Removing a standard from apss.toml and re-running the installer MUST
+Removing a standard from APSS.yaml and re-running the installer MUST
 uninstall that standard's hooks and scaffolds cleanly. "Cleanly"
 means:
 
@@ -130,14 +130,14 @@ means:
   preserved otherwise (with a warning).
 
 Disabling a standard via `disable: true` MUST have the same
-uninstall semantics as removing it from apss.toml. The two paths
+uninstall semantics as removing it from APSS.yaml. The two paths
 exist so that consumers have a discoverable way to record "we
 deliberately do not use docs" in their manifest.
 
 ### 2.6 CLI Surface
 
 ```
-<bootstrap> install                 # primary path; reads apss.toml
+<bootstrap> install                 # primary path; reads APSS.yaml
 <bootstrap> install --locked        # CI mode; fail if apss.lock changes
 <bootstrap> install --offline       # use only cached crates
 <bootstrap> install --dry-run       # print what would happen, no writes
@@ -145,7 +145,7 @@ deliberately do not use docs" in their manifest.
 ```
 
 DI01 §3.2 already lists these commands. CF01 re-states them here to
-emphasize that they are driven by apss.toml, and that the manifest
+emphasize that they are driven by APSS.yaml, and that the manifest
 is the sole declarative input.
 
 `<bootstrap> run <slug> <cmd>` (DI01 §3.3) remains the escape hatch for
@@ -183,14 +183,14 @@ A standard's install contract MUST specify:
 1. **Install steps.** The actions the unified installer performs
    when this standard transitions from absent to present, or when its
    version changes. Steps MUST be deterministic given the
-   `StandardConfig` resolved from apss.toml.
+   `StandardConfig` resolved from APSS.yaml.
 2. **Uninstall steps.** The actions performed when the standard
    transitions from present to absent (removed from manifest or
    `disable: true`). MUST undo §1 cleanly per §2.5.
 3. **Update steps.** What changes between two installed versions of
    the same standard. MAY default to "uninstall + install" if the
    standard has no incremental update story.
-4. **Inputs read.** What the install contract reads from apss.toml.
+4. **Inputs read.** What the install contract reads from APSS.yaml.
    Typically a subset of the standard's contribution schema.
 5. **Outputs written.** Every file path the install contract creates
    or modifies. Required so the uninstall step is auditable.
@@ -267,7 +267,7 @@ The unified installer's run is split into two stages with a clear seam:
 +--------+   +------------+   +-----------+
 ```
 
-1. **Resolve (DI01).** Read apss.toml. Resolve standard versions
+1. **Resolve (DI01).** Read APSS.yaml. Resolve standard versions
    against the registry and the existing apss.lock. Apply
    `--locked` if set. Write apss.lock if changes are allowed.
 2. **Install (per-standard).** For each active standard in the
@@ -308,7 +308,7 @@ explicit. Here it is:
 | Concern | Owner | Surface |
 |---------|-------|---------|
 | Where standards come from (vendoring, registry, pinning) | DI01 | `apss.lock`, `[source]` resolution, registry config |
-| What standards are active and how they are configured | CF01 | apss.toml manifest, contribution schemas |
+| What standards are active and how they are configured | CF01 | APSS.yaml manifest, contribution schemas |
 | How each standard installs its hooks and scaffolds | per-standard | `docs/02_install_contract.md`, `Installable` trait |
 | Orchestration: resolve then install | unified installer | the `<bootstrap> install` command, owned by DI01 §3 with manifest semantics owned by CF01 |
 
@@ -322,14 +322,14 @@ already-resolved versions through the `InstallContext`.
 ## 6. Migration Path
 
 The migration window from EXP-V1-0004's `.apss/config.toml` to the
-single `apss.toml` manifest is specified in the migration note attached
+single `APSS.yaml` manifest is specified in the migration note attached
 to `01_spec.md`. Per brief decision 1, the `.apss/` dotdir is retained
 for generated artifacts (lockfile resolution outputs, install reports)
 but is never configuration.
 
 External consumers MAY use a shim during the window: if `.apss/config.toml`
 exists, the installer MUST report the legacy generated-directory config and
-require the consumer to move that content into `apss.toml`.
+require the consumer to move that content into `APSS.yaml`.
 
 | Code | Severity | Rule |
 |------|----------|------|

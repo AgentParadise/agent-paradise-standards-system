@@ -364,10 +364,10 @@ pub trait StandardCli: Send + Sync {
         vec![self.slug()]
     }
 
-    /// Receive project-specific configuration from `apss.toml`.
+    /// Receive project-specific configuration from `APSS.yaml`.
     ///
     /// Called before `execute()` when running in a project context.
-    /// The `config` value corresponds to `[standards.<slug>.config]` from `apss.toml`,
+    /// The `config` value corresponds to `[standards.<slug>.config]` from `APSS.yaml`,
     /// already validated against the standard's `StandardConfig` type.
     ///
     /// # Default

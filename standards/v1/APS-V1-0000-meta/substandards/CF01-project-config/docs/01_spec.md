@@ -23,11 +23,11 @@ section, with validation delegated to each standard's own validator.
 
 Concretely, CF01 defines:
 
-- The `apss.toml` manifest at the project root, its schema identifier, and its
+- The `APSS.yaml` manifest at the project root, its schema identifier, and its
   top-level structure.
 - The core sections owned by CF01: project identity, the standards list, the
   workspace declaration, and the tool block.
-- Cascading rules for nested `apss.toml` files in monorepos.
+- Cascading rules for nested `APSS.yaml` files in monorepos.
 - A slug registry that every standard in the ecosystem registers into, and the
   meta-validation rules over that registry (Section 3, owned by the registry
   work block).
@@ -54,20 +54,20 @@ and it is the file the installer reads to materialize that intent on disk.
 
 ---
 
-## 2. The `apss.toml` Manifest
+## 2. The `APSS.yaml` Manifest
 
 ### 2.1 Filename and Location
 
-A consumer project MUST place its configuration at `apss.toml` in the project
+A consumer project MUST place its configuration at `APSS.yaml` in the project
 root.
 
-- The file MUST be valid TOML as parsed by the Rust `toml` crate.
-- The extension MUST be `.toml`.
+- The file MUST be valid YAML as parsed by the Rust `serde_yaml` crate.
+- The extension MUST be `.yaml`.
 - The file MUST live at the project root, defined as the directory containing
   the project's version control root (`git rev-parse --show-toplevel`) or,
   when no VCS root is available, the directory in which the operator invokes
   the bootstrap CLI.
-- A project MAY add nested `apss.toml` files inside workspace members. Their
+- A project MAY add nested `APSS.yaml` files inside workspace members. Their
   semantics are defined in Section 4.
 
 The `.apss/` dot directory is reserved for GENERATED artifacts (resolved
@@ -77,10 +77,7 @@ MUST NOT live under `.apss/`. Tooling MUST refuse to read configuration from
 
 ### 2.2 Schema Identifier
 
-The top-level `schema` key MUST be the literal string `apss.config/v1`.
-
-This identifier replaces the prior `apss.project/v1` identifier; see
-Section 9 for the migration rules.
+The top-level `schema` key MUST be the literal string `apss.project/v1`.
 
 ### 2.3 Top-level Structure
 
@@ -93,27 +90,27 @@ The manifest has two kinds of top-level keys:
    a unique slug in the slug registry (Section 3), and the value of that slug
    key holds the standard's configuration for this project.
 
-```toml
-schema = "apss.project/v1"
+```yaml
+schema: apss.project/v1
 
-[project]
-name = "my-service"
-apss_version = "v1"
+project:
+  name: my-service
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0, <2.0.0"
-substandards = ["RS01", "CI01"]
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0, <2.0.0"
+    substandards: ["RS01", "CI01"]
+    config:
+      output_dir: .topology
+      languages: ["rust", "python"]
 
-[standards.code-topology.config]
-output_dir = ".topology"
-languages = ["rust", "python"]
+workspace:
+  members: ["packages/*"]
 
-[workspace]
-members = ["packages/*"]
-
-[tool]
-bin_dir = ".apss/bin"
+tool:
+  bin_dir: .apss/bin
 ```
 
 Every top-level key MUST be either a core key listed above or a slug
@@ -123,10 +120,10 @@ catches this).
 
 ### 2.4 Core Section: `project`
 
-```toml
+```yaml
 project:
-  name: "my-service"      # REQUIRED. Non-empty string.
-  apss_version: "v1"      # REQUIRED. APSS major version.
+  name: my-service      # REQUIRED. Non-empty string.
+  apss_version: v1      # REQUIRED. APSS major version.
 ```
 
 Rules:
@@ -140,7 +137,7 @@ Rules:
 `standards` is a mapping from slug to a per-standard activation entry. The
 slug MUST be one registered in the slug registry (Section 3).
 
-```toml
+```yaml
 standards:
   docs:
     id: "EXP-V1-0004"             # REQUIRED. Standard or experiment ID.
@@ -160,6 +157,9 @@ Field rules:
 - `version` MUST be a valid SemVer requirement.
 - Each `id` MUST appear under at most one slug. Two slugs pointing at the
   same standard ID MUST be rejected as `CF_DUPLICATE_STANDARD_ID`.
+- An `EXP-V1-\d{4}` entry explicitly opts the project into enforcing an
+  experimental standard. Experiments MUST NOT be installed, validated, or
+  enforced unless they are declared in `APSS.yaml`.
 - `enabled: false` keeps the entry in the manifest but disables the standard
   for this project. The unified installer (Section 8) MUST uninstall the
   standard's artifacts cleanly when this flag flips to false.
@@ -177,7 +177,7 @@ live here; it lives in the top-level slug key (Section 2.7 below).
 `workspace` declares this manifest as the root of a monorepo cascade. Its
 presence triggers the discovery and merge rules in Section 4.
 
-```toml
+```yaml
 workspace:
   members: ["packages/*"]          # OPTIONAL. Glob patterns for child configs.
   exclude: ["packages/legacy-*"]   # OPTIONAL. Glob patterns to exclude.
@@ -185,21 +185,21 @@ workspace:
 
 Rules:
 
-- `workspace` MUST NOT appear in a child `apss.toml`. A manifest with
+- `workspace` MUST NOT appear in a child `APSS.yaml`. A manifest with
   `workspace` is by definition a root manifest.
 - `members` patterns MUST resolve to directories that contain an
-  `apss.toml`. A pattern that matches no directory MUST raise
+  `APSS.yaml`. A pattern that matches no directory MUST raise
   `CF_EMPTY_WORKSPACE_GLOB` as a warning.
 
 ### 2.7 Standard Sections (slug keys)
 
 Each active standard contributes ONE top-level section keyed by its slug. The
-value is owned by the standard; CF01 treats it as opaque TOML during parsing
+value is owned by the standard; CF01 treats it as opaque YAML during parsing
 and hands it to the standard's validator (Section 6).
 
 Default-on philosophy:
 
-- An active standard requires NO section in `apss.toml`. Defaults from the
+- An active standard requires NO section in `APSS.yaml`. Defaults from the
   standard's contributed schema apply.
 - A section exists only to OVERRIDE a default or to DISABLE a feature.
 - The `disable: false` flag is the convention for opt-out, both at the top of
@@ -213,7 +213,7 @@ Snake case rule:
 Example (taken from the EXP-V1-0004 docs section after the re-home in commit
 `1784797`):
 
-```toml
+```yaml
 docs:
   disable: false
   root: "docs"
@@ -233,7 +233,7 @@ docs:
 `tool` carries preferences for the bootstrap CLI and supporting tooling.
 Every key is optional with documented defaults.
 
-```toml
+```yaml
 tool:
   bin_dir: ".apss/bin"             # OPTIONAL. Default: ".apss/bin".
   registry: "https://crates.io"   # OPTIONAL. Default: crates.io.
@@ -265,13 +265,13 @@ rules that enforce uniqueness and completeness across `standards/` and
 To resolve the active configuration for a given working directory, tooling
 MUST:
 
-1. Walk upward from the working directory looking for an `apss.toml`
+1. Walk upward from the working directory looking for an `APSS.yaml`
    containing a `workspace` key. The first such file is the **root
    manifest**.
-2. While walking, every `apss.toml` without a `workspace` key encountered
+2. While walking, every `APSS.yaml` without a `workspace` key encountered
    between the working directory and the root manifest is a **child
    manifest**, in deepest-to-shallowest order.
-3. If no manifest with a `workspace` key is found, the closest `apss.toml`
+3. If no manifest with a `workspace` key is found, the closest `APSS.yaml`
    to the working directory is the root manifest and there are no child
    manifests.
 
@@ -334,7 +334,7 @@ Each standard ships a contribution schema that declares its slug, the keys
 it accepts under that slug, their types, defaults, and merge semantics for
 the cascade. The normative definition of the contribution schema lives in
 the sibling spec `03_contribution_schema.md`, which has equal precedence
-with this document. CF01 treats each standard section as opaque TOML and
+with this document. CF01 treats each standard section as opaque YAML and
 defers to the contribution schema for typing, defaulting, and merge.
 
 ---
@@ -365,11 +365,11 @@ disable-inheritance matrix, and worked examples live in the sibling spec
 ## 8. Manifest-Driven Installation (Summary)
 
 The operator-approved Addendum 1 of the unified-config brief makes
-configuration, distribution, and installation a single system. `apss.toml`
+configuration, distribution, and installation a single system. `APSS.yaml`
 is the manifest, the unified installer is the glue, and each active
 standard ships an install contract that the installer invokes.
 
-The npm-style model is the binding analogy: `apss.toml` is to APSS what
+The npm-style model is the binding analogy: `APSS.yaml` is to APSS what
 `package.json` is to npm. The `standards` map (Section 2.5) is the
 dependency declaration; one install command reads the manifest, resolves
 versions via DI01, then drives each per-standard install contract; removing
@@ -399,12 +399,40 @@ The canonical binary name is being resolved separately in repo issue 64
 (APS vs APSS). This spec uses `<bootstrap>` (or the term "the unified
 installer") wherever the binary name can be avoided.
 
+### 8.1 Experimental Standards and Promotion Aliases
+
+Consumer manifests MAY declare experimental standards by using an
+`EXP-V1-XXXX` ID in `standards.<slug>.id`. This is explicit opt-in:
+experimental standards are not part of the default baseline.
+
+If a declared experiment has been promoted to an official standard, CF01 and
+DI01 MUST treat the promotion as a compatibility alias:
+
+1. CF01 accepts the `EXP-V1-XXXX` ID as valid manifest input.
+2. DI01 resolves the alias to the promoted `APS-V1-XXXX` package.
+3. The installer emits a warning diagnostic that names both IDs and the
+   replacement slug.
+4. The lockfile records the resolved official ID and SHOULD retain the
+   original requested ID for auditability.
+5. The project continues to validate using the promoted standard without a
+   manual manifest edit.
+
+The warning SHOULD recommend updating `APSS.yaml` from the experimental ID to
+the official ID. It MUST NOT silently rewrite operator-owned configuration
+without an explicit command or flag.
+
+Promotion aliases MUST preserve the prior experiment's config schema for at
+least one compatible official release, or ship a migration adapter that
+translates the experimental config into the promoted standard's config. If
+neither is possible, the alias MUST produce an error with a migration path
+instead of silently dropping enforcement.
+
 ---
 
 ## 9. Migration from legacy split configuration
 
 The prior project model used `apss.toml` for activation and allowed some
-per-standard configuration under `.apss/config.toml`. CF01 keeps `apss.toml`
+per-standard configuration under `.apss/config.toml`. CF01 keeps `APSS.yaml`
 as the user-owned manifest and forbids user-authored configuration under
 `.apss/`.
 
@@ -412,60 +440,59 @@ as the user-owned manifest and forbids user-authored configuration under
 
 | Concern | Before | After |
 |---------|--------|-------|
-| File location | `apss.toml` and `.apss/config.toml` | `apss.toml` |
-| Serialisation | TOML | TOML |
+| File location | `apss.toml` and `.apss/config.toml` | `APSS.yaml` |
+| Serialisation | TOML | YAML |
 | Schema identifier | `apss.project/v1` | `apss.project/v1` |
 | Configuration in `.apss/` | Allowed (EXP-V1-0004) | Forbidden, dotdir is for generated artifacts only |
-| Per-standard configuration | Split across files | `[standards.<slug>.config]` table |
+| Per-standard configuration | Split across files | `standards.<slug>.config` mapping |
 | Substandard configuration | Implicit, varied | `substandards` list plus standard-owned config keys |
 
 ### 9.2 Top-level mapping
 
-The current single-file TOML shape is:
+The current single-file YAML shape is:
 
-```toml
-schema = "apss.project/v1"
+```yaml
+schema: apss.project/v1
 
-[project]
-name = "my-service"
-apss_version = "v1"
+project:
+  name: my-service
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0, <2.0.0"
-enabled = true
-substandards = ["RS01", "CI01"]
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0, <2.0.0"
+    enabled: true
+    substandards: ["RS01", "CI01"]
+    config:
+      output_dir: .topology
+      languages: ["rust"]
 
-[standards.code-topology.config]
-output_dir = ".topology"
-languages = ["rust"]
+workspace:
+  members: ["packages/*"]
+  exclude: ["packages/legacy-*"]
 
-[workspace]
-members = ["packages/*"]
-exclude = ["packages/legacy-*"]
-
-[tool]
-bin_dir = ".apss/bin"
-registry = "https://crates.io"
-offline = false
-log_level = "warn"
-
-[tool.hooks]
-pre_commit = true
+tool:
+  bin_dir: .apss/bin
+  registry: https://crates.io
+  offline: false
+  log_level: warn
+  hooks:
+    pre_commit: true
 ```
 
-Every previously valid `apss.toml` activation field remains in `apss.toml`;
+Every previously valid `apss.toml` activation field moves into `APSS.yaml`;
 only configuration stored under `.apss/` moves into the manifest.
 
 ### 9.2.1 Tool hook settings
 
-`[tool.hooks]` controls APSS-managed local enforcement hooks.
+`tool.hooks` controls APSS-managed local enforcement hooks.
 
 | Key | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `pre_commit` | bool | `true` | Installs or updates the managed pre-commit hook during `apss install`. |
 
-`pre_commit = false` is an explicit local escape hatch. Installers MUST emit
+`pre_commit: false` is an explicit local escape hatch. Installers MUST emit
 a clear warning when it disables hook installation because commit-time APSS
 validation will not run until the setting is re-enabled or hooks are installed
 another way.
@@ -474,11 +501,11 @@ another way.
 
 Tooling MUST behave as follows during the transition window:
 
-- If `apss.toml` exists: load it normally.
+- If `APSS.yaml` exists: load it normally.
 - If only `.apss/config.toml` exists: emit `CF_LEGACY_APSS_CONFIG_TOML` at
   error severity with the same hint. Tooling MUST NOT read configuration
   from `.apss/`.
-- If both `apss.toml` and `.apss/config.toml` exist: load `apss.toml` and
+- If both `APSS.yaml` and `.apss/config.toml` exist: load `APSS.yaml` and
   emit `CF_LEGACY_APSS_CONFIG_TOML` for the generated-directory config.
 - A future major version of APSS MAY remove the legacy diagnostics and
   refuse to start when a legacy file is present. The diagnostics are the
@@ -488,10 +515,10 @@ Tooling MUST behave as follows during the transition window:
 
 The recommended manual conversion is:
 
-1. Keep `apss.toml` as the project manifest.
-2. Keep or set `schema = "apss.project/v1"`.
+1. Keep `APSS.yaml` as the project manifest.
+2. Keep or set `schema: apss.project/v1`.
 3. Move keys from `.apss/config.toml` into the appropriate
-   `[standards.<slug>.config]` table in `apss.toml`.
+   `standards.<slug>.config` mapping in `APSS.yaml`.
 4. Delete `.apss/config.toml`.
 5. Re-run the unified installer to refresh `apss.lock` and the composed
    binary.
@@ -501,7 +528,7 @@ a fast-follow; the converter is out of scope for this spec.
 
 ### 9.5 Spec-internal compatibility
 
-The authoritative project configuration file for this PR is `apss.toml`.
+The authoritative project configuration file for this PR is `APSS.yaml`.
 
 ---
 
@@ -540,13 +567,15 @@ parsing and core sections.
 | `CF_LEGACY_APSS_CONFIG_TOML` | Error | Legacy `.apss/config.toml` present; see Section 9. |
 | `CF_LEGACY_APSS_TOML` | Error | Legacy `apss.toml` present; see Section 9. |
 | `CF_MISSING_PROJECT_NAME` | Error | `project.name` missing or empty. |
-| `CF_MISSING_SCHEMA` | Error | Top-level `schema` not equal to `apss.config/v1`. |
+| `CF_MISSING_SCHEMA` | Error | Top-level `schema` not equal to `apss.project/v1`. |
 | `CF_MISSING_STANDARD_ID` | Error | Standards entry without `id`. |
 | `CF_MISSING_VERSION_REQ` | Error | Standards entry without `version`. |
 | `CF_SCHEMA_MISMATCH` | Error | Cascade child uses a different `schema` than the root. |
 | `CF_UNKNOWN_TOP_LEVEL_KEY` | Error | Top-level key is neither a core key nor a registered slug. |
 | `CF_VERSION_RANGE_CONFLICT` | Error | Empty intersection between root and child version ranges. |
 | `CF_WORKSPACE_IN_CHILD` | Error | `workspace` key present in a child manifest. |
+| `CF_EXPERIMENT_DECLARED` | Warning | Manifest declares an experimental standard; enforcement is enabled by explicit opt-in. |
+| `CF_EXPERIMENT_PROMOTED` | Warning | Manifest declares an experiment that DI01 resolved through a promoted-standard alias. |
 
 <!-- Codes for the slug registry, contribution schema, validation
 delegation, substandard nesting, install seam, and QA checks are owned

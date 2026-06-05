@@ -19,23 +19,23 @@ fn test_init_creates_expected_layout() {
         .expect("failed to invoke apss init");
     assert!(status.success(), "apss init exited non-zero: {status}");
 
-    // apss.toml exists and contains expected fields
-    let apss_toml = std::fs::read_to_string(temp.path().join("apss.toml")).unwrap();
+    // APSS.yaml exists and contains expected fields
+    let apss_yaml = std::fs::read_to_string(temp.path().join("APSS.yaml")).unwrap();
     assert!(
-        apss_toml.contains("schema = \"apss.project/v1\""),
-        "missing schema line:\n{apss_toml}"
+        apss_yaml.contains("schema: apss.project/v1"),
+        "missing schema line:\n{apss_yaml}"
     );
     assert!(
-        apss_toml.contains("apss_version = \"v1\""),
-        "missing apss_version line:\n{apss_toml}"
+        apss_yaml.contains("apss_version: v1"),
+        "missing apss_version line:\n{apss_yaml}"
     );
     assert!(
-        apss_toml.contains("[tool.hooks]"),
-        "missing [tool.hooks] section:\n{apss_toml}"
+        apss_yaml.contains("hooks:"),
+        "missing hooks section:\n{apss_yaml}"
     );
     assert!(
-        apss_toml.contains("pre_commit = true"),
-        "missing default pre_commit hook setting:\n{apss_toml}"
+        apss_yaml.contains("pre_commit: true"),
+        "missing default pre_commit hook setting:\n{apss_yaml}"
     );
 
     // .apss/bin is generated; .apss/config is intentionally not created
@@ -89,17 +89,17 @@ fn test_init_with_standard_flag() {
         .expect("failed to invoke apss init --standard");
     assert!(status.success(), "apss init exited non-zero: {status}");
 
-    let apss_toml = std::fs::read_to_string(temp.path().join("apss.toml")).unwrap();
+    let apss_yaml = std::fs::read_to_string(temp.path().join("APSS.yaml")).unwrap();
     assert!(
-        apss_toml.contains("[standards.code-topology]"),
-        "missing [standards.code-topology] section:\n{apss_toml}"
+        apss_yaml.contains("  code-topology:"),
+        "missing standards.code-topology section:\n{apss_yaml}"
     );
     assert!(
-        apss_toml.contains("version = \">=1.0.0\""),
-        "missing version requirement:\n{apss_toml}"
+        apss_yaml.contains("version: \">=1.0.0\""),
+        "missing version requirement:\n{apss_yaml}"
     );
     assert!(
-        apss_toml.contains("FIXME"),
-        "missing FIXME placeholder hint for standard id:\n{apss_toml}"
+        apss_yaml.contains("FIXME"),
+        "missing FIXME placeholder hint for standard id:\n{apss_yaml}"
     );
 }

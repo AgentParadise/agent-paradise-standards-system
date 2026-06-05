@@ -1,6 +1,6 @@
 //! Cascading configuration resolution for monorepos.
 //!
-//! When a project uses workspace-style `apss.toml` files, child configs
+//! When a project uses workspace-style `APSS.yaml` files, child configs
 //! inherit from and override the root config. This module handles the
 //! merge logic and version resolution.
 //!
@@ -34,8 +34,8 @@ pub enum ResolutionError {
         child_path: PathBuf,
     },
 
-    /// Child config contains a [workspace] section.
-    #[error("child config {path} must not contain [workspace] section")]
+    /// Child config contains a workspace section.
+    #[error("child config {path} must not contain workspace section")]
     WorkspaceInChild { path: PathBuf },
 
     /// Version range conflict between root and child.
@@ -56,7 +56,7 @@ pub enum ResolutionError {
 /// A fully resolved project configuration after cascading merge.
 #[derive(Debug, Clone)]
 pub struct ResolvedProjectConfig {
-    /// Project identity (from the nearest `apss.toml`).
+    /// Project identity (from the nearest `APSS.yaml`).
     pub project: ProjectInfo,
 
     /// Resolved standards with merged config.
@@ -65,7 +65,7 @@ pub struct ResolvedProjectConfig {
     /// Resolved tool configuration.
     pub tool: ToolConfig,
 
-    /// Which `apss.toml` files contributed to this resolution.
+    /// Which `APSS.yaml` files contributed to this resolution.
     pub source_files: Vec<PathBuf>,
 }
 
@@ -98,7 +98,7 @@ pub struct ResolvedStandard {
 // Resolution Logic
 // ============================================================================
 
-/// Resolve a project configuration from a single `apss.toml` (no cascading).
+/// Resolve a project configuration from a single `APSS.yaml` (no cascading).
 pub fn resolve_single(config: ProjectConfig, source: PathBuf) -> ResolvedProjectConfig {
     let standards = config
         .standards
@@ -131,12 +131,12 @@ pub fn resolve_single(config: ProjectConfig, source: PathBuf) -> ResolvedProject
 /// ## Cascading Rules
 ///
 /// - Child `apss_version` MUST match root (error if different)
-/// - Child MUST NOT contain `[workspace]` (error if present)
+/// - Child MUST NOT contain `workspace` (error if present)
 /// - Standards present only in root: inherited as-is
 /// - Standards present only in child: added
 /// - Standards present in both: child's entry fully replaces root's (no deep merge)
 /// - `enabled = false` in child disables that standard for this member only
-/// - `[tool]` fields from child override root's individual fields
+/// - `tool` fields from child override root's individual fields
 pub fn merge_configs(
     root: &ProjectConfig,
     root_path: &Path,
@@ -152,7 +152,7 @@ pub fn merge_configs(
         });
     }
 
-    // Validate: child must not have [workspace]
+    // Validate: child must not have workspace
     if child.workspace.is_some() {
         return Err(ResolutionError::WorkspaceInChild {
             path: child_path.to_path_buf(),
@@ -268,43 +268,43 @@ mod tests {
     use super::*;
 
     fn minimal_root() -> ProjectConfig {
-        toml::from_str(
+        serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
+schema: apss.project/v1
 
-[project]
-name = "root"
-apss_version = "v1"
+project:
+  name: root
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
+    config:
+      output_dir: .topology
 
-[standards.code-topology.config]
-output_dir = ".topology"
-
-[workspace]
-members = ["packages/*"]
+workspace:
+  members: ["packages/*"]
 "#,
         )
         .unwrap()
     }
 
     fn minimal_child() -> ProjectConfig {
-        toml::from_str(
+        serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
+schema: apss.project/v1
 
-[project]
-name = "child-pkg"
-apss_version = "v1"
+project:
+  name: child-pkg
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0, <2.0.0"
-
-[standards.code-topology.config]
-output_dir = ".custom-topology"
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0, <2.0.0"
+    config:
+      output_dir: .custom-topology
 "#,
         )
         .unwrap()
@@ -313,7 +313,7 @@ output_dir = ".custom-topology"
     #[test]
     fn test_resolve_single() {
         let config = minimal_root();
-        let resolved = resolve_single(config, PathBuf::from("apss.toml"));
+        let resolved = resolve_single(config, PathBuf::from("APSS.yaml"));
 
         assert_eq!(resolved.project.name, "root");
         assert_eq!(resolved.standards.len(), 1);
@@ -331,9 +331,9 @@ output_dir = ".custom-topology"
 
         let resolved = merge_configs(
             &root,
-            Path::new("apss.toml"),
+            Path::new("APSS.yaml"),
             &child,
-            Path::new("packages/a/apss.toml"),
+            Path::new("packages/a/APSS.yaml"),
         )
         .unwrap();
 
@@ -349,42 +349,42 @@ output_dir = ".custom-topology"
 
     #[test]
     fn test_merge_inherits_root_standards() {
-        let root: ProjectConfig = toml::from_str(
+        let root: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "root"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: root
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
+  fitness:
+    id: APS-V1-0003
+    version: ">=1.0.0"
 
-[standards.fitness]
-id = "APS-V1-0003"
-version = ">=1.0.0"
-
-[workspace]
-members = ["packages/*"]
+workspace:
+  members: ["packages/*"]
 "#,
         )
         .unwrap();
 
-        let child: ProjectConfig = toml::from_str(
+        let child: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "child"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: child
+  apss_version: v1
 "#,
         )
         .unwrap();
 
         let resolved = merge_configs(
             &root,
-            Path::new("apss.toml"),
+            Path::new("APSS.yaml"),
             &child,
-            Path::new("packages/a/apss.toml"),
+            Path::new("packages/a/APSS.yaml"),
         )
         .unwrap();
 
@@ -402,9 +402,9 @@ apss_version = "v1"
 
         let result = merge_configs(
             &root,
-            Path::new("apss.toml"),
+            Path::new("APSS.yaml"),
             &child,
-            Path::new("packages/a/apss.toml"),
+            Path::new("packages/a/APSS.yaml"),
         );
 
         assert!(matches!(
@@ -424,9 +424,9 @@ apss_version = "v1"
 
         let result = merge_configs(
             &root,
-            Path::new("apss.toml"),
+            Path::new("APSS.yaml"),
             &child,
-            Path::new("packages/a/apss.toml"),
+            Path::new("packages/a/APSS.yaml"),
         );
 
         assert!(matches!(
@@ -482,40 +482,40 @@ apss_version = "v1"
         // Regression: a child explicitly setting `offline = false` must win,
         // even though `false` is the default. Previously the merge used
         // `child.offline || root.offline`, which made `false` unreachable.
-        let root: ProjectConfig = toml::from_str(
+        let root: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "root"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: root
+  apss_version: v1
 
-[workspace]
-members = ["packages/*"]
+workspace:
+  members: ["packages/*"]
 
-[tool]
-offline = true
+tool:
+  offline: true
 "#,
         )
         .unwrap();
 
-        let child: ProjectConfig = toml::from_str(
+        let child: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "child"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: child
+  apss_version: v1
 
-[tool]
-offline = false
+tool:
+  offline: false
 "#,
         )
         .unwrap();
 
         let resolved = merge_configs(
             &root,
-            Path::new("apss.toml"),
+            Path::new("APSS.yaml"),
             &child,
-            Path::new("packages/a/apss.toml"),
+            Path::new("packages/a/APSS.yaml"),
         )
         .unwrap();
 
@@ -524,40 +524,42 @@ offline = false
 
     #[test]
     fn test_merge_tool_hooks_child_false_overrides_root_true() {
-        let root: ProjectConfig = toml::from_str(
+        let root: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "root"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: root
+  apss_version: v1
 
-[workspace]
-members = ["packages/*"]
+workspace:
+  members: ["packages/*"]
 
-[tool.hooks]
-pre_commit = true
+tool:
+  hooks:
+    pre_commit: true
 "#,
         )
         .unwrap();
 
-        let child: ProjectConfig = toml::from_str(
+        let child: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "child"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: child
+  apss_version: v1
 
-[tool.hooks]
-pre_commit = false
+tool:
+  hooks:
+    pre_commit: false
 "#,
         )
         .unwrap();
 
         let resolved = merge_configs(
             &root,
-            Path::new("apss.toml"),
+            Path::new("APSS.yaml"),
             &child,
-            Path::new("packages/a/apss.toml"),
+            Path::new("packages/a/APSS.yaml"),
         )
         .unwrap();
 
@@ -567,37 +569,37 @@ pre_commit = false
     #[test]
     fn test_merge_tool_child_omits_field_inherits_root() {
         // Child omits `offline` entirely → inherit root's `true`.
-        let root: ProjectConfig = toml::from_str(
+        let root: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "root"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: root
+  apss_version: v1
 
-[workspace]
-members = ["packages/*"]
+workspace:
+  members: ["packages/*"]
 
-[tool]
-offline = true
+tool:
+  offline: true
 "#,
         )
         .unwrap();
 
-        let child: ProjectConfig = toml::from_str(
+        let child: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "child"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: child
+  apss_version: v1
 "#,
         )
         .unwrap();
 
         let resolved = merge_configs(
             &root,
-            Path::new("apss.toml"),
+            Path::new("APSS.yaml"),
             &child,
-            Path::new("packages/a/apss.toml"),
+            Path::new("packages/a/APSS.yaml"),
         )
         .unwrap();
 
@@ -609,40 +611,40 @@ apss_version = "v1"
         // Regression: a child setting `bin_dir = ".apss/bin"` (the default
         // string) must still override the root's `"custom-bin"`. The old
         // "equals default" heuristic silently dropped this override.
-        let root: ProjectConfig = toml::from_str(
+        let root: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "root"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: root
+  apss_version: v1
 
-[workspace]
-members = ["packages/*"]
+workspace:
+  members: ["packages/*"]
 
-[tool]
-bin_dir = "custom-bin"
+tool:
+  bin_dir: custom-bin
 "#,
         )
         .unwrap();
 
-        let child: ProjectConfig = toml::from_str(
+        let child: ProjectConfig = serde_yaml::from_str(
             r#"
-schema = "apss.project/v1"
-[project]
-name = "child"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: child
+  apss_version: v1
 
-[tool]
-bin_dir = ".apss/bin"
+tool:
+  bin_dir: .apss/bin
 "#,
         )
         .unwrap();
 
         let resolved = merge_configs(
             &root,
-            Path::new("apss.toml"),
+            Path::new("APSS.yaml"),
             &child,
-            Path::new("packages/a/apss.toml"),
+            Path::new("packages/a/APSS.yaml"),
         )
         .unwrap();
 

@@ -21,7 +21,7 @@ This substandard defines:
 - The bootstrap CLI binary used for project onboarding (canonical binary name
   is being resolved in repo issue 64; this spec refers to it as the
   "bootstrap" where the name can be avoided)
-- The installation workflow that reads the `apss.toml` manifest defined by
+- The installation workflow that reads the `APSS.yaml` manifest defined by
   CF01 and resolves, fetches, locks, and composes the standards it declares
 - The lockfile format (`apss.lock`)
 - Code generation for composed project-local binaries
@@ -44,7 +44,8 @@ tooling crate or independent Rust library.
 This separates two concerns:
 
 - Tooling distribution installs the APSS tools.
-- Standard distribution installs APSS standards into a consumer repository.
+- Standard distribution installs APSS standards and explicitly declared
+  experiments into a consumer repository.
 
 ### 2.2 Bundle Naming Convention
 
@@ -54,12 +55,19 @@ Bundle directories and archive filenames MUST follow:
 APS-V1-NNNN-<slug>-<version>.apss
 ```
 
-Where `NNNN` is the 4-digit standard ID, `<slug>` is the kebab-case slug,
-and `<version>` is the SemVer version from the package metadata.
+For official standards, `NNNN` is the 4-digit standard ID, `<slug>` is the
+kebab-case slug, and `<version>` is the SemVer version from the package
+metadata. Experimental standard bundles MUST use the same shape with
+`EXP-V1-NNNN` as the ID prefix:
+
+```
+EXP-V1-NNNN-<slug>-<version>.apss
+```
 
 Examples:
 - `APS-V1-0001-code-topology-1.0.0.apss`
 - `APS-V1-0000.DI01-distribution-1.0.0.apss`
+- `EXP-V1-0003-fitness-functions-0.1.0.apss`
 
 ### 2.3 Required Bundle Contents
 
@@ -99,6 +107,27 @@ implementation = "."
 
 Substandard bundles MUST set `kind = "substandard"` and use the substandard
 ID, name, slug, version, and `metadata_file = "substandard.toml"`.
+
+Experimental standard bundles MUST set `kind = "experiment"` and use
+`metadata_file = "experiment.toml"`.
+
+Promoted official standard bundles MAY include a promotion alias table:
+
+```toml
+[[promoted_from]]
+id = "EXP-V1-0003"
+slug = "fitness-functions"
+last_experiment_version = "0.4.0"
+compatibility = "config-compatible"
+```
+
+The `compatibility` value MUST be one of:
+
+- `config-compatible` when the promoted standard accepts the experiment's
+  config unchanged.
+- `migration-adapter` when the promoted standard ships code that translates
+  the experiment config.
+- `manual-migration-required` when automatic resolution is unsafe.
 
 ### 2.5 Implementation Crate Naming
 
@@ -152,8 +181,8 @@ this spec uses `<bootstrap>` where the name can be avoided.
 
 | Command | Description |
 |---------|-------------|
-| `<bootstrap> init` | Create `apss.toml` |
-| `<bootstrap> install` | Read `apss.toml`, resolve, run per-standard install contracts, build composed binary |
+| `<bootstrap> init` | Create `APSS.yaml` |
+| `<bootstrap> install` | Read `APSS.yaml`, resolve, run per-standard install contracts, build composed binary |
 | `<bootstrap> install --check` | Report what install would do without writing |
 | `<bootstrap> install --locked` | CI mode, fail if lockfile would change |
 | `<bootstrap> install --update <slug>` | Update one standard |
@@ -177,7 +206,7 @@ prints a helpful error directing the user to run `<bootstrap> install`.
 
 ## 4. Installation Workflow
 
-The unified installer reads the `apss.toml` manifest (CF01 Section 2),
+The unified installer reads the `APSS.yaml` manifest (CF01 Section 2),
 resolves the standards it declares, drives each resolved standard's install
 contract, then composes the project-local binary. CF01 owns the manifest;
 DI01 owns resolution and the lockfile; each standard owns its install
@@ -185,36 +214,64 @@ contract. The pipeline below stitches the three together.
 
 ### 4.1 Install Pipeline
 
-1. Parse and validate `apss.toml` via CF01 (with cascade applied for
+1. Parse and validate `APSS.yaml` via CF01 (with cascade applied for
    workspaces). Refuse to proceed on any error-severity diagnostic.
 2. Resolve version ranges against the APSS bundle registry index, producing
    one `ResolvedStandard` per `standards.<slug>` entry in the manifest.
-3. Write or update `apss.lock` (Section 5).
-4. For each `ResolvedStandard`, load its install contract
+3. Apply promoted-experiment aliases for any requested `EXP-V1-XXXX` package
+   whose registry entry points to an official `APS-V1-XXXX` replacement
+   (Section 4.2).
+4. Write or update `apss.lock` (Section 5).
+5. For each `ResolvedStandard`, load its install contract
    (`docs/02_install_contract.md` in the standard's package) and ask it for
    an install plan in dry-run mode.
-5. Apply each install plan in dependency order. Standards may install git
+6. Apply each install plan in dependency order. Standards may install git
    hooks, scaffolds, validators, and other artifacts per their contract.
-6. Reconcile removals: any standard previously present in `apss.lock` but
+7. Reconcile removals: any standard previously present in `apss.lock` but
    absent or `enabled: false` in the current manifest MUST have its
    uninstall contract invoked. Removal MUST leave operator data and source
    code untouched.
-7. Generate `.apss/build/Cargo.toml` with resolved bundle implementation
+8. Generate `.apss/build/Cargo.toml` with resolved bundle implementation
    dependencies.
-8. Generate `.apss/build/src/main.rs` with `register()` calls.
-9. Run `cargo build --release --manifest-path .apss/build/Cargo.toml`.
-10. Copy binary to `.apss/bin/<bootstrap>`.
+9. Generate `.apss/build/src/main.rs` with `register()` calls.
+10. Run `cargo build --release --manifest-path .apss/build/Cargo.toml`.
+11. Copy binary to `.apss/bin/<bootstrap>`.
 
 The pipeline MUST be idempotent: re-running with an unchanged manifest and
 registry MUST be a no-op (no file rewrites, no rebuild, exit zero).
 
-### 4.2 Locked Mode
+### 4.2 Promoted Experiment Resolution
+
+DI01 MUST support experimental standards declared in `APSS.yaml`. If an
+`EXP-V1-XXXX` package exists in the registry, resolution proceeds normally
+and the resulting package is marked experimental in the lockfile.
+
+If the requested experiment has been promoted and the registry exposes a
+promotion alias, DI01 MUST resolve the request to the promoted
+`APS-V1-XXXX` package when compatibility is `config-compatible` or
+`migration-adapter`. The installer MUST emit a warning diagnostic that
+includes:
+
+- The requested experimental ID and slug.
+- The resolved official ID and slug.
+- The compatibility mode.
+- A recommendation to update `APSS.yaml`.
+
+If compatibility is `manual-migration-required`, DI01 MUST fail resolution
+with an error diagnostic and a migration path. It MUST NOT silently skip the
+standard, drop validation, or leave the project unenforced.
+
+Promoted alias resolution MUST be deterministic. Given the same registry
+index, `APSS.yaml`, and lockfile, resolution MUST produce the same official
+package and diagnostics.
+
+### 4.3 Locked Mode
 
 `<bootstrap> install --locked` MUST fail if the resolved versions or the
 per-standard install plans would change `apss.lock`. This is intended for
 CI environments.
 
-### 4.3 Per-standard Install Contracts
+### 4.4 Per-standard Install Contracts
 
 Every standard MUST ship `docs/02_install_contract.md`, which is the
 per-standard lifecycle hook the unified installer invokes. The contract
@@ -232,15 +289,15 @@ The per-standard escape hatch MUST remain supported as a debugging aid:
 Documentation MUST present the unified `install` command as the primary path
 and the per-standard form as a secondary escape hatch.
 
-### 4.4 CF01 to DI01 Seam
+### 4.5 CF01 to DI01 Seam
 
 The boundary between CF01 and DI01 is explicit:
 
 - CF01 hands DI01 an ordered list of `(slug, id, version, substandards)`
   tuples derived from the manifest, the cascade, and the slug registry.
 - DI01 returns a `ResolvedStandard` per tuple, containing the pinned
-  version, the checksum, and a source descriptor (registry, bundle path,
-  git).
+  version, the checksum, source descriptor (registry, bundle path, git), and
+  any promoted-experiment alias that was applied.
 - The installer then drives the per-standard install contracts using those
   `ResolvedStandard` values.
 - DI01 owns no knowledge of standard configuration content. CF01 owns no
@@ -254,7 +311,7 @@ The boundary between CF01 and DI01 is explicit:
 ### 5.1 Location
 
 The lockfile MUST be at `apss.lock` in the project root, next to
-`apss.toml`.
+`APSS.yaml`.
 
 ### 5.2 Schema
 
@@ -272,6 +329,9 @@ crate_name = "apss-v1-0001-code-topology"
 version = "1.2.0"
 checksum = "sha256:..."
 source = "registry+https://crates.io"
+requested_id = "EXP-V1-0003"
+requested_slug = "fitness-functions"
+resolved_from = "promoted-experiment"
 
 substandards = [
     { profile = "RS01", crate_name = "apss-v1-0001-rs01-rust", version = "1.0.0", checksum = "sha256:..." },
@@ -288,6 +348,11 @@ The `source` field supports:
 ### 5.4 Version Control
 
 `apss.lock` SHOULD be committed to version control for reproducibility. `.apss/build/` SHOULD be gitignored.
+
+If DI01 resolves a promoted experiment, `apss.lock` MUST record both the
+requested experimental identity and the resolved official identity. This
+allows future installs to detect whether the operator has updated
+`APSS.yaml`, and it makes audit trails clear during experiment promotion.
 
 ---
 
@@ -309,7 +374,7 @@ The `source` field supports:
 
 ### 6.2 Determinism
 
-Code generation MUST be deterministic: the same `apss.toml` and `apss.lock`
+Code generation MUST be deterministic: the same `APSS.yaml` and `apss.lock`
 MUST produce identical generated files.
 
 ---
@@ -324,7 +389,7 @@ Consumer projects SHOULD add:
 ```
 
 And SHOULD commit:
-- `apss.toml`
+- `APSS.yaml`
 - `apss.lock`
 
 ---
@@ -345,7 +410,13 @@ any change to system crates (`apss-core`, `aps-cli`, `apss`).
 
 Standard and substandard versions are independent: a standard MAY be at
 `3.0.0` while the system is at `1.2.0`. Consumer projects pin standard
-versions in `apss.toml` via semver ranges.
+versions in `APSS.yaml` via semver ranges.
+
+Experimental standards MAY be distributed and pinned with `EXP-V1-XXXX`
+identities. Promotion to an official standard creates a new official identity
+and MAY keep the experiment's version lineage or reset to `1.0.0`. The
+promotion alias, not SemVer alone, defines the compatibility bridge from the
+experimental identity to the official identity.
 
 ### 8.2 Version Consistency
 

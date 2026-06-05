@@ -7,7 +7,7 @@
 This document is a sibling normative spec to `01_spec.md` and has
 equal precedence with it under the meta-standard's precedence rule
 (§1.1 of APS-V1-0000). It defines the slug registry that backs the
-single-file apss.toml configuration model.
+single-file APSS.yaml configuration model.
 
 ## Terminology
 
@@ -20,7 +20,7 @@ document are to be interpreted as described in
 
 ## 1. Purpose
 
-apss.toml uses short slugs as top-level keys to namespace each
+APSS.yaml uses short slugs as top-level keys to namespace each
 standard's configuration section. The registry is the single source
 of truth that maps slugs to standard IDs and prevents collisions.
 Every standard in the repository, including experimental standards,
@@ -29,13 +29,13 @@ MUST appear in the registry.
 The registry exists to:
 
 1. Guarantee that no two standards can claim the same top-level key
-   in apss.toml.
+   in APSS.yaml.
 2. Allow the unified installer (Addendum 1, see `06_unified_install_seam.md`)
    to resolve a manifest entry like `docs:` back to its owning crate
    without scanning the filesystem.
 3. Power editor tooling (autocomplete, schema lookup) by exposing a
    stable list of valid top-level sections.
-4. Catch typos in apss.toml early: unknown top-level keys are errors
+4. Catch typos in APSS.yaml early: unknown top-level keys are errors
    (see `04_validation_delegation.md`).
 
 ---
@@ -110,7 +110,7 @@ Field rules:
   ID (APS-V1-0000 §4.2).
 - `substandards[].slug` is the kebab-case slug declared in the
   substandard's `substandard.toml`; it is used as a nested key under
-  the parent slug in apss.toml.
+  the parent slug in APSS.yaml.
 
 #### 2.2.2 Regeneration
 
@@ -164,7 +164,7 @@ used as a standard's slug:
 
 | Reserved | Owner | Purpose |
 |----------|-------|---------|
-| `schema` | CF01 | apss.toml schema identifier |
+| `schema` | CF01 | APSS.yaml schema identifier |
 | `project` | CF01 | Project identity |
 | `workspace` | CF01 | Monorepo membership and cascade |
 | `tool` | CF01 | Installer/tooling settings |
@@ -185,9 +185,9 @@ within their parent's substandard set. Two substandards under
 different parents MAY share a slug (e.g. both `docs.adr` and
 `fitness.adr` would be legal).
 
-Substandards MUST NOT appear as top-level keys in apss.toml. The
+Substandards MUST NOT appear as top-level keys in APSS.yaml. The
 registry artifact reflects this by nesting them inside the parent's
-`substandards` array (see §2.2.1). The full apss.toml shape for
+`substandards` array (see §2.2.1). The full APSS.yaml shape for
 substandard toggles is specified in `05_substandard_nesting.md`.
 
 ### 3.4 Experiment Slug Lifecycle
@@ -197,7 +197,7 @@ registry with `kind = "experiment"`. On promotion to an official
 standard (APS-V1-0000 §14.3):
 
 - The experiment's slug SHOULD carry over to the promoted standard
-  to avoid breaking consumer apss.toml files.
+  to avoid breaking consumer APSS.yaml files.
 - If the slug changes during promotion, the experiment's
   `experiment.toml` MUST record both the original slug and the
   promoted slug under `[promotion]`, and the meta-validator MUST
@@ -280,9 +280,9 @@ qualified with the substandard ID.
 
 ---
 
-## 6. Reading the Registry from apss.toml
+## 6. Reading the Registry from APSS.yaml
 
-When the unified installer or validator parses apss.toml, it looks
+When the unified installer or validator parses APSS.yaml, it looks
 up each top-level key in the registry to find the owning crate:
 
 1. Reserved key (§3.2): handled by CF01 directly.
@@ -358,9 +358,9 @@ Generated entry:
 }
 ```
 
-Consumer apss.toml then references:
+Consumer APSS.yaml then references:
 
-```toml
+```yaml
 docs:
   adr:
     disable: false

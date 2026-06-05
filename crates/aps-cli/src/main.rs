@@ -184,9 +184,9 @@ enum ValidateTarget {
         /// Experiment ID (e.g., EXP-V1-0001)
         id: String,
     },
-    /// Validate an apss.toml project configuration file (CF01)
+    /// Validate an APSS.yaml project configuration file (CF01)
     Config {
-        /// Path to apss.toml. If omitted, searches upward from the current directory.
+        /// Path to APSS.yaml. If omitted, searches upward from the current directory.
         path: Option<PathBuf>,
     },
     /// Validate standard crates for distribution compliance (DI01)
@@ -314,7 +314,7 @@ fn main() -> ExitCode {
                             ) {
                                 Some(path) => path,
                                 None => {
-                                    eprintln!("Error: No apss.toml found");
+                                    eprintln!("Error: No APSS.yaml found");
                                     return ExitCode::FAILURE;
                                 }
                             },

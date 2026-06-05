@@ -14,5 +14,5 @@ backwards_compat = true
 maintainers = ["AgentParadise"]
 
 [metadata]
-description = "Defines the apss.toml project configuration schema, cascading monorepo configs, and typed standard configuration validation."
+description = "Defines the APSS.yaml project configuration schema, cascading monorepo configs, and typed standard configuration validation."
 keywords = ["config", "apss", "project", "monorepo", "validation"]

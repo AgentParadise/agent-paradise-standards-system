@@ -1,13 +1,13 @@
 //! Project Configuration (APS-V1-0000.CF01)
 //!
-//! Validates `apss.toml` project configuration files and ensures standards
+//! Validates `APSS.yaml` project configuration files and ensures standards
 //! define typed configuration surfaces via the `StandardConfig` trait.
 //!
 //! ## Dual Validation Role
 //!
 //! CF01 validates two things:
 //!
-//! 1. **Consumer `apss.toml` files**  -  schema, field types, version requirements,
+//! 1. **Consumer `APSS.yaml` files**  -  schema, field types, version requirements,
 //!    cascading consistency, and standard-specific config blocks.
 //!
 //! 2. **Standard config compliance**  -  ensures every standard in the APS repo
@@ -19,7 +19,7 @@
 //! use apss_core::project_config_validation::validate_project_config;
 //! use std::path::Path;
 //!
-//! let diags = validate_project_config(Path::new("apss.toml"));
+//! let diags = validate_project_config(Path::new("APSS.yaml"));
 //! if diags.has_errors() {
 //!     eprintln!("{diags}");
 //!     std::process::exit(1);
@@ -36,7 +36,7 @@ use std::path::Path;
 
 /// Error codes for CF01 validation.
 pub mod error_codes {
-    // --- Consumer apss.toml validation ---
+    // --- Consumer APSS.yaml validation ---
 
     /// `schema` field missing or not `"apss.project/v1"`.
     pub const CF_MISSING_SCHEMA: &str = "CF_MISSING_SCHEMA";
@@ -65,7 +65,10 @@ pub mod error_codes {
     /// A substandard code doesn't match `[A-Z]{2}\d{2}`.
     pub const CF_INVALID_SUBSTANDARD_CODE: &str = "CF_INVALID_SUBSTANDARD_CODE";
 
-    /// A child `apss.toml` contains a `[workspace]` section.
+    /// An experimental standard is explicitly declared in `APSS.yaml`.
+    pub const CF_EXPERIMENT_DECLARED: &str = "CF_EXPERIMENT_DECLARED";
+
+    /// A child `APSS.yaml` contains a `[workspace]` section.
     pub const CF_WORKSPACE_IN_CHILD: &str = "CF_WORKSPACE_IN_CHILD";
 
     /// Child and root `apss_version` values differ.
@@ -83,16 +86,16 @@ pub mod error_codes {
     /// `[standards]` section exists but is empty.
     pub const CF_EMPTY_STANDARDS: &str = "CF_EMPTY_STANDARDS";
 
-    /// `apss.toml` exists but no `apss.lock` found.
+    /// `APSS.yaml` exists but no `apss.lock` found.
     pub const CF_NO_LOCKFILE: &str = "CF_NO_LOCKFILE";
 
-    /// `apss.toml` was modified more recently than `apss.lock`.
+    /// `APSS.yaml` was modified more recently than `apss.lock`.
     pub const CF_LOCKFILE_STALE: &str = "CF_LOCKFILE_STALE";
 
-    /// Failed to parse the apss.toml file.
+    /// Failed to parse the APSS.yaml file.
     pub const CF_PARSE_ERROR: &str = "CF_PARSE_ERROR";
 
-    /// The apss.toml file was not found.
+    /// The APSS.yaml file was not found.
     pub const CF_FILE_NOT_FOUND: &str = "CF_FILE_NOT_FOUND";
 
     /// An included config file (via `config = { include = "..." }`) was not found.
@@ -172,11 +175,11 @@ fn validate_config_fields(path: &Path) -> Diagnostics {
             );
             return diags;
         }
-        Err(config::ConfigError::Parse { source, .. }) => {
+        Err(config::ConfigError::Parse { source_message, .. }) => {
             diags.push(
                 Diagnostic::error(
                     error_codes::CF_PARSE_ERROR,
-                    format!("Failed to parse configuration: {source}"),
+                    format!("Failed to parse configuration: {source_message}"),
                 )
                 .with_path(path),
             );
@@ -195,14 +198,14 @@ fn validate_config_fields(path: &Path) -> Diagnostics {
         }
         Err(config::ConfigError::IncludeParse {
             path: inc_path,
-            source,
+            source_message,
             ..
         }) => {
             diags.push(
                 Diagnostic::error(
                     error_codes::CF_INCLUDE_PARSE_ERROR,
                     format!(
-                        "Failed to parse included config {}: {source}",
+                        "Failed to parse included config {}: {source_message}",
                         inc_path.display()
                     ),
                 )
@@ -230,7 +233,7 @@ fn validate_config_fields(path: &Path) -> Diagnostics {
     diags
 }
 
-/// Validate a child `apss.toml` in a workspace context.
+/// Validate a child `APSS.yaml` in a workspace context.
 pub fn validate_child_config(child_path: &Path, root_config: &ProjectConfig) -> Diagnostics {
     // Use validate_config_fields (not validate_project_config) to skip lockfile
     // checks  -  in a workspace, the lockfile lives at the root, not in each child.
@@ -249,7 +252,7 @@ pub fn validate_child_config(child_path: &Path, root_config: &ProjectConfig) -> 
                 "Child configuration must not contain a [workspace] section",
             )
             .with_path(child_path)
-            .with_hint("Only the root apss.toml may define workspace members"),
+            .with_hint("Only the root APSS.yaml may define workspace members"),
         );
     }
 
@@ -406,11 +409,25 @@ fn validate_standards(config: &ProjectConfig, path: &Path, diags: &mut Diagnosti
                 Diagnostic::error(
                     error_codes::CF_INVALID_STANDARD_ID,
                     format!(
-                        "Invalid standard ID '{}' for slug '{slug}'. Must match APS-V1-XXXX",
+                        "Invalid standard ID '{}' for slug '{slug}'. Must match APS-V1-XXXX or EXP-V1-XXXX",
                         entry.id
                     ),
                 )
                 .with_path(path),
+            );
+        } else if entry.id.starts_with("EXP-V1-") {
+            diags.push(
+                Diagnostic::warning(
+                    error_codes::CF_EXPERIMENT_DECLARED,
+                    format!(
+                        "Experimental standard '{}' is explicitly declared for slug '{slug}'",
+                        entry.id
+                    ),
+                )
+                .with_path(path)
+                .with_hint(
+                    "Experimental standards are enforced by opt-in and may change before promotion",
+                ),
             );
         }
 
@@ -500,7 +517,7 @@ fn validate_lockfile(config_path: &Path, diags: &mut Diagnostics) {
                 diags.push(
                     Diagnostic::warning(
                         error_codes::CF_LOCKFILE_STALE,
-                        "apss.toml is newer than apss.lock. Run 'apss install' to update",
+                        "APSS.yaml is newer than apss.lock. Run 'apss install' to update",
                     )
                     .with_path(config_path),
                 );
@@ -513,9 +530,9 @@ fn validate_lockfile(config_path: &Path, diags: &mut Diagnostics) {
 // Helpers
 // ============================================================================
 
-/// Check if a string matches the `APS-V1-XXXX` pattern.
+/// Check if a string matches the `APS-V1-XXXX` or `EXP-V1-XXXX` pattern.
 fn is_valid_standard_id(id: &str) -> bool {
-    if !id.starts_with("APS-V1-") {
+    if !(id.starts_with("APS-V1-") || id.starts_with("EXP-V1-")) {
         return false;
     }
     let suffix = &id[7..];
@@ -571,9 +588,12 @@ mod tests {
         assert!(is_valid_standard_id("APS-V1-0000"));
         assert!(is_valid_standard_id("APS-V1-0001"));
         assert!(is_valid_standard_id("APS-V1-9999"));
+        assert!(is_valid_standard_id("EXP-V1-0001"));
+        assert!(is_valid_standard_id("EXP-V1-9999"));
         assert!(!is_valid_standard_id("APS-V1-000"));
         assert!(!is_valid_standard_id("APS-V2-0001"));
-        assert!(!is_valid_standard_id("EXP-V1-0001"));
+        assert!(!is_valid_standard_id("EXP-V1-000"));
+        assert!(!is_valid_standard_id("EXP-V2-0001"));
         assert!(!is_valid_standard_id(""));
     }
 
@@ -591,23 +611,23 @@ mod tests {
     #[test]
     fn test_validate_valid_config() {
         let temp = tempfile::tempdir().unwrap();
-        let config_path = temp.path().join("apss.toml");
+        let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
             r#"
-schema = "apss.project/v1"
+schema: apss.project/v1
 
-[project]
-name = "test-project"
-apss_version = "v1"
+project:
+  name: test-project
+  apss_version: v1
 
-[standards.topology]
-id = "APS-V1-0001"
-version = ">=1.0.0, <2.0.0"
-substandards = ["RS01", "CI01"]
-
-[standards.topology.config]
-output_dir = ".topology"
+standards:
+  topology:
+    id: APS-V1-0001
+    version: ">=1.0.0, <2.0.0"
+    substandards: ["RS01", "CI01"]
+    config:
+      output_dir: .topology
 "#,
         )
         .unwrap();
@@ -619,14 +639,14 @@ output_dir = ".topology"
     #[test]
     fn test_validate_bad_schema() {
         let temp = tempfile::tempdir().unwrap();
-        let config_path = temp.path().join("apss.toml");
+        let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
             r#"
-schema = "wrong/v1"
-[project]
-name = "test"
-apss_version = "v1"
+schema: wrong/v1
+project:
+  name: test
+  apss_version: v1
 "#,
         )
         .unwrap();
@@ -643,18 +663,19 @@ apss_version = "v1"
     #[test]
     fn test_validate_bad_standard_id() {
         let temp = tempfile::tempdir().unwrap();
-        let config_path = temp.path().join("apss.toml");
+        let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.topology]
-id = "INVALID"
-version = ">=1.0.0"
+standards:
+  topology:
+    id: INVALID
+    version: ">=1.0.0"
 "#,
         )
         .unwrap();
@@ -669,20 +690,50 @@ version = ">=1.0.0"
     }
 
     #[test]
-    fn test_validate_bad_version_req() {
+    fn test_validate_experimental_standard_id() {
         let temp = tempfile::tempdir().unwrap();
-        let config_path = temp.path().join("apss.toml");
+        let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.topology]
-id = "APS-V1-0001"
-version = "not-semver!!"
+standards:
+  fitness:
+    id: EXP-V1-0003
+    version: ">=0.1.0"
+"#,
+        )
+        .unwrap();
+
+        let diags = validate_project_config(&config_path);
+        assert!(!diags.has_errors());
+        assert!(
+            diags
+                .iter()
+                .any(|d| d.code == error_codes::CF_EXPERIMENT_DECLARED)
+        );
+    }
+
+    #[test]
+    fn test_validate_bad_version_req() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join(CONFIG_FILENAME);
+        std::fs::write(
+            &config_path,
+            r#"
+schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
+
+standards:
+  topology:
+    id: APS-V1-0001
+    version: "not-semver!!"
 "#,
         )
         .unwrap();
@@ -699,22 +750,22 @@ version = "not-semver!!"
     #[test]
     fn test_validate_duplicate_ids() {
         let temp = tempfile::tempdir().unwrap();
-        let config_path = temp.path().join("apss.toml");
+        let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
-
-[standards.topo]
-id = "APS-V1-0001"
-version = ">=1.0.0"
+standards:
+  topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
+  topo:
+    id: APS-V1-0001
+    version: ">=1.0.0"
 "#,
         )
         .unwrap();
@@ -731,19 +782,20 @@ version = ">=1.0.0"
     #[test]
     fn test_validate_bad_substandard_code() {
         let temp = tempfile::tempdir().unwrap();
-        let config_path = temp.path().join("apss.toml");
+        let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
-substandards = ["rs01", "TOOLONG01"]
+standards:
+  topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
+    substandards: ["rs01", "TOOLONG01"]
 "#,
         )
         .unwrap();
@@ -760,14 +812,14 @@ substandards = ["rs01", "TOOLONG01"]
     #[test]
     fn test_validate_empty_standards_warning() {
         let temp = tempfile::tempdir().unwrap();
-        let config_path = temp.path().join("apss.toml");
+        let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 "#,
         )
         .unwrap();
@@ -784,7 +836,7 @@ apss_version = "v1"
 
     #[test]
     fn test_validate_missing_file() {
-        let diags = validate_project_config(Path::new("/nonexistent/apss.toml"));
+        let diags = validate_project_config(Path::new("/nonexistent/APSS.yaml"));
         assert!(diags.has_errors());
         assert!(
             diags
@@ -797,32 +849,32 @@ apss_version = "v1"
     fn test_validate_child_workspace_forbidden() {
         let temp = tempfile::tempdir().unwrap();
 
-        let root_path = temp.path().join("apss.toml");
+        let root_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &root_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "root"
-apss_version = "v1"
-[workspace]
-members = ["packages/*"]
+schema: apss.project/v1
+project:
+  name: root
+  apss_version: v1
+workspace:
+  members: ["packages/*"]
 "#,
         )
         .unwrap();
 
         let child_dir = temp.path().join("packages/a");
         std::fs::create_dir_all(&child_dir).unwrap();
-        let child_path = child_dir.join("apss.toml");
+        let child_path = child_dir.join(CONFIG_FILENAME);
         std::fs::write(
             &child_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "child"
-apss_version = "v1"
-[workspace]
-members = ["sub/*"]
+schema: apss.project/v1
+project:
+  name: child
+  apss_version: v1
+workspace:
+  members: ["sub/*"]
 "#,
         )
         .unwrap();
@@ -840,22 +892,22 @@ members = ["sub/*"]
     #[test]
     fn test_validate_two_empty_ids_no_duplicate_error() {
         let temp = tempfile::tempdir().unwrap();
-        let config_path = temp.path().join("apss.toml");
+        let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.alpha]
-id = ""
-version = ">=1.0.0"
-
-[standards.beta]
-id = ""
-version = ">=1.0.0"
+standards:
+  alpha:
+    id: ""
+    version: ">=1.0.0"
+  beta:
+    id: ""
+    version: ">=1.0.0"
 "#,
         )
         .unwrap();
@@ -884,30 +936,30 @@ version = ">=1.0.0"
     fn test_validate_child_no_lockfile_warning() {
         let temp = tempfile::tempdir().unwrap();
 
-        let root_path = temp.path().join("apss.toml");
+        let root_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &root_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "root"
-apss_version = "v1"
-[workspace]
-members = ["packages/*"]
+schema: apss.project/v1
+project:
+  name: root
+  apss_version: v1
+workspace:
+  members: ["packages/*"]
 "#,
         )
         .unwrap();
 
         let child_dir = temp.path().join("packages/a");
         std::fs::create_dir_all(&child_dir).unwrap();
-        let child_path = child_dir.join("apss.toml");
+        let child_path = child_dir.join(CONFIG_FILENAME);
         std::fs::write(
             &child_path,
             r#"
-schema = "apss.project/v1"
-[project]
-name = "child"
-apss_version = "v1"
+schema: apss.project/v1
+project:
+  name: child
+  apss_version: v1
 "#,
         )
         .unwrap();

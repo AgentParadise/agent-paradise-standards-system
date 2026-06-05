@@ -11,12 +11,14 @@ use crate::OutputFormat;
 
 /// Configuration for the Code Topology standard (`APS-V1-0001`).
 ///
-/// Used in `apss.toml`:
-/// ```toml
-/// [standards.code-topology.config]
-/// output_dir = ".topology"
-/// languages = ["rust", "python"]
-/// format = "json"
+/// Used in `APSS.yaml`:
+/// ```yaml
+/// standards:
+///   code-topology:
+///     config:
+///       output_dir: .topology
+///       languages: ["rust", "python"]
+///       format: json
 /// ```
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TopologyConfig {

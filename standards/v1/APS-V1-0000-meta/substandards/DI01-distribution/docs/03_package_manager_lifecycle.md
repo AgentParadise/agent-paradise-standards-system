@@ -69,7 +69,7 @@ The APSS project config is user-owned. Humans and agents may edit it directly.
 Examples:
 
 ```text
-apss.toml
+APSS.yaml
 apss.lock
 ```
 
@@ -99,7 +99,7 @@ Managed files SHOULD use this header shape, adapted to the file format:
 ```text
 Managed by APSS. Do not edit manually.
 Regenerate with: apss install
-Source: apss.toml
+Source: APSS.yaml
 Docs: https://github.com/AgentParadise/agent-paradise-standards-system
 ```
 
@@ -189,7 +189,7 @@ Recommended layout:
 
 ```text
 repo/
-  apss.toml
+  APSS.yaml
   apss.lock
   .apss/
     bin/
@@ -219,14 +219,15 @@ The external cache approach is preferred because it speeds repeated installs whi
 
 APSS SHOULD install managed git hooks during `apss install`.
 
-Hook installation is controlled by `[tool.hooks]` in `apss.toml`:
+Hook installation is controlled by `tool.hooks` in `APSS.yaml`:
 
-```toml
-[tool.hooks]
-pre_commit = true
+```yaml
+tool:
+  hooks:
+    pre_commit: true
 ```
 
-`pre_commit` defaults to `true`. If `pre_commit = false`, or if the user
+`pre_commit` defaults to `true`. If `pre_commit: false`, or if the user
 passes an install-time skip flag such as `--no-hooks`, the installer MUST emit
 a clear warning that commit-time APSS validation is disabled. The warning is
 intentional because disabling hooks should be temporary and reserved for cases

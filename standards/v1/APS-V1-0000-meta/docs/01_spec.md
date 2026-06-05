@@ -53,9 +53,16 @@ A **substandard** is a first-class package co-located under a parent standard, w
 An **experimental standard** is an incubating package used for iteration and community feedback. Experiments:
 
 - Are never considered official
-- Are never automatically enforced on downstream repositories
+- Are enforced in downstream repositories only when explicitly declared in
+  `APSS.yaml`
 - Follow the same structure as official standards
 - Can be promoted to official after peer review and security audit
+
+When an experiment is promoted, the promoted official standard MUST provide a
+compatibility alias from the prior `EXP-V1-XXXX` identity to the new
+`APS-V1-XXXX` identity. Distribution tooling MUST use that alias to warn
+consumers and resolve the promoted standard without requiring a manual
+manifest edit on the first install after promotion.
 
 ### 2.4 Template
 
@@ -394,7 +401,7 @@ pub trait StandardConfig: DeserializeOwned + Serialize + Default {
 
 This trait enables:
 
-- **Type-safe config validation**  -  Consumer `apss.toml` config blocks are deserialized into the standard's config type, catching type errors at parse time.
+- **Type-safe config validation**  -  Consumer `APSS.yaml` config blocks are deserialized into the standard's config type, catching type errors at parse time.
 - **Semantic validation**  -  The `validate()` method checks value ranges, cross-field consistency, and other constraints beyond what the type system expresses.
 - **Schema generation**  -  `json_schema()` produces a JSON Schema for IDE completion and external tooling.
 - **Scaffolding**  -  `toml_template()` generates documented default config snippets for `apss init`.
@@ -415,7 +422,7 @@ Standards that implement `StandardConfig` SHOULD include a generated `config.sch
 
 - MUST be regenerable from the Rust type via `StandardConfig::json_schema()`
 - SHOULD be kept in sync (CI MAY validate staleness)
-- Enables IDE completion and external tooling for `apss.toml`
+- Enables IDE completion and external tooling for `APSS.yaml`
 
 #### 8.3.4 Validation Scope
 
@@ -768,13 +775,15 @@ The DI01 substandard specifies:
 
 ### 17.1 Project Configuration
 
-Consumer projects declare which standards they adopt via `apss.toml`, defined by `APS-V1-0000.CF01` (Project Configuration substandard).
+Consumer projects declare which standards they adopt via `APSS.yaml`, defined by `APS-V1-0000.CF01` (Project Configuration substandard).
 
 The CF01 substandard specifies:
 
-- The `apss.toml` schema for declaring standards, versions, and config
+- The `APSS.yaml` schema for declaring standards, versions, and config
 - Cascading configuration for monorepos
 - Typed configuration validation via the `StandardConfig` trait (§8.3)
+- Experimental standard declarations and promoted-experiment compatibility
+  warnings
 
 See ADR 0001 (Versioning Strategy) for detailed semantics.
 

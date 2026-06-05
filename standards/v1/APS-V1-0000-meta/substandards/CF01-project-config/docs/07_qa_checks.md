@@ -9,7 +9,7 @@ specs. Equal precedence under APS-V1-0000 §1.1.
 
 This document specifies how the CLI binary validates that every
 standard in the APSS repository (and every consumer project's
-apss.toml) conforms to the rules across the sibling specs. It is
+APSS.yaml) conforms to the rules across the sibling specs. It is
 the "how do we enforce all this" section.
 
 ## Terminology
@@ -27,7 +27,7 @@ CF01 conformance has two scopes:
    every experiment in `standards-experimental/v1/` MUST conform
    to the rules from the sibling specs. This is enforced by the
    meta-validator at `<bootstrap> v1 validate repo`.
-2. **Consumer projects.** Any project whose root has an apss.toml
+2. **Consumer projects.** Any project whose root has an APSS.yaml
    gets validated by `<bootstrap> validate` (or the editor's LSP
    integration). This is the runtime-side validation.
 
@@ -39,7 +39,7 @@ are applicable.
 
 ## 2. The Six Conformance Dimensions
 
-A standard or substandard conforms to the unified apss.toml model
+A standard or substandard conforms to the unified APSS.yaml model
 when it satisfies six dimensions. The meta-validator MUST emit a
 distinct error code per dimension so that failures are easy to
 classify.
@@ -138,7 +138,7 @@ existing test pipelines.
 `<bootstrap> install` MUST run consumer-side validation BEFORE the
 resolve step. A failed validation exits with code 1 and runs no
 installer side effects. This is the "manifest is law" property:
-the installer never tries to massage a broken apss.toml into
+the installer never tries to massage a broken APSS.yaml into
 working state.
 
 ### 4.3 Editor Integration
@@ -269,7 +269,7 @@ extension; the one-line marker for the install contract) so the
 migration is non-disruptive for standards that genuinely have no
 config or no install-time side effects.
 
-The migration window aligns with the apss.toml migration window
+The migration window aligns with the APSS.yaml migration window
 specified in the migration note attached to CF01 `01_spec.md`.
 Inside the window, both checks SHOULD be downgraded to warnings;
 outside it, they MUST be errors.

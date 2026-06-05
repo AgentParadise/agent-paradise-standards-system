@@ -22,29 +22,29 @@ pub fn run(args: InitArgs) -> i32 {
 
     // Build config content
     let mut content = String::new();
-    content.push_str(&format!("schema = \"{PROJECT_SCHEMA}\"\n\n"));
-    content.push_str("[project]\n");
-
     // Try to derive project name from directory
     let project_name = std::env::current_dir()
         .ok()
         .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
         .unwrap_or_else(|| "my-project".to_string());
 
-    content.push_str(&format!("name = \"{project_name}\"\n"));
-    content.push_str("apss_version = \"v1\"\n");
-    content.push_str("\n[tool.hooks]\n");
-    content.push_str("# Keep pre-commit validation enabled unless it is temporarily blocking critical refactoring.\n");
-    content.push_str("pre_commit = true\n");
+    content.push_str(&format!("schema: {PROJECT_SCHEMA}\n\n"));
+    content.push_str("project:\n");
+    content.push_str(&format!("  name: {project_name}\n"));
+    content.push_str("  apss_version: v1\n\n");
+    content.push_str("tool:\n");
+    content.push_str("  hooks:\n");
+    content.push_str("    # Keep pre-commit validation enabled unless it is temporarily blocking critical refactoring.\n");
+    content.push_str("    pre_commit: true\n");
 
     // Add declared standards
     if !args.standards.is_empty() {
-        content.push('\n');
+        content.push_str("\nstandards:\n");
         for spec in &args.standards {
             let (slug, version) = parse_standard_spec(spec);
-            content.push_str(&format!("\n[standards.{slug}]\n"));
-            content.push_str("id = \"APS-V1-XXXX\"  # FIXME: Replace with correct standard ID (e.g. APS-V1-0001)\n");
-            content.push_str(&format!("version = \"{version}\"\n"));
+            content.push_str(&format!("  {slug}:\n"));
+            content.push_str("    id: APS-V1-XXXX  # FIXME: Replace with correct standard ID (e.g. APS-V1-0001)\n");
+            content.push_str(&format!("    version: \"{version}\"\n"));
         }
     }
 

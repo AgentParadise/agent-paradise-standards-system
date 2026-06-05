@@ -14,7 +14,7 @@
 //!
 //! ```bash
 //! cargo install apss              # install bootstrap
-//! apss init --standard code-topology   # create apss.toml
+//! apss init --standard code-topology   # create APSS.yaml
 //! apss install                    # build composed binary
 //! apss run topology analyze .     # use it
 //! ```

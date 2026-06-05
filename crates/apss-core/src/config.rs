@@ -1,13 +1,13 @@
-//! Project configuration parsing for `apss.toml`.
+//! Project configuration parsing for `APSS.yaml`.
 //!
 //! This module provides types and functions for reading consumer project
-//! configuration files. An `apss.toml` at the root of a project declares
+//! configuration files. An `APSS.yaml` at the root of a project declares
 //! which APS standards the project implements, their version requirements,
 //! and standard-specific configuration.
 //!
 //! See `APS-V1-0000.CF01` for the normative specification.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -16,7 +16,7 @@ use thiserror::Error;
 pub const PROJECT_SCHEMA: &str = "apss.project/v1";
 
 /// Default config filename.
-pub const CONFIG_FILENAME: &str = "apss.toml";
+pub const CONFIG_FILENAME: &str = "APSS.yaml";
 
 // ============================================================================
 // Error Types
@@ -32,26 +32,26 @@ pub enum ConfigError {
         source: std::io::Error,
     },
 
-    /// Failed to parse the TOML content.
-    #[error("failed to parse {path}: {source}")]
+    /// Failed to parse the YAML content.
+    #[error("failed to parse {path}: {source_message}")]
     Parse {
         path: PathBuf,
-        source: toml::de::Error,
+        source_message: String,
     },
 
     /// Configuration file not found.
-    #[error("no apss.toml found (searched from {start_dir})")]
+    #[error("no APSS.yaml found (searched from {start_dir})")]
     NotFound { start_dir: PathBuf },
 
     /// Included config file does not exist.
     #[error("included config file not found: {path}")]
     IncludeNotFound { path: PathBuf },
 
-    /// Included config file failed to parse as TOML.
-    #[error("failed to parse included config {path}: {source}")]
+    /// Included config file failed to parse as YAML or TOML.
+    #[error("failed to parse included config {path}: {source_message}")]
     IncludeParse {
         path: PathBuf,
-        source: Box<toml::de::Error>,
+        source_message: String,
     },
 }
 
@@ -59,7 +59,7 @@ pub enum ConfigError {
 // Configuration Types
 // ============================================================================
 
-/// Parsed `apss.toml` project configuration.
+/// Parsed `APSS.yaml` project configuration.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProjectConfig {
     /// Schema identifier. MUST be `"apss.project/v1"`.
@@ -115,14 +115,17 @@ pub struct StandardEntry {
 
     /// Standard-specific configuration. Opaque to CF01; validated by
     /// each standard's `StandardConfig` implementation.
-    #[serde(default = "default_empty_table")]
+    #[serde(
+        default = "default_empty_table",
+        deserialize_with = "deserialize_config_value"
+    )]
     pub config: toml::Value,
 }
 
 /// Workspace configuration for monorepo support.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WorkspaceConfig {
-    /// Glob patterns for child package directories that may have their own `apss.toml`.
+    /// Glob patterns for child package directories that may have their own `APSS.yaml`.
     pub members: Vec<String>,
 
     /// Glob patterns to exclude from workspace discovery.
@@ -167,7 +170,7 @@ pub struct HooksConfig {
     pub pre_commit: bool,
 }
 
-/// Raw, parse-time view of `[tool]` config. Every field is `Option<T>` so
+/// Raw, parse-time view of `tool` config. Every field is `Option<T>` so
 /// the cascading merge in `resolution` can distinguish "omitted by the user"
 /// from "explicitly set to the default value"  -  a distinction required for
 /// child configs that intentionally re-set a boolean back to `false`.
@@ -226,6 +229,50 @@ fn default_empty_table() -> toml::Value {
     toml::Value::Table(toml::map::Map::new())
 }
 
+fn deserialize_config_value<'de, D>(deserializer: D) -> Result<toml::Value, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = serde_yaml::Value::deserialize(deserializer)?;
+    yaml_to_toml_value(value).map_err(serde::de::Error::custom)
+}
+
+fn yaml_to_toml_value(value: serde_yaml::Value) -> Result<toml::Value, String> {
+    match value {
+        serde_yaml::Value::Bool(value) => Ok(toml::Value::Boolean(value)),
+        serde_yaml::Value::Number(value) => {
+            if let Some(integer) = value.as_i64() {
+                Ok(toml::Value::Integer(integer))
+            } else if let Some(float) = value.as_f64() {
+                Ok(toml::Value::Float(float))
+            } else {
+                Err("unsupported YAML number".to_string())
+            }
+        }
+        serde_yaml::Value::String(value) => Ok(toml::Value::String(value)),
+        serde_yaml::Value::Sequence(values) => values
+            .into_iter()
+            .map(yaml_to_toml_value)
+            .collect::<Result<Vec<_>, _>>()
+            .map(toml::Value::Array),
+        serde_yaml::Value::Mapping(values) => {
+            let mut table = toml::map::Map::new();
+            for (key, value) in values {
+                let key = match key {
+                    serde_yaml::Value::String(key) => key,
+                    _ => return Err("YAML config mapping keys must be strings".to_string()),
+                };
+                table.insert(key, yaml_to_toml_value(value)?);
+            }
+            Ok(toml::Value::Table(table))
+        }
+        serde_yaml::Value::Null => Err("YAML null is not supported in standard config".to_string()),
+        serde_yaml::Value::Tagged(_) => {
+            Err("YAML tags are not supported in standard config".to_string())
+        }
+    }
+}
+
 fn default_bin_dir() -> String {
     ".apss/bin".to_string()
 }
@@ -262,7 +309,7 @@ impl Default for HooksConfig {
 
 /// Parse a project configuration from a file path.
 ///
-/// After TOML deserialization, resolves `config = { include = "path" }` directives
+/// After YAML deserialization, resolves `config = { include = "path" }` directives
 /// by reading the referenced file and replacing the config value with its contents.
 pub fn parse_project_config(path: &Path) -> Result<ProjectConfig, ConfigError> {
     let content = std::fs::read_to_string(path).map_err(|e| ConfigError::Io {
@@ -270,10 +317,11 @@ pub fn parse_project_config(path: &Path) -> Result<ProjectConfig, ConfigError> {
         source: e,
     })?;
 
-    let mut config: ProjectConfig = toml::from_str(&content).map_err(|e| ConfigError::Parse {
-        path: path.to_path_buf(),
-        source: e,
-    })?;
+    let mut config: ProjectConfig =
+        serde_yaml::from_str(&content).map_err(|e| ConfigError::Parse {
+            path: path.to_path_buf(),
+            source_message: e.to_string(),
+        })?;
 
     let config_dir = path.parent().unwrap_or(Path::new("."));
     resolve_includes(&mut config, config_dir)?;
@@ -305,11 +353,7 @@ fn resolve_includes(config: &mut ProjectConfig, config_dir: &Path) -> Result<(),
                             }
                         }
                     })?;
-                    let parsed: toml::Value =
-                        toml::from_str(&content).map_err(|e| ConfigError::IncludeParse {
-                            path: resolved_path,
-                            source: Box::new(e),
-                        })?;
+                    let parsed = parse_included_config(&resolved_path, &content)?;
                     entry.config = parsed;
                 }
             }
@@ -318,7 +362,27 @@ fn resolve_includes(config: &mut ProjectConfig, config_dir: &Path) -> Result<(),
     Ok(())
 }
 
-/// Walk up from `start_dir` to find the nearest `apss.toml`.
+fn parse_included_config(path: &Path, content: &str) -> Result<toml::Value, ConfigError> {
+    let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+    if extension.eq_ignore_ascii_case("toml") {
+        toml::from_str(content).map_err(|e| ConfigError::IncludeParse {
+            path: path.to_path_buf(),
+            source_message: e.to_string(),
+        })
+    } else {
+        let value: serde_yaml::Value =
+            serde_yaml::from_str(content).map_err(|e| ConfigError::IncludeParse {
+                path: path.to_path_buf(),
+                source_message: e.to_string(),
+            })?;
+        yaml_to_toml_value(value).map_err(|e| ConfigError::IncludeParse {
+            path: path.to_path_buf(),
+            source_message: e,
+        })
+    }
+}
+
+/// Walk up from `start_dir` to find the nearest `APSS.yaml`.
 ///
 /// Returns the path to the found config file, or `None` if no config
 /// file is found before reaching the filesystem root.
@@ -335,10 +399,10 @@ pub fn find_project_config(start_dir: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Walk up from `start_dir` to find the workspace root `apss.toml`.
+/// Walk up from `start_dir` to find the workspace root `APSS.yaml`.
 ///
-/// The workspace root is the first `apss.toml` that contains a `[workspace]`
-/// section. If no workspace root is found, returns the nearest `apss.toml`.
+/// The workspace root is the first `APSS.yaml` that contains a `workspace`
+/// section. If no workspace root is found, returns the nearest `APSS.yaml`.
 pub fn find_workspace_root(start_dir: &Path) -> Option<PathBuf> {
     let mut nearest: Option<PathBuf> = None;
     let mut current = start_dir.to_path_buf();
@@ -370,14 +434,14 @@ mod tests {
 
     #[test]
     fn test_parse_minimal_config() {
-        let toml_str = r#"
-schema = "apss.project/v1"
+        let yaml_str = r#"
+schema: apss.project/v1
 
-[project]
-name = "test-project"
-apss_version = "v1"
+project:
+  name: test-project
+  apss_version: v1
 "#;
-        let config: ProjectConfig = toml::from_str(toml_str).unwrap();
+        let config: ProjectConfig = serde_yaml::from_str(yaml_str).unwrap();
         assert_eq!(config.schema, PROJECT_SCHEMA);
         assert_eq!(config.project.name, "test-project");
         assert_eq!(config.project.apss_version, "v1");
@@ -387,39 +451,37 @@ apss_version = "v1"
 
     #[test]
     fn test_parse_full_config() {
-        let toml_str = r#"
-schema = "apss.project/v1"
+        let yaml_str = r#"
+schema: apss.project/v1
 
-[project]
-name = "my-service"
-apss_version = "v1"
+project:
+  name: my-service
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0, <2.0.0"
-substandards = ["RS01", "CI01"]
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0, <2.0.0"
+    substandards: ["RS01", "CI01"]
+    config:
+      output_dir: .topology
+      languages: ["rust", "python"]
+  fitness:
+    id: APS-V1-0003
+    version: ">=1.0.0"
+    enabled: false
 
-[standards.code-topology.config]
-output_dir = ".topology"
-languages = ["rust", "python"]
+workspace:
+  members: ["packages/*", "services/*"]
+  exclude: ["packages/deprecated-*"]
 
-[standards.fitness]
-id = "APS-V1-0003"
-version = ">=1.0.0"
-enabled = false
-
-[workspace]
-members = ["packages/*", "services/*"]
-exclude = ["packages/deprecated-*"]
-
-[tool]
-bin_dir = ".apss/bin"
-offline = true
-
-[tool.hooks]
-pre_commit = false
+tool:
+  bin_dir: .apss/bin
+  offline: true
+  hooks:
+    pre_commit: false
 "#;
-        let config: ProjectConfig = toml::from_str(toml_str).unwrap();
+        let config: ProjectConfig = serde_yaml::from_str(yaml_str).unwrap();
         assert_eq!(config.standards.len(), 2);
 
         let topology = &config.standards["code-topology"];
@@ -441,18 +503,19 @@ pre_commit = false
 
     #[test]
     fn test_default_standard_entry_values() {
-        let toml_str = r#"
-schema = "apss.project/v1"
+        let yaml_str = r#"
+schema: apss.project/v1
 
-[project]
-name = "test"
-apss_version = "v1"
+project:
+  name: test
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
 "#;
-        let config: ProjectConfig = toml::from_str(toml_str).unwrap();
+        let config: ProjectConfig = serde_yaml::from_str(yaml_str).unwrap();
         let entry = &config.standards["code-topology"];
         assert!(entry.enabled); // default true
         assert!(entry.substandards.is_none()); // default none = all
@@ -475,10 +538,10 @@ version = ">=1.0.0"
         let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
-            r#"schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+            r#"schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 "#,
         )
         .unwrap();
@@ -511,15 +574,17 @@ apss_version = "v1"
         let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
-            r#"schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+            r#"schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
-config = { include = ".apss/config/code-topology.toml" }
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
+    config:
+      include: .apss/config/code-topology.toml
 "#,
         )
         .unwrap();
@@ -536,15 +601,17 @@ config = { include = ".apss/config/code-topology.toml" }
         let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
-            r#"schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+            r#"schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
-config = { include = "nonexistent.toml" }
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
+    config:
+      include: nonexistent.toml
 "#,
         )
         .unwrap();
@@ -561,15 +628,17 @@ config = { include = "nonexistent.toml" }
         let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
-            r#"schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+            r#"schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
-config = { include = "bad.toml" }
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
+    config:
+      include: bad.toml
 "#,
         )
         .unwrap();
@@ -584,18 +653,18 @@ config = { include = "bad.toml" }
         let config_path = temp.path().join(CONFIG_FILENAME);
         std::fs::write(
             &config_path,
-            r#"schema = "apss.project/v1"
-[project]
-name = "test"
-apss_version = "v1"
+            r#"schema: apss.project/v1
+project:
+  name: test
+  apss_version: v1
 
-[standards.code-topology]
-id = "APS-V1-0001"
-version = ">=1.0.0"
-
-[standards.code-topology.config]
-include = "some-value"
-other_key = "other-value"
+standards:
+  code-topology:
+    id: APS-V1-0001
+    version: ">=1.0.0"
+    config:
+      include: some-value
+      other_key: other-value
 "#,
         )
         .unwrap();

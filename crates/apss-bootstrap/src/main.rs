@@ -40,7 +40,7 @@ enum Commands {
 
     /// Validate project configuration
     Validate {
-        /// Only validate apss.toml structure (skip standard-specific validation)
+        /// Only validate APSS.yaml structure (skip standard-specific validation)
         #[arg(long)]
         config_only: bool,
     },
@@ -61,7 +61,7 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum ConfigAction {
-    /// Generate apss.toml with all defaults and comments
+    /// Generate APSS.yaml with all defaults and comments
     Template,
 }
 
@@ -94,7 +94,7 @@ fn cmd_status() -> i32 {
     let config_path = match find_config() {
         Some(p) => p,
         None => {
-            eprintln!("No apss.toml found. Run 'apss init' to create one.");
+            eprintln!("No APSS.yaml found. Run 'apss init' to create one.");
             return 1;
         }
     };
@@ -102,7 +102,7 @@ fn cmd_status() -> i32 {
     let config = match apss_core::config::parse_project_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Failed to load apss.toml: {e}");
+            eprintln!("Failed to load APSS.yaml: {e}");
             return 1;
         }
     };
@@ -161,7 +161,7 @@ fn cmd_validate(config_only: bool) -> i32 {
     let config_path = match find_config() {
         Some(p) => p,
         None => {
-            eprintln!("No apss.toml found. Run 'apss init' to create one.");
+            eprintln!("No APSS.yaml found. Run 'apss init' to create one.");
             return 1;
         }
     };
@@ -184,7 +184,7 @@ fn cmd_run(args: &[String]) -> i32 {
     let config_path = match find_config() {
         Some(p) => p,
         None => {
-            eprintln!("No apss.toml found. Run 'apss init' to create one.");
+            eprintln!("No APSS.yaml found. Run 'apss init' to create one.");
             return 1;
         }
     };
@@ -192,7 +192,7 @@ fn cmd_run(args: &[String]) -> i32 {
     let config = match apss_core::config::parse_project_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Failed to load apss.toml: {e}");
+            eprintln!("Failed to load APSS.yaml: {e}");
             return 1;
         }
     };
@@ -228,38 +228,40 @@ fn cmd_run(args: &[String]) -> i32 {
 
 fn cmd_config_template() -> i32 {
     println!(
-        r#"# apss.toml  -  APSS Project Configuration
+        r#"# APSS.yaml - APSS Project Configuration
 # See: https://github.com/AgentParadise/agent-paradise-standards-system
 
-schema = "apss.project/v1"
+schema: apss.project/v1
 
-[project]
-name = "my-project"
-apss_version = "v1"
+project:
+  name: my-project
+  apss_version: v1
 
 # Declare which standards this project implements.
-    # Each key is a slug used for CLI dispatch (e.g., `apss run code-topology ...`).
-
-    # [standards.code-topology]
-    # id = "APS-V1-0001"
-    # version = ">=1.0.0, <2.0.0"
-    # substandards = ["RS01", "CI01"]  # omit for all
-    #
-    # [standards.code-topology.config]
-    # output_dir = ".topology"
-    # languages = ["rust", "python"]
+# Each key is a slug used for CLI dispatch (e.g., `apss run code-topology ...`).
+#
+# standards:
+#   code-topology:
+#     id: APS-V1-0001
+#     version: ">=1.0.0, <2.0.0"
+#     substandards: ["RS01", "CI01"]  # omit for all
+#     config:
+#       output_dir: .topology
+#       languages: ["rust", "python"]
 
 # Monorepo workspace configuration (optional).
-# [workspace]
-# members = ["packages/*", "services/*"]
-# exclude = ["packages/deprecated-*"]
+# workspace:
+#   members: ["packages/*", "services/*"]
+#   exclude: ["packages/deprecated-*"]
 
 # Tool configuration (optional).
-# [tool]
-# bin_dir = ".apss/bin"
-# registry = "https://crates.io"
-# offline = false
-# log_level = "warn"
+# tool:
+#   bin_dir: .apss/bin
+#   registry: https://crates.io
+#   offline: false
+#   log_level: warn
+#   hooks:
+#     pre_commit: true
 "#
     );
     0

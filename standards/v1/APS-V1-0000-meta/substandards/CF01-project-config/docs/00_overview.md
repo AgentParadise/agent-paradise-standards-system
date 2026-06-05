@@ -14,7 +14,7 @@ to each standard's own validator.
 Before CF01, project state was split across two files with different
 serialisation formats:
 
-- Project-level activation lived in `apss.toml` at the root.
+- Project-level activation lived in `APSS.yaml` at the root.
 - Per-standard configuration sometimes lived under `.apss/config.toml`
   (notably for EXP-V1-0004 documentation).
 
@@ -25,7 +25,7 @@ the operator authors) and generated artifacts (which the installer writes).
 
 ## Solution
 
-CF01 specifies a single manifest, `apss.toml`, at the project root and gives
+CF01 specifies a single manifest, `APSS.yaml`, at the project root and gives
 it three roles at once.
 
 1. **Project configuration.** Core sections owned by CF01 capture project
@@ -33,12 +33,12 @@ it three roles at once.
 2. **Standard activation.** The `standards` mapping is the project's
    dependency declaration: which standards (and which substandards) are
    active, at what version range.
-3. **Installation manifest.** The unified installer reads `apss.toml`,
+3. **Installation manifest.** The unified installer reads `APSS.yaml`,
    resolves it through DI01, then invokes each active standard's install
    contract to produce on-disk state. Removing an entry and re-running
    uninstalls cleanly.
 
-The npm analogy is the binding model: `apss.toml` is to APSS what
+The npm analogy is the binding model: `APSS.yaml` is to APSS what
 `package.json` is to npm. One file, one install command, one source of
 truth for what the project considers active.
 
@@ -62,5 +62,5 @@ build outputs, composed binaries). Configuration MUST NOT live there.
   `StandardCli` trait is the in-process API the unified installer uses to
   reach a standard's install contract.
 - **APS-V1-0000.SS01** Substandard Structure. Substandards nest under the
-  parent slug in `apss.toml` rather than receiving their own top-level slug.
+  parent slug in `APSS.yaml` rather than receiving their own top-level slug.
 - **Meta-standard section 8.3** `StandardConfig` trait specification.

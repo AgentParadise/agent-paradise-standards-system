@@ -3,7 +3,7 @@
 //! This module provides the [`StandardRegistry`] trait and [`ProjectRunner`]
 //! for composing multiple standards into a single CLI binary. Standards
 //! register themselves via `register()` functions, and the runner dispatches
-//! commands based on the project's `apss.toml` configuration.
+//! commands based on the project's `APSS.yaml` configuration.
 //!
 //! See `APS-V1-0000.DI01` for the normative specification.
 
@@ -28,11 +28,11 @@ pub enum RunnerError {
     StandardNotFound { slug: String },
 
     /// Standard not registered (declared in config but not linked).
-    #[error("standard '{slug}' is declared in apss.toml but not registered in this binary")]
+    #[error("standard '{slug}' is declared in APSS.yaml but not registered in this binary")]
     StandardNotRegistered { slug: String },
 
     /// No configuration file found.
-    #[error("no apss.toml found (searched from {start_dir})")]
+    #[error("no APSS.yaml found (searched from {start_dir})")]
     NoConfig { start_dir: PathBuf },
 }
 
@@ -113,7 +113,7 @@ struct RegistryEntry {
 /// Config-driven CLI runner for consumer projects.
 ///
 /// This is the main entry point for composed binaries. It:
-/// 1. Loads `apss.toml` configuration
+/// 1. Loads `APSS.yaml` configuration
 /// 2. Accepts standard registrations via [`StandardRegistry`]
 /// 3. Dispatches CLI commands to the appropriate standard handler
 pub struct ProjectRunner {
@@ -122,7 +122,7 @@ pub struct ProjectRunner {
 }
 
 impl ProjectRunner {
-    /// Create a runner from an `apss.toml` file path.
+    /// Create a runner from an `APSS.yaml` file path.
     pub fn from_config_file(path: &Path) -> Result<Self, RunnerError> {
         let project_config = config::parse_project_config(path)?;
         let resolved = resolution::resolve_single(project_config, path.to_path_buf());
@@ -192,11 +192,11 @@ impl ProjectRunner {
         let resolved = match self.config.standards.get(slug.as_str()) {
             Some(s) if s.enabled => s,
             Some(_) => {
-                eprintln!("Standard '{slug}' is disabled in apss.toml");
+                eprintln!("Standard '{slug}' is disabled in APSS.yaml");
                 return 1;
             }
             None => {
-                eprintln!("Standard '{slug}' not found in apss.toml");
+                eprintln!("Standard '{slug}' not found in APSS.yaml");
                 return 1;
             }
         };
@@ -206,7 +206,7 @@ impl ProjectRunner {
             Some(e) => e,
             None => {
                 eprintln!(
-                    "Standard '{slug}' is declared in apss.toml but not registered in this binary"
+                    "Standard '{slug}' is declared in APSS.yaml but not registered in this binary"
                 );
                 eprintln!("Run 'apss install' to rebuild with the correct standards.");
                 return 1;
