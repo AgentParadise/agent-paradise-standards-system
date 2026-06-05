@@ -83,6 +83,8 @@ pub struct BacklinkingConfig {
     pub disable: bool,
     #[serde(default = "default_backlinking_file_types")]
     pub file_types: Vec<String>,
+    #[serde(rename = "scan", default, alias = "include_globs")]
+    pub scan: Option<Vec<String>>,
 }
 
 impl Default for BacklinkingConfig {
@@ -90,6 +92,7 @@ impl Default for BacklinkingConfig {
         Self {
             disable: false,
             file_types: default_backlinking_file_types(),
+            scan: None,
         }
     }
 }
@@ -336,23 +339,27 @@ fn default_docs_reference_pattern() -> String {
 }
 
 fn default_backlinking_file_types() -> Vec<String> {
+    Vec::new()
+}
+
+pub fn default_backlinking_scan() -> Vec<String> {
     vec![
-        "rs".to_string(),
-        "py".to_string(),
-        "ts".to_string(),
-        "tsx".to_string(),
-        "js".to_string(),
-        "jsx".to_string(),
-        "go".to_string(),
-        "java".to_string(),
-        "kt".to_string(),
-        "rb".to_string(),
-        "sh".to_string(),
-        "yaml".to_string(),
-        "yml".to_string(),
-        "toml".to_string(),
-        "json".to_string(),
-        "md".to_string(),
+        "**/*.rs".to_string(),
+        "**/*.py".to_string(),
+        "**/*.ts".to_string(),
+        "**/*.tsx".to_string(),
+        "**/*.js".to_string(),
+        "**/*.jsx".to_string(),
+        "**/*.go".to_string(),
+        "**/*.java".to_string(),
+        "**/*.kt".to_string(),
+        "**/*.rb".to_string(),
+        "**/*.sh".to_string(),
+        "**/*.yaml".to_string(),
+        "**/*.yml".to_string(),
+        "**/*.toml".to_string(),
+        "**/*.json".to_string(),
+        "**/*.md".to_string(),
     ]
 }
 

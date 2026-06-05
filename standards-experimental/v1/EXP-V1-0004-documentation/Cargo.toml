@@ -13,6 +13,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml.workspace = true
 walkdir.workspace = true
+glob.workspace = true
 thiserror.workspace = true
 regex = "1"
 

@@ -42,6 +42,8 @@ fn assert_docs_defaults(docs: &documentation::config::DocsConfig) {
     );
 
     assert!(!docs.backlinking.disable);
+    assert_eq!(docs.backlinking.scan, None);
+    assert!(docs.backlinking.file_types.is_empty());
 
     assert!(!docs.north_star.disable);
     assert_eq!(docs.north_star.location, expected.north_star.location);
@@ -101,6 +103,9 @@ docs:
     docs_reference_pattern: documentation/
   backlinking:
     disable: true
+    scan:
+      - "**/*.rs"
+      - "notes/**/*.md"
 "#,
     )
     .unwrap();
@@ -112,6 +117,11 @@ docs:
     assert_eq!(config.docs.adr.naming_pattern, "DEC_\\d{3}_[a-z]+\\.md");
     assert_eq!(config.docs.adr.required_adr_keywords, vec!["init"]);
     assert!(config.docs.backlinking.disable);
+    assert_eq!(
+        config.docs.backlinking.scan,
+        Some(vec!["**/*.rs".to_string(), "notes/**/*.md".to_string()])
+    );
+    assert!(config.docs.backlinking.file_types.is_empty());
     assert!(config.docs.readme.disable);
     assert_eq!(config.docs.readme.max_depth, 3);
     assert_eq!(config.docs.readme.exclude_dirs, vec!["build"]);

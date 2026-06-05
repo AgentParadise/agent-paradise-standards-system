@@ -459,6 +459,7 @@ name = "documentation"
 version = "0.1.0"
 dependencies = [
  "aps-core",
+ "glob",
  "regex",
  "serde",
  "serde_json",
@@ -474,6 +475,7 @@ version = "0.1.0"
 dependencies = [
  "aps-core",
  "documentation",
+ "glob",
  "regex",
  "tempfile",
  "walkdir",

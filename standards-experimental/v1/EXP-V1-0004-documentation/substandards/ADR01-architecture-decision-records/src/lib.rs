@@ -4,8 +4,9 @@
 //! required front matter, keyword-based required ADRs, and backlinking from
 //! implementation files back to governing ADRs.
 
-use aps_core::{Diagnostic, Diagnostics};
+use aps_core::{Diagnostic, Diagnostics, diagnostics::Location};
 use documentation::config::{self, DocsConfig};
+use glob::Pattern;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -37,8 +38,12 @@ pub mod error_codes {
     pub const MISSING_ADR_CONTEXT_FILE: &str = "ADR01-missing-context-file";
     /// ADR CLAUDE.md or AGENTS.md does not document how code references ADRs.
     pub const ADR_CONTEXT_MISSING_GUIDANCE: &str = "ADR01-context-missing-guidance";
-    /// Source file references an ADR identifier that has no matching file.
+    /// Source file references an ADR token that has no matching ADR file.
+    pub const UNKNOWN_ADR_REFERENCE: &str = "ADR01-unknown-reference";
+    /// The old code name before precision accuracy was renamed in 2026-06.
     pub const DEAD_ADR_REFERENCE: &str = "ADR01-dead-reference";
+    /// A docs.backlinking include glob is invalid.
+    pub const INVALID_ADR_REFERENCE_GLOB: &str = "ADR01-invalid-reference-glob";
     /// ADR file is missing a required section header (Context, Decision, Consequences).
     pub const MISSING_ADR_HEADER: &str = "ADR01-missing-header";
     /// ADR file is missing the `status` field, or its value is not a valid lifecycle state.
@@ -400,7 +405,7 @@ fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
     }
 }
 
-// ─── Dead ADR reference scanning (ADR01-dead-reference) ──────────────────
+// ─── ADR reference scanning (ADR01-unknown-reference) ────────────────
 
 /// Extract ADR identifiers from text using a regex derived from the configured
 /// naming pattern (filename stem, without the trailing `\.md`). This keeps
@@ -412,6 +417,18 @@ fn extract_adr_references(content: &str, stem_re: &Regex) -> Vec<String> {
         .find_iter(content)
         .map(|m| m.as_str().to_string())
         .collect()
+}
+
+/// Extract ADR identifiers from text with line numbers, where line is 1-indexed.
+fn extract_adr_references_with_lines(content: &str, stem_re: &Regex) -> Vec<(String, usize)> {
+    let mut refs = Vec::new();
+    for (line_number, line) in content.lines().enumerate() {
+        let line_number = line_number + 1;
+        for m in stem_re.find_iter(line) {
+            refs.push((m.as_str().to_string(), line_number));
+        }
+    }
+    refs
 }
 
 /// Build a set of valid ADR stems (filename without `.md`) from the ADR directory.
@@ -443,14 +460,49 @@ fn adr_statuses(adr_dir: &Path, adr_files: &[String]) -> HashMap<String, String>
     map
 }
 
-/// File extensions to scan for ADR references.
-const SOURCE_EXTENSIONS: &[&str] = &[
-    "rs", "py", "ts", "tsx", "js", "jsx", "go", "java", "kt", "rb", "sh", "yaml", "yml", "toml",
-    "json", "md",
-];
+fn compile_backlinking_patterns(
+    repo_root: &Path,
+    config: &DocsConfig,
+    diagnostics: &mut Diagnostics,
+) -> Vec<Pattern> {
+    let mut raw_patterns = config
+        .backlinking
+        .scan
+        .clone()
+        .unwrap_or_else(config::default_backlinking_scan);
+
+    let deprecated_file_patterns = config
+        .backlinking
+        .file_types
+        .iter()
+        .map(|ext| format!("**/*.{}", ext));
+    raw_patterns.extend(deprecated_file_patterns);
+
+    let mut patterns = Vec::new();
+    for pattern in raw_patterns {
+        match Pattern::new(&pattern) {
+            Ok(compiled) => patterns.push(compiled),
+            Err(e) => {
+                diagnostics.push(
+                    Diagnostic::error(
+                        error_codes::INVALID_ADR_REFERENCE_GLOB,
+                        format!(
+                            "Invalid ADR reference scan glob '{pattern}' in docs.backlinking.scan: {e}"
+                        ),
+                    )
+                    .with_path(repo_root)
+                    .with_hint(
+                        "Update docs.backlinking.scan to valid glob syntax, for example '**/*.rs'.",
+                    ),
+                );
+            }
+        }
+    }
+    patterns
+}
 
 /// ADR01-009/012: Scan source files for ADR-XXX-name references and flag any
-/// that don't correspond to an actual ADR file (009), or reference a
+/// that don't correspond to an actual ADR file (unknown), or reference a
 /// superseded/deprecated ADR (012).
 fn validate_adr_references(
     repo_root: &Path,
@@ -475,6 +527,10 @@ fn validate_adr_references(
     };
 
     let statuses = adr_statuses(adr_dir, adr_files);
+    let patterns = compile_backlinking_patterns(repo_root, config, diagnostics);
+    if patterns.is_empty() {
+        return;
+    }
     let exclude: HashSet<&str> = config
         .readme
         .exclude_dirs
@@ -489,6 +545,12 @@ fn validate_adr_references(
     let canonical_adr_dir = adr_dir
         .canonicalize()
         .unwrap_or_else(|_| adr_dir.to_path_buf());
+
+    let should_scan = |path: &Path| -> bool {
+        let rel = path.strip_prefix(&canonical_repo).unwrap_or(path);
+        let rel_str = rel.to_string_lossy().replace('\\', "/");
+        patterns.iter().any(|pattern| pattern.matches(&rel_str))
+    };
 
     for entry in WalkDir::new(&canonical_repo)
         .into_iter()
@@ -506,9 +568,7 @@ fn validate_adr_references(
             continue;
         }
 
-        // Only scan known source extensions
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        if !SOURCE_EXTENSIONS.contains(&ext) {
+        if !should_scan(path) {
             continue;
         }
 
@@ -522,15 +582,22 @@ fn validate_adr_references(
             continue;
         };
 
-        let refs = extract_adr_references(&content, &stem_re);
-        for adr_ref in refs {
+        let refs = extract_adr_references_with_lines(&content, &stem_re);
+        for (adr_ref, line_number) in refs {
             if !valid_stems.contains(&adr_ref) {
                 diagnostics.push(
-                    Diagnostic::warning(
-                        error_codes::DEAD_ADR_REFERENCE,
-                        format!("Reference to '{adr_ref}' does not match any ADR file"),
+                    Diagnostic::error(
+                        error_codes::UNKNOWN_ADR_REFERENCE,
+                        format!(
+                            "Reference to '{adr_ref}' in {}:{line_number} does not match any ADR file",
+                            path.display()
+                        ),
                     )
-                    .with_path(path)
+                    .with_location(Location {
+                        path: Some(path.to_path_buf()),
+                        line: Some(line_number),
+                        column: None,
+                    })
                     .with_hint(format!(
                         "No file '{adr_ref}.md' found in {}. Update or remove the stale reference.",
                         adr_dir.display()
@@ -626,7 +693,8 @@ mod tests {
             error_codes::INVALID_NAMING_REGEX,
             error_codes::MISSING_ADR_CONTEXT_FILE,
             error_codes::ADR_CONTEXT_MISSING_GUIDANCE,
-            error_codes::DEAD_ADR_REFERENCE,
+            error_codes::UNKNOWN_ADR_REFERENCE,
+            error_codes::INVALID_ADR_REFERENCE_GLOB,
             error_codes::MISSING_ADR_HEADER,
             error_codes::INVALID_ADR_STATUS,
             error_codes::SUPERSEDED_ADR_REFERENCE,

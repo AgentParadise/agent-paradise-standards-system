@@ -517,25 +517,25 @@ fn fixture_no_guidance_warns() {
 }
 
 #[test]
-fn fixture_dead_adr_references() {
+fn fixture_unknown_adr_references() {
     let validator =
         AdrValidator::with_config(&fixture_path("dead_references"), DocsConfig::default());
     let diagnostics = validator.validate();
 
-    let dead_refs: Vec<_> = diagnostics
-        .warnings()
-        .filter(|d| d.code == error_codes::DEAD_ADR_REFERENCE)
+    let unknown_refs: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE)
         .collect();
 
     // src/main.rs references ADR-999-nonexistent which doesn't exist
     assert_eq!(
-        dead_refs.len(),
+        unknown_refs.len(),
         1,
-        "Expected 1 dead reference warning, got {}: {:?}",
-        dead_refs.len(),
-        dead_refs
+        "Expected 1 unknown ADR reference error, got {}: {:?}",
+        unknown_refs.len(),
+        unknown_refs
     );
-    assert!(dead_refs[0].message.contains("ADR-999-nonexistent"));
+    assert!(unknown_refs[0].message.contains("ADR-999-nonexistent"));
 }
 
 #[test]
@@ -545,10 +545,151 @@ fn fixture_valid_repo_no_dead_references() {
 
     assert!(
         !diagnostics
-            .warnings()
-            .any(|d| d.code == error_codes::DEAD_ADR_REFERENCE),
-        "Valid fixture should have no dead ADR references"
+            .errors()
+            .any(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE),
+        "Valid fixture should have no unknown ADR references"
     );
+}
+
+#[test]
+fn test_default_adr_scan_list_is_used_when_scan_not_set() {
+    let dir = tempdir().unwrap();
+    let adr_dir = dir.path().join("docs").join("adrs");
+    let src_dir = dir.path().join("src");
+    let notes_dir = dir.path().join("notes");
+    fs::create_dir_all(&adr_dir).unwrap();
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&notes_dir).unwrap();
+
+    fs::write(
+        adr_dir.join("ADR-001-auth.md"),
+        "---\nname: \"Auth\"\ndescription: \"Auth\"\nstatus: accepted\n---\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+
+    fs::write(
+        src_dir.join("handler.rs"),
+        "// ADR-999-missing from source code\n",
+    )
+    .unwrap();
+    fs::write(
+        notes_dir.join("notes.txt"),
+        "ADR-888-missing in text file\n",
+    )
+    .unwrap();
+
+    let validator = AdrValidator::with_config(dir.path(), DocsConfig::default());
+    let diagnostics = validator.validate();
+
+    let unknown_refs: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE)
+        .collect();
+
+    assert_eq!(unknown_refs.len(), 1);
+    assert!(
+        unknown_refs[0]
+            .location
+            .path
+            .as_ref()
+            .is_some_and(|p| p.ends_with("handler.rs"))
+    );
+}
+
+#[test]
+fn test_scan_override_targets_configured_globs() {
+    let dir = tempdir().unwrap();
+    let adr_dir = dir.path().join("docs").join("adrs");
+    let src_dir = dir.path().join("src");
+    let notes_dir = dir.path().join("notes");
+    fs::create_dir_all(&adr_dir).unwrap();
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::create_dir_all(&notes_dir).unwrap();
+
+    fs::write(
+        adr_dir.join("ADR-001-auth.md"),
+        "---\nname: \"Auth\"\ndescription: \"Auth\"\nstatus: accepted\n---\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+
+    fs::write(src_dir.join("handler.rs"), "// ADR-999-missing\n").unwrap();
+    fs::write(notes_dir.join("handler.md"), "ADR-888-missing\n").unwrap();
+
+    let mut config = DocsConfig::default();
+    config.backlinking.scan = Some(vec!["notes/**/*.md".to_string()]);
+
+    let validator = AdrValidator::with_config(dir.path(), config);
+    let diagnostics = validator.validate();
+
+    let unknown_refs: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE)
+        .collect();
+
+    assert_eq!(unknown_refs.len(), 1);
+    assert!(
+        unknown_refs[0]
+            .location
+            .path
+            .as_ref()
+            .is_some_and(|p| p.ends_with("handler.md"))
+    );
+}
+
+#[test]
+fn test_invalid_scan_glob_reports_error() {
+    let dir = tempdir().unwrap();
+    let adr_dir = dir.path().join("docs").join("adrs");
+    fs::create_dir_all(&adr_dir).unwrap();
+
+    fs::write(
+        adr_dir.join("ADR-001-auth.md"),
+        "---\nname: \"Auth\"\ndescription: \"Auth\"\nstatus: accepted\n---\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+
+    let mut config = DocsConfig::default();
+    config.backlinking.scan = Some(vec!["[".to_string()]);
+
+    let validator = AdrValidator::with_config(dir.path(), config);
+    let diagnostics = validator.validate();
+
+    let pattern_errors: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::INVALID_ADR_REFERENCE_GLOB)
+        .collect();
+
+    assert_eq!(pattern_errors.len(), 1);
 }
 
 #[test]
@@ -609,13 +750,13 @@ fn test_dead_reference_in_source_file() {
     let validator = AdrValidator::with_config(dir.path(), DocsConfig::default());
     let diagnostics = validator.validate();
 
-    let dead_refs: Vec<_> = diagnostics
-        .warnings()
-        .filter(|d| d.code == error_codes::DEAD_ADR_REFERENCE)
+    let unknown_refs: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE)
         .collect();
 
-    assert_eq!(dead_refs.len(), 1);
-    assert!(dead_refs[0].message.contains("ADR-050-deleted-feature"));
+    assert_eq!(unknown_refs.len(), 1);
+    assert!(unknown_refs[0].message.contains("ADR-050-deleted-feature"));
 }
 
 #[test]
@@ -648,8 +789,8 @@ fn test_no_dead_references_when_backlinking_disabled() {
 
     assert!(
         !diagnostics
-            .warnings()
-            .any(|d| d.code == error_codes::DEAD_ADR_REFERENCE),
+            .errors()
+            .any(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE),
         "Dead reference scanning should be skipped when backlinking is disabled"
     );
 }
