@@ -5,16 +5,16 @@
 //!
 //! ## Key Concepts
 //!
-//! - **Standard crates** — each standard publishes as an independent Rust crate
-//! - **Bootstrap binary** — lightweight `apss` CLI for init/install
-//! - **Composed binary** — project-local binary with only declared standards
-//! - **Lockfile** — `apss.lock` pins exact versions for reproducibility
+//! - **Standard crates**  -  each standard publishes as an independent Rust crate
+//! - **Bootstrap binary**  -  lightweight `apss` CLI for init/install
+//! - **Composed binary**  -  project-local binary with only declared standards
+//! - **Lockfile**  -  `apss.lock` pins exact versions for reproducibility
 //!
 //! ## Quick Start
 //!
 //! ```bash
 //! cargo install apss              # install bootstrap
-//! apss init --standard topology   # create apss.toml
+//! apss init --standard code-topology   # create apss.toml
 //! apss install                    # build composed binary
 //! apss run topology analyze .     # use it
 //! ```
@@ -246,7 +246,7 @@ pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    // Skip workspace-inherited versions — they're managed centrally
+    // Skip workspace-inherited versions  -  they're managed centrally
     let is_workspace_version = package
         .get("version")
         .and_then(|v| v.as_table())
@@ -311,7 +311,7 @@ pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
         diags.push(
             Diagnostic::warning(
                 error_codes::DI_MISSING_PUBLISH_METADATA,
-                "Missing 'description' in Cargo.toml — required for crates.io publishing",
+                "Missing 'description' in Cargo.toml  -  required for crates.io publishing",
             )
             .with_path(&cargo_path),
         );
@@ -321,7 +321,7 @@ pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
         diags.push(
             Diagnostic::warning(
                 error_codes::DI_MISSING_PUBLISH_METADATA,
-                "Missing 'license' in Cargo.toml — required for crates.io publishing",
+                "Missing 'license' in Cargo.toml  -  required for crates.io publishing",
             )
             .with_path(&cargo_path),
         );
@@ -331,7 +331,7 @@ pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
         diags.push(
             Diagnostic::warning(
                 error_codes::DI_MISSING_PUBLISH_METADATA,
-                "Missing 'repository' in Cargo.toml — required for crates.io publishing",
+                "Missing 'repository' in Cargo.toml  -  required for crates.io publishing",
             )
             .with_path(&cargo_path),
         );
@@ -343,7 +343,7 @@ pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
             diags.push(
                 Diagnostic::warning(
                     error_codes::DI_PUBLISH_DISABLED,
-                    "Crate has 'publish = false' — it won't be publishable to crates.io",
+                    "Crate has 'publish = false'  -  it won't be publishable to crates.io",
                 )
                 .with_path(&cargo_path)
                 .with_hint("Remove 'publish = false' if this crate should be distributed"),
@@ -369,7 +369,7 @@ pub fn validate_installation(project_root: &Path) -> Diagnostics {
         return diags;
     }
 
-    // Lockfile exists — check it parses
+    // Lockfile exists  -  check it parses
     if let Err(e) = aps_core::lockfile::parse_lockfile(&lockfile_path) {
         diags.push(
             Diagnostic::error(

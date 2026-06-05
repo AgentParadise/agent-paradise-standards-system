@@ -58,10 +58,6 @@ pub fn run(args: InitArgs) -> i32 {
         eprintln!("Failed to create .apss/bin directory: {e}");
         return 1;
     }
-    if let Err(e) = std::fs::create_dir_all(".apss/config") {
-        eprintln!("Failed to create .apss/config directory: {e}");
-        return 1;
-    }
 
     // Self-contained gitignore: only build artifacts, not config
     let apss_gitignore = Path::new(".apss/.gitignore");
@@ -74,9 +70,8 @@ pub fn run(args: InitArgs) -> i32 {
     println!();
     println!("Next steps:");
     println!("  1. Edit {CONFIG_FILENAME} to configure your standards");
-    println!("  2. Optionally extract configs to .apss/config/<standard>.toml");
-    println!("  3. Run 'apss install' to build the project CLI");
-    println!("  4. Run 'apss run <standard> <command>' to use it");
+    println!("  2. Run 'apss install' to build the project CLI");
+    println!("  3. Run 'apss run <standard> <command>' to use it");
 
     0
 }

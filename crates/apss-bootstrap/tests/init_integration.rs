@@ -30,14 +30,15 @@ fn test_init_creates_expected_layout() {
         "missing apss_version line:\n{apss_toml}"
     );
 
-    // .apss/bin and .apss/config are directories
+    // .apss/bin is generated; .apss/config is intentionally not created
+    // because configuration is user-owned and lives outside .apss/.
     assert!(
         temp.path().join(".apss/bin").is_dir(),
         ".apss/bin is not a directory"
     );
     assert!(
-        temp.path().join(".apss/config").is_dir(),
-        ".apss/config is not a directory"
+        !temp.path().join(".apss/config").exists(),
+        ".apss/config should not be created by apss init"
     );
 
     // .apss/.gitignore holds only build artifacts, not configs
@@ -74,7 +75,7 @@ fn test_init_with_standard_flag() {
     let temp = tempfile::tempdir().unwrap();
 
     let status = Command::new(APSS_BIN)
-        .args(["init", "--standard", "topology@>=1.0.0"])
+        .args(["init", "--standard", "code-topology@>=1.0.0"])
         .current_dir(temp.path())
         .status()
         .expect("failed to invoke apss init --standard");
@@ -82,8 +83,8 @@ fn test_init_with_standard_flag() {
 
     let apss_toml = std::fs::read_to_string(temp.path().join("apss.toml")).unwrap();
     assert!(
-        apss_toml.contains("[standards.topology]"),
-        "missing [standards.topology] section:\n{apss_toml}"
+        apss_toml.contains("[standards.code-topology]"),
+        "missing [standards.code-topology] section:\n{apss_toml}"
     );
     assert!(
         apss_toml.contains("version = \">=1.0.0\""),

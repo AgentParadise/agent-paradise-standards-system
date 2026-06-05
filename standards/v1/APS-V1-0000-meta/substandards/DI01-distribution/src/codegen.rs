@@ -6,7 +6,7 @@
 use aps_core::lockfile::Lockfile;
 use aps_core::resolution::ResolvedProjectConfig;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 /// Errors from code generation.
@@ -18,6 +18,22 @@ pub enum CodegenError {
         path: String,
         source: std::io::Error,
     },
+
+    /// A requested local package was not found in the provided repository.
+    #[error("local package '{package}' not found under {repo}")]
+    LocalPackageNotFound { package: String, repo: String },
+
+    /// A registry dependency could not be emitted from an exact lockfile pin.
+    #[error("standard '{standard}' is not exactly resolved in apss.lock")]
+    UnresolvedRegistryPackage { standard: String },
+}
+
+/// Options controlling generated build crate dependency sources.
+#[derive(Debug, Clone, Default)]
+pub struct CodegenOptions {
+    /// Local repository root to use for path dependencies instead of registry
+    /// versions. Intended for pre-publish distribution testing.
+    pub local_repo: Option<PathBuf>,
 }
 
 /// Generate the `.apss/build/` crate from a resolved config.
@@ -30,6 +46,16 @@ pub fn generate_build_crate(
     lockfile: Option<&Lockfile>,
     output_dir: &Path,
 ) -> Result<Vec<String>, CodegenError> {
+    generate_build_crate_with_options(config, lockfile, output_dir, &CodegenOptions::default())
+}
+
+/// Generate the `.apss/build/` crate with explicit codegen options.
+pub fn generate_build_crate_with_options(
+    config: &ResolvedProjectConfig,
+    lockfile: Option<&Lockfile>,
+    output_dir: &Path,
+    options: &CodegenOptions,
+) -> Result<Vec<String>, CodegenError> {
     let mut generated_files = Vec::new();
 
     // Create directories
@@ -41,7 +67,7 @@ pub fn generate_build_crate(
 
     // Generate Cargo.toml
     let cargo_path = output_dir.join("Cargo.toml");
-    generate_cargo_toml(config, lockfile, &cargo_path)?;
+    generate_cargo_toml(config, lockfile, &cargo_path, options)?;
     generated_files.push(cargo_path.display().to_string());
 
     // Generate main.rs
@@ -56,6 +82,7 @@ fn generate_cargo_toml(
     config: &ResolvedProjectConfig,
     lockfile: Option<&Lockfile>,
     path: &Path,
+    options: &CodegenOptions,
 ) -> Result<(), CodegenError> {
     let mut content = String::new();
 
@@ -70,29 +97,49 @@ fn generate_cargo_toml(
     content.push_str("path = \"src/main.rs\"\n\n");
     content.push_str("[dependencies]\n");
 
-    // Use pinned core version from lockfile, or fall back to current version
-    let core_version = lockfile
-        .map(|l| l.core.version.as_str())
-        .unwrap_or(env!("CARGO_PKG_VERSION"));
-    content.push_str(&format!("aps-core = {{ version = \"{core_version}\" }}\n"));
+    if let Some(local_repo) = &options.local_repo {
+        let core_path = find_local_package_dir(local_repo, "aps-core")?;
+        content.push_str(&format!(
+            "aps-core = {{ path = \"{}\" }}\n",
+            escape_toml_path(&core_path)
+        ));
+    } else {
+        // Use pinned core version from lockfile, or fall back to current version
+        let core_version = lockfile
+            .map(|l| l.core.version.as_str())
+            .unwrap_or(env!("CARGO_PKG_VERSION"));
+        content.push_str(&format!("aps-core = {{ version = \"{core_version}\" }}\n"));
+    }
 
     for standard in config.standards.values() {
         if !standard.enabled {
             continue;
         }
-        // Use pinned exact versions from lockfile. If the lockfile still carries
-        // explicit unresolved sentinels, keep the generated build crate usable by
-        // falling back to the requested range; the lockfile still records that
-        // this is not reproducible yet.
-        let version = lockfile
-            .and_then(|l| l.find_package(&standard.id))
-            .map(|p| p.version.as_str())
-            .filter(|version| !version.starts_with("UNRESOLVED("))
-            .unwrap_or(&standard.version_req);
-        content.push_str(&format!(
-            "{} = {{ version = \"{version}\" }}\n",
-            standard.crate_name
-        ));
+        if let Some(local_repo) = &options.local_repo {
+            let package_path = find_local_package_dir(local_repo, &standard.crate_name)?;
+            let ident = standard_crate_ident(&standard.crate_name);
+            content.push_str(&format!(
+                "{ident} = {{ package = \"{}\", path = \"{}\" }}\n",
+                standard.crate_name,
+                escape_toml_path(&package_path)
+            ));
+        } else {
+            // Registry installs must use exact pins from apss.lock. Local
+            // pre-publish testing should use --local-repo instead of masking
+            // unresolved registry state with version ranges.
+            let version = lockfile
+                .and_then(|l| l.find_package(&standard.id))
+                .map(|p| p.version.as_str())
+                .filter(|version| !version.starts_with("UNRESOLVED("))
+                .ok_or_else(|| CodegenError::UnresolvedRegistryPackage {
+                    standard: standard.id.clone(),
+                })?;
+            let ident = standard_crate_ident(&standard.crate_name);
+            content.push_str(&format!(
+                "{ident} = {{ package = \"{}\", version = \"{version}\" }}\n",
+                standard.crate_name
+            ));
+        }
     }
 
     let mut file = std::fs::File::create(path).map_err(|e| CodegenError::Io {
@@ -106,6 +153,82 @@ fn generate_cargo_toml(
         })?;
 
     Ok(())
+}
+
+fn find_local_package_dir(repo: &Path, package_name: &str) -> Result<PathBuf, CodegenError> {
+    let canonical_repo = repo.canonicalize().map_err(|e| CodegenError::Io {
+        path: repo.display().to_string(),
+        source: e,
+    })?;
+    find_local_package_dir_inner(&canonical_repo, package_name)?.ok_or_else(|| {
+        CodegenError::LocalPackageNotFound {
+            package: package_name.to_string(),
+            repo: canonical_repo.display().to_string(),
+        }
+    })
+}
+
+fn find_local_package_dir_inner(
+    dir: &Path,
+    package_name: &str,
+) -> Result<Option<PathBuf>, CodegenError> {
+    let cargo_toml = dir.join("Cargo.toml");
+    if cargo_toml.is_file() {
+        let content = std::fs::read_to_string(&cargo_toml).map_err(|e| CodegenError::Io {
+            path: cargo_toml.display().to_string(),
+            source: e,
+        })?;
+        if package_name_from_manifest(&content).as_deref() == Some(package_name) {
+            return Ok(Some(dir.to_path_buf()));
+        }
+    }
+
+    let entries = std::fs::read_dir(dir).map_err(|e| CodegenError::Io {
+        path: dir.display().to_string(),
+        source: e,
+    })?;
+    for entry in entries {
+        let entry = entry.map_err(|e| CodegenError::Io {
+            path: dir.display().to_string(),
+            source: e,
+        })?;
+        let path = entry.path();
+        if !path.is_dir() || should_skip_dir(&path) {
+            continue;
+        }
+        if let Some(found) = find_local_package_dir_inner(&path, package_name)? {
+            return Ok(Some(found));
+        }
+    }
+
+    Ok(None)
+}
+
+fn package_name_from_manifest(content: &str) -> Option<String> {
+    let manifest: toml::Value = toml::from_str(content).ok()?;
+    manifest
+        .get("package")?
+        .get("name")?
+        .as_str()
+        .map(ToOwned::to_owned)
+}
+
+fn standard_crate_ident(crate_name: &str) -> String {
+    crate_name.replace('-', "_")
+}
+
+fn should_skip_dir(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    matches!(
+        name,
+        ".git" | ".apss" | "target" | "node_modules" | ".cargo"
+    )
+}
+
+fn escape_toml_path(path: &Path) -> String {
+    path.display().to_string().replace('\\', "\\\\")
 }
 
 fn generate_main_rs(config: &ResolvedProjectConfig, path: &Path) -> Result<(), CodegenError> {
@@ -134,8 +257,7 @@ fn generate_main_rs(config: &ResolvedProjectConfig, path: &Path) -> Result<(), C
         if !standard.enabled {
             continue;
         }
-        // Convert crate name (kebab-case) to Rust identifier (snake_case)
-        let ident = standard.crate_name.replace('-', "_");
+        let ident = standard_crate_ident(&standard.crate_name);
         content.push_str(&format!("    {ident}::register(&mut runner);\n"));
     }
 
@@ -171,10 +293,10 @@ mod tests {
             },
             standards: BTreeMap::from([
                 (
-                    "topology".to_string(),
+                    "code-topology".to_string(),
                     ResolvedStandard {
                         id: "APS-V1-0001".to_string(),
-                        slug: "topology".to_string(),
+                        slug: "code-topology".to_string(),
                         version_req: ">=1.0.0".to_string(),
                         enabled: true,
                         substandards: None,
@@ -200,18 +322,48 @@ mod tests {
         }
     }
 
+    fn test_lockfile() -> Lockfile {
+        let mut lockfile = Lockfile::new("1.0.0".to_string());
+        lockfile.packages.push(aps_core::lockfile::LockedPackage {
+            id: "APS-V1-0001".to_string(),
+            slug: "code-topology".to_string(),
+            crate_name: "apss-v1-0001-code-topology".to_string(),
+            version: "1.0.0".to_string(),
+            checksum: "sha256:test".to_string(),
+            source: "registry+https://crates.io".to_string(),
+            substandards: vec![],
+        });
+        lockfile.packages.push(aps_core::lockfile::LockedPackage {
+            id: "APS-V1-0003".to_string(),
+            slug: "fitness".to_string(),
+            crate_name: "apss-v1-0003-fitness-functions".to_string(),
+            version: "1.0.0".to_string(),
+            checksum: "sha256:test".to_string(),
+            source: "registry+https://crates.io".to_string(),
+            substandards: vec![],
+        });
+        lockfile
+    }
+
     #[test]
     fn test_generate_build_crate() {
         let temp = tempfile::tempdir().unwrap();
         let config = test_config();
 
-        let files = generate_build_crate(&config, None, temp.path()).unwrap();
+        let lockfile = test_lockfile();
+
+        let files = generate_build_crate(&config, Some(&lockfile), temp.path()).unwrap();
         assert_eq!(files.len(), 2);
 
         // Verify Cargo.toml
         let cargo = std::fs::read_to_string(temp.path().join("Cargo.toml")).unwrap();
         assert!(cargo.contains("apss-v1-0001-code-topology"));
         assert!(cargo.contains("apss-v1-0003-fitness-functions"));
+        assert!(
+            cargo.contains(
+                "apss_v1_0001_code_topology = { package = \"apss-v1-0001-code-topology\""
+            )
+        );
         assert!(cargo.contains("aps-core"));
         assert!(cargo.contains("publish = false"));
 
@@ -229,7 +381,9 @@ mod tests {
         let mut config = test_config();
         config.standards.get_mut("fitness").unwrap().enabled = false;
 
-        generate_build_crate(&config, None, temp.path()).unwrap();
+        let lockfile = test_lockfile();
+
+        generate_build_crate(&config, Some(&lockfile), temp.path()).unwrap();
 
         let cargo = std::fs::read_to_string(temp.path().join("Cargo.toml")).unwrap();
         assert!(cargo.contains("apss-v1-0001-code-topology"));
@@ -238,5 +392,62 @@ mod tests {
         let main = std::fs::read_to_string(temp.path().join("src/main.rs")).unwrap();
         assert!(main.contains("apss_v1_0001_code_topology::register"));
         assert!(!main.contains("apss_v1_0003_fitness_functions::register"));
+    }
+
+    #[test]
+    fn test_registry_codegen_rejects_unresolved_lockfile() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = test_config();
+
+        let err = generate_build_crate(&config, None, temp.path()).unwrap_err();
+        assert!(matches!(
+            err,
+            CodegenError::UnresolvedRegistryPackage { .. }
+        ));
+    }
+
+    #[test]
+    fn test_generate_with_local_repo_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        let output = temp.path().join("out");
+        std::fs::create_dir_all(repo.join("crates/aps-core")).unwrap();
+        std::fs::create_dir_all(repo.join("standards/code-topology")).unwrap();
+        std::fs::create_dir_all(repo.join("standards/fitness")).unwrap();
+        std::fs::write(
+            repo.join("crates/aps-core/Cargo.toml"),
+            "[package]\nname = \"aps-core\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            repo.join("standards/code-topology/Cargo.toml"),
+            "[package]\nname = \"apss-v1-0001-code-topology\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            repo.join("standards/fitness/Cargo.toml"),
+            "[package]\nname = \"apss-v1-0003-fitness-functions\"\n",
+        )
+        .unwrap();
+
+        generate_build_crate_with_options(
+            &test_config(),
+            None,
+            &output,
+            &CodegenOptions {
+                local_repo: Some(repo.clone()),
+            },
+        )
+        .unwrap();
+
+        let cargo = std::fs::read_to_string(output.join("Cargo.toml")).unwrap();
+        assert!(cargo.contains("aps-core = { path = "));
+        assert!(cargo.contains(
+            "apss_v1_0001_code_topology = { package = \"apss-v1-0001-code-topology\", path = "
+        ));
+        assert!(cargo.contains(
+            "apss_v1_0003_fitness_functions = { package = \"apss-v1-0003-fitness-functions\", path = "
+        ));
+        assert!(!cargo.contains("version = \">=1.0.0\""));
     }
 }

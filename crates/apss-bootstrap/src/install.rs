@@ -3,10 +3,13 @@
 use aps_core::config::{self, CONFIG_FILENAME};
 use aps_core::lockfile::{self, LOCKFILE_FILENAME, LockedPackage, LockedSubstandard, Lockfile};
 use aps_core::resolution;
-use apss_distribution::codegen;
+use apss_distribution::codegen::{self, CodegenOptions};
 use clap::Args;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+const APSS_HOOK_BEGIN: &str = "# BEGIN APSS MANAGED PRE-COMMIT";
+const APSS_HOOK_END: &str = "# END APSS MANAGED PRE-COMMIT";
 
 // TODO: add --update <slug> and --update-all flags when registry resolution is implemented
 #[derive(Args)]
@@ -18,6 +21,17 @@ pub struct InstallArgs {
     /// Use only cached crates (no network).
     #[arg(long)]
     offline: bool,
+
+    /// Use local checkout path dependencies instead of registry versions.
+    ///
+    /// Intended for pre-publish testing, for example:
+    /// `apss install --local-repo /path/to/agent-paradise-standards-system`.
+    #[arg(long, value_name = "PATH")]
+    local_repo: Option<PathBuf>,
+
+    /// Do not install managed Git hooks.
+    #[arg(long)]
+    no_hooks: bool,
 }
 
 pub fn run(args: InstallArgs) -> i32 {
@@ -61,6 +75,14 @@ pub fn run(args: InstallArgs) -> i32 {
     let lockfile_path = project_root.join(LOCKFILE_FILENAME);
     let lockfile = generate_lockfile(&resolved);
 
+    if args.local_repo.is_none() && lockfile_has_unresolved_packages(&lockfile) {
+        eprintln!("Registry resolution is not implemented yet.");
+        eprintln!(
+            "Refusing to write an unresolved {LOCKFILE_FILENAME}; use --local-repo for local distribution testing."
+        );
+        return 1;
+    }
+
     if args.locked {
         if !lockfile_path.exists() {
             eprintln!("Lockfile would be created but --locked was specified.");
@@ -76,7 +98,7 @@ pub fn run(args: InstallArgs) -> i32 {
             }
         };
 
-        // Compare full lockfile content (not just IDs — catch version/checksum/source changes)
+        // Compare full lockfile content (not just IDs  -  catch version/checksum/source changes)
         let existing_serialized = toml::to_string_pretty(&existing).unwrap_or_default();
         let new_serialized = toml::to_string_pretty(&lockfile).unwrap_or_default();
 
@@ -95,7 +117,15 @@ pub fn run(args: InstallArgs) -> i32 {
 
     // 4. Generate build crate
     let build_dir = project_root.join(apss_distribution::BUILD_DIR);
-    match codegen::generate_build_crate(&resolved, Some(&lockfile), &build_dir) {
+    let codegen_options = CodegenOptions {
+        local_repo: args.local_repo.clone(),
+    };
+    match codegen::generate_build_crate_with_options(
+        &resolved,
+        Some(&lockfile),
+        &build_dir,
+        &codegen_options,
+    ) {
         Ok(files) => {
             println!("Generated {} files in {}", files.len(), build_dir.display());
         }
@@ -172,6 +202,17 @@ pub fn run(args: InstallArgs) -> i32 {
         return 1;
     }
 
+    if !args.no_hooks {
+        match install_pre_commit_hook(project_root, &output_binary) {
+            Ok(Some(path)) => println!("Installed Git hook: {}", path.display()),
+            Ok(None) => println!("Git hook install skipped: not a Git repository"),
+            Err(e) => {
+                eprintln!("Failed to install Git hook: {e}");
+                return 1;
+            }
+        }
+    }
+
     println!("\nDone! Run 'apss run <standard> <command>' to use your standards.");
     0
 }
@@ -203,4 +244,188 @@ fn generate_lockfile(config: &resolution::ResolvedProjectConfig) -> Lockfile {
     }
 
     lockfile
+}
+
+fn lockfile_has_unresolved_packages(lockfile: &Lockfile) -> bool {
+    lockfile.packages.iter().any(|package| {
+        package.version.starts_with("UNRESOLVED(")
+            || package.checksum == "UNRESOLVED"
+            || package.source.starts_with("unresolved+")
+            || package.substandards.iter().any(|substandard| {
+                substandard.profile == "UNRESOLVED"
+                    || substandard.crate_name == "UNRESOLVED"
+                    || substandard.version == "UNRESOLVED"
+                    || substandard.checksum == "UNRESOLVED"
+            })
+    })
+}
+
+fn install_pre_commit_hook(
+    project_root: &Path,
+    composed_binary: &Path,
+) -> Result<Option<PathBuf>, String> {
+    let hook_path = git_hook_path(project_root, "pre-commit")?;
+    let Some(hook_path) = hook_path else {
+        return Ok(None);
+    };
+
+    if let Some(parent) = hook_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create hook directory: {error}"))?;
+    }
+
+    let bootstrap_binary = std::env::current_exe()
+        .ok()
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| PathBuf::from("apss"));
+    let managed_block = pre_commit_hook_block(&bootstrap_binary, composed_binary);
+
+    let existing = std::fs::read_to_string(&hook_path).unwrap_or_default();
+    let next = if existing.contains(APSS_HOOK_BEGIN) && existing.contains(APSS_HOOK_END) {
+        replace_managed_block(&existing, &managed_block)
+    } else if existing.trim().is_empty() {
+        format!("#!/bin/sh\n\n{managed_block}\n")
+    } else {
+        format!("{existing}\n\n{managed_block}\n")
+    };
+
+    std::fs::write(&hook_path, next)
+        .map_err(|error| format!("failed to write {}: {error}", hook_path.display()))?;
+
+    make_executable(&hook_path)?;
+    Ok(Some(hook_path))
+}
+
+fn git_hook_path(project_root: &Path, hook_name: &str) -> Result<Option<PathBuf>, String> {
+    if !project_root.join(".git").exists() {
+        return Ok(None);
+    }
+
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--git-path")
+        .arg(format!("hooks/{hook_name}"))
+        .current_dir(project_root)
+        .output()
+        .map_err(|error| format!("failed to run git rev-parse: {error}"))?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path.is_empty() {
+        return Ok(None);
+    }
+
+    let hook_path = PathBuf::from(path);
+    if hook_path.is_absolute() {
+        Ok(Some(hook_path))
+    } else {
+        Ok(Some(project_root.join(hook_path)))
+    }
+}
+
+fn pre_commit_hook_block(bootstrap_binary: &Path, composed_binary: &Path) -> String {
+    format!(
+        r#"{APSS_HOOK_BEGIN}
+echo "APSS pre-commit: validating project"
+APSS_BOOTSTRAP='{bootstrap}'
+APSS_COMPOSED='{composed}'
+if [ -x "$APSS_BOOTSTRAP" ]; then
+  "$APSS_BOOTSTRAP" validate
+elif command -v apss >/dev/null 2>&1; then
+  apss validate
+elif [ -x "$APSS_COMPOSED" ]; then
+  "$APSS_COMPOSED" list >/dev/null
+  echo "APSS bootstrap was not found; checked installed composed binary only."
+else
+  echo "APSS is not installed. Run 'apss install'." >&2
+  exit 1
+fi
+{APSS_HOOK_END}"#,
+        bootstrap = shell_single_quote_path(bootstrap_binary),
+        composed = shell_single_quote_path(composed_binary)
+    )
+}
+
+fn replace_managed_block(existing: &str, managed_block: &str) -> String {
+    let Some(begin) = existing.find(APSS_HOOK_BEGIN) else {
+        return existing.to_string();
+    };
+    let Some(end_start) = existing.find(APSS_HOOK_END) else {
+        return existing.to_string();
+    };
+    let end = end_start + APSS_HOOK_END.len();
+    format!(
+        "{}{}{}",
+        &existing[..begin],
+        managed_block,
+        &existing[end..]
+    )
+}
+
+fn shell_single_quote_path(path: &Path) -> String {
+    path.display().to_string().replace('\'', r#"'\''"#)
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let metadata =
+        std::fs::metadata(path).map_err(|error| format!("failed to stat hook: {error}"))?;
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(permissions.mode() | 0o755);
+    std::fs::set_permissions(path, permissions)
+        .map_err(|error| format!("failed to chmod hook: {error}"))
+}
+
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pre_commit_block_runs_validation() {
+        let block = pre_commit_hook_block(Path::new("/tmp/apss"), Path::new(".apss/bin/apss"));
+
+        assert!(block.contains(APSS_HOOK_BEGIN));
+        assert!(block.contains("\"$APSS_BOOTSTRAP\" validate"));
+        assert!(block.contains("apss validate"));
+        assert!(block.contains("\"$APSS_COMPOSED\" list"));
+    }
+
+    #[test]
+    fn replace_pre_commit_block_preserves_user_content() {
+        let existing = "#!/bin/sh\necho before\n# BEGIN APSS MANAGED PRE-COMMIT\nold\n# END APSS MANAGED PRE-COMMIT\necho after\n";
+        let replaced = replace_managed_block(existing, "new-block");
+
+        assert!(replaced.contains("echo before"));
+        assert!(replaced.contains("new-block"));
+        assert!(!replaced.contains("\nold\n"));
+        assert!(replaced.contains("echo after"));
+    }
+
+    #[test]
+    fn unresolved_lockfile_packages_are_detected() {
+        let mut lockfile = Lockfile::new("1.0.0".to_string());
+        assert!(!lockfile_has_unresolved_packages(&lockfile));
+
+        lockfile.packages.push(LockedPackage {
+            id: "APS-V1-0001".to_string(),
+            slug: "code-topology".to_string(),
+            crate_name: "apss-v1-0001-code-topology".to_string(),
+            version: "UNRESOLVED(>=1.0.0)".to_string(),
+            checksum: "UNRESOLVED".to_string(),
+            source: "unresolved+registry+https://crates.io".to_string(),
+            substandards: vec![],
+        });
+
+        assert!(lockfile_has_unresolved_packages(&lockfile));
+    }
 }
