@@ -104,6 +104,13 @@ impl TemplateEngine {
                     })?;
                 }
 
+                // Create-if-missing for scaffold outputs. Existing files are
+                // preserved so installer-like callers do not accidentally
+                // overwrite project-local customizations.
+                if target_path.exists() {
+                    continue;
+                }
+
                 // Check if file should be rendered as template
                 if should_render_as_template(entry.path()) {
                     let content = self.render_file(entry.path(), context)?;
@@ -386,5 +393,30 @@ mod tests {
         assert!(output_dir.join("docs").join("info.md").exists());
         assert!(!output_dir.join(".agentic").exists());
         assert!(!output_dir.join(".agentic").join("analytics.jsonl").exists());
+    }
+
+    #[test]
+    fn test_render_skeleton_skips_existing_targets() {
+        let engine = TemplateEngine::new();
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let skeleton_dir = temp_dir.path().join("skeleton");
+        fs::create_dir_all(&skeleton_dir).unwrap();
+        fs::write(skeleton_dir.join("README.md"), "scaffolded").unwrap();
+
+        let output_dir = temp_dir.path().join("output");
+        fs::create_dir_all(&output_dir).unwrap();
+        fs::write(output_dir.join("README.md"), "existing").unwrap();
+
+        let context = StandardContext::new("APS-V1-0002", "My Standard", "my-standard");
+        let files = engine
+            .render_skeleton(&skeleton_dir, &output_dir, &context)
+            .unwrap();
+
+        assert!(files.is_empty());
+        assert_eq!(
+            fs::read_to_string(output_dir.join("README.md")).unwrap(),
+            "existing"
+        );
     }
 }
