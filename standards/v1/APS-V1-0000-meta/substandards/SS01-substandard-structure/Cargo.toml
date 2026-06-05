@@ -9,7 +9,7 @@ description = "Defines structural requirements for all APS substandards"
 
 [dependencies]
 toml.workspace = true
-aps-core.workspace = true
+apss-core.workspace = true
 
 # Pattern matching for validation rules
 regex = "1.11"

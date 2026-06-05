@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 /// Trait for typed standard configuration.
 ///
 /// Implementing this trait enables:
-/// - **Type-safe validation** — consumer config blocks are deserialized into this type
-/// - **Semantic validation** — `validate()` checks value ranges, cross-field consistency
-/// - **Schema generation** — `json_schema()` produces JSON Schema for IDE tooling
-/// - **Scaffolding** — `toml_template()` generates documented default config snippets
+/// - **Type-safe validation**  -  consumer config blocks are deserialized into this type
+/// - **Semantic validation**  -  `validate()` checks value ranges, cross-field consistency
+/// - **Schema generation**  -  `json_schema()` produces JSON Schema for IDE tooling
+/// - **Scaffolding**  -  `toml_template()` generates documented default config snippets
 pub trait StandardConfig: DeserializeOwned + Serialize + Default + Send + Sync {
     /// Validate config values beyond type checking.
     ///
@@ -41,7 +41,7 @@ pub trait StandardConfig: DeserializeOwned + Serialize + Default + Send + Sync {
 /// Use this when your standard has no configurable options:
 ///
 /// ```ignore
-/// use aps_core::standard_config::NoConfig;
+/// use apss_core::standard_config::NoConfig;
 /// pub type Config = NoConfig;
 /// ```
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

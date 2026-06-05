@@ -26,8 +26,8 @@
 //! }
 //! ```
 
-use aps_core::config::{self, CONFIG_FILENAME, PROJECT_SCHEMA, ProjectConfig};
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::config::{self, CONFIG_FILENAME, PROJECT_SCHEMA, ProjectConfig};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 // ============================================================================
@@ -477,7 +477,7 @@ fn validate_lockfile(config_path: &Path, diags: &mut Diagnostics) {
     let lockfile_path = config_path
         .parent()
         .unwrap_or(Path::new("."))
-        .join(aps_core::lockfile::LOCKFILE_FILENAME);
+        .join(apss_core::lockfile::LOCKFILE_FILENAME);
 
     if !lockfile_path.exists() {
         diags.push(
@@ -535,9 +535,9 @@ fn is_valid_substandard_code(code: &str) -> bool {
 }
 
 /// Register this package with a composed APSS runner.
-pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
     registry.register(
-        aps_core::registry::RegisteredStandard {
+        apss_core::registry::RegisteredStandard {
             id: "APS-V1-0000.CF01".to_string(),
             slug: "project-config".to_string(),
             name: "Project Configuration".to_string(),
@@ -551,13 +551,13 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
 
 struct NoopCommandHandler;
 
-impl aps_core::registry::CommandHandler for NoopCommandHandler {
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
     fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
         eprintln!("No composed CLI commands are registered for cf01-project-config yet.");
         5
     }
 
-    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
         Vec::new()
     }
 }

@@ -21,7 +21,7 @@
 
 pub mod codegen;
 
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 // ============================================================================
@@ -36,8 +36,8 @@ pub mod error_codes {
     /// Crate name doesn't follow `apss-v1-NNNN-slug` pattern.
     pub const DI_INVALID_CRATE_NAME: &str = "DI_INVALID_CRATE_NAME";
 
-    /// Standard crate doesn't depend on `aps-core`.
-    pub const DI_MISSING_APS_CORE_DEP: &str = "DI_MISSING_APS_CORE_DEP";
+    /// Standard crate doesn't depend on `apss-core`.
+    pub const DI_MISSING_APSS_CORE_DEP: &str = "DI_MISSING_APSS_CORE_DEP";
 
     /// Cargo.toml is missing from the crate directory.
     pub const DI_MISSING_CARGO_TOML: &str = "DI_MISSING_CARGO_TOML";
@@ -94,7 +94,7 @@ pub const BIN_NAME: &str = "apss";
 ///
 /// Checks that the crate follows DI01's packaging requirements:
 /// - Correct crate naming convention
-/// - Depends on `aps-core`
+/// - Depends on `apss-core`
 /// - Exports a `register()` function
 pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
     let mut diags = Diagnostics::new();
@@ -146,7 +146,7 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
         .and_then(|p| p.get("name"))
         .and_then(|n| n.as_str())
     {
-        if !aps_core::ecosystem::is_ecosystem_crate(name) && !is_valid_standard_crate_name(name) {
+        if !apss_core::ecosystem::is_ecosystem_crate(name) && !is_valid_standard_crate_name(name) {
             diags.push(
                 Diagnostic::error(
                     error_codes::DI_INVALID_CRATE_NAME,
@@ -160,20 +160,20 @@ pub fn validate_publishable_standard(crate_path: &Path) -> Diagnostics {
         }
     }
 
-    // Check aps-core dependency
+    // Check apss-core dependency
     let has_core_dep = cargo_toml
         .get("dependencies")
-        .map(|deps| deps.get("aps-core").is_some())
+        .map(|deps| deps.get("apss-core").is_some())
         .unwrap_or(false);
 
     if !has_core_dep {
         diags.push(
             Diagnostic::error(
-                error_codes::DI_MISSING_APS_CORE_DEP,
-                "Standard crate must depend on aps-core",
+                error_codes::DI_MISSING_APSS_CORE_DEP,
+                "Standard crate must depend on apss-core",
             )
             .with_path(&cargo_path)
-            .with_hint("Add aps-core to [dependencies]"),
+            .with_hint("Add apss-core to [dependencies]"),
         );
     }
 
@@ -258,15 +258,17 @@ pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
         if let Some(cargo_ver) = &cargo_version {
             // Find the metadata version
             let metadata_version = if crate_path.join("standard.toml").exists() {
-                aps_core::metadata::parse_standard_metadata(&crate_path.join("standard.toml"))
+                apss_core::metadata::parse_standard_metadata(&crate_path.join("standard.toml"))
                     .ok()
                     .map(|m| m.standard.version)
             } else if crate_path.join("substandard.toml").exists() {
-                aps_core::metadata::parse_substandard_metadata(&crate_path.join("substandard.toml"))
-                    .ok()
-                    .map(|m| m.substandard.version)
+                apss_core::metadata::parse_substandard_metadata(
+                    &crate_path.join("substandard.toml"),
+                )
+                .ok()
+                .map(|m| m.substandard.version)
             } else if crate_path.join("experiment.toml").exists() {
-                aps_core::metadata::parse_experiment_metadata(&crate_path.join("experiment.toml"))
+                apss_core::metadata::parse_experiment_metadata(&crate_path.join("experiment.toml"))
                     .ok()
                     .map(|m| m.experiment.version)
             } else {
@@ -360,7 +362,7 @@ pub fn validate_release_readiness(crate_path: &Path) -> Diagnostics {
 pub fn validate_installation(project_root: &Path) -> Diagnostics {
     let mut diags = Diagnostics::new();
 
-    let lockfile_path = project_root.join(aps_core::lockfile::LOCKFILE_FILENAME);
+    let lockfile_path = project_root.join(apss_core::lockfile::LOCKFILE_FILENAME);
     let binary_path = project_root.join(BIN_DIR).join(BIN_NAME);
     let build_dir = project_root.join(BUILD_DIR);
 
@@ -370,7 +372,7 @@ pub fn validate_installation(project_root: &Path) -> Diagnostics {
     }
 
     // Lockfile exists  -  check it parses
-    if let Err(e) = aps_core::lockfile::parse_lockfile(&lockfile_path) {
+    if let Err(e) = apss_core::lockfile::parse_lockfile(&lockfile_path) {
         diags.push(
             Diagnostic::error(
                 error_codes::DI_LOCKFILE_PARSE_ERROR,
@@ -460,9 +462,9 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
 
         // Create a valid lockfile
-        let lockfile = aps_core::lockfile::Lockfile::new("0.1.0".to_string());
-        aps_core::lockfile::write_lockfile(
-            &temp.path().join(aps_core::lockfile::LOCKFILE_FILENAME),
+        let lockfile = apss_core::lockfile::Lockfile::new("0.1.0".to_string());
+        apss_core::lockfile::write_lockfile(
+            &temp.path().join(apss_core::lockfile::LOCKFILE_FILENAME),
             &lockfile,
         )
         .unwrap();
@@ -494,19 +496,19 @@ mod tests {
         assert!(is_valid_standard_crate_name("apss-v1-0003-fitness"));
         assert!(!is_valid_standard_crate_name("apss-v1-topology")); // no 4-digit ID
         assert!(!is_valid_standard_crate_name("apss-v1-0001")); // no slug
-        assert!(!is_valid_standard_crate_name("aps-core")); // not a standard
+        assert!(!is_valid_standard_crate_name("apss-core")); // not a standard
     }
 
     #[test]
-    fn test_ecosystem_allowlist_wired_through_aps_core() {
-        // Regression guard: DI01 must read the ecosystem allowlist from aps-core
+    fn test_ecosystem_allowlist_wired_through_apss_core() {
+        // Regression guard: DI01 must read the ecosystem allowlist from apss-core
         // rather than maintaining its own list. A minimal spot-check here is
-        // enough; the full matrix lives in aps_core::ecosystem's own tests.
-        assert!(aps_core::ecosystem::is_ecosystem_crate("aps-core"));
-        assert!(aps_core::ecosystem::is_ecosystem_crate(
+        // enough; the full matrix lives in apss_core::ecosystem's own tests.
+        assert!(apss_core::ecosystem::is_ecosystem_crate("apss-core"));
+        assert!(apss_core::ecosystem::is_ecosystem_crate(
             "aps-v1-0000-cf01-project-config"
         ));
-        assert!(!aps_core::ecosystem::is_ecosystem_crate(
+        assert!(!apss_core::ecosystem::is_ecosystem_crate(
             "apss-v1-0001-code-topology"
         ));
     }
@@ -525,7 +527,7 @@ name = "apss-v1-0001-code-topology"
 version = "1.0.0"
 
 [dependencies]
-aps-core = "0.1.0"
+apss-core = "0.1.0"
 "#,
         )
         .unwrap();
@@ -533,7 +535,7 @@ aps-core = "0.1.0"
         std::fs::write(
             src.join("lib.rs"),
             r#"
-pub fn register(registry: &mut dyn aps_core::StandardRegistry) {
+pub fn register(registry: &mut dyn apss_core::StandardRegistry) {
     // ...
 }
 "#,
@@ -558,7 +560,7 @@ name = "bad-name"
 version = "1.0.0"
 
 [dependencies]
-aps-core = "0.1.0"
+apss-core = "0.1.0"
 "#,
         )
         .unwrap();
@@ -570,7 +572,7 @@ aps-core = "0.1.0"
             .find(|d| d.code == error_codes::DI_INVALID_CRATE_NAME)
             .expect("expected DI_INVALID_CRATE_NAME diagnostic");
         assert!(
-            name_diag.severity == aps_core::Severity::Error,
+            name_diag.severity == apss_core::Severity::Error,
             "DI_INVALID_CRATE_NAME should be error severity"
         );
     }
@@ -589,7 +591,7 @@ name = "apss-v1-0001-code-topology"
 version = "1.0.0"
 
 [dependencies]
-aps-core = "0.1.0"
+apss-core = "0.1.0"
 "#,
         )
         .unwrap();
@@ -601,7 +603,7 @@ aps-core = "0.1.0"
             .find(|d| d.code == error_codes::DI_MISSING_REGISTER_FN)
             .expect("expected DI_MISSING_REGISTER_FN diagnostic");
         assert!(
-            reg_diag.severity == aps_core::Severity::Error,
+            reg_diag.severity == apss_core::Severity::Error,
             "DI_MISSING_REGISTER_FN should be error severity"
         );
     }
@@ -616,7 +618,7 @@ aps-core = "0.1.0"
             .find(|d| d.code == error_codes::DI_MISSING_CARGO_TOML)
             .expect("expected DI_MISSING_CARGO_TOML diagnostic");
         assert!(
-            cargo_diag.severity == aps_core::Severity::Error,
+            cargo_diag.severity == apss_core::Severity::Error,
             "DI_MISSING_CARGO_TOML should be error severity"
         );
     }
@@ -640,9 +642,9 @@ aps-core = "0.1.0"
         let temp = tempfile::tempdir().unwrap();
 
         // Create lockfile + binary but no build dir
-        let lockfile = aps_core::lockfile::Lockfile::new("0.1.0".to_string());
-        aps_core::lockfile::write_lockfile(
-            &temp.path().join(aps_core::lockfile::LOCKFILE_FILENAME),
+        let lockfile = apss_core::lockfile::Lockfile::new("0.1.0".to_string());
+        apss_core::lockfile::write_lockfile(
+            &temp.path().join(apss_core::lockfile::LOCKFILE_FILENAME),
             &lockfile,
         )
         .unwrap();
@@ -657,7 +659,7 @@ aps-core = "0.1.0"
             .find(|d| d.code == error_codes::DI_BUILD_DIR_MISSING)
             .expect("expected DI_BUILD_DIR_MISSING diagnostic");
         assert!(
-            build_diag.severity == aps_core::Severity::Error,
+            build_diag.severity == apss_core::Severity::Error,
             "DI_BUILD_DIR_MISSING should be error severity"
         );
     }

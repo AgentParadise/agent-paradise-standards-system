@@ -99,7 +99,7 @@ fn cmd_status() -> i32 {
         }
     };
 
-    let config = match aps_core::config::parse_project_config(&config_path) {
+    let config = match apss_core::config::parse_project_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to load apss.toml: {e}");
@@ -189,7 +189,7 @@ fn cmd_run(args: &[String]) -> i32 {
         }
     };
 
-    let config = match aps_core::config::parse_project_config(&config_path) {
+    let config = match apss_core::config::parse_project_config(&config_path) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Failed to load apss.toml: {e}");
@@ -228,7 +228,7 @@ fn cmd_run(args: &[String]) -> i32 {
 
 fn cmd_config_template() -> i32 {
     println!(
-        r#"# apss.toml — APSS Project Configuration
+        r#"# apss.toml  -  APSS Project Configuration
 # See: https://github.com/AgentParadise/agent-paradise-standards-system
 
 schema = "apss.project/v1"
@@ -271,10 +271,10 @@ apss_version = "v1"
 
 fn find_config() -> Option<PathBuf> {
     let cwd = std::env::current_dir().ok()?;
-    aps_core::config::find_project_config(&cwd)
+    apss_core::config::find_project_config(&cwd)
 }
 
-fn print_and_exit(diags: aps_core::Diagnostics) -> i32 {
+fn print_and_exit(diags: apss_core::Diagnostics) -> i32 {
     if !diags.is_empty() {
         eprintln!("{diags}");
     }

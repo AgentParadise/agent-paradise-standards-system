@@ -5,8 +5,8 @@
 
 mod fixtures;
 
-use aps_core::discovery::discover_v1_packages;
 use aps_v1_0000_meta::{MetaStandard, Standard};
+use apss_core::discovery::discover_v1_packages;
 use fixtures::repo_root;
 use std::process::Command;
 
@@ -78,8 +78,8 @@ fn test_repo_has_required_structure() {
         "standards-experimental/v1/ required"
     );
     assert!(
-        repo.join("crates/aps-core").exists(),
-        "crates/aps-core/ required"
+        repo.join("crates/apss-core").exists(),
+        "crates/apss-core/ required"
     );
     assert!(
         repo.join("crates/aps-cli").exists(),

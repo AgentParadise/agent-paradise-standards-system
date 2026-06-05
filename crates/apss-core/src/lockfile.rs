@@ -13,8 +13,8 @@ use thiserror::Error;
 /// Schema identifier for lockfiles.
 pub const LOCKFILE_SCHEMA: &str = "apss.lock/v1";
 
-/// Version of the `aps-core` crate used to produce lockfile core metadata.
-pub const APS_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Version of the `apss-core` crate used to produce lockfile core metadata.
+pub const APSS_CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Default lockfile filename.
 pub const LOCKFILE_FILENAME: &str = "apss.lock";
@@ -67,7 +67,7 @@ pub struct Lockfile {
 /// Core library version information.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LockCore {
-    /// Version of `aps-core` used.
+    /// Version of `apss-core` used.
     pub version: String,
 
     /// SHA-256 checksum of the core crate.

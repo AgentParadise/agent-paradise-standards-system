@@ -25,15 +25,15 @@
 
 mod vsa_config;
 
-use aps_core::discovery::{
+use aps_v1_0000_meta::{MetaStandard, Standard};
+use apss_core::discovery::{
     PackageMetadata, PackageType, count_packages, discover_v1_packages, find_package_by_id,
 };
-use aps_core::versioning::BumpPart;
-use aps_core::{
+use apss_core::versioning::BumpPart;
+use apss_core::{
     Diagnostic, Diagnostics, StandardContext, TemplateEngine, bump_version, generate_all_views,
     get_version, promote_experiment,
 };
-use aps_v1_0000_meta::{MetaStandard, Standard};
 use clap::Parser;
 use std::env;
 use std::fs;
@@ -309,7 +309,7 @@ fn main() -> ExitCode {
                     ValidateTarget::Config { path } => {
                         let config_path = match path {
                             Some(path) => path,
-                            None => match aps_core::config::find_project_config(
+                            None => match apss_core::config::find_project_config(
                                 &std::env::current_dir().unwrap_or_else(|_| repo_root.clone()),
                             ) {
                                 Some(path) => path,
@@ -444,7 +444,7 @@ fn main() -> ExitCode {
                     }
 
                     let engine = TemplateEngine::new();
-                    let context = aps_core::SubstandardContext::new(&id, &name, &slug, &parent_id);
+                    let context = apss_core::SubstandardContext::new(&id, &name, &slug, &parent_id);
 
                     let skeleton_dir = repo_root
                         .join("standards/v1/APS-V1-0000-meta/templates/substandard/skeleton");
@@ -486,7 +486,7 @@ fn main() -> ExitCode {
                     }
 
                     let engine = TemplateEngine::new();
-                    let context = aps_core::ExperimentContext::new(&id, &name, &slug);
+                    let context = apss_core::ExperimentContext::new(&id, &name, &slug);
 
                     let skeleton_dir = repo_root
                         .join("standards/v1/APS-V1-0000-meta/templates/experiment/skeleton");
@@ -670,7 +670,7 @@ fn create_local_bundle(
     let package_output = bundle_dir.join(&package_relative);
     copy_dir_filtered(&package.path, &package_output)?;
 
-    let core_relative = PathBuf::from("crates/aps-core");
+    let core_relative = PathBuf::from("crates/apss-core");
     let core_source = repo_root.join(&core_relative);
     let core_output = bundle_dir.join(&core_relative);
     copy_dir_filtered(&core_source, &core_output)?;
@@ -707,7 +707,7 @@ fn metadata_kind(metadata: &PackageMetadata) -> &'static str {
 
 fn bundle_manifest(
     metadata: &PackageMetadata,
-    package: &aps_core::discovery::DiscoveredPackage,
+    package: &apss_core::discovery::DiscoveredPackage,
     package_relative: &Path,
 ) -> String {
     format!(
@@ -3092,7 +3092,7 @@ fn get_slice_from_id(module_id: &str) -> String {
 
         // For crates, use crate name
         if parts.len() >= 2 && parts[0] == "crates" {
-            return parts[1].to_string(); // e.g., "aps-core"
+            return parts[1].to_string(); // e.g., "apss-core"
         }
 
         // Default: first two segments

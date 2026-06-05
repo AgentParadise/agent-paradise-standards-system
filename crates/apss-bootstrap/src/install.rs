@@ -1,8 +1,8 @@
 //! `apss install` command implementation.
 
-use aps_core::config::{self, CONFIG_FILENAME};
-use aps_core::lockfile::{self, LOCKFILE_FILENAME, LockedPackage, LockedSubstandard, Lockfile};
-use aps_core::resolution;
+use apss_core::config::{self, CONFIG_FILENAME};
+use apss_core::lockfile::{self, LOCKFILE_FILENAME, LockedPackage, LockedSubstandard, Lockfile};
+use apss_core::resolution;
 use apss_distribution::codegen::{self, CodegenOptions};
 use clap::Args;
 use serde::Deserialize;
@@ -260,7 +260,7 @@ fn generate_lockfile(
     config: &resolution::ResolvedProjectConfig,
     bundle_manifest: Option<&BundleManifest>,
 ) -> Lockfile {
-    let mut lockfile = Lockfile::new(lockfile::APS_CORE_VERSION.to_string());
+    let mut lockfile = Lockfile::new(lockfile::APSS_CORE_VERSION.to_string());
 
     for (slug, standard) in &config.standards {
         if !standard.enabled {

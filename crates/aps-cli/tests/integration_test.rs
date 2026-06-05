@@ -29,7 +29,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-aps-core = { path = "../../crates/aps-core" }
+apss-core = { path = "../../crates/apss-core" }
 "#;
     fs::write(temp_dir.join("Cargo.toml"), cargo_toml).unwrap();
 

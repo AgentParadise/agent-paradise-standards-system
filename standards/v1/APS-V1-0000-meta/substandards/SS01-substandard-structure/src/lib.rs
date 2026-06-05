@@ -11,7 +11,7 @@
 //! 3. **Relaxed Compatibility**: Substandards MAY break within parent major version
 //! 4. **Domain Specialization**: Used for language bindings, platform profiles, etc.
 
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Substandard ID regex pattern: APS-V1-XXXX.YY01
@@ -47,7 +47,7 @@ pub fn extract_parent_id(substandard_id: &str) -> Option<String> {
 /// Validate substandard-specific metadata.
 pub fn validate_substandard_metadata(
     path: &Path,
-    metadata: &aps_core::metadata::SubstandardMetadata,
+    metadata: &apss_core::metadata::SubstandardMetadata,
     diagnostics: &mut Diagnostics,
 ) {
     use error_codes::*;
@@ -86,9 +86,9 @@ pub fn validate_substandard_metadata(
 }
 
 /// Register this package with a composed APSS runner.
-pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
     registry.register(
-        aps_core::registry::RegisteredStandard {
+        apss_core::registry::RegisteredStandard {
             id: "APS-V1-0000.SS01".to_string(),
             slug: "substandard-structure".to_string(),
             name: "Substandard Structure".to_string(),
@@ -102,13 +102,13 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
 
 struct NoopCommandHandler;
 
-impl aps_core::registry::CommandHandler for NoopCommandHandler {
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
     fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
         eprintln!("No composed CLI commands are registered for ss01-substandard-structure yet.");
         5
     }
 
-    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
         Vec::new()
     }
 }

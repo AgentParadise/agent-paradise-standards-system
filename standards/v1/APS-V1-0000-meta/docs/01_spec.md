@@ -1,4 +1,4 @@
-# APS-V1-0000 — Meta-Standard (Canonical Specification)
+# APS-V1-0000  -  Meta-Standard (Canonical Specification)
 
 **Version**: 1.2.0
 **Status**: Active  
@@ -74,7 +74,7 @@ The APS System repository MUST use this top-level layout:
 ```
 agent-paradise-standards-system/
 ├── crates/
-│   ├── aps-core/               # Core engine
+│   ├── apss-core/               # Core engine
 │   └── aps-cli/                # CLI entrypoint
 ├── standards/v1/               # Official V1 standards
 ├── standards-experimental/v1/  # Experimental V1 standards
@@ -153,8 +153,8 @@ Substandard IDs are immutable.
 Substandard directories SHOULD be prefixed with the parent standard number for discoverability in flat listings (Cargo workspace, search results):
 
 ```
-substandards/0001-VIZ01-dashboard/     # RECOMMENDED — parent visible
-substandards/VIZ01-dashboard/          # ALLOWED — parent inferred from path
+substandards/0001-VIZ01-dashboard/     # RECOMMENDED  -  parent visible
+substandards/VIZ01-dashboard/          # ALLOWED  -  parent inferred from path
 ```
 
 The prefix is the 4-digit parent standard number (matching `APS-V1-XXXX`).
@@ -193,7 +193,7 @@ Every official standard and experimental standard MUST include:
 
 ### 5.2 Required Directories (Substandards)
 
-Substandards consume their parent standard's artifacts and produce further output. They have reduced structural requirements — the `docs/01_spec.md` serves as both normative specification and agent-readable knowledge about what the substandard consumes and produces.
+Substandards consume their parent standard's artifacts and produce further output. They have reduced structural requirements  -  the `docs/01_spec.md` serves as both normative specification and agent-readable knowledge about what the substandard consumes and produces.
 
 Every substandard MUST include:
 
@@ -205,17 +205,17 @@ Every substandard MUST include:
 
 The following directories are OPTIONAL for substandards (they inherit context from the parent):
 
-- `examples/` — MAY be present; parent standard examples cover end-to-end usage
-- `tests/` — MAY be present as a directory; see §11.2 for inline test alternative
-- `agents/skills/` — MAY be present; the substandard's `docs/01_spec.md` serves as agent context
+- `examples/`  -  MAY be present; parent standard examples cover end-to-end usage
+- `tests/`  -  MAY be present as a directory; see §11.2 for inline test alternative
+- `agents/skills/`  -  MAY be present; the substandard's `docs/01_spec.md` serves as agent context
 
 ### 5.3 Optional Directories
 
 The following are optional for all package types, but if present MUST conform to this spec:
 
-- `templates/` — Scaffolding templates
-- `proto/` — Protobuf contracts (REQUIRED for technical standards)
-- `evolution/` — Evolution packs for major version bumps
+- `templates/`  -  Scaffolding templates
+- `proto/`  -  Protobuf contracts (REQUIRED for technical standards)
+- `evolution/`  -  Evolution packs for major version bumps
 
 ### 5.4 Category-based Requirements
 
@@ -323,14 +323,14 @@ Parent validations MUST be written with scoping so that non-applicable rules can
 
 Substandards of the meta standard (`APS-V1-0000`) serve a dual role:
 
-1. **Specification** — They define normative rules for a specific concern (e.g., CLI contracts, project configuration, distribution).
-2. **Validation** — They MUST provide executable validation that can be applied to other standards and substandards to verify compliance.
+1. **Specification**  -  They define normative rules for a specific concern (e.g., CLI contracts, project configuration, distribution).
+2. **Validation**  -  They MUST provide executable validation that can be applied to other standards and substandards to verify compliance.
 
 Meta substandards MUST:
 
 - Implement validation rules as part of their Rust crate (via the `Standard` trait or domain-specific traits)
 - Define error codes (§16.2) for each compliance rule they enforce
-- Be composable — their validation SHOULD be invocable independently or as part of a full `aps v1 validate repo` sweep
+- Be composable  -  their validation SHOULD be invocable independently or as part of a full `aps v1 validate repo` sweep
 
 Meta substandards SHOULD:
 
@@ -361,13 +361,13 @@ pub trait Standard {
 
 Standard crates MUST include:
 
-- `Cargo.toml` — Crate manifest
-- `src/lib.rs` — Library root with Standard trait impl
+- `Cargo.toml`  -  Crate manifest
+- `src/lib.rs`  -  Library root with Standard trait impl
 
 Standard crates SHOULD include:
 
-- `src/validate.rs` — Validation rules
-- `src/templates.rs` — Template rendering (if templates exist)
+- `src/validate.rs`  -  Validation rules
+- `src/templates.rs`  -  Template rendering (if templates exist)
 
 ### 8.3 Configuration Contract
 
@@ -392,10 +392,10 @@ pub trait StandardConfig: DeserializeOwned + Serialize + Default {
 
 This trait enables:
 
-- **Type-safe config validation** — Consumer `apss.toml` config blocks are deserialized into the standard's config type, catching type errors at parse time.
-- **Semantic validation** — The `validate()` method checks value ranges, cross-field consistency, and other constraints beyond what the type system expresses.
-- **Schema generation** — `json_schema()` produces a JSON Schema for IDE completion and external tooling.
-- **Scaffolding** — `toml_template()` generates documented default config snippets for `apss init`.
+- **Type-safe config validation**  -  Consumer `apss.toml` config blocks are deserialized into the standard's config type, catching type errors at parse time.
+- **Semantic validation**  -  The `validate()` method checks value ranges, cross-field consistency, and other constraints beyond what the type system expresses.
+- **Schema generation**  -  `json_schema()` produces a JSON Schema for IDE completion and external tooling.
+- **Scaffolding**  -  `toml_template()` generates documented default config snippets for `apss init`.
 
 #### 8.3.2 Config Module Convention
 
@@ -434,7 +434,7 @@ chain risk and keep the ecosystem lightweight.
 
 By default, a standard crate MAY only depend on:
 
-- `aps-core` (always allowed)
+- `apss-core` (always allowed)
 - Workspace-internal crates (via `path` dependencies)
 - Workspace-inherited crates (via `.workspace = true` in `Cargo.toml`)
 
@@ -478,9 +478,9 @@ is managed centrally).
 
 Publishable crates MUST include in `Cargo.toml`:
 
-- `description` — what the crate does
-- `license` — SPDX identifier (or `.workspace = true`)
-- `repository` — source code URL (or `.workspace = true`)
+- `description`  -  what the crate does
+- `license`  -  SPDX identifier (or `.workspace = true`)
+- `repository`  -  source code URL (or `.workspace = true`)
 
 #### 8.5.3 Crate Naming
 
@@ -611,7 +611,7 @@ At least one of these forms MUST be present. CI MUST run these tests for all pac
 
 Standards and experiments MUST provide agent assets under `agents/skills/`. This directory MUST include at least one skill file or README usable by an agent.
 
-For substandards, `agents/skills/` is OPTIONAL. The substandard's `docs/01_spec.md` serves as agent-readable context — it specifies what artifacts the substandard consumes and produces, which is sufficient for agent reasoning.
+For substandards, `agents/skills/` is OPTIONAL. The substandard's `docs/01_spec.md` serves as agent-readable context  -  it specifies what artifacts the substandard consumes and produces, which is sufficient for agent reasoning.
 
 ### 12.2 Reserved Directories
 
@@ -702,7 +702,7 @@ generated/v1/views/
 This directory SHOULD be gitignored. Views MUST include a header:
 
 ```
-# GENERATED — DO NOT EDIT
+# GENERATED  -  DO NOT EDIT
 # Regenerate with: aps v1 generate views
 ```
 
@@ -740,9 +740,9 @@ PROTO_DESCRIPTOR_MISMATCH: Protobuf descriptor mismatch
 
 CLI validation commands MUST use:
 
-- `0` — All checks passed
-- `1` — Errors found
-- `2` — Warnings only (no errors)
+- `0`  -  All checks passed
+- `1`  -  Errors found
+- `2`  -  Warnings only (no errors)
 
 ---
 

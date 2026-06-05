@@ -1,11 +1,11 @@
-//! Ecosystem crate identity — the allowlist of crates that don't follow the
+//! Ecosystem crate identity  -  the allowlist of crates that don't follow the
 //! `apss-vN-NNNN-slug` standard-crate convention.
 //!
 //! Non-standard-shaped ecosystem crates fall into two buckets:
 //!
-//! - Named literals: `aps-core`, `apss`, `apss-project-config`,
-//!   `apss-distribution` — shared engine and CLI bootstrap.
-//! - Meta-substandard prefix: `aps-v1-0000-*` — substandards belonging to the
+//! - Named literals: `apss-core`, `apss`, `apss-project-config`,
+//!   `apss-distribution`  -  shared engine and CLI bootstrap.
+//! - Meta-substandard prefix: `aps-v1-0000-*`  -  substandards belonging to the
 //!   meta standard (e.g. CF01, DI01, SS01).
 //!
 //! This list is shared by DI01 (distribution validation) and any future
@@ -13,7 +13,7 @@
 
 /// Named ecosystem crates that are not standards but still live in the workspace.
 pub const ECOSYSTEM_CRATE_NAMES: &[&str] = &[
-    "aps-core",
+    "apss-core",
     "apss",
     "apss-project-config",
     "apss-distribution",
@@ -33,7 +33,7 @@ mod tests {
 
     #[test]
     fn named_ecosystem_crates_are_ecosystem() {
-        assert!(is_ecosystem_crate("aps-core"));
+        assert!(is_ecosystem_crate("apss-core"));
         assert!(is_ecosystem_crate("apss"));
         assert!(is_ecosystem_crate("apss-project-config"));
         assert!(is_ecosystem_crate("apss-distribution"));

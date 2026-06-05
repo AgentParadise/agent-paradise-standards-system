@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "GitHub Actions CI integration for Code Topology — generates workflow templates and checks"
+description = "GitHub Actions CI integration for Code Topology  -  generates workflow templates and checks"
 
 [lib]
 name = "code_topology_ci_github_actions"
@@ -13,7 +13,7 @@ name = "code_topology_ci_github_actions"
 
 [dependencies]
 toml.workspace = true
-aps-core.workspace = true
+apss-core.workspace = true
 code-topology = { package = "apss-v1-0001-code-topology", path = "../.." }
 serde.workspace = true
 serde_json.workspace = true

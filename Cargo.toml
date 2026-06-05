@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/aps-core",
+    "crates/apss-core",
     "crates/aps-cli",
     "crates/apss-bootstrap",
     "standards/v1/APS-V1-0000-meta",
@@ -59,4 +59,4 @@ handlebars = "6.3"
 semver = "1.0"
 
 # Internal crates
-aps-core = { path = "crates/aps-core" }
+apss-core = { version = "1.0.0", path = "crates/apss-core" }

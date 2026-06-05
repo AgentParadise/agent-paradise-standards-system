@@ -3,8 +3,8 @@
 //! Implements `StandardConfig` to provide type-safe validation,
 //! JSON Schema generation, and TOML scaffolding for topology config blocks.
 
-use aps_core::standard_config::StandardConfig;
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::standard_config::StandardConfig;
+use apss_core::{Diagnostic, Diagnostics};
 use serde::{Deserialize, Serialize};
 
 use crate::OutputFormat;

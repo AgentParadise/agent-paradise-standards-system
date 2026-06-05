@@ -13,7 +13,7 @@ name = "code_topology_3d"
 
 [dependencies]
 toml.workspace = true
-aps-core.workspace = true
+apss-core.workspace = true
 code-topology = { package = "apss-v1-0001-code-topology", path = "../.." }
 serde.workspace = true
 serde_json.workspace = true

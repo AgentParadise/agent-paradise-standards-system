@@ -5,11 +5,11 @@
 //!
 //! ## Key Features
 //!
-//! - **Committable artifacts** — `.topology/` directory with metrics and graphs
-//! - **Complexity metrics** — Cyclomatic, Cognitive, Halstead, Martin's coupling
-//! - **Coupling matrix** — For 3D visualization of architecture
-//! - **Language adapters** — Polyglot support via tree-sitter
-//! - **Projector interface** — Substandards implement visualizations
+//! - **Committable artifacts**  -  `.topology/` directory with metrics and graphs
+//! - **Complexity metrics**  -  Cyclomatic, Cognitive, Halstead, Martin's coupling
+//! - **Coupling matrix**  -  For 3D visualization of architecture
+//! - **Language adapters**  -  Polyglot support via tree-sitter
+//! - **Projector interface**  -  Substandards implement visualizations
 //!
 //! ## Example
 //!
@@ -969,9 +969,9 @@ impl Default for CodeTopologyStandard {
 // ============================================================================
 
 /// Register this package with a composed APSS runner.
-pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
     registry.register(
-        aps_core::registry::RegisteredStandard {
+        apss_core::registry::RegisteredStandard {
             id: "EXP-V1-0001".to_string(),
             slug: "code-topology".to_string(),
             name: "Experimental Code Topology".to_string(),
@@ -985,13 +985,13 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
 
 struct NoopCommandHandler;
 
-impl aps_core::registry::CommandHandler for NoopCommandHandler {
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
     fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
         eprintln!("No composed CLI commands are registered for code-topology yet.");
         5
     }
 
-    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
         Vec::new()
     }
 }

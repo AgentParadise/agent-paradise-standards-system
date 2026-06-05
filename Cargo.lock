@@ -74,8 +74,8 @@ dependencies = [
 name = "aps-cli"
 version = "1.0.0"
 dependencies = [
- "aps-core",
  "aps-v1-0000-meta",
+ "apss-core",
  "apss-distribution",
  "apss-project-config",
  "apss-v1-0001-3d01-force-directed",
@@ -95,7 +95,51 @@ dependencies = [
 ]
 
 [[package]]
-name = "aps-core"
+name = "aps-v1-0000-cli01-cli-contract"
+version = "1.1.0"
+dependencies = [
+ "apss-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "aps-v1-0000-meta"
+version = "1.2.0"
+dependencies = [
+ "apss-core",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "aps-v1-0000-ss01-substandard-structure"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "regex",
+ "toml",
+]
+
+[[package]]
+name = "apss"
+version = "1.0.0"
+dependencies = [
+ "apss-core",
+ "apss-distribution",
+ "apss-project-config",
+ "clap",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-core"
 version = "1.0.0"
 dependencies = [
  "handlebars",
@@ -109,54 +153,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "aps-v1-0000-cli01-cli-contract"
-version = "1.1.0"
-dependencies = [
- "aps-core",
- "serde",
- "serde_json",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "aps-v1-0000-meta"
-version = "1.2.0"
-dependencies = [
- "aps-core",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "aps-v1-0000-ss01-substandard-structure"
-version = "1.0.0"
-dependencies = [
- "aps-core",
- "regex",
- "toml",
-]
-
-[[package]]
-name = "apss"
-version = "1.0.0"
-dependencies = [
- "aps-core",
- "apss-distribution",
- "apss-project-config",
- "clap",
- "semver",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
-]
-
-[[package]]
 name = "apss-distribution"
 version = "1.0.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "semver",
  "serde",
  "serde_json",
@@ -169,7 +169,7 @@ dependencies = [
 name = "apss-project-config"
 version = "1.0.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "semver",
  "serde",
  "serde_json",
@@ -181,7 +181,7 @@ dependencies = [
 name = "apss-v1-0001-3d01-force-directed"
 version = "0.1.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "apss-v1-0001-code-topology",
  "serde",
  "serde_json",
@@ -194,7 +194,7 @@ dependencies = [
 name = "apss-v1-0001-ci01-github-actions"
 version = "0.1.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "apss-v1-0001-code-topology",
  "serde",
  "serde_json",
@@ -206,7 +206,7 @@ dependencies = [
 name = "apss-v1-0001-code-topology"
 version = "0.1.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "apss-v1-0001-3d01-force-directed",
  "apss-v1-0001-lang01-rust",
  "apss-v1-0001-viz01-mermaid",
@@ -226,7 +226,7 @@ dependencies = [
 name = "apss-v1-0001-lang01-rust"
 version = "0.1.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "apss-v1-0001-code-topology",
  "proc-macro2",
  "quote",
@@ -243,7 +243,7 @@ dependencies = [
 name = "apss-v1-0001-viz01-dashboard"
 version = "0.1.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "apss-v1-0001-code-topology",
  "chrono",
  "serde",
@@ -256,7 +256,7 @@ dependencies = [
 name = "apss-v1-0001-viz01-mermaid"
 version = "0.1.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "apss-v1-0001-code-topology",
  "serde",
  "serde_json",
@@ -267,7 +267,7 @@ dependencies = [
 name = "apss-v1-0002-todo-tracker"
 version = "0.1.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "chrono",
  "glob",
  "hex",
@@ -286,7 +286,7 @@ dependencies = [
 name = "apss-v1-0003-fitness-functions"
 version = "0.1.0"
 dependencies = [
- "aps-core",
+ "apss-core",
  "chrono",
  "glob",
  "serde",

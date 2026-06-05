@@ -13,7 +13,7 @@ name = "code_topology"
 
 [dependencies]
 toml.workspace = true
-aps-core.workspace = true
+apss-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

@@ -6,11 +6,11 @@
 //! This crate implements the `Standard` trait and provides validation rules
 //! that all V1 packages must satisfy.
 
-use aps_core::discovery::{DiscoveredPackage, discover_v1_packages};
-use aps_core::metadata::{
+use apss_core::discovery::{DiscoveredPackage, discover_v1_packages};
+use apss_core::metadata::{
     self, parse_experiment_metadata, parse_standard_metadata, parse_substandard_metadata,
 };
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Error codes for meta-standard validation.
@@ -56,7 +56,7 @@ pub mod error_codes {
 /// Required directories for standards and experiments (§5.1).
 pub const REQUIRED_STANDARD_DIRS: &[&str] = &["docs", "examples", "tests", "agents/skills", "src"];
 
-/// Required directories for substandards (§5.2) — reduced requirements.
+/// Required directories for substandards (§5.2)  -  reduced requirements.
 pub const REQUIRED_SUBSTANDARD_DIRS: &[&str] = &["docs", "src"];
 
 /// Metadata file options (one must exist).
@@ -172,7 +172,7 @@ impl MetaStandard {
             );
         }
 
-        // Content checks — only for standards and experiments (§5.1), not substandards (§5.2)
+        // Content checks  -  only for standards and experiments (§5.1), not substandards (§5.2)
         if !is_substandard {
             // §11.1: examples/ MUST contain at least one example
             let examples_dir = path.join("examples");
@@ -396,7 +396,7 @@ impl MetaStandard {
 
     /// Validate dependency policy for a package.
     ///
-    /// Standards MUST only depend on `aps-core` and workspace-inherited crates.
+    /// Standards MUST only depend on `apss-core` and workspace-inherited crates.
     /// Any external dependency requires explicit approval in the package's
     /// metadata file (`standard.toml`, `substandard.toml`, or `experiment.toml`)
     /// with a documented rationale.
@@ -452,7 +452,7 @@ impl MetaStandard {
             };
 
             for (dep_name, dep_value) in deps {
-                // Workspace-inherited deps are fine — they're controlled at the workspace root
+                // Workspace-inherited deps are fine  -  they're controlled at the workspace root
                 let is_workspace = dep_value
                     .as_table()
                     .and_then(|t| t.get("workspace"))
@@ -470,8 +470,8 @@ impl MetaStandard {
                     continue;
                 }
 
-                // aps-core is always allowed
-                if dep_name == "aps-core" {
+                // apss-core is always allowed
+                if dep_name == "apss-core" {
                     continue;
                 }
 
@@ -766,9 +766,9 @@ fn is_valid_semver(version: &str) -> bool {
 }
 
 /// Register this package with a composed APSS runner.
-pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
     registry.register(
-        aps_core::registry::RegisteredStandard {
+        apss_core::registry::RegisteredStandard {
             id: "APS-V1-0000".to_string(),
             slug: "meta".to_string(),
             name: "Meta Standard".to_string(),
@@ -782,13 +782,13 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
 
 struct NoopCommandHandler;
 
-impl aps_core::registry::CommandHandler for NoopCommandHandler {
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
     fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
         eprintln!("No composed CLI commands are registered for meta yet.");
         5
     }
 
-    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
         Vec::new()
     }
 }
@@ -952,7 +952,7 @@ maintainers = ["Test"]
     fn test_validate_substandard_package() {
         let temp_dir = tempfile::tempdir().unwrap();
 
-        // Create minimal valid substandard structure (§5.2 — reduced requirements)
+        // Create minimal valid substandard structure (§5.2  -  reduced requirements)
         let pkg_dir = temp_dir
             .path()
             .join("standards/v1/APS-V1-0001-test/substandards/GH01-github");
@@ -1102,7 +1102,7 @@ maintainers = ["Test"]
             "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
         )
         .unwrap();
-        // examples/ is empty — should fail
+        // examples/ is empty  -  should fail
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);
         assert!(
@@ -1131,7 +1131,7 @@ maintainers = ["Test"]
             "[standard]\nid = \"APS-V1-0001\"\nname = \"T\"\nslug = \"t\"\nversion = \"1.0.0\"\ncategory = \"governance\"\nstatus = \"active\"\n\n[aps]\naps_major = \"v1\"\n\n[ownership]\nmaintainers = [\"Test\"]\n",
         )
         .unwrap();
-        // examples/ has ONLY a README — still fails
+        // examples/ has ONLY a README  -  still fails
         fs::write(pkg_dir.join("examples/README.md"), "# Examples").unwrap();
         let meta = MetaStandard::new();
         let diagnostics = meta.validate_package(&pkg_dir);

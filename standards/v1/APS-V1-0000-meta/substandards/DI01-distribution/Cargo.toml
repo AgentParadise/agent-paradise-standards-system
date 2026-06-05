@@ -5,10 +5,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "APSS Distribution & Installation (APS-V1-0000.DI01) — packaging, bootstrap, and CLI composition"
+description = "APSS Distribution & Installation (APS-V1-0000.DI01)  -  packaging, bootstrap, and CLI composition"
 
 [dependencies]
-aps-core.workspace = true
+apss-core.workspace = true
 toml.workspace = true
 serde.workspace = true
 serde_json.workspace = true

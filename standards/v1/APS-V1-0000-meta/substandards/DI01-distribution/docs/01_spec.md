@@ -123,14 +123,14 @@ generation. They are not the public standard package identifiers.
 Rust implementation crates used by bundles MUST export:
 
 ```rust
-pub fn register(registry: &mut dyn aps_core::StandardRegistry) {
+pub fn register(registry: &mut dyn apss_core::StandardRegistry) {
     // Register this standard's CLI handler
 }
 ```
 
 ### 2.7 Dependencies
 
-Rust implementation crates MUST depend on `aps-core` for shared traits.
+Rust implementation crates MUST depend on `apss-core` for shared traits.
 
 ### 2.8 Configuration Export
 
@@ -337,11 +337,11 @@ The system has two independent version tracks:
 
 | Tier | Scope | Pattern | Source of truth |
 |------|-------|---------|-----------------|
-| **System** | `aps-core`, `aps-cli`, `apss` bootstrap | `1.x.y` | `[workspace.package].version` in root `Cargo.toml` |
+| **System** | `apss-core`, `aps-cli`, `apss` bootstrap | `1.x.y` | `[workspace.package].version` in root `Cargo.toml` |
 | **Standard** | Each standard/substandard independently | SemVer | `standard.toml` / `substandard.toml` version field |
 
 The system version MUST track `1.x.y` to align with `APS-V1`. It is bumped on
-any change to system crates (`aps-core`, `aps-cli`, `apss`).
+any change to system crates (`apss-core`, `aps-cli`, `apss`).
 
 Standard and substandard versions are independent: a standard MAY be at
 `3.0.0` while the system is at `1.2.0`. Consumer projects pin standard
@@ -363,7 +363,7 @@ When merging from `main` to `release`:
 
 - If any file within a standard's directory has changed since the last release,
   the standard's version MUST have been bumped
-- If any system crate (`crates/aps-core`, `crates/aps-cli`, `crates/apss-bootstrap`)
+- If any system crate (`crates/apss-core`, `crates/aps-cli`, `crates/apss-bootstrap`)
   has changed, the workspace version MUST have been bumped
 - The release gate MUST fail if a version bump is missing
 
@@ -373,8 +373,8 @@ Published crate versions MUST follow SemVer:
 
 - A consumer project using `apss-v1-0001 = ">=1.0, <2.0"` MUST continue to
   work with any `1.x.y` release of that standard
-- System crate updates (e.g., `aps-core` `1.1.0` → `1.2.0`) MUST NOT break
-  previously published standards  -  the `aps-core` API is a stability contract
+- System crate updates (e.g., `apss-core` `1.1.0` → `1.2.0`) MUST NOT break
+  previously published standards  -  the `apss-core` API is a stability contract
 
 ---
 
@@ -411,7 +411,7 @@ On merge to `release`:
    - Per-substandard tags: `APS-V1-NNNN.PP01-vX.Y.Z` (for each bumped substandard)
 3. Create GitHub Release with changelog from PR body
 4. Publish to crates.io (only changed crates, in dependency order):
-   - Tier 1: `aps-core` (if changed)
+   - Tier 1: `apss-core` (if changed)
    - Tier 2: meta substandard crates  -  CF01, DI01, CL01, SS01 (if changed)
    - Tier 3: standard crates (if changed)
    - Tier 4: `apss` bootstrap binary (if changed)
@@ -432,7 +432,7 @@ within their declared semver compatibility ranges.
 |------|----------|------|
 | `DI_MISSING_REGISTER_FN` | Error | Crate must export `register()` |
 | `DI_INVALID_CRATE_NAME` | Error | Must follow naming convention |
-| `DI_MISSING_APS_CORE_DEP` | Error | Must depend on `aps-core` |
+| `DI_MISSING_APSS_CORE_DEP` | Error | Must depend on `apss-core` |
 | `DI_LOCKFILE_INTEGRITY` | Error | Checksum mismatch |
 | `DI_LOCKFILE_PARSE_ERROR` | Error | Invalid lockfile format |
 | `DI_BUILD_DIR_MISSING` | Error | Build dir missing |

@@ -1,6 +1,6 @@
 //! `apss init` command implementation.
 
-use aps_core::config::{CONFIG_FILENAME, PROJECT_SCHEMA};
+use apss_core::config::{CONFIG_FILENAME, PROJECT_SCHEMA};
 use clap::Args;
 use std::path::Path;
 

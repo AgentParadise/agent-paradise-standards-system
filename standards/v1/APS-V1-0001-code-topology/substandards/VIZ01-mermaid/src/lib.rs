@@ -184,7 +184,7 @@ impl MermaidProjector {
             "    title System Context - Code Topology".to_string(),
         ];
 
-        // Group modules by prefix (e.g., "aps-core::" becomes a system)
+        // Group modules by prefix (e.g., "apss-core::" becomes a system)
         let mut systems: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
 
@@ -406,9 +406,9 @@ impl Projector for MermaidProjector {
 }
 
 /// Register this package with a composed APSS runner.
-pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
     registry.register(
-        aps_core::registry::RegisteredStandard {
+        apss_core::registry::RegisteredStandard {
             id: "APS-V1-0001.MM01".to_string(),
             slug: "mermaid".to_string(),
             name: "Mermaid Visualization".to_string(),
@@ -422,13 +422,13 @@ pub fn register(registry: &mut dyn aps_core::registry::StandardRegistry) {
 
 struct NoopCommandHandler;
 
-impl aps_core::registry::CommandHandler for NoopCommandHandler {
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
     fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
         eprintln!("No composed CLI commands are registered for viz01-mermaid yet.");
         5
     }
 
-    fn commands(&self) -> Vec<aps_core::registry::CommandInfo> {
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
         Vec::new()
     }
 }
@@ -446,8 +446,8 @@ mod tests {
     #[test]
     fn test_sanitize_id() {
         assert_eq!(
-            MermaidProjector::sanitize_id("aps-core::discovery"),
-            "aps_core_discovery"
+            MermaidProjector::sanitize_id("apss-core::discovery"),
+            "apss_core_discovery"
         );
         assert_eq!(MermaidProjector::sanitize_id("my.module"), "my_module");
     }

@@ -4,7 +4,7 @@
 //!
 //! TODO: Add description
 
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Error codes for this standard's validation.
