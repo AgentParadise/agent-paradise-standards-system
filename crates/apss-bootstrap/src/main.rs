@@ -166,12 +166,12 @@ fn cmd_validate(config_only: bool) -> i32 {
         }
     };
 
-    let diags = apss_project_config::validate_project_config(&config_path);
+    let diags = apss_core::project_config_validation::validate_project_config(&config_path);
 
     if !config_only {
         // Also validate installation state
         let project_root = config_path.parent().unwrap_or(Path::new("."));
-        let install_diags = apss_distribution::validate_installation(project_root);
+        let install_diags = apss_core::distribution::validate_installation(project_root);
         let mut all = diags;
         all.merge(install_diags);
         print_and_exit(all)

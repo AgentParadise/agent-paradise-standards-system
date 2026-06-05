@@ -21,9 +21,11 @@
 pub mod config;
 pub mod diagnostics;
 pub mod discovery;
+pub mod distribution;
 pub mod ecosystem;
 pub mod lockfile;
 pub mod metadata;
+pub mod project_config_validation;
 pub mod promotion;
 pub mod registry;
 pub mod resolution;

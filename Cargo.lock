@@ -128,8 +128,6 @@ name = "apss"
 version = "1.0.0"
 dependencies = [
  "apss-core",
- "apss-distribution",
- "apss-project-config",
  "clap",
  "semver",
  "serde",

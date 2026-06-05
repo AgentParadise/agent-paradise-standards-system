@@ -410,19 +410,22 @@ On merge to `release`:
    - Per-standard tags: `APS-V1-NNNN-vX.Y.Z` (for each bumped standard)
    - Per-substandard tags: `APS-V1-NNNN.PP01-vX.Y.Z` (for each bumped substandard)
 3. Create GitHub Release with changelog from PR body
-4. Publish to crates.io (only changed crates, in dependency order):
-   - Tier 1: `apss-core` (if changed)
-   - Tier 2: meta substandard crates  -  CF01, DI01, CL01, SS01 (if changed)
-   - Tier 3: standard crates (if changed)
-   - Tier 4: `apss` bootstrap binary (if changed)
-5. Previously published versions remain available  -  consumers are not forced
+4. Publish APSS tooling to crates.io when the system version changed:
+   - Tier 1: `apss-core`
+   - Tier 2: `apss` bootstrap binary
+5. Publish standards as APSS bundles when standard versions changed.
+6. Previously published versions remain available  -  consumers are not forced
    to upgrade
 
 ### 9.4 Publish Scope
 
-Only crates with a version bump since the last release tag are published. The
-system MUST work with any combination of previously published standard versions
-within their declared semver compatibility ranges.
+Only APSS tooling crates are published to crates.io by default. CF01, DI01,
+CL01, SS01, and standard implementation crates are standards packages, not
+public product crates, unless explicitly marked as independent Rust libraries.
+
+Standard distribution MUST use APSS bundles. The system MUST work with any
+combination of previously published standard bundle versions within their
+declared semver compatibility ranges.
 
 ---
 

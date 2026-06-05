@@ -1,9 +1,9 @@
 //! `apss install` command implementation.
 
 use apss_core::config::{self, CONFIG_FILENAME};
+use apss_core::distribution::codegen::{self, CodegenOptions};
 use apss_core::lockfile::{self, LOCKFILE_FILENAME, LockedPackage, LockedSubstandard, Lockfile};
 use apss_core::resolution;
-use apss_distribution::codegen::{self, CodegenOptions};
 use clap::Args;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -70,7 +70,7 @@ pub fn run(args: InstallArgs) -> i32 {
     };
 
     // 2. Validate config
-    let diags = apss_project_config::validate_project_config(&config_path);
+    let diags = apss_core::project_config_validation::validate_project_config(&config_path);
     if diags.has_errors() {
         eprintln!("{diags}");
         eprintln!("\nFix configuration errors before installing.");
@@ -143,7 +143,7 @@ pub fn run(args: InstallArgs) -> i32 {
     println!("Updated {LOCKFILE_FILENAME}");
 
     // 4. Generate build crate
-    let build_dir = project_root.join(apss_distribution::BUILD_DIR);
+    let build_dir = project_root.join(apss_core::distribution::BUILD_DIR);
     let codegen_options = CodegenOptions {
         local_repo: local_source,
     };
@@ -208,8 +208,8 @@ pub fn run(args: InstallArgs) -> i32 {
     let target_binary = build_dir
         .join("target")
         .join("release")
-        .join(apss_distribution::BIN_NAME);
-    let output_binary = bin_dir.join(apss_distribution::BIN_NAME);
+        .join(apss_core::distribution::BIN_NAME);
+    let output_binary = bin_dir.join(apss_core::distribution::BIN_NAME);
 
     if target_binary.exists() {
         if let Err(e) = std::fs::copy(&target_binary, &output_binary) {
