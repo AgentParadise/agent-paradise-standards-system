@@ -40,7 +40,7 @@ body:
       description: Which part of the system does this affect?
       options:
         - CLI (aps command)
-        - Core library (aps-core)
+        - Core library (apss-core)
         - Meta-standard
         - Documentation
         - Other

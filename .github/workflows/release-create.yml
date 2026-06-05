@@ -1,5 +1,5 @@
 # =============================================================================
-# Release Create — Tag + publish on merge to release
+# Release Create - Tag + publish on merge to release
 # =============================================================================
 #
 # Triggered when a PR merges into `release`. Creates git tags and publishes
@@ -12,7 +12,7 @@
 #   4. Publish changed crates to crates.io (with approval gate)
 #
 # Publishing order (respects dependency graph):
-#   Tier 1: aps-core
+#   Tier 1: apss-core
 #   Tier 2: meta substandard crates (CF01, DI01, CL01, SS01)
 #   Tier 3: standard + substandard crates
 #   Tier 4: apss bootstrap binary
@@ -53,7 +53,7 @@ jobs:
           # Find the previous release tag (most recent v1.x.y tag)
           LAST_TAG=$(git tag -l 'v1.*' --sort=-v:refname | head -1 || echo "")
           if [ -z "$LAST_TAG" ]; then
-            echo "No previous release tag found — treating all crates as new"
+            echo "No previous release tag found - treating all crates as new"
             BASE=$(git rev-list --max-parents=0 HEAD)
           else
             echo "Last release tag: $LAST_TAG"
@@ -69,7 +69,7 @@ jobs:
           SYSTEM_VERSION=$(grep -A1 '^\[workspace.package\]' Cargo.toml | grep 'version' | sed 's/.*= *"\(.*\)"/\1/')
           echo "Current system version: $SYSTEM_VERSION"
 
-          SYSTEM_CRATE_DIRS=("crates/aps-core" "crates/aps-cli" "crates/apss-bootstrap")
+          SYSTEM_CRATE_DIRS=("crates/apss-core" "crates/aps-cli" "crates/apss-bootstrap")
           for dir in "${SYSTEM_CRATE_DIRS[@]}"; do
             if [ -d "$dir" ] && ! git diff --quiet "$BASE" HEAD -- "$dir" 2>/dev/null; then
               SYSTEM_CHANGED="true"
@@ -80,7 +80,7 @@ jobs:
 
           if [ "$SYSTEM_CHANGED" = "true" ]; then
             TAG_LIST="v${SYSTEM_VERSION}"
-            echo "System changed — will tag v${SYSTEM_VERSION}"
+            echo "System changed - will tag v${SYSTEM_VERSION}"
           fi
 
           # --- Standard version detection ---
@@ -312,7 +312,7 @@ jobs:
 
               # Check if already published (idempotency)
               if cargo search "$name" 2>/dev/null | grep -q "^${name} = \"${ver}\""; then
-                echo "  Already published — skipping"
+                echo "  Already published - skipping"
                 continue
               fi
 
@@ -325,7 +325,7 @@ jobs:
           }
 
           # Publish in dependency order
-          publish_tier 1  # aps-core
+          publish_tier 1  # apss-core
           publish_tier 2  # meta substandards (CF01, DI01, CL01, SS01)
           publish_tier 3  # standards + substandards
           publish_tier 4  # apss bootstrap binary

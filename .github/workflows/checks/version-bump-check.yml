@@ -1,5 +1,5 @@
 # =============================================================================
-# Version Bump Check — ensures changed standards have version bumps
+# Version Bump Check - ensures changed standards have version bumps
 # =============================================================================
 #
 # Detects which standards/substandards/experiments changed and verifies that
@@ -35,7 +35,7 @@ jobs:
 
           # --- System version check ---
           SYSTEM_CHANGED=false
-          for prefix in "crates/aps-core/" "crates/aps-cli/" "crates/apss-bootstrap/"; do
+          for prefix in "crates/apss-core/" "crates/aps-cli/" "crates/apss-bootstrap/"; do
             if echo "$CHANGED_FILES" | grep -q "^${prefix}"; then
               SYSTEM_CHANGED=true
               break
@@ -72,7 +72,7 @@ jobs:
             # Skip if only docs changed (doc-only changes don't require bumps)
             NON_DOC_CHANGES=$(echo "$CHANGED_FILES" | grep "^${pkg_dir}/" | grep -v "^${pkg_dir}/docs/" || true)
             if [ -z "$NON_DOC_CHANGES" ]; then
-              echo "· $pkg_dir — docs-only change, skipping version check"
+              echo "· $pkg_dir - docs-only change, skipping version check"
               return
             fi
 
@@ -81,7 +81,7 @@ jobs:
             NEW_VER=$(grep "^version" "$pkg_dir/$meta_file" | head -1 | sed 's/.*= *"\(.*\)"/\1/')
 
             if [ -z "$OLD_VER" ]; then
-              echo "✓ $pkg_dir — new package ($NEW_VER)"
+              echo "✓ $pkg_dir - new package ($NEW_VER)"
               return
             fi
 

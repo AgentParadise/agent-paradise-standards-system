@@ -228,15 +228,29 @@ apss validate
 If global `apss` is unavailable, the hook MAY fall back to repo-local `.apss/bin/apss` for checks that the repo-local runtime can perform.
 
 For an APSS standards repository, the managed pre-commit hook MUST run the
-meta-standard and distribution validators before allowing a commit:
+full local QA gate before allowing a commit:
 
 ```bash
+just qa
+```
+
+If `just` is unavailable, the hook MUST fall back to the equivalent direct
+commands:
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --workspace --all-targets
+cargo test --workspace
+cargo build --workspace --release
 cargo run -p aps-cli --bin apss-dev -- v1 validate repo
 cargo run -p aps-cli --bin apss-dev -- v1 validate distribution
 ```
 
 This ensures the meta-standard validates every discovered standard,
-substandard, and experiment, and DI01 validates distribution readiness.
+substandard, and experiment; DI01 validates distribution readiness; and the
+Rust workspace remains formatted, lint-clean, type-checkable, tested, and
+release-buildable.
 
 Hooks MUST be managed in a way that preserves user-authored hook content.
 

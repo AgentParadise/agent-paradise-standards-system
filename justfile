@@ -30,12 +30,16 @@ default:
 # QUALITY ASSURANCE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Run all QA checks (format check, lint, test)
+# Run all QA checks (format, lint, typecheck, test, release build, APS validation)
 [group('qa')]
-check: format lint test
+qa: format lint typecheck test build-release aps-validate aps-validate-distribution
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
-    @echo '{{ GREEN }}✓ All checks passed!{{ NORMAL }}'
+    @echo '{{ GREEN }}✓ QA passed!{{ NORMAL }}'
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
+
+# Run all QA checks
+[group('qa')]
+check: qa
 
 # Run QA with auto-fixes
 [group('qa')]
@@ -163,7 +167,7 @@ clean:
 
 # CI pipeline (strict checks)
 [group('ci')]
-ci: format lint typecheck test build-release aps-validate
+ci: qa
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
     @echo '{{ GREEN }}✓ CI pipeline passed!{{ NORMAL }}'
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
@@ -263,8 +267,7 @@ aps-full:
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
     just aps-validate
     just aps-test
-    @echo '{{ YELLOW }}Running DI01 distribution checks (advisory)...{{ NORMAL }}'
-    -just aps-validate-distribution
+    just aps-validate-distribution
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
     @echo '{{ GREEN }}✓ APS Full Suite Passed!{{ NORMAL }}'
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
@@ -326,4 +329,3 @@ deps-update:
     @echo '{{ YELLOW }}Updating dependencies...{{ NORMAL }}'
     cargo update
     @echo '{{ GREEN }}✓ Dependencies updated{{ NORMAL }}'
-

@@ -414,8 +414,17 @@ echo "APSS pre-commit: validating project"
 APSS_BOOTSTRAP='{bootstrap}'
 APSS_COMPOSED='{composed}'
 if [ -d "standards/v1/APS-V1-0000-meta" ] && [ -f "Cargo.toml" ]; then
-  cargo run -p aps-cli --bin apss-dev -- v1 validate repo
-  cargo run -p aps-cli --bin apss-dev -- v1 validate distribution
+  if command -v just >/dev/null 2>&1; then
+    just qa
+  else
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo check --workspace --all-targets
+    cargo test --workspace
+    cargo build --workspace --release
+    cargo run -p aps-cli --bin apss-dev -- v1 validate repo
+    cargo run -p aps-cli --bin apss-dev -- v1 validate distribution
+  fi
 elif [ -x "$APSS_BOOTSTRAP" ]; then
   "$APSS_BOOTSTRAP" validate
 elif command -v apss >/dev/null 2>&1; then
@@ -479,6 +488,8 @@ mod tests {
         let block = pre_commit_hook_block(Path::new("/tmp/apss"), Path::new(".apss/bin/apss"));
 
         assert!(block.contains(APSS_HOOK_BEGIN));
+        assert!(block.contains("just qa"));
+        assert!(block.contains("cargo clippy --workspace --all-targets -- -D warnings"));
         assert!(block.contains("apss-dev -- v1 validate repo"));
         assert!(block.contains("apss-dev -- v1 validate distribution"));
         assert!(block.contains("\"$APSS_BOOTSTRAP\" validate"));
