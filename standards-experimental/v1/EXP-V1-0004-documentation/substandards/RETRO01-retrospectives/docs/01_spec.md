@@ -114,7 +114,6 @@ Configuration: `docs.retrospectives.append_only = true` (default). Setting it to
 ```yaml
 docs:
   retrospectives:
-    disable:        false
     directory:      docs/retrospectives
     naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
     append_only:    true

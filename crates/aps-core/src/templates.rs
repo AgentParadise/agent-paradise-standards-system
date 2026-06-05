@@ -352,4 +352,39 @@ mod tests {
         assert!(content.contains("My Standard"));
         assert!(content.contains("1.0.0"));
     }
+
+    #[test]
+    fn test_render_skeleton_skips_hidden_path() {
+        let engine = TemplateEngine::new();
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let skeleton_dir = temp_dir.path().join("skeleton");
+        fs::create_dir_all(skeleton_dir.join(".agentic")).unwrap();
+        fs::create_dir_all(skeleton_dir.join("docs")).unwrap();
+
+        fs::write(
+            skeleton_dir.join("README.md"),
+            "# {{name}}\n\nVersion: {{version}}",
+        )
+        .unwrap();
+        fs::write(skeleton_dir.join("docs/info.md"), "# info").unwrap();
+        fs::write(
+            skeleton_dir.join(".agentic/analytics.jsonl"),
+            "{\"event\":\"ignore\"}",
+        )
+        .unwrap();
+
+        let output_dir = temp_dir.path().join("output");
+        let context = StandardContext::new("APS-V1-0001", "My Standard", "my-standard");
+
+        let files = engine
+            .render_skeleton(&skeleton_dir, &output_dir, &context)
+            .unwrap();
+
+        assert_eq!(files.len(), 2);
+        assert!(output_dir.join("README.md").exists());
+        assert!(output_dir.join("docs").join("info.md").exists());
+        assert!(!output_dir.join(".agentic").exists());
+        assert!(!output_dir.join(".agentic").join("analytics.jsonl").exists());
+    }
 }

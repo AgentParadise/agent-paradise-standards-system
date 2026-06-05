@@ -141,11 +141,10 @@ The schema is normative. Keys not listed here under the `docs` section MUST be r
 
 ```yaml
 docs:
-  # disable defaults to false (absence enables the whole doc standard).
+  # Omit a field to use the default for that surface.
   root: docs                      # Documentation root directory
 
   index:
-    # disable defaults to false.
     auto_generate: true           # Allow the CLI / hook to (re)write indexes
     frontmatter_fields:           # Columns rendered in index tables
       - name
@@ -156,7 +155,6 @@ docs:
     require_agents_md: true       # Require AGENTS.md per docs directory
 
   readme:
-    # disable defaults to false.
     max_depth: -1                 # -1 means unlimited depth
     exclude_dirs:
       - node_modules
@@ -166,11 +164,10 @@ docs:
       - .topology
 
   root_context:
-    # disable defaults to false.
     docs_reference_pattern: docs/ # Pattern checked in root CLAUDE.md / AGENTS.md
 
   backlinking:
-    # disable defaults to false. Backlinking applies to every doc type when not disabled.
+    # Backlinking applies to every doc type when not disabled.
     file_types:
       - rs
       - py
@@ -195,17 +192,15 @@ docs:
   # the substandard's kebab-case slug (matches `substandard.toml`).
 
   adr:
-    # disable defaults to false.
     directory: adrs
     naming_pattern: "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
     required_adr_keywords: []
 
   north-star:
-    # disable defaults to false.
+    # Disable with docs.north-star.disable: true
     location: docs/north-star.md  # Default file path. See PV01.
 
   retrospectives:
-    # disable defaults to false.
     directory: docs/retrospectives
     naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 ```

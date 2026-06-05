@@ -132,9 +132,9 @@ docs:
 ```
 
 A project that legitimately has no North Star document (rare) sets
-`disable: true`. Writing `disable: false` is the default the validator
-applies for absence and MUST NOT appear in real configs. Customizing
-`location` is supported (for example `docs/00_north_star.md` or
+`disable: true`. The default for `docs.north-star` is the section being
+absent.
+Customizing `location` is supported (for example `docs/00_north_star.md` or
 `NORTH-STAR.md` at the repo root) but the default is recommended so
 agents looking for the file find it in one place.
 

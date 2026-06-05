@@ -64,7 +64,10 @@ docs:
     naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 ```
 
-To disable the substandard entirely, set `disable: true`. Writing `disable: false` is the default the validator applies for absence and MUST NOT appear in real configs. `append_only: false` disables the append-only check; it defaults to `true` because retros are a historical record, not a working document.
+To disable the substandard entirely, set `disable: true`. Absence is
+the default. `append_only: false` disables the append-only check; it
+defaults to `true` because retros are a historical record, not a working
+document.
 
 ## Error Codes
 

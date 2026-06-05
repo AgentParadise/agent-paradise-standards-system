@@ -174,7 +174,6 @@ or `BACKLINK` do not produce false `ADR01-context-missing-guidance` warnings.
 ```yaml
 docs:
   adr:
-    disable:               false                    # Default-on; set true to skip ADR validation
     directory:             "adrs"                   # ADR directory name under docs root
     naming_pattern:        "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md" # File naming regex
     required_adr_keywords: []                       # Required topic keywords

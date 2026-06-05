@@ -10,6 +10,65 @@ use documentation::config::{ApssConfig, CONFIG_FILENAME, load_config};
 use std::fs;
 use tempfile::tempdir;
 
+fn assert_docs_defaults(docs: &documentation::config::DocsConfig) {
+    let expected = ApssConfig::default().docs;
+
+    assert_eq!(docs.root, expected.root);
+    assert!(!docs.disable);
+
+    assert!(!docs.index.disable);
+    assert_eq!(docs.index.auto_generate, expected.index.auto_generate);
+    assert_eq!(
+        docs.index.frontmatter_fields,
+        expected.index.frontmatter_fields
+    );
+
+    assert!(!docs.readme.disable);
+    assert_eq!(docs.readme.max_depth, expected.readme.max_depth);
+    assert_eq!(docs.readme.exclude_dirs, expected.readme.exclude_dirs);
+
+    assert!(!docs.root_context.disable);
+    assert_eq!(
+        docs.root_context.docs_reference_pattern,
+        expected.root_context.docs_reference_pattern
+    );
+
+    assert!(!docs.adr.disable);
+    assert_eq!(docs.adr.directory, expected.adr.directory);
+    assert_eq!(docs.adr.naming_pattern, expected.adr.naming_pattern);
+    assert_eq!(
+        docs.adr.required_adr_keywords,
+        expected.adr.required_adr_keywords
+    );
+
+    assert!(!docs.backlinking.disable);
+
+    assert!(!docs.purpose_and_vision.disable);
+    assert_eq!(
+        docs.purpose_and_vision.location,
+        expected.purpose_and_vision.location
+    );
+
+    assert!(!docs.retrospectives.disable);
+    assert_eq!(
+        docs.retrospectives.directory,
+        expected.retrospectives.directory
+    );
+    assert_eq!(
+        docs.retrospectives.naming_pattern,
+        expected.retrospectives.naming_pattern
+    );
+
+    assert_eq!(
+        docs.context_files.require_claude_md,
+        expected.context_files.require_claude_md
+    );
+    assert_eq!(
+        docs.context_files.require_agents_md,
+        expected.context_files.require_agents_md
+    );
+}
+
 #[test]
 fn test_missing_config_returns_defaults() {
     let dir = tempdir().unwrap();
@@ -30,10 +89,8 @@ fn test_full_config_parsing() {
         dir.path().join(CONFIG_FILENAME),
         r#"
 docs:
-  disable: false
   root: documentation
   adr:
-    disable: false
     directory: decisions
     naming_pattern: "DEC_\\d{3}_[a-z]+\\.md"
     required_adr_keywords:
@@ -44,7 +101,6 @@ docs:
     exclude_dirs:
       - build
   root_context:
-    disable: false
     docs_reference_pattern: documentation/
   backlinking:
     disable: true
@@ -139,7 +195,6 @@ fn test_other_standards_sections_are_tolerated() {
         dir.path().join(CONFIG_FILENAME),
         r#"
 fitness:
-  disable: false
   threshold: 42
 topology:
   disable: true
@@ -165,7 +220,7 @@ fn test_missing_docs_section_returns_defaults() {
         dir.path().join(CONFIG_FILENAME),
         r#"
 fitness:
-  disable: false
+  threshold: 42
 "#,
     )
     .unwrap();
@@ -173,4 +228,52 @@ fitness:
     let config = load_config(dir.path()).unwrap();
     assert!(!config.docs.disable);
     assert_eq!(config.docs.root, "docs");
+}
+
+#[test]
+fn test_empty_docs_block_matches_defaults() {
+    let dir = tempdir().unwrap();
+    fs::write(
+        dir.path().join(CONFIG_FILENAME),
+        r#"
+docs: {}
+"#,
+    )
+    .unwrap();
+    let config = load_config(dir.path()).unwrap();
+
+    assert_docs_defaults(&config.docs);
+}
+
+#[test]
+fn test_absence_and_empty_docs_block_match() {
+    let no_docs_dir = tempdir().unwrap();
+    let no_docs = load_config(no_docs_dir.path()).unwrap();
+
+    let no_docs_key_dir = tempdir().unwrap();
+    fs::write(
+        no_docs_key_dir.path().join(CONFIG_FILENAME),
+        r#"
+fitness:
+  threshold: 42
+"#,
+    )
+    .unwrap();
+    let no_docs_key = load_config(no_docs_key_dir.path()).unwrap();
+
+    let empty_docs_dir = tempdir().unwrap();
+    fs::write(
+        empty_docs_dir.path().join(CONFIG_FILENAME),
+        r#"
+docs: {}
+"#,
+    )
+    .unwrap();
+    let empty_docs = load_config(empty_docs_dir.path()).unwrap();
+
+    assert_docs_defaults(&no_docs.docs);
+    assert_docs_defaults(&no_docs_key.docs);
+    assert_docs_defaults(&empty_docs.docs);
+    assert_eq!(no_docs.docs.root, no_docs_key.docs.root);
+    assert_eq!(no_docs.docs.root, empty_docs.docs.root);
 }

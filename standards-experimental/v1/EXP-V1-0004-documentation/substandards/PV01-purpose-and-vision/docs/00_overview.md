@@ -75,9 +75,8 @@ docs:
     location: docs/my-north-star.md
 ```
 
-Disabling: set `disable: true`. Writing `disable: false` is the
-default the validator applies for absence and MUST NOT appear in real
-configs. Backlinking from `CLAUDE.md` and `AGENTS.md` is enforced by
+Disabling: set `disable: true`. Absence is the default.
+Backlinking from `CLAUDE.md` and `AGENTS.md` is enforced by
 the parent standard's DOC03-self-reference check, not by this
 substandard.
 
