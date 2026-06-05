@@ -7,7 +7,7 @@ a registry, installed into a project, and composed into a project-local CLI
 binary.
 
 DI01 owns the right half of the unified manifest model: given the
-`apss.yaml` declared by the project (CF01), turn each `standards.<slug>`
+`apss.toml` declared by the project (CF01), turn each `standards.<slug>`
 entry into a pinned, checksummed, on-disk install by resolving versions,
 invoking each standard's install contract, and producing a composed binary.
 
@@ -47,19 +47,19 @@ DI01 specifies:
 ```bash
 cargo install <bootstrap>           # one-time global install
 cd my-project
-<bootstrap> init --standard code-topology    # creates apss.yaml
-<bootstrap> install                     # reads apss.yaml, resolves, installs, builds composed binary
+<bootstrap> init --standard code-topology    # creates apss.toml
+<bootstrap> install                     # reads apss.toml, resolves, installs, builds composed binary
 <bootstrap> run code-topology analyze .      # forwards to composed binary
 ```
 
 A single `install` command materialises everything declared in the
 manifest: per-standard git hooks, validators, scaffolds, and the composed
-binary. Removing an entry from `apss.yaml` and re-running `install` cleanly
+binary. Removing an entry from `apss.toml` and re-running `install` cleanly
 uninstalls that standard.
 
 ## Related
 
-- **APS-V1-0000.CF01** Project Configuration. Owns the `apss.yaml` manifest
+- **APS-V1-0000.CF01** Project Configuration. Owns the `apss.toml` manifest
   that DI01 consumes. The unified installer crosses the CF01/DI01 boundary
   via the `ResolvedStandard` seam described in the spec.
 - **APS-V1-0000.CL01** CLI Contract. Defines the `StandardCli` trait the

@@ -9,7 +9,7 @@ specs. Equal precedence under APS-V1-0000 §1.1.
 
 This document specifies how the CLI binary validates that every
 standard in the APSS repository (and every consumer project's
-apss.yaml) conforms to the rules across the sibling specs. It is
+apss.toml) conforms to the rules across the sibling specs. It is
 the "how do we enforce all this" section.
 
 ## Terminology
@@ -27,7 +27,7 @@ CF01 conformance has two scopes:
    every experiment in `standards-experimental/v1/` MUST conform
    to the rules from the sibling specs. This is enforced by the
    meta-validator at `<bootstrap> v1 validate repo`.
-2. **Consumer projects.** Any project whose root has an apss.yaml
+2. **Consumer projects.** Any project whose root has an apss.toml
    gets validated by `<bootstrap> validate` (or the editor's LSP
    integration). This is the runtime-side validation.
 
@@ -39,7 +39,7 @@ are applicable.
 
 ## 2. The Six Conformance Dimensions
 
-A standard or substandard conforms to the unified apss.yaml model
+A standard or substandard conforms to the unified apss.toml model
 when it satisfies six dimensions. The meta-validator MUST emit a
 distinct error code per dimension so that failures are easy to
 classify.
@@ -138,7 +138,7 @@ existing test pipelines.
 `<bootstrap> install` MUST run consumer-side validation BEFORE the
 resolve step. A failed validation exits with code 1 and runs no
 installer side effects. This is the "manifest is law" property:
-the installer never tries to massage a broken apss.yaml into
+the installer never tries to massage a broken apss.toml into
 working state.
 
 ### 4.3 Editor Integration
@@ -146,7 +146,7 @@ working state.
 The aggregate schema `generated/v1/apss.schema.json`
 (`03_contribution_schema.md` §6.2) is the bridge to editor support.
 A consumer project SHOULD register it in editor settings (e.g.
-VS Code's `yaml.schemas`) so that completion and hover work without
+VS Code's `toml.schemas`) so that completion and hover work without
 a custom language server. The unified installer SHOULD offer to
 write this registration during `<bootstrap> init` when an editor
 config is detected; this is OPTIONAL.
@@ -269,7 +269,7 @@ extension; the one-line marker for the install contract) so the
 migration is non-disruptive for standards that genuinely have no
 config or no install-time side effects.
 
-The migration window aligns with the apss.yaml migration window
+The migration window aligns with the apss.toml migration window
 specified in the migration note attached to CF01 `01_spec.md`.
 Inside the window, both checks SHOULD be downgraded to warnings;
 outside it, they MUST be errors.

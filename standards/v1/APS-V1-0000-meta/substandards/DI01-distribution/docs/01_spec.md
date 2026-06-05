@@ -1,4 +1,4 @@
-# APS-V1-0000.DI01 — Distribution & Installation (Specification)
+# APS-V1-0000.DI01  -  Distribution & Installation (Specification)
 
 **Version**: 1.0.0
 **Status**: Active
@@ -20,7 +20,7 @@ This substandard defines:
 - The bootstrap CLI binary used for project onboarding (canonical binary name
   is being resolved in repo issue 64; this spec refers to it as the
   "bootstrap" where the name can be avoided)
-- The installation workflow that reads the `apss.yaml` manifest defined by
+- The installation workflow that reads the `apss.toml` manifest defined by
   CF01 and resolves, fetches, locks, and composes the standards it declares
 - The lockfile format (`apss.lock`)
 - Code generation for composed project-local binaries
@@ -90,8 +90,8 @@ this spec uses `<bootstrap>` where the name can be avoided.
 
 | Command | Description |
 |---------|-------------|
-| `<bootstrap> init` | Create `apss.yaml` |
-| `<bootstrap> install` | Read `apss.yaml`, resolve, run per-standard install contracts, build composed binary |
+| `<bootstrap> init` | Create `apss.toml` |
+| `<bootstrap> install` | Read `apss.toml`, resolve, run per-standard install contracts, build composed binary |
 | `<bootstrap> install --check` | Report what install would do without writing |
 | `<bootstrap> install --locked` | CI mode, fail if lockfile would change |
 | `<bootstrap> install --update <slug>` | Update one standard |
@@ -115,7 +115,7 @@ prints a helpful error directing the user to run `<bootstrap> install`.
 
 ## 4. Installation Workflow
 
-The unified installer reads the `apss.yaml` manifest (CF01 Section 2),
+The unified installer reads the `apss.toml` manifest (CF01 Section 2),
 resolves the standards it declares, drives each resolved standard's install
 contract, then composes the project-local binary. CF01 owns the manifest;
 DI01 owns resolution and the lockfile; each standard owns its install
@@ -123,7 +123,7 @@ contract. The pipeline below stitches the three together.
 
 ### 4.1 Install Pipeline
 
-1. Parse and validate `apss.yaml` via CF01 (with cascade applied for
+1. Parse and validate `apss.toml` via CF01 (with cascade applied for
    workspaces). Refuse to proceed on any error-severity diagnostic.
 2. Resolve version ranges against the registry index, producing one
    `ResolvedStandard` per `standards.<slug>` entry in the manifest.
@@ -190,7 +190,7 @@ The boundary between CF01 and DI01 is explicit:
 ### 5.1 Location
 
 The lockfile MUST be at `apss.lock` in the project root, next to
-`apss.yaml`.
+`apss.toml`.
 
 ### 5.2 Schema
 
@@ -217,9 +217,9 @@ substandards = [
 ### 5.3 Source Types
 
 The `source` field supports:
-- `registry+<url>` — fetched from a crate registry
-- `path+<relative>` — local path (for development)
-- `git+<url>?rev=<sha>` — git source
+- `registry+<url>`  -  fetched from a crate registry
+- `path+<relative>`  -  local path (for development)
+- `git+<url>?rev=<sha>`  -  git source
 
 ### 5.4 Version Control
 
@@ -245,7 +245,7 @@ The `source` field supports:
 
 ### 6.2 Determinism
 
-Code generation MUST be deterministic: the same `apss.yaml` and `apss.lock`
+Code generation MUST be deterministic: the same `apss.toml` and `apss.lock`
 MUST produce identical generated files.
 
 ---
@@ -260,7 +260,7 @@ Consumer projects SHOULD add:
 ```
 
 And SHOULD commit:
-- `apss.yaml`
+- `apss.toml`
 - `apss.lock`
 
 ---
@@ -281,7 +281,7 @@ any change to system crates (`aps-core`, `aps-cli`, `apss`).
 
 Standard and substandard versions are independent: a standard MAY be at
 `3.0.0` while the system is at `1.2.0`. Consumer projects pin standard
-versions in `apss.yaml` via semver ranges.
+versions in `apss.toml` via semver ranges.
 
 ### 8.2 Version Consistency
 
@@ -310,7 +310,7 @@ Published crate versions MUST follow SemVer:
 - A consumer project using `apss-v1-0001 = ">=1.0, <2.0"` MUST continue to
   work with any `1.x.y` release of that standard
 - System crate updates (e.g., `aps-core` `1.1.0` → `1.2.0`) MUST NOT break
-  previously published standards — the `aps-core` API is a stability contract
+  previously published standards  -  the `aps-core` API is a stability contract
 
 ---
 
@@ -330,7 +330,7 @@ main ──PR──► release branch
 The release gate MUST validate:
 
 1. `just ci` passes (format, lint, typecheck, test, build, aps-validate)
-2. `aps v1 validate distribution` passes (hard gate, not advisory)
+2. `apss-dev v1 validate distribution` passes (hard gate, not advisory)
 3. Version bump detected for every changed standard/substandard
 4. System version bumped if any system crate changed
 5. `cargo audit` passes (supply chain security)
@@ -348,10 +348,10 @@ On merge to `release`:
 3. Create GitHub Release with changelog from PR body
 4. Publish to crates.io (only changed crates, in dependency order):
    - Tier 1: `aps-core` (if changed)
-   - Tier 2: meta substandard crates — CF01, DI01, CL01, SS01 (if changed)
+   - Tier 2: meta substandard crates  -  CF01, DI01, CL01, SS01 (if changed)
    - Tier 3: standard crates (if changed)
    - Tier 4: `apss` bootstrap binary (if changed)
-5. Previously published versions remain available — consumers are not forced
+5. Previously published versions remain available  -  consumers are not forced
    to upgrade
 
 ### 9.4 Publish Scope

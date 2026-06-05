@@ -8,7 +8,7 @@ Sibling normative spec to `01_spec.md`, `02_slug_registry.md`, and
 `03_contribution_schema.md`. Equal precedence under
 APS-V1-0000 §1.1.
 
-This document defines how apss.yaml is validated end to end across the
+This document defines how apss.toml is validated end to end across the
 meta-validator and the per-standard validators.
 
 ## Terminology
@@ -19,13 +19,13 @@ RFC 2119 keywords apply.
 
 ## 1. The Three Roles
 
-apss.yaml validation has three roles, deliberately separated so that
+apss.toml validation has three roles, deliberately separated so that
 each standard owns its own contract surface and the meta-standard
 does not become a god object:
 
-1. **Meta-validator (CF01).** Owns the file: opens it, parses YAML,
+1. **Meta-validator (CF01).** Owns the file: opens it, parses TOML,
    resolves the workspace cascade (see `01_spec.md` §4 as rewritten
-   by the apss.yaml migration), checks reserved keys and the slug
+   by the apss.toml migration), checks reserved keys and the slug
    registry. Then routes each registered slug to its owning validator.
 2. **Standard validator (per slug).** Owns one top-level key. Receives
    the parsed config object (already deserialized into the standard's
@@ -49,7 +49,7 @@ gates the next: a failure halts subsequent steps for that section
 as possible per run).
 
 ```
-1. Parse YAML        (CF01)   error code CF_YAML_PARSE_ERROR
+1. Parse TOML        (CF01)   error code CF_TOML_PARSE_ERROR
 2. Cascade resolve   (CF01)   per 01_spec.md §4
 3. Reserved keys     (CF01)   project, workspace, tool, etc.
 4. Registry lookup   (CF01)   per 02_slug_registry.md §6
@@ -67,10 +67,10 @@ Step 9 runs once after all per-section work is done.
 ### 2.1 What "Structural Only" Means in Step 5
 
 Step 5 applies the JSON Schema from
-`03_contribution_schema.md` to the raw YAML node for that slug. It
+`03_contribution_schema.md` to the raw TOML node for that slug. It
 checks:
 
-- the section is a YAML mapping,
+- the section is a TOML mapping,
 - only known keys appear (`additionalProperties: false`),
 - types match,
 - required keys are present.
@@ -100,12 +100,12 @@ this check is a no-op for that standard.
 
 ### 3.1 What CF01 Hands Off
 
-For each registered slug present in apss.yaml, CF01 passes the
+For each registered slug present in apss.toml, CF01 passes the
 following to the owning validator:
 
 ```rust
 pub struct DelegatedSection<'a> {
-    /// Path to the apss.yaml that produced this section.
+    /// Path to the apss.toml that produced this section.
     pub source_path: &'a Path,
 
     /// Resolved cascade level: 0 = workspace root, n = nth child.
@@ -114,10 +114,10 @@ pub struct DelegatedSection<'a> {
     /// Slug for this section.
     pub slug: &'a str,
 
-    /// Parsed YAML value for this section, post-cascade-merge,
+    /// Parsed TOML value for this section, post-cascade-merge,
     /// BEFORE deserialization. Owners deserialize into their own
     /// StandardConfig type.
-    pub raw: &'a serde_yaml::Value,
+    pub raw: &'a toml::Value,
 
     /// Snapshot of the universal keys, lifted by CF01 for convenience.
     /// disable: from `disable`, defaults to false.
@@ -184,8 +184,8 @@ settings validated.
 
 The meta-standard's default-on philosophy (`01_spec.md` §5, brief
 binding decision 5) requires that any active standard works without
-needing an apss.yaml section. The flip side is that any top-level
-key in apss.yaml MUST be one of:
+needing an apss.toml section. The flip side is that any top-level
+key in apss.toml MUST be one of:
 
 - a reserved CF01 key (see `02_slug_registry.md` §3.2),
 - a registered slug from the generated registry.
@@ -194,12 +194,12 @@ Anything else is an error:
 
 | Code | Severity | Rule |
 |------|----------|------|
-| `CF_UNKNOWN_TOP_LEVEL_KEY` | Error | A top-level key in apss.yaml is neither reserved nor a registered slug. Diagnostic MUST include the closest registered slug as a suggestion if edit distance is below 3. |
+| `CF_UNKNOWN_TOP_LEVEL_KEY` | Error | A top-level key in apss.toml is neither reserved nor a registered slug. Diagnostic MUST include the closest registered slug as a suggestion if edit distance is below 3. |
 | `CF_UNKNOWN_NESTED_KEY` | Error | A key inside a registered section is not in that section's contribution schema (`additionalProperties: false`). |
 | `CF_UNKNOWN_SUBSTANDARD_KEY` | Error | A nested key under a registered slug claims to be a substandard but no substandard with that slug exists for the parent standard. |
 
 This is deliberate: unknown-key permissiveness is what makes config
-files rot over decades. apss.yaml errors loudly on the first run after
+files rot over decades. apss.toml errors loudly on the first run after
 a typo is introduced.
 
 The `--allow-unknown-keys` flag MUST NOT exist. Migration paths for
@@ -210,7 +210,7 @@ emitted from `validate()`, not by relaxing the meta-validator.
 
 ## 5. Disabled and Missing Sections
 
-| State | apss.yaml | Behavior |
+| State | apss.toml | Behavior |
 |-------|-----------|----------|
 | Active, default config | section absent | Standard runs with `Default` config. |
 | Active, overridden | section present, no `disable` | Standard runs with section merged onto `Default`. |
@@ -219,7 +219,7 @@ emitted from `validate()`, not by relaxing the meta-validator.
 
 Section presence is never required. The meta-validator MUST NOT
 emit `CF_EMPTY_STANDARDS` or any similar diagnostic just because
-apss.yaml has no sections for active standards: that is the
+apss.toml has no sections for active standards: that is the
 expected state for greenfield projects.
 
 ---
@@ -230,7 +230,7 @@ The CF01 validation delegation is exposed at the CLI through:
 
 ```
 <bootstrap> v1 validate                # full repo + project pass
-<bootstrap> v1 validate --project      # only apss.yaml + sections
+<bootstrap> v1 validate --project      # only apss.toml + sections
 <bootstrap> v1 validate --slug <slug>  # only one section, useful for editor LSPs
 ```
 
@@ -249,7 +249,7 @@ addition to the existing CF01 codes from `01_spec.md` §6.
 
 | Code | Severity | Source |
 |------|----------|--------|
-| `CF_YAML_PARSE_ERROR` | Error | Step 1 |
+| `CF_TOML_PARSE_ERROR` | Error | Step 1 |
 | `CF_UNKNOWN_TOP_LEVEL_KEY` | Error | Step 4 / §4 |
 | `CF_UNKNOWN_NESTED_KEY` | Error | Step 5 / §4 |
 | `CF_UNKNOWN_SUBSTANDARD_KEY` | Error | Step 5 / §4 |
@@ -266,9 +266,9 @@ unchanged at steps 6 and 7 respectively.
 
 ## 8. Worked Example
 
-Consumer apss.yaml:
+Consumer apss.toml:
 
-```yaml
+```toml
 schema: apss.config/v1
 
 project:

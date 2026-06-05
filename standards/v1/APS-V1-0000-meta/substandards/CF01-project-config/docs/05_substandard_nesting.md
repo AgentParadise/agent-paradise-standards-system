@@ -18,9 +18,9 @@ RFC 2119 keywords apply.
 
 Substandards MUST be configured as nested keys under the parent
 standard's slug. Substandards MUST NOT receive a top-level slug in
-apss.yaml.
+apss.toml.
 
-```yaml
+```toml
 docs:
   enforce_adr: true
   adr:
@@ -49,7 +49,7 @@ can evaluate it.
 ### 2.1 Three Alternatives Considered
 
 1. **Top-level qualified key.** Examples: `docs.adr:`, `docs.pvs:`.
-   Rejected because YAML keys containing dots are syntactically legal
+   Rejected because TOML keys containing dots are syntactically legal
    but read poorly, conflict with editor schema completion (which
    expects a single token), and force the meta-validator to do string
    surgery on every top-level key to discover parents.
@@ -69,7 +69,7 @@ can evaluate it.
 ### 2.2 Why Nested Wins
 
 - **Grouping is correct.** Substandards are scoped to their parent in
-  the meta-standard (APS-V1-0000 §4.2). Nesting in apss.yaml matches
+  the meta-standard (APS-V1-0000 §4.2). Nesting in apss.toml matches
   that hierarchy without lossy flattening.
 - **Disable inheritance is natural.** `disable: true` at the parent
   slug means the parent and all its substandards are off. The
@@ -86,7 +86,7 @@ can evaluate it.
   preserves operator muscle memory across the migration.
 
 The single small cost is that a substandard cannot be configured
-without naming its parent. That cost is paid in apss.yaml only, where
+without naming its parent. That cost is paid in apss.toml only, where
 it actually helps the reader.
 
 ---
@@ -140,7 +140,7 @@ If a standard's contribution schema declares a property with the
 same name as one of its substandard slugs, the meta-validator MUST
 emit `CF_SUBSTANDARD_KEY_SHADOW`. This is a build-time error caught
 during `<bootstrap> v1 validate repo`, not a runtime error against
-apss.yaml. Standards are responsible for avoiding the clash; the
+apss.toml. Standards are responsible for avoiding the clash; the
 slug registry produces the canonical list of substandard slugs
 each standard owns.
 
@@ -148,7 +148,7 @@ each standard owns.
 |------|----------|------|
 | `CF_SUBSTANDARD_KEY_SHADOW` | Error | Standard contribution schema declares a property with the same name as a substandard slug. |
 
-This rule exists so that consumers can read apss.yaml without ever
+This rule exists so that consumers can read apss.toml without ever
 having to disambiguate "is this a leaf property or a substandard?".
 
 ---
@@ -182,7 +182,7 @@ the parent and disable the parent's other substandards explicitly.
 
 ### 5.1 All Defaults
 
-```yaml
+```toml
 schema: apss.config/v1
 
 project:
@@ -195,7 +195,7 @@ retrospectives) are active with their defaults. No section needed.
 
 ### 5.2 Override One Substandard
 
-```yaml
+```toml
 docs:
   adr:
     adr_dir: docs/decisions
@@ -206,7 +206,7 @@ overridden for the ADR substandard.
 
 ### 5.3 Disable One Substandard, Keep Parent
 
-```yaml
+```toml
 docs:
   purpose-and-vision:
     disable: true
@@ -216,7 +216,7 @@ Docs is active; ADR and retrospectives are active; PVS is off.
 
 ### 5.4 Disable the Whole Standard
 
-```yaml
+```toml
 docs:
   disable: true
 ```
@@ -228,7 +228,7 @@ would still be caught.
 
 ### 5.5 Disable Substandard Despite Disabled Parent
 
-```yaml
+```toml
 docs:
   disable: true
   adr:

@@ -8,7 +8,7 @@ Sibling normative spec to `01_spec.md` and `02_slug_registry.md`.
 Equal precedence under APS-V1-0000 §1.1.
 
 This document specifies the schema format each standard ships to
-contribute its section to apss.yaml. It is the APSS analog of VS Code's
+contribute its section to apss.toml. It is the APSS analog of VS Code's
 `contributes.configuration`.
 
 ## Terminology
@@ -19,7 +19,7 @@ RFC 2119 keywords apply, as in `01_spec.md`.
 
 ## 1. Why Contribution Schemas
 
-apss.yaml has one top-level key per registered slug (see
+apss.toml has one top-level key per registered slug (see
 `02_slug_registry.md`). Each standard owns the contents of its own
 key. To make the file self-documenting, machine-validatable, and
 editor-friendly, every standard MUST ship a typed schema describing:
@@ -72,12 +72,12 @@ pub trait StandardConfig:
 {
     fn validate(&self) -> Diagnostics;
     fn json_schema() -> serde_json::Value;
-    fn yaml_template() -> String;
+    fn toml_template() -> String;
 }
 
 pub trait ConfigContribution {
     /// The slug under which this standard's section appears in
-    /// apss.yaml. Must equal the slug declared in metadata.
+    /// apss.toml. Must equal the slug declared in metadata.
     fn slug() -> &'static str;
 
     /// Stable, human-readable title for the section.
@@ -103,10 +103,8 @@ pub struct SubstandardContribution {
 
 Notes:
 
-- `yaml_template()` replaces the old `toml_template()` from
-  `01_spec.md` §8.3.1. Standards MAY keep `toml_template()` as a
-  deprecated alias during the migration window described in the
-  migration note attached to `01_spec.md`, but new code MUST emit YAML.
+- `toml_template()` emits documented TOML snippets for
+  `[standards.<slug>.config]`.
 - `slug()`, `title()`, and `summary()` are needed at code-generation
   time and are therefore associated functions, not instance methods.
 - `substandard_schemas()` lets the parent standard carry its
@@ -118,13 +116,13 @@ Notes:
 
 Standards that take no configuration MUST use `NoConfig`. This still
 registers a slug and a (trivially empty) contribution schema, so that
-apss.yaml can still toggle the standard on or off via the universal
+apss.toml can still toggle the standard on or off via the universal
 `disable` key (§3.1.1) and so that the meta-validator can still
 report unknown keys for that slug.
 
 ---
 
-## 3. apss.yaml Section Shape
+## 3. apss.toml Section Shape
 
 ### 3.1 Universal Keys
 
@@ -137,7 +135,7 @@ Standards MUST NOT redefine them; meta-validation enforces this.
 | `version` | string | resolved by installer | Optional Cargo-style semver requirement that pins the standard's version. If absent, the workspace lockfile decides. |
 
 The `disable` key is the universal off switch. An active standard
-requires no section in apss.yaml; a section exists only to override
+requires no section in apss.toml; a section exists only to override
 or disable. Tooling MUST accept `disable: false` as a no-op
 (useful for documentation purposes when explicitly opting in).
 
@@ -163,8 +161,8 @@ the following restrictions and conventions:
 
 ### 3.3 Worked Example
 
-```yaml
-# apss.yaml fragment, contributed by the docs standard
+```toml
+# apss.toml fragment, contributed by the docs standard
 docs:
   enforce_adr: true
   adr_dir: docs/adrs
@@ -291,14 +289,13 @@ The contribution schema powers four concrete tooling targets:
    Schema can be pointed at the per-slug `$id` for completion. The
    unified installer SHOULD also emit an aggregate
    `generated/v1/apss.schema.json` that unions every standard's schema
-   under its slug, suitable as a `yaml.schemas` entry in
-   `.vscode/settings.json` (and equivalents).
+   under its slug for editor integrations.
 3. **Validation.** The meta-validator uses the schema for structural
    validation (types, required, additionalProperties). Semantic
    validation is delegated to `StandardConfig::validate()`; see
    `04_validation_delegation.md`.
-4. **Scaffolding.** `<bootstrap> v1 config template` emits a YAML
-   skeleton from every active standard's `yaml_template()`, used by
+4. **Scaffolding.** `<bootstrap> v1 config template` emits a TOML
+   skeleton from every active standard's `toml_template()`, used by
    the unified installer's first-run flow
    (`06_unified_install_seam.md` §2.4).
 
@@ -309,7 +306,7 @@ The contribution schema powers four concrete tooling targets:
 This document tightens the `StandardConfig` contract introduced in
 APS-V1-0000 §8.3. Existing implementations that derived
 `StandardConfig` without `ConfigContribution` MUST add the
-`ConfigContribution` impl during the apss.yaml migration window
+`ConfigContribution` impl during the apss.toml migration window
 described in the migration note attached to `01_spec.md`. The
 meta-validator MUST emit `CF_MISSING_CONTRIBUTION_TRAIT` as an
 error for any standard that lacks `ConfigContribution` after the
@@ -317,5 +314,5 @@ window closes.
 
 For published v1 standards, the migration is a minor bump (no
 breaking changes to consumers, since the trait extension is purely
-additive on the standards side and apss.yaml content is unchanged
+additive on the standards side and apss.toml content is unchanged
 by adding it).

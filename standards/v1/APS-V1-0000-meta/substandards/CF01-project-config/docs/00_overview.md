@@ -25,7 +25,7 @@ the operator authors) and generated artifacts (which the installer writes).
 
 ## Solution
 
-CF01 specifies a single manifest, `apss.yaml`, at the project root and gives
+CF01 specifies a single manifest, `apss.toml`, at the project root and gives
 it three roles at once.
 
 1. **Project configuration.** Core sections owned by CF01 capture project
@@ -33,17 +33,17 @@ it three roles at once.
 2. **Standard activation.** The `standards` mapping is the project's
    dependency declaration: which standards (and which substandards) are
    active, at what version range.
-3. **Installation manifest.** The unified installer reads `apss.yaml`,
+3. **Installation manifest.** The unified installer reads `apss.toml`,
    resolves it through DI01, then invokes each active standard's install
    contract to produce on-disk state. Removing an entry and re-running
    uninstalls cleanly.
 
-The npm analogy is the binding model: `apss.yaml` is to APSS what
+The npm analogy is the binding model: `apss.toml` is to APSS what
 `package.json` is to npm. One file, one install command, one source of
 truth for what the project considers active.
 
 Each standard contributes a top-level section keyed by its registered slug
-(for example `docs:`, `fitness:`, `topology:`). The slug registry is owned
+(for example `[standards.code-topology]`). The slug registry is owned
 by CF01; the section's content is owned by the standard. CF01 itself never
 needs to know the shape of those sections, because each standard ships a
 contribution schema describing its keys and a validator that owns the
@@ -62,5 +62,5 @@ build outputs, composed binaries). Configuration MUST NOT live there.
   `StandardCli` trait is the in-process API the unified installer uses to
   reach a standard's install contract.
 - **APS-V1-0000.SS01** Substandard Structure. Substandards nest under the
-  parent slug in `apss.yaml` rather than receiving their own top-level slug.
+  parent slug in `apss.toml` rather than receiving their own top-level slug.
 - **Meta-standard section 8.3** `StandardConfig` trait specification.
