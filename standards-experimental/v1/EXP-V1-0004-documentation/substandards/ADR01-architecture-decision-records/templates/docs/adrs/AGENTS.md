@@ -46,29 +46,73 @@ would touch many files or other decisions, you do.
 ## The backlink rule (load-bearing)
 
 Implementation files that exist to satisfy an ADR MUST contain a
-backlink to it near the top of the file. The token form is
-`ADR-<NNN>-<slug>`, matching the filename without `.md`. Example:
+backlink to it. The token form is `ADR-<NNN>-<slug>`, matching the
+filename without `.md`. The token MUST sit inside a comment in the
+file's source language so it never affects code semantics.
+
+### Where the backlink goes
+
+Both of the placements below are picked up by the reference
+validator. Pick the one that matches the scope of the decision.
+
+**Top of the file (PREFERRED).** When the file as a whole exists to
+satisfy one or more ADRs, put a short header comment near the top
+that says what the file is for and lists the ADRs it implements.
+This is the right shape for a module, a binary entry point, or a
+single-purpose source file.
 
 ```rust
-// Implements ADR-001-choose-database.
+// auth: hand off bearer tokens between the gateway and the worker tier.
+// Implements ADR-001-choose-database, ADR-014-token-storage.
+
+pub fn login(...) { ... }
+pub fn logout(...) { ... }
 ```
 
 ```python
+# rate_limit: per-tenant token bucket used by the public API.
 # Implements ADR-042-format-timestamps.
+
+def enforce(...): ...
 ```
 
-This is enforced parent-side under `docs.backlinking` in the EXP-V1-0004
-documentation standard. The pre-commit hook surfaces:
+**Above a specific function or code block (ALSO ALLOWED).** When the
+ADR governs only a single function, struct, or contiguous block while
+the rest of the file is unrelated, put the backlink directly above
+the unit it scopes to. The validator treats this identically to a
+top-of-file backlink.
 
-- `ADR01-dead-reference` when code points at an ADR that does not exist
-  (renamed, renumbered, or deleted).
-- `ADR01-superseded-reference` when code points at an ADR whose
-  `status` is `deprecated` or `superseded`. Retarget the backlink to
-  the current ADR.
+```rust
+fn unrelated_helper(...) { ... }
 
-Skip the backlink for code that is genuinely not tied to a specific
-decision. Backlinking exists so a fresh-context agent can recover the
-"why" without scraping prose.
+// Implements ADR-027-rate-limit-burst.
+fn enforce_rate_limit(...) {
+    ...
+}
+```
+
+A file MAY combine both placements: a top-of-file backlink for the
+file's overall purpose and additional per-function backlinks for
+ADRs that govern individual units. Skip the backlink entirely for
+code that is genuinely not tied to a specific decision.
+
+### What the validator emits
+
+This is enforced parent-side under `docs.backlinking` in the
+EXP-V1-0004 documentation standard. The pre-commit hook surfaces:
+
+- `ADR01-unknown-reference` (error) when code points at an ADR token
+  that does not resolve to a real file in `docs.adr.directory`
+  matching `docs.adr.naming_pattern` (renamed, renumbered, deleted,
+  or misnamed). This replaces the earlier `ADR01-dead-reference`
+  warning.
+- `ADR01-superseded-reference` (warning) when code points at an ADR
+  whose `status` is `deprecated` or `superseded`. Retarget the
+  backlink to the current ADR.
+
+Backlinking exists so a fresh-context agent can recover the "why"
+without scraping prose. The reference validator is the mechanical
+enforcement: if your token does not resolve, the commit is blocked.
 
 ## How to add a new ADR
 

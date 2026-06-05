@@ -53,7 +53,7 @@ We shipped ...
 
 ## Configuration
 
-In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers the key `retrospectives` under the parent `docs` slug. Per the parent standard's absence-equals-enabled convention (Section 3.2 of the parent spec), a project adopting every default for this substandard writes nothing under `docs.retrospectives`. The substandard is opt-out, not opt-in.
+In `APSS.yaml` (owned by APS-V1-0000.CF01); this substandard registers the key `retrospectives` under the parent `docs` slug. Per the parent standard's absence-equals-enabled convention (Section 3.2 of the parent spec), a project adopting every default for this substandard writes nothing under `docs.retrospectives`. The substandard is opt-out, not opt-in.
 
 To override the default directory or naming pattern:
 

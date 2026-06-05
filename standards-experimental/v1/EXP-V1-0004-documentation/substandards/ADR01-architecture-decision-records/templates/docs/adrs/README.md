@@ -71,7 +71,7 @@ Examples:
 - `ADR-100-manage-passwords.md`
 
 The pattern is configurable via `docs.adr.naming_pattern` in
-`apss.yaml`.
+`APSS.yaml`.
 
 ## Backlinking from code
 

@@ -21,7 +21,7 @@ The append-only rule is the key invariant: a retrospective is a record of what w
 
 A directory MUST exist at `docs.retrospectives.directory` (default: `docs/retrospectives/`).
 
-Diagnostic: `RETRO01-dir-not-found` (error). Hint: "Create the directory at `<directory>` or set `docs.retrospectives.disable = true` in `apss.yaml`."
+Diagnostic: `RETRO01-dir-not-found` (error). Hint: "Create the directory at `<directory>` or set `docs.retrospectives.disable = true` in `APSS.yaml`."
 
 The retrospective directory inherits the parent rules: it MUST contain a `README.md` with a `## Index` section (auto generated from frontmatter) and per directory `CLAUDE.md` and `AGENTS.md`.
 
@@ -43,7 +43,7 @@ A retrospective file MUST be reachable from the directory's `## Index` section o
 
 Diagnostics:
 - `RETRO01-naming-mismatch` (error): a file does not match the regex.
-- `RETRO01-invalid-naming-regex` (error): the configured regex itself is not valid. Hint: "Check `docs.retrospectives.naming_pattern` in `apss.yaml`."
+- `RETRO01-invalid-naming-regex` (error): the configured regex itself is not valid. Hint: "Check `docs.retrospectives.naming_pattern` in `APSS.yaml`."
 
 ## 4. Frontmatter (RETRO01-frontmatter-missing, RETRO01-frontmatter-field-missing)
 

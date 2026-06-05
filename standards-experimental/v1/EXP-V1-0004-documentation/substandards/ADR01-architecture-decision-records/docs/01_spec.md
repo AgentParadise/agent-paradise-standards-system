@@ -17,7 +17,7 @@ This substandard's vocabulary, lifecycle, naming guidance, and shipped template 
 
 The docs root (default `docs/`) MUST contain an ADR directory (default `adrs/`).
 
-- Configurable via `docs.adr.directory` in `apss.yaml`
+- Configurable via `docs.adr.directory` in `APSS.yaml`
 - Full path: `<docs.root>/<docs.adr.directory>/` (e.g., `docs/adrs/`)
 - The ADR directory SHOULD contain a `README.md` with a `## Index` section listing all ADRs (managed by the parent standard's index generation)
 
@@ -36,7 +36,7 @@ Every `.md` file in the ADR directory (excluding `README.md`, `CLAUDE.md`, `AGEN
 
 - The number MUST be zero-padded to at least 3 digits (maximum 5 digits)
 - The name MUST use kebab-case (lowercase letters, digits, hyphens)
-- Configurable via `docs.adr.naming_pattern` in `apss.yaml`
+- Configurable via `docs.adr.naming_pattern` in `APSS.yaml`
 
 ## 3. Front Matter (ADR01-missing-frontmatter, ADR01-invalid-status)
 
@@ -104,25 +104,100 @@ This enables bidirectional discovery:
 - From code → ADR: developers and agents find the governing decision
 - From ADR → code: `grep ADR-001-security` finds all implementing files
 
-## 6. Dead ADR Reference Detection (ADR01-dead-reference, ADR01-superseded-reference)
+## 6. ADR Reference Accuracy (ADR01-unknown-reference, ADR01-superseded-reference)
 
-When backlinking is enabled, the validator scans source files across the
-repository for ADR identifiers and checks that each referenced ADR actually
-exists in the ADR directory. The reference-extraction regex is derived from
-the configured `docs.adr.naming_pattern`, so projects that customise the
-prefix (e.g., `DEC-...`) still get their references scanned.
+This is the mechanical enforcement of the parent-level backlinking rule for
+ADRs. The validator scans source files across the repository for ADR
+identifiers and validates that each referenced ADR resolves to a real file
+in the configured ADR directory.
 
-This catches stale references to ADRs that have been renamed, renumbered, or
-deleted. Live references to an ADR whose status is `superseded` or
-`deprecated` are flagged separately as `ADR01-superseded-reference`.
+### 6.1 Reference scan (normative)
 
-**Scanned file types:** `.rs`, `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.java`, `.kt`, `.rb`, `.sh`, `.yaml`, `.yml`, `.toml`, `.json`, `.md`
+When backlinking is enabled, the validator MUST:
 
-**Excluded from scanning:** Hidden directories, configured `exclude_dirs`, and files inside the ADR directory itself.
+1. Walk the project tree, including files matched by
+   `docs.backlinking.scan` (per the parent spec Section 7.2; the
+   defaults documented in Section 3.3 of the parent spec apply when the
+   key is absent), and skipping hidden directories, the configured
+   `docs.readme.exclude_dirs`, and the ADR directory itself. The
+   deprecated `docs.backlinking.file_types` key MUST be honoured for
+   backward compatibility per the parent spec; tooling MUST emit
+   `backlinking-file-types-deprecated` (warning) when it is set so
+   the operator migrates to `scan`.
+2. For every walked file, extract every token of the form
+   `ADR-<NNN>-<slug>` where `<NNN>` is 3 to 5 digits and `<slug>` matches
+   the slug fragment of the configured `docs.adr.naming_pattern`. The
+   reference-extraction regex MUST be derived from
+   `docs.adr.naming_pattern`, so projects that customise the prefix
+   (for example `DEC-...`) still get their references scanned.
+3. For every extracted token, look up the matching file name
+   `<token>.md` in the configured ADR directory.
 
-**Severity:** warning (ADR01-dead-reference, ADR01-superseded-reference)
+### 6.2 Resolution rules
 
-**Controlled by:** `docs.backlinking.disable` in `apss.yaml`
+Every extracted token MUST resolve to a real ADR file. A reference resolves
+when:
+
+- A file named `<token>.md` exists in `<docs.root>/<docs.adr.directory>/`.
+- That file's name satisfies `docs.adr.naming_pattern` (so a file added by
+  hand without the correct shape does not silently "resolve" a reference).
+
+A reference that does not resolve MUST be reported as
+`ADR01-unknown-reference` (severity: error). The diagnostic MUST include
+the source file path, the line number where the token appears, and the
+offending token verbatim, so the operator can jump straight to the bad
+reference. Without file and line the diagnostic is non-actionable and MUST
+NOT be emitted.
+
+`ADR01-unknown-reference` is the substandard's strict accuracy code and
+supersedes the parent-level `backlink-dead-reference` warning for ADRs.
+When `ADR01-unknown-reference` is applicable, the validator MUST NOT also
+emit `backlink-dead-reference` for the same finding.
+
+### 6.3 Superseded reference
+
+A resolved reference whose target ADR has `status: superseded` or
+`status: deprecated` MUST be reported as `ADR01-superseded-reference`
+(severity: warning) so the operator can retarget the backlink to the
+current ADR. The diagnostic MUST include file, line, and token, identically
+to `ADR01-unknown-reference`.
+
+### 6.4 Placement guidance for the operator
+
+The parent spec (Section 7.1.1 of `EXP-V1-0004/docs/01_spec.md`) defines
+two equally valid backlink placements: a top-of-file header comment for a
+file whose whole purpose is one or more ADRs, and a per-function or
+per-block comment for ADRs that scope to a single unit. The reference
+validator picks up tokens regardless of which placement is chosen; the
+docs-area `AGENTS.md` template (`templates/docs/adrs/AGENTS.md`) repeats
+the guidance so agents see it in the ADR directory itself.
+
+### 6.5 Scope summary
+
+**Scanned file set:** every file matched by `docs.backlinking.scan`
+(default include-globs documented in Section 3.3 of the parent spec
+cover `**/*.rs`, `**/*.py`, `**/*.ts`, `**/*.tsx`, `**/*.js`,
+`**/*.jsx`, `**/*.go`, `**/*.java`, `**/*.kt`, `**/*.rb`, `**/*.sh`,
+`**/*.yaml`, `**/*.yml`, `**/*.toml`, `**/*.json`, `**/*.md`). The
+deprecated `file_types` key MAY widen the set during migration.
+
+**Excluded from scanning:** hidden directories, configured `exclude_dirs`,
+and files inside the ADR directory itself (so an ADR's own body can
+reference other ADRs without tripping the validator).
+
+**Severity:** error (`ADR01-unknown-reference`), warning
+(`ADR01-superseded-reference`).
+
+**Controlled by:** `docs.backlinking.disable` in `APSS.yaml`. When backlinking
+is disabled both codes are suppressed.
+
+### 6.6 Migration from `ADR01-dead-reference`
+
+Earlier drafts of this spec defined `ADR01-dead-reference` (warning) for
+the same finding. The renamed code is `ADR01-unknown-reference` and the
+severity is upgraded from warning to error. Downstream tooling that
+filters on the older code MUST migrate to the new name. The migration is
+a one-way upgrade; the old code is not retained as an alias.
 
 ## 7. Required ADR Headers (ADR01-missing-header)
 
@@ -211,7 +286,7 @@ matches the operator invariant for human-readable codes.
 | ADR01-invalid-naming-regex | error | Invalid naming regex in configuration |
 | ADR01-missing-context-file | error | ADR directory missing CLAUDE.md or AGENTS.md |
 | ADR01-context-missing-guidance | warning | ADR context file lacks ADR referencing guidance |
-| ADR01-dead-reference | warning | Source file references non-existent ADR (dead reference) |
+| ADR01-unknown-reference | error | Source file references an ADR token that does not resolve to a real file in `docs.adr.directory` matching `docs.adr.naming_pattern` (replaces the earlier `ADR01-dead-reference` warning) |
 | ADR01-missing-header | warning | ADR file missing required section header |
 | ADR01-invalid-status | error | ADR missing or invalid `status` field |
 | ADR01-superseded-reference | warning | Source file references a superseded or deprecated ADR |

@@ -63,7 +63,7 @@ We are the project that ...
 
 ## Configuration
 
-In `apss.yaml` (owned by APS-V1-0000.CF01); this substandard registers
+In `APSS.yaml` (owned by APS-V1-0000.CF01); this substandard registers
 the kebab-case key `north-star` under the parent `docs` slug. Per the
 parent standard's absence-equals-enabled convention (Section 3.2 of
 the parent spec), a project adopting every default writes nothing for

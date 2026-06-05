@@ -15,7 +15,7 @@ description: "Normative rules for documentation structure, the doc type registry
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119).
 
-When this standard says a rule is "default-on, switchable-off", it means the rule is part of the standard, applied unconditionally unless a specific `disable` flag in `apss.yaml` turns it off for that one project. Defaults are opinionated. Configuration is by exception, not by accumulation of optional flags.
+When this standard says a rule is "default-on, switchable-off", it means the rule is part of the standard, applied unconditionally unless a specific `disable` flag in `APSS.yaml` turns it off for that one project. Defaults are opinionated. Configuration is by exception, not by accumulation of optional flags.
 
 ---
 
@@ -47,7 +47,7 @@ The unlocks layered on top of the generic mechanism are:
    to operate on docs as data.
 2. **A configurable, growing doc type registry (Section 8).** Doc
    types are default on; a project disables one by flipping a single
-   flag in `apss.yaml`.
+   flag in `APSS.yaml`.
 3. **Installable enforcement (Section 9).** Installing the standard
    installs a git pre-commit hook that auto-updates the doc index,
    validates structure against the config, and fails the commit when
@@ -65,17 +65,17 @@ Section 8.
 
 ### 1.1 Relationship to APS-V1-0000 and the unified APSS config
 
-This standard plugs into the unified APSS configuration model owned by the meta-standard APS-V1-0000 (via its CF01 substandard). Project-level configuration for every APSS standard lives in a single file at the repository root, `apss.yaml`, whose top-level structure and slug registry are owned by CF01. Each standard registers a unique short slug and contributes a config-section schema; the meta-validator aggregates and delegates validation of each namespaced section to its owner.
+This standard plugs into the unified APSS configuration model owned by the meta-standard APS-V1-0000 (via its CF01 substandard). Project-level configuration for every APSS standard lives in a single file at the repository root, `APSS.yaml`, whose top-level structure and slug registry are owned by CF01. Each standard registers a unique short slug and contributes a config-section schema; the meta-validator aggregates and delegates validation of each namespaced section to its owner.
 
 This standard:
 
 1. Registers the slug `docs`.
-2. Contributes the schema for the `docs` section of `apss.yaml` (Section 3 below).
+2. Contributes the schema for the `docs` section of `APSS.yaml` (Section 3 below).
 3. Validates its own section: the parent validator validates the `docs` block and its core sub-blocks (`index`, `context_files`, `readme`, `root_context`, `backlinking`); each substandard validates its own nested key (`adr`, `north-star`, `retrospectives`).
 
 Substandards do NOT register their own top-level slugs. They nest under the `docs` key as namespaced sub-sections (`docs.adr`, `docs.north-star`, `docs.retrospectives`); the nesting convention is normative and is owned by the meta-standard.
 
-The `.apss/` dotdir, when it exists, holds GENERATED artifacts (such as cached indexes and validator state) only. It MUST NOT hold configuration. Earlier drafts of this standard placed configuration in the `.apss` tree; that layout is superseded by `apss.yaml` at the repository root. Tooling MUST NOT continue to read legacy `.apss` project configuration.
+The `.apss/` dotdir, when it exists, holds GENERATED artifacts (such as cached indexes and validator state) only. It MUST NOT hold configuration. Earlier drafts of this standard placed configuration in the `.apss` tree; that layout is superseded by `APSS.yaml` at the repository root. Tooling MUST NOT continue to read legacy `.apss` project configuration.
 
 This standard complements APS-V1-0000's requirement for a per-package `docs/01_spec.md` by enforcing broader documentation structure across the project's docs root, beyond each standard package's own spec file.
 
@@ -88,7 +88,7 @@ This standard complements APS-V1-0000's requirement for a per-package `docs/01_s
 - **Context file**: `CLAUDE.md` or `AGENTS.md`, one per directory, providing AI agents with lightweight orientation to that directory.
 - **Docs root**: The project's technical documentation directory. Default `docs/`, configurable via `docs.root`.
 - **Doc type**: A class of document with its own structure rules (ADR, North Star, Retrospective, ...). Each doc type is implemented as a substandard.
-- **Doc type registry**: The set of `docs.<type>` keys in `apss.yaml` that declare which doc types are active in a given project. See Section 8.
+- **Doc type registry**: The set of `docs.<type>` keys in `APSS.yaml` that declare which doc types are active in a given project. See Section 8.
 - **Backlink**: A reference from an implementation file to the governing doc (ADR, North Star, ...) that it implements. Backlinking is part of every doc type, not a per type opt in. See Section 7.
 
 ---
@@ -97,16 +97,16 @@ This standard complements APS-V1-0000's requirement for a per-package `docs/01_s
 
 ### 3.1 Config Location
 
-Project-level configuration MUST be located at `apss.yaml` relative to the repository root. The file is owned by the meta-standard (APS-V1-0000.CF01); this standard registers and contributes the `docs` section.
+Project-level configuration MUST be located at `APSS.yaml` relative to the repository root. The file is owned by the meta-standard (APS-V1-0000.CF01); this standard registers and contributes the `docs` section.
 
 Configuration MUST NOT be placed under `.apss/`. The `.apss/` dotdir is reserved for GENERATED artifacts (cached indexes, validator state) only.
 
-Monorepo cascade: a nested `apss.yaml` inside a sub-package layers over the root file using the meta-standard's cascade rules (nearer file overrides root values). Cascade resolution is owned by CF01; this standard inherits whatever the meta-validator produces and validates the merged `docs` block.
+Monorepo cascade: a nested `APSS.yaml` inside a sub-package layers over the root file using the meta-standard's cascade rules (nearer file overrides root values). Cascade resolution is owned by CF01; this standard inherits whatever the meta-validator produces and validates the merged `docs` block.
 
 ### 3.2 Default Behavior (absence equals enabled)
 
 The standard follows an absence-equals-enabled convention modelled on
-environment variables. If `apss.yaml` does not exist, or it exists but
+environment variables. If `APSS.yaml` does not exist, or it exists but
 contains no `docs` key, or a `docs` block exists but a given
 sub-section is absent, the validator MUST apply the documented
 defaults for the absent surface. The validator MUST NOT error on a
@@ -114,7 +114,7 @@ missing config file, a missing `docs` section, or a missing
 sub-section. Zero-config works; every flag defaults to the recommended
 setting and every feature defaults to enabled.
 
-A key only appears in `apss.yaml` to do one of two things:
+A key only appears in `APSS.yaml` to do one of two things:
 
 1. Opt OUT of a default-on rule with `disable: true`.
 2. Override a non-`disable` default value (for example, change
@@ -125,19 +125,19 @@ into a real or example config: it is the default that the validator
 already applies for absence. Tooling and documentation MUST NOT
 generate `disable: false` boilerplate, and operators reading examples
 MUST be shown the empty-section happy path, not a `disable: false`
-crutch. The smallest valid `apss.yaml` for a project that adopts every
+crutch. The smallest valid `APSS.yaml` for a project that adopts every
 default of this standard is:
 
 ```yaml
 docs: {}
 ```
 
-or simply no `apss.yaml` at all (CF01 owns whether the file is
+or simply no `APSS.yaml` at all (CF01 owns whether the file is
 required for other reasons).
 
 ### 3.3 Schema
 
-The schema is normative. Keys not listed here under the `docs` section MUST be rejected with `unknown-config-field`. The schema below shows the `docs` block as it appears inside `apss.yaml`. Every line below is a default that the validator applies for absence; per Section 3.2 a project only writes a key to opt out (`disable: true`) or to override a non-`disable` value. The surrounding top-level structure (schema declaration, project identity, standard activation) is owned by CF01.
+The schema is normative. Keys not listed here under the `docs` section MUST be rejected with `unknown-config-field`. The schema below shows the `docs` block as it appears inside `APSS.yaml`. Every line below is a default that the validator applies for absence; per Section 3.2 a project only writes a key to opt out (`disable: true`) or to override a non-`disable` value. The surrounding top-level structure (schema declaration, project identity, standard activation) is owned by CF01.
 
 ```yaml
 docs:
@@ -168,23 +168,34 @@ docs:
 
   backlinking:
     # Backlinking applies to every doc type when not disabled.
-    file_types:
-      - rs
-      - py
-      - ts
-      - tsx
-      - js
-      - jsx
-      - go
-      - java
-      - kt
-      - rb
-      - sh
-      - yaml
-      - yml
-      - toml
-      - json
-      - md
+    #
+    # The `scan` key is the canonical way to control which files the
+    # reference validator walks. It is a list of include-globs evaluated
+    # from the repository root. When the key is absent the validator
+    # MUST apply the defaults below (absence equals enabled). An
+    # explicit list overrides the defaults completely; combine entries
+    # to widen the scope.
+    scan:
+      - "**/*.rs"
+      - "**/*.py"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.go"
+      - "**/*.java"
+      - "**/*.kt"
+      - "**/*.rb"
+      - "**/*.sh"
+      - "**/*.yaml"
+      - "**/*.yml"
+      - "**/*.toml"
+      - "**/*.json"
+      - "**/*.md"
+    # `file_types` is a deprecated alias. When set, each entry `X` is
+    # treated as the glob `**/*.X` and unioned with `scan`. New projects
+    # MUST use `scan`; tooling MUST surface a `backlinking-file-types-deprecated`
+    # warning when `file_types` is present.
 
   # Doc type registry (substandards). Each `docs.<slug>` key is default
   # on. To opt a single doc type out, write `docs.<slug>.disable: true`;
@@ -208,7 +219,7 @@ docs:
 ### 3.4 Configurability rules
 
 - Every rule listed in this spec is on by default. A project disables one rule by setting `disable: true` in the smallest scope that contains it (a single nested key under `docs`, or the top-level `docs.disable` to disable all doc validation).
-- `disable: false` is the default the validator applies for absence and MUST NOT be written into real or example configs. Examples in this spec and in `examples/apss.yaml` MUST show empty sections (or no section at all) for surfaces a project does not override.
+- `disable: false` is the default the validator applies for absence and MUST NOT be written into real or example configs. Examples in this spec and in `examples/APSS.yaml` MUST show empty sections (or no section at all) for surfaces a project does not override.
 - There MUST NOT be per feature `optional` flags scattered through the spec. The shape is always: an implicit default-on with `disable: true` as the opt-out, plus that section's content.
 - Adding a new doc type does not require changing this spec. A new substandard MAY claim its own `docs.<slug>` key; the parent standard MUST tolerate unknown `docs.<slug>` keys for forward compatibility, even though it MUST reject unknown scalar fields inside known sections.
 - Substandard keys use the substandard's kebab-case slug (for example `north-star`, not `north_star`). Scalar field names inside each section remain snake_case to match the Rust struct contract.
@@ -217,7 +228,7 @@ docs:
 
 The CLI and hook MUST emit a single human-readable diagnostic, never a panic, when the config file is malformed:
 
-- `invalid-apss-yaml`: `apss.yaml` is not valid YAML. Severity: error.
+- `invalid-apss-yaml`: `APSS.yaml` is not valid YAML. Severity: error.
 - `unknown-config-field`: a known section under `docs` contains an unknown scalar field. Severity: error.
 
 Both diagnostics MUST include the file path, the offending field or token, and a one-line hint.
@@ -402,7 +413,7 @@ Backlinking is a load-bearing invariant for every doc type, not an opt in featur
 
 ### 7.1 The backlinking rule
 
-For every active doc type, an implementation file that is governed by a specific doc MUST contain a token of the form `<DOC-TYPE-ID>-<NUMBER>-<NAME>` somewhere in the file (typically a single line comment near the top).
+For every active doc type, an implementation file that is governed by a specific doc MUST contain a token of the form `<DOC-TYPE-ID>-<NUMBER>-<NAME>` somewhere in the file. The token MUST appear inside a comment in the file's source language so it never affects code semantics.
 
 Examples:
 
@@ -414,22 +425,67 @@ Examples:
 # Implements PV-001-product-purpose, RETRO-007-q1-launch
 ```
 
-### 7.2 Dead-reference detection
+### 7.1.1 Placement guidance (normative)
 
-The validator MUST scan source files in the repository (respecting `docs.backlinking.file_types`) and emit:
+The validator picks up backlink tokens regardless of where they appear in the file. Authors and agents SHOULD follow this placement convention so the backlink is discoverable by a reader skimming the file:
 
-- `backlink-dead-reference` (warning) when a code file references a doc identifier that does not exist in the corresponding doc type directory.
+- **Top of file (PREFERRED).** When the file as a whole exists to satisfy one or more decisions, place a short header comment near the top giving the file's purpose in one line and listing the ADR (or other doc-type) identifiers it implements. This is the right shape for a module, a binary entry point, or a single-purpose source file.
+- **Above a specific function or code block (ALSO ALLOWED).** When only a single function, struct, or contiguous block of code is governed by an ADR while the rest of the file is unrelated, place the backlink comment directly above the unit it scopes to. The validator treats this identically to a top-of-file backlink for the purpose of accuracy checking (Section 7.2).
+
+Both placements satisfy the rule. A file MAY combine both: a top-of-file backlink for the file's overall purpose and additional per-function backlinks for ADRs that govern individual units. The validator MUST NOT prefer one placement over the other; it scans the whole file.
+
+```rust
+// Top-of-file placement: this whole file implements two ADRs.
+// Implements ADR-001-security-architecture, ADR-014-token-storage.
+
+fn login(...) { ... }
+fn logout(...) { ... }
+```
+
+```rust
+// Per-function placement: only this one function is governed by the ADR;
+// the rest of the file is unrelated background work.
+
+fn unrelated_helper(...) { ... }
+
+// Implements ADR-027-rate-limit-burst.
+fn enforce_rate_limit(...) {
+    ...
+}
+```
+
+The agent-context template at `docs/adrs/AGENTS.md` (shipped by the ADR01 substandard) MUST repeat this guidance so the convention is on hand whenever an agent opens the ADR directory.
+
+### 7.2 Reference accuracy
+
+The validator MUST scan source files in the repository (respecting `docs.backlinking.scan` and, for backward compatibility, the deprecated `docs.backlinking.file_types`) and validate every backlink token it finds against the corresponding doc type's on-disk state.
+
+The `scan` key is a list of include-globs evaluated from the repository root. When the key is absent the validator MUST apply the defaults documented in Section 3.3 (absence equals enabled). When the key is set, the explicit list overrides the defaults entirely; a project widens the surface by combining entries. The validator MUST always exclude hidden directories and the project's `docs.readme.exclude_dirs`, regardless of how `scan` is configured. The configured doc type directories are also excluded from the scan so an ADR's own body or a retrospective's text can reference other ADRs without tripping the validator.
+
+The deprecated `docs.backlinking.file_types` key MAY still appear in older configs; when present, each entry `X` MUST be treated as the glob `**/*.X` and unioned with `scan`. A project that sets `file_types` MUST receive a `backlinking-file-types-deprecated` warning so the operator migrates to `scan`. Tooling MUST NOT emit this warning when only `scan` is present.
+
+The generic parent-level diagnostics are:
+
+- `backlink-dead-reference` (warning) when a code file references a doc identifier that does not exist in the corresponding doc type directory and the doc type does not ship a stricter substandard-specific accuracy code.
 - `backlink-superseded-reference` (warning) when a code file references a doc whose status is `deprecated` or `superseded`.
 
 The reference extraction regex MUST be derived from each doc type's configured `naming_pattern` (so a project that customizes its ADR naming pattern still gets accurate dead reference detection).
 
+#### 7.2.1 Substandard tightening (normative)
+
+A substandard MAY tighten accuracy to error severity by emitting its own code. ADR01 (Section 6 of `substandards/ADR01-architecture-decision-records/docs/01_spec.md`) defines `ADR01-unknown-reference` (error) for any code-side `ADR-NNN-...` token (3 to 5 digit number) that does not resolve to a real ADR file in `docs.adr.directory` matching the configured `docs.adr.naming_pattern`. When a substandard's strict code applies to a finding, the validator MUST emit the substandard code and MUST NOT also emit the generic warning. Substandards that do not ship a strict accuracy code inherit the generic warning above.
+
+#### 7.2.2 Diagnostic contents
+
+Every accuracy diagnostic MUST include the source file path, the line number where the bad reference appears, and the offending token verbatim. A diagnostic without file and line is non-actionable and MUST NOT be emitted by the validator.
+
 ### 7.3 Disabling
 
-Backlinking is enabled by default. A project that needs to disable it sets `docs.backlinking.disable = true`. Per doc type backlinking toggles are not supported by design: backlinking is either on for the project or off for the project.
+Backlinking is enabled by default. A project that needs to disable it sets `docs.backlinking.disable = true`. Per doc type backlinking toggles are not supported by design: backlinking is either on for the project or off for the project. When backlinking is disabled, both the generic parent diagnostics and every substandard accuracy code MUST be suppressed.
 
 ### 7.4 Generator side requirements
 
-The standard does not require code files to be auto generated with backlinks. It requires that the validator emit a diagnostic when a backlink is missing or dead. Adding the backlink line is the implementer's responsibility (and a good fit for a planning agent's checklist).
+The standard does not require code files to be auto generated with backlinks. It requires that the validator emit a diagnostic when a backlink is missing, dead, or unresolved. Adding the backlink line is the implementer's responsibility (and a good fit for a planning agent's checklist).
 
 ---
 
@@ -437,7 +493,7 @@ The standard does not require code files to be auto generated with backlinks. It
 
 The parent standard defines the doc type registry. Each doc type is implemented as a substandard under `substandards/`. The shipped doc types are:
 
-| Doc type | Substandard | Default location | Config key in `apss.yaml` |
+| Doc type | Substandard | Default location | Config key in `APSS.yaml` |
 |----------|-------------|------------------|---------------------------|
 | Architecture Decision Records | `EXP-V1-0004.ADR01` | `docs/adrs/` | `docs.adr` |
 | North Star (Mission, Vision, Position) | `EXP-V1-0004.PV01` | `docs/north-star.md` | `docs.north-star` |
@@ -459,7 +515,7 @@ ADRs are never revised; they are superseded. Retrospectives are append only. Nor
 A new doc type is added by:
 
 1. Creating a substandard under `substandards/<ID>-<slug>/`.
-2. Documenting its nested key under `docs` in `apss.yaml`, using the substandard's kebab-case slug (so `docs.<slug>`). Per Section 3.2 the validator MUST treat the absence of `docs.<slug>` as default-on; the substandard's spec MUST NOT instruct projects to write `disable: false`. Any non-`disable` fields are owned by the substandard. Substandards do NOT register their own top-level slug in the meta-standard registry.
+2. Documenting its nested key under `docs` in `APSS.yaml`, using the substandard's kebab-case slug (so `docs.<slug>`). Per Section 3.2 the validator MUST treat the absence of `docs.<slug>` as default-on; the substandard's spec MUST NOT instruct projects to write `disable: false`. Any non-`disable` fields are owned by the substandard. Substandards do NOT register their own top-level slug in the meta-standard registry.
 3. Registering the doc type in this section's table.
 4. Defining the substandard's diagnostic codes using the human readable scheme described in Section 10.
 
@@ -487,10 +543,10 @@ aps run docs uninstall [<repo-root>]
 Behavior:
 
 - `install` MUST:
-  1. If `apss.yaml` does not exist, ask the meta-standard's installer (CF01) to create it with the project's selected standards. If `apss.yaml` exists, MUST NOT overwrite it; only add a `docs:` block if missing, leaving every other section untouched. The added `docs:` block uses the documented defaults from Section 3.3.
+  1. If `APSS.yaml` does not exist, ask the meta-standard's installer (CF01) to create it with the project's selected standards. If `APSS.yaml` exists, MUST NOT overwrite it; only add a `docs:` block if missing, leaving every other section untouched. The added `docs:` block uses the documented defaults from Section 3.3.
   2. Install the git pre-commit hook described in Section 9.4. If a pre-commit hook already exists, MUST insert an `apss-docs-hook` block delimited by sentinel comments rather than replace the user's hook.
   3. Print the resolved doc type registry so the operator sees which doc types just became active.
-- `uninstall` MUST remove only the `apss-docs-hook` block from the pre-commit hook and MUST leave `apss.yaml` (and its `docs:` block) and the rest of the hook intact.
+- `uninstall` MUST remove only the `apss-docs-hook` block from the pre-commit hook and MUST leave `APSS.yaml` (and its `docs:` block) and the rest of the hook intact.
 - Both commands MUST be idempotent.
 
 ### 9.2 Validator contract
@@ -500,7 +556,7 @@ The validator is the source of truth. The hook and the standalone CLI MUST call 
 **Inputs**:
 
 - `repo_root: Path`: absolute path to the repository root.
-- `config: ApssConfig`: the merged `docs` block from `apss.yaml` (after CF01 cascade resolution), with defaults applied for any missing fields.
+- `config: ApssConfig`: the merged `docs` block from `APSS.yaml` (after CF01 cascade resolution), with defaults applied for any missing fields.
 - `scope: ValidationScope`: one of:
   - `Full`: walk the entire docs root and every doc type directory.
   - `Changed { staged_paths: Vec<PathBuf> }`: only inspect docs touched by the staged change set; the hook MUST use this scope.
@@ -558,7 +614,7 @@ The installed hook is a small shell wrapper that calls into `aps run docs hook -
 
 **What "valid structure" means per doc type**:
 
-- ADR (`EXP-V1-0004.ADR01`): the ADR directory exists, every file matches the naming pattern, every ADR has the required frontmatter and `status`, required topic keywords are satisfied, context files exist with referencing guidance, and there are no dead or superseded backlinks. See the ADR01 spec for the per rule diagnostic codes.
+- ADR (`EXP-V1-0004.ADR01`): the ADR directory exists, every file matches the naming pattern, every ADR has the required frontmatter and `status`, required topic keywords are satisfied, context files exist with referencing guidance, no backlink is superseded, and every `ADR-NNN-<slug>` token found in the file set defined by `docs.backlinking.scan` (defaults in Section 3.3; deprecated `file_types` honoured with a `backlinking-file-types-deprecated` warning) resolves to a real ADR file matching `docs.adr.naming_pattern` (`ADR01-unknown-reference`, error). See the ADR01 spec for the per rule diagnostic codes.
 - North Star (`EXP-V1-0004.PV01`): a single `north-star.md` (or configured location) exists with frontmatter, a `## Mission` section, a `## Vision` section, a `## Position` section, and a current `status`. See PV01 spec.
 - Retrospectives (`EXP-V1-0004.RETRO01`): the retrospective directory exists, each file matches the naming pattern, files are append only (no historical retros modified in the staged change set), and required sections are present. See RETRO01 spec.
 
@@ -583,7 +639,7 @@ Existing numeric or composite codes (for example, `ADR01-001`) MAY be retained a
 
 | Code | Severity | Domain | Description |
 |------|----------|--------|-------------|
-| `invalid-apss-yaml` | error | Config | `apss.yaml` is not valid YAML. |
+| `invalid-apss-yaml` | error | Config | `APSS.yaml` is not valid YAML. |
 | `unknown-config-field` | error | Config | A known section under `docs` contains an unknown scalar field. |
 | `readme-missing` | error | DOC02 | Directory missing `README.md`. |
 | `claude-md-missing` | warning | DOC02 | Directory missing `CLAUDE.md`. |
@@ -599,8 +655,9 @@ Existing numeric or composite codes (for example, `ADR01-001`) MAY be retained a
 | `root-agents-md-missing` | error | DOC03 | Root missing `AGENTS.md`. |
 | `root-self-reference-missing` | warning | DOC03 | Root context file missing required APSS, docs, or doc-type references. |
 | `skills-format-violation` | warning | DOC03 | Skill README does not follow the Claude Code skills format. |
-| `backlink-dead-reference` | warning | Backlink | Code references a doc identifier that does not exist. |
+| `backlink-dead-reference` | warning | Backlink | Code references a doc identifier that does not exist; superseded by a substandard-specific accuracy code when one applies. |
 | `backlink-superseded-reference` | warning | Backlink | Code references a `deprecated` or `superseded` doc. |
+| `backlinking-file-types-deprecated` | warning | Backlink | `docs.backlinking.file_types` is the deprecated alias for `docs.backlinking.scan`; migrate to `scan`. |
 | `validator-internal-error` | error | Tooling | Validator hit an internal error. |
 
 Substandard codes are defined in their own specs.
@@ -623,7 +680,7 @@ Every command MUST emit the same diagnostics shape as the validator (Section 9.2
 
 ## Appendix A: Validation Checklist
 
-- [ ] `apss.yaml` valid, or absent for defaults; the `docs:` block (if present) parses against Section 3.3.
+- [ ] `APSS.yaml` valid, or absent for defaults; the `docs:` block (if present) parses against Section 3.3.
 - [ ] Every docs directory has `README.md` with a valid `## Index` section.
 - [ ] `.md` files under the docs root have closed frontmatter with the configured fields.
 - [ ] `CLAUDE.md` and `AGENTS.md` present per docs directory.

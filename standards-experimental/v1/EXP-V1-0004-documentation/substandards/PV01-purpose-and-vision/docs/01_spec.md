@@ -33,7 +33,7 @@ A file MUST exist at `docs.north-star.location` (default:
 `docs/north-star.md`).
 
 Diagnostic: `PV01-document-missing` (error). Hint: "Create the file at
-`<location>` or set `docs.north-star.disable = true` in `apss.yaml`."
+`<location>` or set `docs.north-star.disable = true` in `APSS.yaml`."
 
 ## 3. Frontmatter (PV01-frontmatter-missing, PV01-frontmatter-field-missing)
 

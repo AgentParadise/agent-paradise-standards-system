@@ -91,7 +91,7 @@ decisions.
 ## File naming convention
 
 The default naming pattern is `ADR-\d{3,5}-[a-zA-Z0-9-]+\.md`, configurable
-via `docs.adr.naming_pattern` in `apss.yaml`. The canonical guidance prefers
+via `docs.adr.naming_pattern` in `APSS.yaml`. The canonical guidance prefers
 present-tense imperative verb phrases in the name, lowercase, dashes for
 word separation, and the `.md` extension. Examples:
 
@@ -136,7 +136,7 @@ and have well-formed frontmatter.
 # Validate ADRs (runs as part of docs validate)
 aps run docs validate .
 
-# Configure required ADR keywords in apss.yaml at the repo root
+# Configure required ADR keywords in APSS.yaml at the repo root
 # (config is owned by APS-V1-0000.CF01; the docs standard contributes the docs: block)
 docs:
   adr:
@@ -177,7 +177,7 @@ names the condition, so a single line of CLI output
 | `ADR01-invalid-naming-regex` | Invalid naming regex in config |
 | `ADR01-missing-context-file` | ADR directory missing CLAUDE.md or AGENTS.md |
 | `ADR01-context-missing-guidance` | ADR context file lacks ADR referencing guidance |
-| `ADR01-dead-reference` | Source file references non-existent ADR |
+| `ADR01-unknown-reference` | Source file references an ADR that does not resolve to a real file in `docs.adr.directory` matching the configured naming pattern (error; replaces the earlier `ADR01-dead-reference` warning) |
 | `ADR01-missing-header` | ADR file missing required section header |
 | `ADR01-invalid-status` | ADR missing or invalid `status` field |
 | `ADR01-superseded-reference` | Source file references superseded or deprecated ADR |
