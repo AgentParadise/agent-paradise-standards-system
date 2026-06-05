@@ -4,17 +4,17 @@ Guidance for coding agents working in the Agent Paradise Standards System reposi
 
 ## Project Overview
 
-Agent Paradise Standards System (APS) is a Rust workspace for executable, versioned engineering standards. Standards are implemented as Rust crates, validated by the APS CLI, and documented as agent-readable specifications.
+Agent Paradise Standards System (APSS) is a Rust workspace for executable, versioned engineering standards. Standards are implemented as Rust crates, validated by the APS CLI, and documented as agent-readable specifications.
 
 ## Repository Layout
 
-- `crates/aps-core/` — core library for diagnostics, discovery, metadata, config, lockfiles, registry, and standard resolution.
-- `crates/aps-cli/` — `aps` CLI for running standards and managing V1 standard lifecycle commands.
-- `crates/apss-bootstrap/` — `apss` bootstrap CLI for consumer project initialization, installation, status, and dispatch.
-- `standards/v1/APS-V1-0000-meta/` — meta-standard defining structure, validation, config, CLI, and distribution rules.
-- `standards/v1/APS-V1-0001-code-topology/` — official Code Topology standard and related substandards.
-- `standards-experimental/v1/` — incubating experimental standards; `EXP-V1-0001-code-topology` is historical and excluded from the workspace.
-- `.github/workflows/` — CI, release gate, and release creation workflows.
+- `crates/aps-core/` - core library for diagnostics, discovery, metadata, config, lockfiles, registry, and standard resolution.
+- `crates/aps-cli/` - `aps` CLI for running standards and managing V1 standard lifecycle commands.
+- `crates/apss-bootstrap/` - `apss` bootstrap CLI for consumer project initialization, installation, status, and dispatch.
+- `standards/v1/APS-V1-0000-meta/` - meta-standard defining structure, validation, config, CLI, distribution, experiment lifecycle, and promotion rules.
+- `standards/v1/` - official standards governed by the meta-standard.
+- `standards-experimental/v1/` - incubating experimental standards governed by the meta-standard.
+- `.github/workflows/` - CI, release gate, and release creation workflows.
 
 ## Setup Commands
 
@@ -39,7 +39,7 @@ Agent Paradise Standards System (APS) is a Rust workspace for executable, versio
 ## APS Validation Commands
 
 - Validate all V1 standards: `just aps-validate`.
-- Validate all V1 standards directly: `cargo run -p aps-cli -- v1 validate repo`.
+- Validate all V1 standards directly: `cargo run -p aps-cli --bin apss-dev -- v1 validate repo`.
 - List discovered V1 packages: `just aps-list`.
 - Validate a specific package: `just aps-validate-pkg <APS-ID>`.
 - Create standards and experiments through the `aps-cli` recipes in `justfile`; do not hand-copy scaffold structures unless the CLI path is unsuitable.
@@ -52,6 +52,7 @@ Agent Paradise Standards System (APS) is a Rust workspace for executable, versio
 - Put shared engine behavior in `aps-core`, CLI user interactions in `aps-cli` or `apss-bootstrap`, and standard-specific behavior in the relevant standard crate.
 - Avoid adding new workspace dependencies unless they are clearly justified and compatible with the release/distribution rules.
 - Use `TODO` for intentional future improvements and `FIXME` only for known broken behavior.
+- No em dashes are allowed anywhere in the repo. Restructure sentences or use colons or commas instead.
 
 ## Testing Guidelines
 
@@ -59,13 +60,21 @@ Agent Paradise Standards System (APS) is a Rust workspace for executable, versio
 - Prefer targeted tests first, then run broader workspace checks when the change is complete.
 - For config or validation logic, cover success and diagnostic/error cases.
 - For generated files such as schemas, include freshness or round-trip tests when practical.
-- If touching standards, run `cargo run -p aps-cli -- v1 validate repo` before finishing.
+- If touching standards, run `cargo run -p aps-cli --bin apss-dev -- v1 validate repo` before finishing.
 
 ## Standards Structure
 
+- Treat the meta-standard as the source of truth for how this repository works. It governs official standards, experimental standards, substandards, versioning, backwards compatibility, artifact definitions, validation criteria, promotion criteria, and automation expectations.
+- Standards are versioned so they can evolve over time. Major versions must remain backwards compatible within the guarantees defined by the meta-standard.
+- Standards may define substandards. Substandards are first-class governed units and must follow the structure, metadata, validation, and lifecycle rules defined by the meta-standard.
+- Standards should define artifacts when practical. Not every standard must produce artifacts, but artifact definitions are important because validators, queries, reports, and downstream automation can be built against them.
+- Standards should include executable code where it makes the standard enforceable or useful. Typical code includes validators, generators, artifact producers, query helpers, scaffolds, and automation that can run in git hooks, QA pipelines, and CI/CD pipelines.
+- Treat the meta-standard as the source of truth for experiment lifecycle rules, including experimental version bumps, validation criteria, promotion criteria, and removal from `standards-experimental/v1/` after promotion.
 - Official standards live under `standards/v1/APS-V1-XXXX-<slug>/`.
 - Substandards live under `standards/v1/APS-V1-XXXX-<slug>/substandards/<PROFILE>-<slug>/`.
 - Experimental standards live under `standards-experimental/v1/EXP-V1-XXXX-<slug>/`.
+- Experimental standards should be held to the same validation bar as official standards unless the meta-standard explicitly defines a narrower exception.
+- Fast validation that the meta-standard enforces should run in QA automation, such as CI checks or git hooks, when practical.
 - Standards and substandards should keep metadata files, `Cargo.toml`, docs, and implementation aligned.
 - When changing non-documentation files in a standard or substandard, check whether `standard.toml`, `substandard.toml`, and `Cargo.toml` versions need to be bumped.
 

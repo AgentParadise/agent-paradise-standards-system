@@ -68,5 +68,8 @@
         "editor.tabSize": 4
     },
     // File explorer
-    "explorer.compactFolders": false
+    "explorer.compactFolders": false,
+    "cSpell.words": [
+        "APSS"
+    ]
 }
