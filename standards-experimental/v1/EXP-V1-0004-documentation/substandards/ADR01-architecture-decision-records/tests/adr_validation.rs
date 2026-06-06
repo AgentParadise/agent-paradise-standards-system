@@ -539,6 +539,154 @@ fn fixture_unknown_adr_references() {
 }
 
 #[test]
+fn fixture_duplicate_adr_reference_on_same_line_is_deduped() {
+    let dir = tempdir().unwrap();
+    let adr_dir = dir.path().join("docs").join("adrs");
+    let src_dir = dir.path().join("src");
+    fs::create_dir_all(&adr_dir).unwrap();
+    fs::create_dir_all(dir.path().join("docs")).unwrap();
+    fs::create_dir_all(&src_dir).unwrap();
+
+    fs::write(
+        adr_dir.join("ADR-001-known.md"),
+        "---\nname: \"Known\"\ndescription: \"Known ADR\"\nstatus: accepted\n---\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "ADR- identifiers\nReference in code\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "ADR- identifiers\nReference in code\n",
+    )
+    .unwrap();
+
+    fs::write(
+        src_dir.join("README.md"),
+        "[ADR-999-missing](path/to/ADR-999-missing.md) and ADR-999-missing",
+    )
+    .unwrap();
+
+    let mut config = DocsConfig::default();
+    config.backlinking.scan = Some(vec!["**/*.md".to_string()]);
+
+    let validator = AdrValidator::with_config(dir.path(), config);
+    let diagnostics = validator.validate();
+
+    let unknown_refs: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE)
+        .collect();
+    assert_eq!(unknown_refs.len(), 1);
+    assert!(
+        unknown_refs[0]
+            .location
+            .path
+            .as_ref()
+            .is_some_and(|p| p.ends_with("README.md"))
+    );
+}
+
+#[test]
+fn fixture_rust_string_literal_reference_is_scanned() {
+    let dir = tempdir().unwrap();
+    let adr_dir = dir.path().join("docs").join("adrs");
+    let src_dir = dir.path().join("src");
+    fs::create_dir_all(&adr_dir).unwrap();
+    fs::create_dir_all(&src_dir).unwrap();
+
+    fs::write(
+        adr_dir.join("ADR-001-auth.md"),
+        "---\nname: \"Auth\"\ndescription: \"Auth\"\nstatus: accepted\n---\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "ADR- identifiers\nReference in code\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "ADR- identifiers\nReference in code\n",
+    )
+    .unwrap();
+
+    fs::write(
+        src_dir.join("handler.rs"),
+        "let msg = \"ADR-999-missing in text\";\n",
+    )
+    .unwrap();
+
+    let validator = AdrValidator::with_config(dir.path(), DocsConfig::default());
+    let diagnostics = validator.validate();
+
+    let unknown_refs: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE)
+        .collect();
+    assert_eq!(unknown_refs.len(), 1);
+    assert!(
+        unknown_refs[0]
+            .location
+            .path
+            .as_ref()
+            .is_some_and(|p| p.ends_with("handler.rs"))
+    );
+}
+
+#[test]
+fn fixture_markdown_fenced_code_block_reference_is_scanned() {
+    let dir = tempdir().unwrap();
+    let adr_dir = dir.path().join("docs").join("adrs");
+    let notes_dir = dir.path().join("notes");
+    fs::create_dir_all(&adr_dir).unwrap();
+    fs::create_dir_all(&notes_dir).unwrap();
+
+    fs::write(
+        adr_dir.join("ADR-001-auth.md"),
+        "---\nname: \"Auth\"\ndescription: \"Auth\"\nstatus: accepted\n---\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "ADR- identifiers\nReference in code\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "ADR- identifiers\nReference in code\n",
+    )
+    .unwrap();
+
+    fs::write(
+        notes_dir.join("notes.md"),
+        "```rust\nlet msg = \"ADR-999-missing\";\n```\n",
+    )
+    .unwrap();
+
+    let mut config = DocsConfig::default();
+    config.backlinking.scan = Some(vec!["**/*.md".to_string()]);
+
+    let validator = AdrValidator::with_config(dir.path(), config);
+    let diagnostics = validator.validate();
+
+    let unknown_refs: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE)
+        .collect();
+    assert_eq!(unknown_refs.len(), 1);
+    assert!(
+        unknown_refs[0]
+            .location
+            .path
+            .as_ref()
+            .is_some_and(|p| p.ends_with("notes.md"))
+    );
+}
+
+#[test]
 fn fixture_valid_repo_no_dead_references() {
     let validator = AdrValidator::with_config(&fixture_path("valid_repo"), DocsConfig::default());
     let diagnostics = validator.validate();
@@ -653,6 +801,58 @@ fn test_scan_override_targets_configured_globs() {
             .path
             .as_ref()
             .is_some_and(|p| p.ends_with("handler.md"))
+    );
+}
+
+#[test]
+fn test_deprecated_backlinking_file_types_warn_and_scan() {
+    let dir = tempdir().unwrap();
+    let adr_dir = dir.path().join("docs").join("adrs");
+    let root_dir = dir.path().join("root");
+    fs::create_dir_all(&adr_dir).unwrap();
+    fs::create_dir_all(&root_dir).unwrap();
+
+    fs::write(
+        adr_dir.join("ADR-001-auth.md"),
+        "---\nname: \"Auth\"\ndescription: \"Auth\"\nstatus: accepted\n---\n",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("CLAUDE.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+    fs::write(
+        adr_dir.join("AGENTS.md"),
+        "Reference ADR- identifiers in comment blocks.",
+    )
+    .unwrap();
+
+    fs::write(root_dir.join("plan.txt"), "ADR-999-missing\n").unwrap();
+
+    let mut config = DocsConfig::default();
+    config.backlinking.file_types = vec!["txt".to_string()];
+
+    let validator = AdrValidator::with_config(dir.path(), config);
+    let diagnostics = validator.validate();
+
+    let warnings: Vec<_> = diagnostics
+        .warnings()
+        .filter(|d| d.code == error_codes::BACKLINKING_FILE_TYPES_DEPRECATED)
+        .collect();
+    assert_eq!(warnings.len(), 1);
+
+    let unknown_refs: Vec<_> = diagnostics
+        .errors()
+        .filter(|d| d.code == error_codes::UNKNOWN_ADR_REFERENCE)
+        .collect();
+    assert_eq!(unknown_refs.len(), 1);
+    assert!(
+        unknown_refs[0]
+            .location
+            .path
+            .as_ref()
+            .is_some_and(|p| p.ends_with("plan.txt"))
     );
 }
 

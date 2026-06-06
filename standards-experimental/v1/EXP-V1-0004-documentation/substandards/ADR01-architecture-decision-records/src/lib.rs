@@ -29,9 +29,6 @@ pub mod error_codes {
     pub const MISSING_ADR_FRONTMATTER: &str = "ADR01-missing-frontmatter";
     /// A configured required-keyword ADR is missing from the directory.
     pub const MISSING_REQUIRED_ADR: &str = "ADR01-missing-required-keyword";
-    /// Reserved - not emitted. Forward backlink enforcement is not feasible;
-    /// use `ADR01-dead-reference` for reference integrity instead.
-    pub const MISSING_ADR_BACKLINK: &str = "ADR01-missing-backlink";
     /// The configured naming pattern is not a valid regex.
     pub const INVALID_NAMING_REGEX: &str = "ADR01-invalid-naming-regex";
     /// ADR directory is missing CLAUDE.md or AGENTS.md.
@@ -44,12 +41,16 @@ pub mod error_codes {
     pub const DEAD_ADR_REFERENCE: &str = "ADR01-dead-reference";
     /// A docs.backlinking include glob is invalid.
     pub const INVALID_ADR_REFERENCE_GLOB: &str = "ADR01-invalid-reference-glob";
+    /// A deprecated backlinking list key was used and is still honored.
+    pub const BACKLINKING_FILE_TYPES_DEPRECATED: &str = "ADR01-backlinking-file-types-deprecated";
     /// ADR file is missing a required section header (Context, Decision, Consequences).
     pub const MISSING_ADR_HEADER: &str = "ADR01-missing-header";
     /// ADR file is missing the `status` field, or its value is not a valid lifecycle state.
     pub const INVALID_ADR_STATUS: &str = "ADR01-invalid-status";
     /// Source file references an ADR whose status is superseded or deprecated.
     pub const SUPERSEDED_ADR_REFERENCE: &str = "ADR01-superseded-reference";
+    /// A scanned path is outside the repo root and was matched with fallback logic.
+    pub const SCAN_PATH_OUTSIDE_REPO: &str = "ADR01-scan-path-outside-repo";
 }
 
 /// ADR validator that loads config and runs all ADR checks.
@@ -60,7 +61,7 @@ pub struct AdrValidator {
 
 impl AdrValidator {
     /// Load the ADR validator from a repository root.
-    /// Reads `apss.yaml` for configuration.
+    /// Reads `APSS.yaml` for configuration.
     pub fn load(repo_root: &Path) -> Result<Self, config::ConfigError> {
         let apss_config = config::load_config(repo_root)?;
         Ok(Self {
@@ -349,13 +350,7 @@ fn validate_required_keywords(
 /// guidance. Matched against a lowercased copy of the file so casing variants
 /// like `Reference` and `BACKLINK` do not produce false `ADR01-context-missing-guidance`
 /// warnings.
-const ADR_REFERENCE_KEYWORDS: &[&str] = &[
-    "adr-",
-    "backlink",
-    "reference",
-    "comment block",
-    "comment at the top",
-];
+const ADR_REFERENCE_KEYWORDS: &[&str] = &["adr-", "comment", "backlink", "reference in code"];
 
 /// The ADR directory must contain CLAUDE.md and AGENTS.md with guidance on how
 /// ADRs should be referenced in implementation files. Emits
@@ -385,7 +380,9 @@ fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
         };
         let lowered = content.to_ascii_lowercase();
 
-        let has_guidance = ADR_REFERENCE_KEYWORDS.iter().any(|kw| lowered.contains(kw));
+        let has_adr_prefix = lowered.contains("adr-");
+        let has_guidance_fragment = ADR_REFERENCE_KEYWORDS.iter().any(|kw| lowered.contains(kw));
+        let has_guidance = has_adr_prefix && has_guidance_fragment;
 
         if !has_guidance {
             diagnostics.push(
@@ -407,28 +404,89 @@ fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
 
 // ─── ADR reference scanning (ADR01-unknown-reference) ────────────────
 
-/// Extract ADR identifiers from text using a regex derived from the configured
-/// naming pattern (filename stem, without the trailing `\.md`). This keeps
-/// reference extraction consistent with the configured filename convention so
-/// projects that customise the prefix (e.g., `DEC-`) still get their
-/// references scanned.
-#[allow(dead_code)]
-fn extract_adr_references(content: &str, stem_re: &Regex) -> Vec<String> {
-    stem_re
-        .find_iter(content)
-        .map(|m| m.as_str().to_string())
-        .collect()
-}
-
 /// Extract ADR identifiers from text with line numbers, where line is 1-indexed.
-fn extract_adr_references_with_lines(content: &str, stem_re: &Regex) -> Vec<(String, usize)> {
+fn extract_adr_references_with_lines(
+    content: &str,
+    reference_re: &Regex,
+    stem_re: &Regex,
+    adjacent_splitter: &Option<Regex>,
+) -> Vec<(String, usize)> {
     let mut refs = Vec::new();
     for (line_number, line) in content.lines().enumerate() {
         let line_number = line_number + 1;
-        for m in stem_re.find_iter(line) {
-            refs.push((m.as_str().to_string(), line_number));
+        for captures in reference_re.captures_iter(line) {
+            let Some(m) = captures.get(1) else {
+                continue;
+            };
+            for reference in split_adr_references(m.as_str(), stem_re, adjacent_splitter) {
+                refs.push((reference, line_number));
+            }
         }
     }
+    refs
+}
+
+/// Build the regex used to detect ADR references.
+///
+/// The matcher uses left-boundary protection for embedded identifiers and a
+/// right-boundary check so references ending in punctuation are still accepted
+/// while most false positives are avoided.
+fn compile_reference_matcher(stem_re: &Regex) -> Result<Regex, regex::Error> {
+    Regex::new(&format!(
+        r"(?:^|[^A-Za-z0-9-])({})(?:$|[^A-Za-z0-9-])",
+        stem_re.as_str()
+    ))
+}
+
+/// Build a splitter pattern that finds the start of a second reference that is
+/// glued to a previous one with only a hyphen, for example
+/// `ADR-001-foo-ADR-002-bar`.
+fn compile_adjacent_splitter(stem_re: &str) -> Option<Regex> {
+    let Some(split_prefix_end) = stem_re.find(r"\d") else {
+        return None;
+    };
+    let prefix = stem_re[..split_prefix_end].trim();
+    if prefix.is_empty() {
+        return None;
+    }
+    Regex::new(&format!(r"-{}[0-9]", regex::escape(prefix))).ok()
+}
+
+/// Split a raw matched ADR-like token into one or more references.
+///
+/// This function handles adjacent references by splitting at a hyphen followed
+/// by a second prefix and ensures trailing hyphens are trimmed to avoid false
+/// negatives for valid references followed by punctuation.
+fn split_adr_references(
+    reference: &str,
+    stem_re: &Regex,
+    adjacent_splitter: &Option<Regex>,
+) -> Vec<String> {
+    let mut remaining = reference;
+    let mut refs = Vec::new();
+
+    while let Some(splitter) = adjacent_splitter.as_ref() {
+        if let Some(m) = splitter.find(remaining) {
+            let head = remaining[..m.start()].trim_end_matches('-');
+            if head.is_empty() {
+                remaining = &remaining[m.start() + 1..];
+                continue;
+            }
+
+            if stem_re.is_match(head) {
+                refs.push(head.to_string());
+                remaining = &remaining[m.start() + 1..];
+                continue;
+            }
+        }
+        break;
+    }
+
+    let tail = remaining.trim_end_matches('-');
+    if stem_re.is_match(tail) {
+        refs.push(tail.to_string());
+    }
+
     refs
 }
 
@@ -480,6 +538,19 @@ fn compile_backlinking_patterns(
     raw_patterns.extend(deprecated_file_patterns);
 
     let mut patterns = Vec::new();
+    if !config.backlinking.file_types.is_empty() {
+        diagnostics.push(
+            Diagnostic::warning(
+                error_codes::BACKLINKING_FILE_TYPES_DEPRECATED,
+                "docs.backlinking.file_types is deprecated",
+            )
+            .with_path(repo_root)
+            .with_hint(
+                "Use docs.backlinking.scan instead. The deprecated key is still honored for now",
+            ),
+        );
+    }
+
     for pattern in raw_patterns {
         match Pattern::new(&pattern) {
             Ok(compiled) => patterns.push(compiled),
@@ -493,9 +564,9 @@ fn compile_backlinking_patterns(
                     )
                     .with_path(repo_root)
                     .with_hint(
-                        "Update docs.backlinking.scan to valid glob syntax, for example '**/*.rs'.",
+                        "Update docs.backlinking.scan to valid glob syntax. Other patterns still apply.",
                     ),
-                );
+            );
             }
         }
     }
@@ -517,15 +588,20 @@ fn validate_adr_references(
         return;
     }
 
-    // Build the reference-extraction regex from the configured naming pattern
-    // so projects that customise the prefix still get backlink scanning. On
-    // regex error fall back to skipping (ADR01-invalid-naming-regex would have
-    // been emitted earlier from the same pattern).
+    // Build the reference-extraction regex from the configured naming pattern so
+    // projects that customise the prefix still get backlink scanning.
+    // On regex error, fall back to skipping (ADR01-invalid-naming-regex would
+    // have been emitted earlier from the same pattern).
     let stem_pattern = config::adr_stem_pattern_from_naming(&config.adr.naming_pattern);
     let stem_re = match Regex::new(&stem_pattern) {
         Ok(re) => re,
         Err(_) => return,
     };
+    let reference_re = match compile_reference_matcher(&stem_re) {
+        Ok(re) => re,
+        Err(_) => return,
+    };
+    let adjacent_splitter = compile_adjacent_splitter(&stem_pattern);
 
     let statuses = adr_statuses(adr_dir, adr_files);
     let patterns = compile_backlinking_patterns(repo_root, config, diagnostics);
@@ -546,12 +622,8 @@ fn validate_adr_references(
     let canonical_adr_dir = adr_dir
         .canonicalize()
         .unwrap_or_else(|_| adr_dir.to_path_buf());
-
-    let should_scan = |path: &Path| -> bool {
-        let rel = path.strip_prefix(&canonical_repo).unwrap_or(path);
-        let rel_str = rel.to_string_lossy().replace('\\', "/");
-        patterns.iter().any(|pattern| pattern.matches(&rel_str))
-    };
+    let mut scan_path_outside_repo_warning_emitted = false;
+    let mut seen_references: HashSet<(PathBuf, usize, String)> = HashSet::new();
 
     for entry in WalkDir::new(&canonical_repo)
         .into_iter()
@@ -569,7 +641,30 @@ fn validate_adr_references(
             continue;
         }
 
-        if !should_scan(path) {
+        let rel_str = match path.strip_prefix(&canonical_repo) {
+            Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
+            Err(_) => {
+                if !scan_path_outside_repo_warning_emitted {
+                    scan_path_outside_repo_warning_emitted = true;
+                    diagnostics.push(
+                        Diagnostic::warning(
+                            error_codes::SCAN_PATH_OUTSIDE_REPO,
+                            format!(
+                                "Path '{}' is outside '{}' and matched as fallback text",
+                                path.display(),
+                                canonical_repo.display()
+                            ),
+                        )
+                        .with_path(path)
+                        .with_hint(
+                            "The path is being matched as an absolute path against scan globs. Audit scan coverage if this is unexpected.",
+                        ),
+                    );
+                }
+                path.to_string_lossy().replace('\\', "/")
+            }
+        };
+        if !patterns.iter().any(|pattern| pattern.matches(&rel_str)) {
             continue;
         }
 
@@ -583,8 +678,16 @@ fn validate_adr_references(
             continue;
         };
 
-        let refs = extract_adr_references_with_lines(&content, &stem_re);
+        let refs = extract_adr_references_with_lines(
+            &content,
+            &reference_re,
+            &stem_re,
+            &adjacent_splitter,
+        );
         for (adr_ref, line_number) in refs {
+            if !seen_references.insert((path.to_path_buf(), line_number, adr_ref.clone())) {
+                continue;
+            }
             if !valid_stems.contains(&adr_ref) {
                 diagnostics.push(
                     Diagnostic::error(
@@ -687,10 +790,11 @@ mod tests {
     fn error_codes_are_unique() {
         let codes = vec![
             error_codes::MISSING_ADR_DIR,
+            error_codes::BACKLINKING_FILE_TYPES_DEPRECATED,
+            error_codes::SCAN_PATH_OUTSIDE_REPO,
             error_codes::INVALID_ADR_NAMING,
             error_codes::MISSING_ADR_FRONTMATTER,
             error_codes::MISSING_REQUIRED_ADR,
-            error_codes::MISSING_ADR_BACKLINK,
             error_codes::INVALID_NAMING_REGEX,
             error_codes::MISSING_ADR_CONTEXT_FILE,
             error_codes::ADR_CONTEXT_MISSING_GUIDANCE,
@@ -704,47 +808,109 @@ mod tests {
         assert_eq!(codes.len(), unique.len(), "error codes must be unique");
     }
 
-    fn default_stem_re() -> Regex {
-        let stem = config::adr_stem_pattern_from_naming(&config::default_adr_filename_pattern());
-        Regex::new(&stem).expect("default ADR stem regex must compile")
+    fn reference_inputs(stem_pattern: &str) -> (Regex, Regex, Option<Regex>) {
+        let stem_re = Regex::new(stem_pattern).expect("ADR stem pattern must compile");
+        let reference_re =
+            compile_reference_matcher(&stem_re).expect("reference matcher must compile");
+        let adjacent_splitter = compile_adjacent_splitter(stem_pattern);
+        (stem_re, reference_re, adjacent_splitter)
+    }
+
+    fn default_reference_inputs() -> (Regex, Regex, Option<Regex>) {
+        let stem_pattern =
+            config::adr_stem_pattern_from_naming(&config::default_adr_filename_pattern());
+        reference_inputs(&stem_pattern)
+    }
+
+    fn custom_reference_inputs(pattern: &str) -> (Regex, Regex, Option<Regex>) {
+        let stem_pattern = config::adr_stem_pattern_from_naming(pattern);
+        reference_inputs(&stem_pattern)
+    }
+
+    fn extract_adr_references(
+        content: &str,
+        reference_re: &Regex,
+        stem_re: &Regex,
+        adjacent_splitter: &Option<Regex>,
+    ) -> Vec<String> {
+        extract_adr_references_with_lines(content, reference_re, stem_re, adjacent_splitter)
+            .into_iter()
+            .map(|(r, _)| r)
+            .collect()
+    }
+
+    fn extract_adr_references_with_line_numbers(
+        content: &str,
+        reference_re: &Regex,
+        stem_re: &Regex,
+        adjacent_splitter: &Option<Regex>,
+    ) -> Vec<(String, usize)> {
+        extract_adr_references_with_lines(content, reference_re, stem_re, adjacent_splitter)
     }
 
     #[test]
     fn extract_adr_references_finds_patterns() {
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
         let content = r#"
             // Implements ADR-001-security
             // Also see ADR-042-testing for context
             let x = 42; // not an ADR reference
         "#;
-        let refs = extract_adr_references(content, &default_stem_re());
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
         assert_eq!(refs, vec!["ADR-001-security", "ADR-042-testing"]);
     }
 
     #[test]
     fn extract_adr_references_ignores_short_numbers() {
         // ADR-01-foo has only 2 digits - should not match (minimum 3)
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
         let content = "// ADR-01-short";
-        let refs = extract_adr_references(content, &default_stem_re());
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
         assert!(refs.is_empty());
     }
 
     #[test]
     fn extract_adr_references_handles_inline() {
         let content = "# see ADR-001-auth for rationale, and ADR-002-db for schema";
-        let refs = extract_adr_references(content, &default_stem_re());
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
         assert_eq!(refs.len(), 2);
         assert_eq!(refs[0], "ADR-001-auth");
         assert_eq!(refs[1], "ADR-002-db");
     }
 
     #[test]
+    fn extract_adr_references_splits_adjacent_references() {
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
+        let content = "ADR-001-foo-ADR-002-bar";
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
+        assert_eq!(refs, vec!["ADR-001-foo", "ADR-002-bar"]);
+    }
+
+    #[test]
+    fn extract_adr_references_handles_trailing_hyphen() {
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
+        let content = "ADR-001-foo-";
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
+        assert_eq!(refs, vec!["ADR-001-foo"]);
+    }
+
+    #[test]
+    fn extract_adr_references_ignores_embedded_prefix() {
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
+        let content = "BADR-001-embedded ADR-001-real";
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
+        assert_eq!(refs, vec!["ADR-001-real"]);
+    }
+
+    #[test]
     fn extract_adr_references_follows_custom_naming() {
         // A project that customises naming_pattern to `DEC-...` should have its
         // references picked up by the stem regex derived from that pattern.
-        let stem = config::adr_stem_pattern_from_naming(r"DEC-\d{3,5}-[a-zA-Z0-9-]+\.md");
-        let re = Regex::new(&stem).unwrap();
+        let (stem_re, reference_re, adjacent_splitter) =
+            custom_reference_inputs(r"DEC-\d{3,5}-[a-zA-Z0-9-]+\.md");
         let content = "// Implements DEC-042-payments\n// Old ref ADR-001-auth";
-        let refs = extract_adr_references(content, &re);
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
         assert_eq!(refs, vec!["DEC-042-payments"]);
     }
 
@@ -813,15 +979,36 @@ mod tests {
 
     #[test]
     fn extract_adr_references_accepts_five_digit_numbers() {
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
         let content = "// ADR-99999-max-digits";
-        let refs = extract_adr_references(content, &default_stem_re());
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
         assert_eq!(refs, vec!["ADR-99999-max-digits"]);
     }
 
     #[test]
     fn extract_adr_references_rejects_six_digit_numbers() {
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
         let content = "// ADR-123456-too-long";
-        let refs = extract_adr_references(content, &default_stem_re());
+        let refs = extract_adr_references(content, &reference_re, &stem_re, &adjacent_splitter);
         assert!(refs.is_empty());
+    }
+
+    #[test]
+    fn extract_adr_references_tracks_line_numbers() {
+        let (stem_re, reference_re, adjacent_splitter) = default_reference_inputs();
+        let content = "\n// first\nADR-001-security\ntext ADR-002-testing\n";
+        let refs = extract_adr_references_with_line_numbers(
+            content,
+            &reference_re,
+            &stem_re,
+            &adjacent_splitter,
+        );
+        assert_eq!(
+            refs,
+            vec![
+                ("ADR-001-security".to_string(), 3),
+                ("ADR-002-testing".to_string(), 4)
+            ]
+        );
     }
 }
