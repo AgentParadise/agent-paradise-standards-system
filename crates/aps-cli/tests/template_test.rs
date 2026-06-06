@@ -5,8 +5,8 @@
 
 mod fixtures;
 
-use apss_core::templates::{ExperimentContext, StandardContext, TemplateEngine};
 use aps_v1_0000_meta::{MetaStandard, Standard};
+use apss_core::templates::{ExperimentContext, StandardContext, TemplateEngine};
 use fixtures::create_test_workspace;
 use std::fs;
 use std::path::Path;
