@@ -1,4 +1,4 @@
-use aps_core::Diagnostics;
+use apss_core::Diagnostics;
 use documentation::DocValidator;
 use documentation::config::DocsConfig;
 use documentation::context::validate_root_context;

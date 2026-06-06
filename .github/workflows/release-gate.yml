@@ -1,0 +1,171 @@
+# =============================================================================
+# Release Gate — Pre-merge validation for main → release PRs
+# =============================================================================
+#
+# Runs on PRs targeting the `release` branch. All jobs must pass before merge.
+#
+# Checks:
+#   1. Source branch — must be from main
+#   2. Full QA — format, lint, typecheck, test, build
+#   3. APS validation — structural + distribution (hard gate)
+#   4. Version bumps — changed packages must have version bumps
+#   5. Changelog — PR body must contain release notes
+#   6. Security — cargo audit + dependency review
+#
+# Full CI (ci.yml) also runs on these PRs via the main branch trigger.
+# =============================================================================
+
+name: Release Gate
+
+on:
+  pull_request:
+    branches: [release]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Reusable checks
+  # ---------------------------------------------------------------------------
+  source-branch-check:
+    uses: ./.github/workflows/checks/source-branch-check.yml
+
+  version-bump-check:
+    uses: ./.github/workflows/checks/version-bump-check.yml
+
+  changelog-check:
+    uses: ./.github/workflows/checks/changelog-check.yml
+    with:
+      pr_body: ${{ github.event.pull_request.body }}
+
+  # ---------------------------------------------------------------------------
+  # Full QA Pipeline
+  # ---------------------------------------------------------------------------
+  qa:
+    name: Full QA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Type check
+        run: cargo check --workspace --all-targets
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Release build
+        run: cargo build --workspace --release
+
+  # ---------------------------------------------------------------------------
+  # APS Standards Validation (hard gate on release)
+  # ---------------------------------------------------------------------------
+  aps-validation:
+    name: APS Standards Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build -p aps-cli --release
+
+      - name: Validate all V1 standards (structural)
+        run: cargo run -p aps-cli --release -- v1 validate repo
+
+      - name: Validate distribution compliance (DI01 — hard gate)
+        run: cargo run -p aps-cli --release -- v1 validate distribution
+
+      - name: Run self-validation tests
+        run: cargo test -p aps-cli --release -- self_validation
+
+      - name: Run backwards compatibility tests
+        run: cargo test -p aps-cli --release -- backwards_compat
+
+      - name: Run CF01 config validation tests
+        run: cargo test -p apss-project-config --release
+
+      - name: Run DI01 distribution tests
+        run: cargo test -p apss-distribution --release
+
+  # ---------------------------------------------------------------------------
+  # Security
+  # ---------------------------------------------------------------------------
+  cargo-audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      - name: Run audit
+        run: cargo audit
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
+  # ---------------------------------------------------------------------------
+  # Aggregator — required status check for branch protection
+  # ---------------------------------------------------------------------------
+  release-gate-success:
+    name: Release Gate
+    if: always()
+    needs:
+      - source-branch-check
+      - version-bump-check
+      - changelog-check
+      - qa
+      - aps-validation
+      - cargo-audit
+      - dependency-review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all gates passed
+        run: |
+          echo "source-branch-check: ${{ needs.source-branch-check.result }}"
+          echo "version-bump-check: ${{ needs.version-bump-check.result }}"
+          echo "changelog-check:    ${{ needs.changelog-check.result }}"
+          echo "qa:                 ${{ needs.qa.result }}"
+          echo "aps-validation:     ${{ needs.aps-validation.result }}"
+          echo "cargo-audit:        ${{ needs.cargo-audit.result }}"
+          echo "dependency-review:  ${{ needs.dependency-review.result }}"
+
+          FAILED=0
+          check() {
+            local job="$1" result="$2"
+            if [[ "$result" != "success" ]]; then
+              echo "::error::${job} did not pass (result: ${result})"
+              FAILED=1
+            fi
+          }
+          check "source-branch-check" "${{ needs.source-branch-check.result }}"
+          check "version-bump-check" "${{ needs.version-bump-check.result }}"
+          check "changelog-check"    "${{ needs.changelog-check.result }}"
+          check "qa"                 "${{ needs.qa.result }}"
+          check "aps-validation"     "${{ needs.aps-validation.result }}"
+          check "cargo-audit"        "${{ needs.cargo-audit.result }}"
+          check "dependency-review"  "${{ needs.dependency-review.result }}"
+
+          if [[ "$FAILED" == "1" ]]; then
+            exit 1
+          fi
+
+          echo "All release gates passed."

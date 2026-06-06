@@ -5,8 +5,8 @@
 
 mod fixtures;
 
-use aps_core::discovery::discover_v1_packages;
-use aps_core::metadata::parse_standard_metadata;
+use apss_core::discovery::discover_v1_packages;
+use apss_core::metadata::parse_standard_metadata;
 use fixtures::repo_root;
 
 /// All V1 standards must declare backwards_compatible_major_required.

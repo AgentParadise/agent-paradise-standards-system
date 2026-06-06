@@ -9,7 +9,7 @@ description = "Purpose and Vision substandard: enforces the project's North Star
 
 [dependencies]
 documentation = { path = "../.." }
-aps-core.workspace = true
+apss-core.workspace = true
 
 [dev-dependencies]
 tempfile = "3.14"

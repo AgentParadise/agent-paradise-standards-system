@@ -6,7 +6,7 @@
 use crate::config::DocsConfig;
 use crate::error_codes;
 use crate::index::{self, IndexIssue};
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::collections::HashSet;
 use std::path::Path;
 use walkdir::WalkDir;

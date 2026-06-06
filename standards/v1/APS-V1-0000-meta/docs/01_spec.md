@@ -1,6 +1,6 @@
-# APS-V1-0000 — Meta-Standard (Canonical Specification)
+# APS-V1-0000  -  Meta-Standard (Canonical Specification)
 
-**Version**: 1.1.0
+**Version**: 1.2.0
 **Status**: Active  
 **Category**: Governance
 
@@ -53,9 +53,16 @@ A **substandard** is a first-class package co-located under a parent standard, w
 An **experimental standard** is an incubating package used for iteration and community feedback. Experiments:
 
 - Are never considered official
-- Are never automatically enforced on downstream repositories
+- Are enforced in downstream repositories only when explicitly declared in
+  `APSS.yaml`
 - Follow the same structure as official standards
 - Can be promoted to official after peer review and security audit
+
+When an experiment is promoted, the promoted official standard MUST provide a
+compatibility alias from the prior `EXP-V1-XXXX` identity to the new
+`APS-V1-XXXX` identity. Distribution tooling MUST use that alias to warn
+consumers and resolve the promoted standard without requiring a manual
+manifest edit on the first install after promotion.
 
 ### 2.4 Template
 
@@ -74,7 +81,7 @@ The APS System repository MUST use this top-level layout:
 ```
 agent-paradise-standards-system/
 ├── crates/
-│   ├── aps-core/               # Core engine
+│   ├── apss-core/               # Core engine
 │   └── aps-cli/                # CLI entrypoint
 ├── standards/v1/               # Official V1 standards
 ├── standards-experimental/v1/  # Experimental V1 standards
@@ -153,8 +160,8 @@ Substandard IDs are immutable.
 Substandard directories SHOULD be prefixed with the parent standard number for discoverability in flat listings (Cargo workspace, search results):
 
 ```
-substandards/0001-VIZ01-dashboard/     # RECOMMENDED — parent visible
-substandards/VIZ01-dashboard/          # ALLOWED — parent inferred from path
+substandards/0001-VIZ01-dashboard/     # RECOMMENDED  -  parent visible
+substandards/VIZ01-dashboard/          # ALLOWED  -  parent inferred from path
 ```
 
 The prefix is the 4-digit parent standard number (matching `APS-V1-XXXX`).
@@ -183,6 +190,7 @@ Every official standard and experimental standard MUST include:
 
 ```
 <package>/
+├── README.md            # Package index
 ├── docs/
 ├── examples/
 ├── tests/
@@ -193,29 +201,30 @@ Every official standard and experimental standard MUST include:
 
 ### 5.2 Required Directories (Substandards)
 
-Substandards consume their parent standard's artifacts and produce further output. They have reduced structural requirements — the `docs/01_spec.md` serves as both normative specification and agent-readable knowledge about what the substandard consumes and produces.
+Substandards consume their parent standard's artifacts and produce further output. They have reduced structural requirements  -  the `docs/01_spec.md` serves as both normative specification and agent-readable knowledge about what the substandard consumes and produces.
 
 Every substandard MUST include:
 
 ```
 <package>/
+├── README.md            # Package index
 ├── docs/                # MUST contain 01_spec.md
 └── src/                 # Rust source
 ```
 
 The following directories are OPTIONAL for substandards (they inherit context from the parent):
 
-- `examples/` — MAY be present; parent standard examples cover end-to-end usage
-- `tests/` — MAY be present as a directory; see §11.2 for inline test alternative
-- `agents/skills/` — MAY be present; the substandard's `docs/01_spec.md` serves as agent context
+- `examples/`  -  MAY be present; parent standard examples cover end-to-end usage
+- `tests/`  -  MAY be present as a directory; see §11.2 for inline test alternative
+- `agents/skills/`  -  MAY be present; the substandard's `docs/01_spec.md` serves as agent context
 
 ### 5.3 Optional Directories
 
 The following are optional for all package types, but if present MUST conform to this spec:
 
-- `templates/` — Scaffolding templates
-- `proto/` — Protobuf contracts (REQUIRED for technical standards)
-- `evolution/` — Evolution packs for major version bumps
+- `templates/`  -  Scaffolding templates
+- `proto/`  -  Protobuf contracts (REQUIRED for technical standards)
+- `evolution/`  -  Evolution packs for major version bumps
 
 ### 5.4 Category-based Requirements
 
@@ -319,6 +328,26 @@ A substandard MUST be validated in this order:
 
 Parent validations MUST be written with scoping so that non-applicable rules can be skipped without weakening enforcement. Tooling MUST report which rules were skipped and why.
 
+### 7.3 Meta Substandard as Ecosystem Validators
+
+Substandards of the meta standard (`APS-V1-0000`) serve a dual role:
+
+1. **Specification**  -  They define normative rules for a specific concern (e.g., CLI contracts, project configuration, distribution).
+2. **Validation**  -  They MUST provide executable validation that can be applied to other standards and substandards to verify compliance.
+
+Meta substandards MUST:
+
+- Implement validation rules as part of their Rust crate (via the `Standard` trait or domain-specific traits)
+- Define error codes (§16.2) for each compliance rule they enforce
+- Be composable  -  their validation SHOULD be invocable independently or as part of a full `aps v1 validate repo` sweep
+
+Meta substandards SHOULD:
+
+- Provide generation capabilities where applicable (e.g., scaffolding, schema generation, default config generation)
+- Define traits that other standards implement, creating a contract that meta substandards can validate against
+
+This ensures the meta standard's authority is enforced programmatically, not just documented.
+
 ---
 
 ## 8. Rust Crate Requirements
@@ -341,13 +370,131 @@ pub trait Standard {
 
 Standard crates MUST include:
 
-- `Cargo.toml` — Crate manifest
-- `src/lib.rs` — Library root with Standard trait impl
+- `Cargo.toml`  -  Crate manifest
+- `src/lib.rs`  -  Library root with Standard trait impl
 
 Standard crates SHOULD include:
 
-- `src/validate.rs` — Validation rules
-- `src/templates.rs` — Template rendering (if templates exist)
+- `src/validate.rs`  -  Validation rules
+- `src/templates.rs`  -  Template rendering (if templates exist)
+
+### 8.3 Configuration Contract
+
+Standards and substandards that accept runtime configuration MUST define a typed configuration struct in their crate. Standards that accept no configuration MUST use the `NoConfig` marker type.
+
+#### 8.3.1 StandardConfig Trait
+
+Configurable standards MUST implement the `StandardConfig` trait:
+
+```rust
+pub trait StandardConfig: DeserializeOwned + Serialize + Default {
+    /// Validate config values beyond type checking.
+    fn validate(&self) -> Diagnostics;
+
+    /// Generate a JSON Schema for this config.
+    fn json_schema() -> serde_json::Value;
+
+    /// Generate a commented TOML snippet showing defaults.
+    fn toml_template() -> String;
+}
+```
+
+This trait enables:
+
+- **Type-safe config validation**  -  Consumer `APSS.yaml` config blocks are deserialized into the standard's config type, catching type errors at parse time.
+- **Semantic validation**  -  The `validate()` method checks value ranges, cross-field consistency, and other constraints beyond what the type system expresses.
+- **Schema generation**  -  `json_schema()` produces a JSON Schema for IDE completion and external tooling.
+- **Scaffolding**  -  `toml_template()` generates documented default config snippets for `apss init`.
+
+#### 8.3.2 Config Module Convention
+
+Standards SHOULD place their config type in `src/config.rs` and re-export it from `src/lib.rs`:
+
+```
+src/
+├── lib.rs          # re-exports Config
+└── config.rs       # struct MyStandardConfig { ... }
+```
+
+#### 8.3.3 Config Schema File
+
+Standards that implement `StandardConfig` SHOULD include a generated `config.schema.json` at the crate root. This file:
+
+- MUST be regenerable from the Rust type via `StandardConfig::json_schema()`
+- SHOULD be kept in sync (CI MAY validate staleness)
+- Enables IDE completion and external tooling for `APSS.yaml`
+
+#### 8.3.4 Validation Scope
+
+The `validate()` method handles semantic validation beyond what the type system can express:
+
+- Value ranges (e.g., `coupling_threshold` between 0.0 and 1.0)
+- Path existence checks
+- Cross-field consistency (e.g., if feature X is enabled, field Y is required)
+
+Type-level validation (required fields, correct types) is handled automatically by serde deserialization.
+
+### 8.4 Dependency Policy
+
+Standards and substandards MUST minimize external dependencies to reduce supply
+chain risk and keep the ecosystem lightweight.
+
+#### 8.4.1 Allowed Dependencies
+
+By default, a standard crate MAY only depend on:
+
+- `apss-core` (always allowed)
+- Workspace-internal crates (via `path` dependencies)
+- Workspace-inherited crates (via `.workspace = true` in `Cargo.toml`)
+
+Any other external dependency MUST be explicitly approved in the package's
+metadata file (`standard.toml`, `substandard.toml`, or `experiment.toml`).
+
+#### 8.4.2 Dependency Allowlist
+
+To exempt an external dependency, add it to the `[dependencies]` section of the
+metadata file with a rationale:
+
+```toml
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "syn"
+rationale = "Rust source code parsing for topology extraction"
+```
+
+The rationale is reviewed during security audits and MUST explain why the
+dependency is necessary (not just what it does).
+
+#### 8.4.3 Validation
+
+The meta standard validator (`aps v1 validate repo`) checks each package's
+`Cargo.toml` against its allowlist. Unapproved external dependencies produce
+`UNAPPROVED_EXTERNAL_DEP` errors.
+
+### 8.5 Deployment Structure
+
+Standards that are published for distribution MUST follow DI01's deployment
+requirements (see `APS-V1-0000.DI01`).
+
+#### 8.5.1 Version Consistency
+
+The version in `Cargo.toml` MUST match the version in the package's metadata
+file (`standard.toml`, `substandard.toml`, or `experiment.toml`). Standards
+using `version.workspace = true` in `Cargo.toml` are exempt (workspace version
+is managed centrally).
+
+#### 8.5.2 Publish Metadata
+
+Publishable crates MUST include in `Cargo.toml`:
+
+- `description`  -  what the crate does
+- `license`  -  SPDX identifier (or `.workspace = true`)
+- `repository`  -  source code URL (or `.workspace = true`)
+
+#### 8.5.3 Crate Naming
+
+Standard crates SHOULD follow the `apss-v1-NNNN-slug` naming convention.
+Substandard crates SHOULD follow `apss-v1-NNNN-profile-slug`.
 
 ---
 
@@ -465,6 +612,13 @@ Every package MUST have automated test coverage. Tests MAY be provided via eithe
 
 At least one of these forms MUST be present. CI MUST run these tests for all packages.
 
+### 11.3 Package README
+
+Every standard, substandard, and experiment MUST include a root `README.md`.
+The README is the package index shown by source hosting tools and MUST link
+to the package metadata file, `docs/01_spec.md`, examples when present, tests
+or test coverage notes, and install or validation guidance.
+
 ---
 
 ## 12. Agent Skills Namespace
@@ -473,7 +627,7 @@ At least one of these forms MUST be present. CI MUST run these tests for all pac
 
 Standards and experiments MUST provide agent assets under `agents/skills/`. This directory MUST include at least one skill file or README usable by an agent.
 
-For substandards, `agents/skills/` is OPTIONAL. The substandard's `docs/01_spec.md` serves as agent-readable context — it specifies what artifacts the substandard consumes and produces, which is sufficient for agent reasoning.
+For substandards, `agents/skills/` is OPTIONAL. The substandard's `docs/01_spec.md` serves as agent-readable context  -  it specifies what artifacts the substandard consumes and produces, which is sufficient for agent reasoning.
 
 ### 12.2 Reserved Directories
 
@@ -564,7 +718,7 @@ generated/v1/views/
 This directory SHOULD be gitignored. Views MUST include a header:
 
 ```
-# GENERATED — DO NOT EDIT
+# GENERATED  -  DO NOT EDIT
 # Regenerate with: aps v1 generate views
 ```
 
@@ -602,45 +756,34 @@ PROTO_DESCRIPTOR_MISMATCH: Protobuf descriptor mismatch
 
 CLI validation commands MUST use:
 
-- `0` — All checks passed
-- `1` — Errors found
-- `2` — Warnings only (no errors)
+- `0`  -  All checks passed
+- `1`  -  Errors found
+- `2`  -  Warnings only (no errors)
 
 ---
 
 ## 17. Package Distribution
 
-### 17.1 Bundle Releases
+Distribution, installation, and CLI composition for consumer projects are defined by `APS-V1-0000.DI01` (Distribution & Installation substandard).
 
-Standards are distributed via GitHub Releases as individual tarballs:
+The DI01 substandard specifies:
 
-```
-aps-<slug>-<version>.tar.gz
-aps-<slug>-<version>.tar.gz.sha256
-```
+- How standards are published as independent Rust crates
+- The bootstrap CLI (`apss`) for project onboarding
+- Version resolution and lockfile format (`apss.lock`)
+- Composed binary generation for project-local CLI
 
-Each release includes a `registry.json` listing all available standards and versions.
+### 17.1 Project Configuration
 
-### 17.2 Lock Files
+Consumer projects declare which standards they adopt via `APSS.yaml`, defined by `APS-V1-0000.CF01` (Project Configuration substandard).
 
-Consumers pin exact versions in `.aps/manifest.lock`:
+The CF01 substandard specifies:
 
-```toml
-[[package]]
-slug = "code-topology"
-version = "0.1.0"
-checksum = "sha256:..."
-resolved_url = "https://github.com/.../aps-code-topology-0.1.0.tar.gz"
-```
-
-Lock files ensure reproducible builds regardless of new releases.
-
-### 17.3 Version Selection
-
-When adding a standard:
-- If version specified: use that exact version
-- If no version: use `latest` from registry
-- Lock file pins the resolved version
+- The `APSS.yaml` schema for declaring standards, versions, and config
+- Cascading configuration for monorepos
+- Typed configuration validation via the `StandardConfig` trait (§8.3)
+- Experimental standard declarations and promoted-experiment compatibility
+  warnings
 
 See ADR 0001 (Versioning Strategy) for detailed semantics.
 
@@ -651,6 +794,7 @@ See ADR 0001 (Versioning Strategy) for detailed semantics.
 ### Standards and Experiments
 
 - [ ] `standard.toml` or `experiment.toml` with valid schema
+- [ ] `README.md` package index
 - [ ] `docs/01_spec.md` (normative spec)
 - [ ] `examples/` with at least one example
 - [ ] Test coverage (integration tests in `tests/` or inline `#[cfg(test)]`)
@@ -661,6 +805,7 @@ See ADR 0001 (Versioning Strategy) for detailed semantics.
 ### Substandards
 
 - [ ] `substandard.toml` with valid schema and parent reference
+- [ ] `README.md` package index
 - [ ] `docs/01_spec.md` (specifies consumed/produced artifacts)
 - [ ] Test coverage (integration tests in `tests/` or inline `#[cfg(test)]`)
 - [ ] `Cargo.toml` and `src/lib.rs` (Rust crate)

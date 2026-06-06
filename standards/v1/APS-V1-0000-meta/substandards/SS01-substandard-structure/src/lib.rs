@@ -1,4 +1,4 @@
-//! APS-V1-0000.SS01 — Substandard Structure
+//! APS-V1-0000.SS01  -  Substandard Structure
 //!
 //! This substandard defines the structural requirements for all APS substandards.
 //! Substandards are domain-specific extensions that inherit from a parent standard
@@ -11,7 +11,7 @@
 //! 3. **Relaxed Compatibility**: Substandards MAY break within parent major version
 //! 4. **Domain Specialization**: Used for language bindings, platform profiles, etc.
 
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Substandard ID regex pattern: APS-V1-XXXX.YY01
@@ -47,7 +47,7 @@ pub fn extract_parent_id(substandard_id: &str) -> Option<String> {
 /// Validate substandard-specific metadata.
 pub fn validate_substandard_metadata(
     path: &Path,
-    metadata: &aps_core::metadata::SubstandardMetadata,
+    metadata: &apss_core::metadata::SubstandardMetadata,
     diagnostics: &mut Diagnostics,
 ) {
     use error_codes::*;
@@ -82,6 +82,34 @@ pub fn validate_substandard_metadata(
             .with_path(path)
             .with_hint(format!("Set parent_id = \"{expected_parent}\"")),
         );
+    }
+}
+
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "APS-V1-0000.SS01".to_string(),
+            slug: "substandard-structure".to_string(),
+            name: "Substandard Structure".to_string(),
+            description: "Structural requirements for APS substandards".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for ss01-substandard-structure yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
     }
 }
 

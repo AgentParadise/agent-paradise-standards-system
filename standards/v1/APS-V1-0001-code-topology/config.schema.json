@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TopologyConfig",
+  "description": "Configuration for the Code Topology standard (APS-V1-0001)",
+  "type": "object",
+  "properties": {
+    "output_dir": {
+      "type": "string",
+      "description": "Output directory for topology artifacts",
+      "default": ".topology"
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Languages to analyze (empty = auto-detect)",
+      "default": []
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "dot",
+        "svg",
+        "png",
+        "mermaid",
+        "markdown",
+        "json",
+        "webgl",
+        "html",
+        "gltf"
+      ],
+      "description": "Output format for generated artifacts",
+      "default": "json"
+    }
+  },
+  "additionalProperties": false
+}

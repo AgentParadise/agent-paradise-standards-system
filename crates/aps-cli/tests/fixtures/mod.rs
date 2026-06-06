@@ -73,6 +73,7 @@ maintainers = ["Test"]
 "#
     );
     fs::write(pkg_dir.join("standard.toml"), standard_toml).unwrap();
+    fs::write(pkg_dir.join("README.md"), format!("# {name}\n")).unwrap();
 
     // Cargo.toml
     let cargo_toml = format!(
@@ -130,6 +131,7 @@ maintainers = ["Test"]
 "#
     );
     fs::write(pkg_dir.join("experiment.toml"), experiment_toml).unwrap();
+    fs::write(pkg_dir.join("README.md"), format!("# {name}\n")).unwrap();
 
     // Cargo.toml
     let cargo_toml = format!(
@@ -192,6 +194,7 @@ maintainers = ["Test"]
 "#
     );
     fs::write(pkg_dir.join("substandard.toml"), substandard_toml).unwrap();
+    fs::write(pkg_dir.join("README.md"), format!("# {name}\n")).unwrap();
 
     // Cargo.toml
     let cargo_toml = format!(

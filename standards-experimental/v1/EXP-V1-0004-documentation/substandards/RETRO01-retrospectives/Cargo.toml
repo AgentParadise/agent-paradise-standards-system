@@ -9,7 +9,7 @@ description = "Retrospectives substandard: enforces append-only retrospective hi
 
 [dependencies]
 documentation = { path = "../.." }
-aps-core.workspace = true
+apss-core.workspace = true
 regex = "1"
 
 [dev-dependencies]

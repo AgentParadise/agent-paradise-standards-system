@@ -8,11 +8,11 @@ use std::process::Command;
 
 /// Get the path to the compiled aps binary.
 fn aps_binary() -> std::path::PathBuf {
-    // During tests, the binary is in target/debug/aps
+    // During tests, the binary is in target/debug/apss-dev
     let mut path = std::env::current_exe().unwrap();
     path.pop(); // Remove test binary name
     path.pop(); // Remove deps
-    path.push("aps");
+    path.push("apss-dev");
     path
 }
 
@@ -29,7 +29,7 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-aps-core = { path = "../../crates/aps-core" }
+apss-core = { path = "../../crates/apss-core" }
 "#;
     fs::write(temp_dir.join("Cargo.toml"), cargo_toml).unwrap();
 
@@ -43,7 +43,7 @@ fn test_cli_help() {
     let output = Command::new(aps_binary())
         .arg("--help")
         .output()
-        .expect("Failed to execute aps");
+        .expect("Failed to execute apss-dev");
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -56,7 +56,7 @@ fn test_cli_v1_help() {
     let output = Command::new(aps_binary())
         .args(["v1", "--help"])
         .output()
-        .expect("Failed to execute aps v1");
+        .expect("Failed to execute apss-dev v1");
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -77,7 +77,7 @@ fn test_cli_list_empty_repo() {
         .args(["v1", "list"])
         .current_dir(temp_dir.path())
         .output()
-        .expect("Failed to execute aps v1 list");
+        .expect("Failed to execute apss-dev v1 list");
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -93,7 +93,7 @@ fn test_cli_validate_repo_empty() {
         .args(["v1", "validate", "repo"])
         .current_dir(temp_dir.path())
         .output()
-        .expect("Failed to execute aps v1 validate repo");
+        .expect("Failed to execute apss-dev v1 validate repo");
 
     // Empty repo with proper structure should pass
     assert!(output.status.success());
@@ -108,7 +108,7 @@ fn test_version_show_not_found() {
         .args(["v1", "version", "show", "APS-V1-9999"])
         .current_dir(temp_dir.path())
         .output()
-        .expect("Failed to execute aps v1 version show");
+        .expect("Failed to execute apss-dev v1 version show");
 
     // Should fail because package doesn't exist
     assert!(!output.status.success());

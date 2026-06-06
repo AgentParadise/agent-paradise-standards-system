@@ -75,6 +75,34 @@ pub enum TrackerError {
 /// Result type for tracker operations
 pub type Result<T> = std::result::Result<T, TrackerError>;
 
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "EXP-V1-0002".to_string(),
+            slug: "todo-tracker".to_string(),
+            name: "TODO Tracker".to_string(),
+            description: "TODO and FIXME tracking experiment".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for todo-tracker yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

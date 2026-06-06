@@ -5,7 +5,7 @@
 //! module exposes the diagnostic code constants and shared defaults so the
 //! parent crate and downstream tooling can reference them today.
 
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Diagnostic codes emitted by the Retrospectives substandard.

@@ -5,7 +5,7 @@
 
 mod fixtures;
 
-use aps_core::templates::{ExperimentContext, StandardContext, TemplateEngine};
+use apss_core::templates::{ExperimentContext, StandardContext, TemplateEngine};
 use aps_v1_0000_meta::{MetaStandard, Standard};
 use fixtures::create_test_workspace;
 use std::fs;
@@ -62,6 +62,7 @@ edition = "2021"
     )
     .unwrap();
 
+    fs::write(dir.join("README.md"), "# {{name}}\n").unwrap();
     fs::write(dir.join("examples/README.md"), "# Examples\n").unwrap();
     fs::write(dir.join("examples/placeholder.toml"), "# Example\n").unwrap();
     fs::write(dir.join("agents/skills/README.md"), "# Skills\n").unwrap();
@@ -116,6 +117,7 @@ edition = "2021"
     )
     .unwrap();
 
+    fs::write(dir.join("README.md"), "# {{name}}\n").unwrap();
     fs::write(dir.join("examples/README.md"), "# Examples\n").unwrap();
     fs::write(dir.join("examples/placeholder.toml"), "# Example\n").unwrap();
     fs::write(dir.join("agents/skills/README.md"), "# Skills\n").unwrap();

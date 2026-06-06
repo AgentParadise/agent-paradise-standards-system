@@ -5,8 +5,8 @@
 
 mod fixtures;
 
-use aps_core::discovery::discover_v1_packages;
 use aps_v1_0000_meta::{MetaStandard, Standard};
+use apss_core::discovery::discover_v1_packages;
 use fixtures::repo_root;
 use std::process::Command;
 
@@ -56,14 +56,14 @@ fn test_repo_validation_via_cli() {
         .args(["v1", "validate", "repo"])
         .current_dir(&repo)
         .output()
-        .expect("Failed to execute aps v1 validate repo");
+        .expect("Failed to execute apss-dev v1 validate repo");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(
         output.status.success(),
-        "aps v1 validate repo should succeed.\nstdout: {stdout}\nstderr: {stderr}"
+        "apss-dev v1 validate repo should succeed.\nstdout: {stdout}\nstderr: {stderr}"
     );
 }
 
@@ -78,8 +78,8 @@ fn test_repo_has_required_structure() {
         "standards-experimental/v1/ required"
     );
     assert!(
-        repo.join("crates/aps-core").exists(),
-        "crates/aps-core/ required"
+        repo.join("crates/apss-core").exists(),
+        "crates/apss-core/ required"
     );
     assert!(
         repo.join("crates/aps-cli").exists(),

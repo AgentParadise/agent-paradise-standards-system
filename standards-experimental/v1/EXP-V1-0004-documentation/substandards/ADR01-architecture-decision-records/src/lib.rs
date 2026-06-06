@@ -4,7 +4,7 @@
 //! required front matter, keyword-based required ADRs, and backlinking from
 //! implementation files back to governing ADRs.
 
-use aps_core::{Diagnostic, Diagnostics, diagnostics::Location};
+use apss_core::{Diagnostic, Diagnostics, diagnostics::Location};
 use documentation::config::{self, DocsConfig};
 use glob::Pattern;
 use regex::Regex;
@@ -412,6 +412,7 @@ fn validate_adr_context_files(adr_dir: &Path, diagnostics: &mut Diagnostics) {
 /// reference extraction consistent with the configured filename convention so
 /// projects that customise the prefix (e.g., `DEC-`) still get their
 /// references scanned.
+#[allow(dead_code)]
 fn extract_adr_references(content: &str, stem_re: &Regex) -> Vec<String> {
     stem_re
         .find_iter(content)

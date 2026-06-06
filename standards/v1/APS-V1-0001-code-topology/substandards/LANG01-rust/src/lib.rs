@@ -1075,6 +1075,34 @@ exclude_paths = ["target", ".git"]
 // Tests
 // ============================================================================
 
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "APS-V1-0001.RS01".to_string(),
+            slug: "rust-adapter".to_string(),
+            name: "Rust Language Adapter".to_string(),
+            description: "Rust language adapter for code topology".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for lang01-rust yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

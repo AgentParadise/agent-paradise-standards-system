@@ -108,8 +108,8 @@ impl DocValidator {
     }
 
     /// Run all enabled documentation validations.
-    pub fn validate(&self) -> aps_core::Diagnostics {
-        let mut diagnostics = aps_core::Diagnostics::new();
+    pub fn validate(&self) -> apss_core::Diagnostics {
+        let mut diagnostics = apss_core::Diagnostics::new();
 
         if self.docs_config.disable {
             return diagnostics;

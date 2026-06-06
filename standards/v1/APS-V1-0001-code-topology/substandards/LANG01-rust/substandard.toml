@@ -10,3 +10,16 @@ parent_major = "0"
 
 [ownership]
 maintainers = ["AgentParadise"]
+
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "syn"
+rationale = "Rust source code parsing — full AST analysis for topology extraction"
+
+[[dependencies.allowed_external]]
+crate = "quote"
+rationale = "Companion to syn for Rust token stream manipulation"
+
+[[dependencies.allowed_external]]
+crate = "proc-macro2"
+rationale = "Foundation type for syn/quote token streams"

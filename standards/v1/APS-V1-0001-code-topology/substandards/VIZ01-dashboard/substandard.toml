@@ -18,3 +18,8 @@ maintainers = ["AgentParadise"]
 
 [visualizations]
 types = ["3d-force", "codecity", "clusters", "vsa", "index"]
+
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "chrono"
+rationale = "Timestamp generation for dashboard build metadata"

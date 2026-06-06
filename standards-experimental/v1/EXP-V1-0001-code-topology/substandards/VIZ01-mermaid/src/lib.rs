@@ -184,7 +184,7 @@ impl MermaidProjector {
             "    title System Context - Code Topology".to_string(),
         ];
 
-        // Group modules by prefix (e.g., "aps-core::" becomes a system)
+        // Group modules by prefix (e.g., "apss-core::" becomes a system)
         let mut systems: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
 
@@ -418,8 +418,8 @@ mod tests {
     #[test]
     fn test_sanitize_id() {
         assert_eq!(
-            MermaidProjector::sanitize_id("aps-core::discovery"),
-            "aps_core_discovery"
+            MermaidProjector::sanitize_id("apss-core::discovery"),
+            "apss_core_discovery"
         );
         assert_eq!(MermaidProjector::sanitize_id("my.module"), "my_module");
     }

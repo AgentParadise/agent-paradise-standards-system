@@ -11,3 +11,8 @@ parent_major = "1"
 [ownership]
 maintainers = ["AgentParadise"]
 
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "regex"
+rationale = "Pattern matching for substandard ID and naming convention validation"
+

@@ -31,13 +31,13 @@ Artifact file parsing and validation:
 
 ```bash
 # Run all tests for code-topology
-cargo test -p code-topology
+cargo test --manifest-path standards-experimental/v1/EXP-V1-0001-code-topology/Cargo.toml
 
 # Run only integration tests
-cargo test -p code-topology --test artifact_parsing
+cargo test --manifest-path standards-experimental/v1/EXP-V1-0001-code-topology/Cargo.toml --test artifact_parsing
 
 # Run with output
-cargo test -p code-topology -- --nocapture
+cargo test --manifest-path standards-experimental/v1/EXP-V1-0001-code-topology/Cargo.toml -- --nocapture
 ```
 
 ## Test Fixtures
@@ -70,5 +70,5 @@ When adding new tests:
 Ensure all tests pass before committing:
 
 ```bash
-cargo test -p code-topology -p code-topology-3d
+cargo test --manifest-path standards-experimental/v1/EXP-V1-0001-code-topology/Cargo.toml
 ```

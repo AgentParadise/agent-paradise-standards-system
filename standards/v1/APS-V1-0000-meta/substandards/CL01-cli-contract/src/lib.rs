@@ -363,6 +363,21 @@ pub trait StandardCli: Send + Sync {
     fn aliases(&self) -> Vec<&str> {
         vec![self.slug()]
     }
+
+    /// Receive project-specific configuration from `APSS.yaml`.
+    ///
+    /// Called before `execute()` when running in a project context.
+    /// The `config` value corresponds to `[standards.<slug>.config]` from `APSS.yaml`,
+    /// already validated against the standard's `StandardConfig` type.
+    ///
+    /// # Default
+    ///
+    /// The default implementation ignores configuration. Override this to
+    /// accept project-specific settings.
+    fn configure(&mut self, config: toml::Value) -> Result<(), String> {
+        let _ = config;
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -406,6 +421,34 @@ impl StandardInfo {
 // ============================================================================
 // Tests
 // ============================================================================
+
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "APS-V1-0000.CL01".to_string(),
+            slug: "cli-contract".to_string(),
+            name: "CLI Contract".to_string(),
+            description: "CLI contract definitions for APS standards".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for cl01-cli-contract yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {

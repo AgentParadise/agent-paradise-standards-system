@@ -5,7 +5,7 @@
 
 use crate::config::DocsConfig;
 use crate::error_codes;
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Validate root-level context files (CLAUDE.md, AGENTS.md).

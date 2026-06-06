@@ -5,7 +5,7 @@
 //! `docs/01_spec.md`; this module exposes the diagnostic code constants so
 //! the parent crate's tests can reference them today.
 
-use aps_core::{Diagnostic, Diagnostics};
+use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 /// Diagnostic codes emitted by the Purpose and Vision substandard.

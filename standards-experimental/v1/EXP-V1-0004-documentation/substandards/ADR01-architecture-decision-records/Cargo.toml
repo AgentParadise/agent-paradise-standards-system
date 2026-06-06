@@ -9,7 +9,7 @@ description = "ADR enforcement substandard - naming conventions, front matter, r
 
 [dependencies]
 documentation = { path = "../.." }
-aps-core.workspace = true
+apss-core.workspace = true
 glob.workspace = true
 regex = "1"
 walkdir.workspace = true

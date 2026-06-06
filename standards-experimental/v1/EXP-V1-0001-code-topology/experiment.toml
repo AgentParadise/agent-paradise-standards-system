@@ -18,3 +18,8 @@ maintainers = ["AgentParadise"]
 # promoted_to = "APS-V1-XXXX"
 # promoted_at = "YYYY-MM-DD"
 
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "streaming-iterator"
+rationale = "Required by tree-sitter API for traversing syntax tree nodes"
+

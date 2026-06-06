@@ -1,0 +1,18 @@
+schema = "aps.substandard/v1"
+
+[substandard]
+id = "APS-V1-0000.DI01"
+name = "Distribution & Installation"
+slug = "distribution"
+version = "1.0.0"
+parent_id = "APS-V1-0000"
+parent_major = "1"
+category = "governance"
+backwards_compat = true
+
+[ownership]
+maintainers = ["AgentParadise"]
+
+[metadata]
+description = "Defines how standards are packaged, distributed, installed, and composed into project-local CLI binaries via the apss bootstrap."
+keywords = ["distribution", "install", "packaging", "bootstrap", "cli"]

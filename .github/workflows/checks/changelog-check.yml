@@ -1,0 +1,45 @@
+# =============================================================================
+# Changelog Check — ensures release PR body contains release notes
+# =============================================================================
+
+name: Changelog Check
+
+on:
+  workflow_call:
+    inputs:
+      pr_body:
+        required: true
+        type: string
+
+jobs:
+  changelog:
+    name: Check changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR body contains changelog
+        env:
+          PR_BODY: ${{ inputs.pr_body }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$PR_BODY" ]; then
+            echo "::error::PR body is empty. Release PRs must include release notes."
+            exit 1
+          fi
+
+          # Check for a changelog/release notes section
+          if echo "$PR_BODY" | grep -qiE '(##\s*(changelog|release notes|what.s changed|changes))'; then
+            echo "✓ Changelog section found in PR body"
+          else
+            echo "::error::PR body must contain a '## Changelog' or '## Release Notes' section"
+            exit 1
+          fi
+
+          # Check it has some content (not just a header)
+          BODY_LENGTH=${#PR_BODY}
+          if [ "$BODY_LENGTH" -lt 50 ]; then
+            echo "::error::PR body is too short ($BODY_LENGTH chars). Please add meaningful release notes."
+            exit 1
+          fi
+
+          echo "✓ Release notes look good ($BODY_LENGTH chars)"

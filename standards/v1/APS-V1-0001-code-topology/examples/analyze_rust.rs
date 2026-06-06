@@ -72,14 +72,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .iter()
             .filter(|f| f.cyclomatic > 5)
             .collect();
-        hotspots.sort_by(|a, b| b.cyclomatic.cmp(&a.cyclomatic));
+        hotspots.sort_by_key(|hotspot| std::cmp::Reverse(hotspot.cyclomatic));
 
         if !hotspots.is_empty() {
             println!("\n🔥 Complexity Hotspots (CC > 5):");
             for func in hotspots.iter().take(10) {
                 let status = if func.cyclomatic > 10 { "⚠️" } else { "  " };
                 println!(
-                    "   {} {} — CC:{} Cog:{}",
+                    "   {} {} - CC:{} Cog:{}",
                     status, func.id, func.cyclomatic, func.cognitive
                 );
             }
@@ -89,7 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Print module stats
     println!("\n📦 Module Analysis:");
     let mut sorted_modules = result.modules.clone();
-    sorted_modules.sort_by(|a, b| b.function_count.cmp(&a.function_count));
+    sorted_modules.sort_by_key(|module| std::cmp::Reverse(module.function_count));
 
     for module in sorted_modules.iter().take(10) {
         let ca_ce = format!("Ca:{} Ce:{}", module.ca, module.ce);
@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "🟡"
         };
         println!(
-            "   {} {} — {} funcs, {} (I={:.2})",
+            "   {} {} - {} funcs, {} (I={:.2})",
             status, module.id, module.function_count, ca_ce, instability
         );
     }

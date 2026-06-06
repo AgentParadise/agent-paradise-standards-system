@@ -4,9 +4,9 @@
 
 mod fixtures;
 
-use aps_core::promotion::promote_experiment;
-use aps_core::versioning::{BumpPart, bump_version, get_version};
 use aps_v1_0000_meta::{MetaStandard, Standard};
+use apss_core::promotion::promote_experiment;
+use apss_core::versioning::{BumpPart, bump_version, get_version};
 use fixtures::{create_test_workspace, create_valid_experiment, create_valid_standard};
 use std::fs;
 

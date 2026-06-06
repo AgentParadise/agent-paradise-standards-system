@@ -14,6 +14,35 @@ aps_major = "v1"
 [ownership]
 maintainers = ["AgentParadise"]
 
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "regex"
+rationale = "ADR substandard derives backlink and reference-extraction regexes from the configured docs.adr.naming_pattern"
+
+[[dependencies.allowed_external]]
+crate = "serde"
+rationale = "Workspace dependency for deserialising APSS.yaml's docs section into typed config structs"
+
+[[dependencies.allowed_external]]
+crate = "serde_json"
+rationale = "Workspace dependency used by the validator for machine-readable diagnostics output"
+
+[[dependencies.allowed_external]]
+crate = "serde_yaml"
+rationale = "Workspace dependency for parsing APSS.yaml during config load"
+
+[[dependencies.allowed_external]]
+crate = "walkdir"
+rationale = "Workspace dependency for walking the docs root during index generation and reference scanning"
+
+[[dependencies.allowed_external]]
+crate = "glob"
+rationale = "ADR substandard validates docs.backlinking.scan globs at config load"
+
+[[dependencies.allowed_external]]
+crate = "tempfile"
+rationale = "Dev-only dependency used in integration tests"
+
 # Promotion metadata (added after promotion, do not edit manually)
 # [promotion]
 # promoted_to = "APS-V1-XXXX"

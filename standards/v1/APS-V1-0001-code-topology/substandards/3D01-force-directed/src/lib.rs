@@ -5,10 +5,10 @@
 //!
 //! ## Key Features
 //!
-//! - **Force-directed layout** — Tightly coupled modules cluster together
-//! - **Deterministic positions** — Saves layout positions for reproducibility
-//! - **Multiple formats** — WebGL scene, GLTF model, HTML viewer
-//! - **Metric-driven sizing** — Node size reflects complexity
+//! - **Force-directed layout**  -  Tightly coupled modules cluster together
+//! - **Deterministic positions**  -  Saves layout positions for reproducibility
+//! - **Multiple formats**  -  WebGL scene, GLTF model, HTML viewer
+//! - **Metric-driven sizing**  -  Node size reflects complexity
 //!
 //! ## Usage
 //!
@@ -1262,6 +1262,34 @@ impl ForceDirectedProjector {
             edge_count = scene.edges.len(),
             scene_json = scene_json
         ))
+    }
+}
+
+/// Register this package with a composed APSS runner.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: "APS-V1-0001.FD01".to_string(),
+            slug: "force-directed".to_string(),
+            name: "3D Force Directed".to_string(),
+            description: "3D force-directed topology visualization substandard".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
+        eprintln!("No composed CLI commands are registered for 3d01-force-directed yet.");
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
     }
 }
 

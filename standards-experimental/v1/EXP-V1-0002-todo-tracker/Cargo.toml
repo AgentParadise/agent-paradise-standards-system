@@ -1,5 +1,5 @@
 [package]
-name = "todo-tracker"
+name = "apss-v1-0002-todo-tracker"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -7,8 +7,12 @@ repository.workspace = true
 rust-version.workspace = true
 description = "TODO/FIXME Tracker and Issue Validator (Experimental)"
 
+[lib]
+name = "todo_tracker"
+
+
 [dependencies]
-aps-core.workspace = true
+apss-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
