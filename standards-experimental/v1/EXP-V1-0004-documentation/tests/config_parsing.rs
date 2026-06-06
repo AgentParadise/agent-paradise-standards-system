@@ -6,7 +6,8 @@
 //! defaults, and tolerance of unrelated top-level sections owned by other
 //! standards.
 
-use documentation::config::{ApssConfig, CONFIG_FILENAME, load_config};
+use apss_core::config::CONFIG_FILENAME;
+use documentation::config::{ApssConfig, load_config};
 use std::fs;
 use tempfile::tempdir;
 
@@ -129,6 +130,22 @@ docs:
         config.docs.root_context.docs_reference_pattern,
         "documentation/"
     );
+}
+
+#[test]
+fn test_load_config_uses_canonical_uppercase_filename() {
+    let dir = tempdir().unwrap();
+    fs::write(
+        dir.path().join(CONFIG_FILENAME),
+        r#"
+docs:
+  root: documentation
+"#,
+    )
+    .unwrap();
+
+    let config = load_config(dir.path()).unwrap();
+    assert_eq!(config.docs.root, "documentation");
 }
 
 #[test]

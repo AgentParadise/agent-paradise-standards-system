@@ -13,6 +13,7 @@
 //! `docs:` block produces sensible defaults (zero-config works out of the
 //! box).
 
+use apss_core::config as project_config;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -21,7 +22,7 @@ use std::path::{Path, PathBuf};
 /// Single source of truth so the CLI, the validator, and the hint strings all
 /// agree. Changing this path is a CF01 contract change; do not flip without
 /// updating the meta-standard.
-pub const CONFIG_FILENAME: &str = "apss.yaml";
+pub const CONFIG_FILENAME: &str = project_config::CONFIG_FILENAME;
 
 /// Top-level APSS configuration file.
 ///

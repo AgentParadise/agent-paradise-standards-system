@@ -27,7 +27,7 @@ pub fn validate_readmes(repo_root: &Path, docs_config: &DocsConfig, diagnostics:
             )
             .with_path(&docs_root)
             .with_hint(format!(
-                "Create '{}' or configure docs.root in apss.yaml",
+                "Create '{}' or configure docs.root in APSS.yaml",
                 docs_root.display()
             )),
         );

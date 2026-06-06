@@ -1329,7 +1329,7 @@ fn dispatch_fitness(
 ///
 /// Mirrors `documentation::config::load_config` but works against an
 /// arbitrary path so operators can point `aps run docs validate` at a
-/// non-default `apss.yaml`. YAML format per the unified-config brief
+/// non-default `APSS.yaml`. YAML format per the unified-config brief
 /// (2026-06-04); other top-level sections owned by other standards are
 /// tolerated and ignored.
 fn load_docs_config(
@@ -1383,7 +1383,7 @@ fn dispatch_docs(
             println!("    index [path]       Generate or check README indexes from front matter");
             println!();
             println!("OPTIONS:");
-            println!("    --config <file>    Path to apss.yaml (default: <path>/apss.yaml)");
+            println!("    --config <file>    Path to APSS.yaml (default: <path>/APSS.yaml)");
             println!(
                 "    --write            Write generated indexes into README.md files (index only)"
             );
@@ -1581,7 +1581,7 @@ fn dispatch_docs(
                                 "Docs root not found or contains no directories under {}.",
                                 target.display(),
                             );
-                            println!("Create the docs root or configure docs.root in apss.yaml.");
+                            println!("Create the docs root or configure docs.root in APSS.yaml.");
                         } else {
                             for idx in &indexes {
                                 println!("--- {} ---", idx.dir.display());
