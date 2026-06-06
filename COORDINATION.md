@@ -217,6 +217,93 @@ on main has not yet been corrected. Decisions needed:
 This session leaves EXP-V1-0004 absence-equals-enabled per Correction
 1 and surfaces the conflict here rather than guessing.
 
+## Final-gate blocker 2026-06-06 (Codex)
+
+Operator final-gate review found a hard blocker plus two doc defects.
+Claude has fixed the two doc defects in the same commit as this note;
+Codex owns the BLOCKER. Details:
+
+### BLOCKER: filename-casing drift in the docs standard's Rust
+
+The merged CF01 meta-standard canonically loads `APSS.yaml`
+(uppercase) via `crates/apss-core/src/config.rs` line 19
+(`CONFIG_FILENAME = "APSS.yaml"`). This standard's Rust still
+hardcodes lowercase `apss.yaml` in:
+
+- `standards-experimental/v1/EXP-V1-0004-documentation/src/config.rs`
+  line 24:
+  `pub const CONFIG_FILENAME: &str = "apss.yaml";`
+- `crates/aps-cli/src/main.rs` lines 1446 and 1464 where the docs
+  validate path is wired.
+
+On a case-sensitive filesystem (Linux CI, most production hosts) the
+docs validator silently ignores a project's real `APSS.yaml`.
+
+**Fix per the no-magic-strings rule:**
+
+1. Delete `pub const CONFIG_FILENAME: &str = "apss.yaml";` in
+   `standards-experimental/v1/EXP-V1-0004-documentation/src/config.rs`.
+2. Import the canonical constant from `apss-core`:
+   `use apss_core::config::CONFIG_FILENAME;` (or
+   `apss_core::CONFIG_FILENAME` if re-exported) and use it wherever
+   the docs standard reads or writes the config file. There MUST be
+   no local duplicate. Adjust the `load_config` function and any
+   helper that currently joins the literal `"apss.yaml"`.
+3. Update `crates/aps-cli/src/main.rs` lines 1446 and 1464 to use
+   the same imported constant. Drop any local string literal.
+4. Sweep every remaining lowercase `apss.yaml` doc comment and hint
+   string in the docs standard's Rust to the canonical casing:
+   - `standards-experimental/v1/EXP-V1-0004-documentation/src/config.rs`
+     module doc, `DocsConfig` doc, `BacklinkingConfig` doc,
+     `PurposeVisionConfig` doc, `load_config` doc.
+   - `standards-experimental/v1/EXP-V1-0004-documentation/src/lib.rs`
+     line 128: `Load the validator, reading config from APSS.yaml.`
+   - `standards-experimental/v1/EXP-V1-0004-documentation/src/readme.rs`
+     line 30 hint string: `configure docs.root in APSS.yaml`.
+   - `standards-experimental/v1/EXP-V1-0004-documentation/tests/config_parsing.rs`
+     module doc and inline comments at lines 197 and 224.
+   - `standards-experimental/v1/EXP-V1-0004-documentation/substandards/ADR01-architecture-decision-records/src/lib.rs`
+     doc comment on `from_repo` and hint strings at lines 99 and 118.
+   - `standards-experimental/v1/EXP-V1-0004-documentation/substandards/PV01-purpose-and-vision/src/lib.rs`
+     line 56 hint string.
+   - `standards-experimental/v1/EXP-V1-0004-documentation/substandards/RETRO01-retrospectives/src/lib.rs`
+     line 61 hint string.
+
+**Regression test (required):**
+
+Add a unit or integration test in
+`standards-experimental/v1/EXP-V1-0004-documentation/tests/config_parsing.rs`
+that:
+
+1. Creates a temp directory.
+2. Writes the REAL uppercase file name `APSS.yaml` (not lowercase) to
+   that directory with a valid `docs:` block.
+3. Calls `load_config(temp.path())` and asserts the returned config
+   loads the docs block from the file.
+4. Asserts the inverse: a lowercase `apss.yaml` in the same temp dir
+   without an uppercase counterpart MUST NOT be picked up as the
+   canonical config (otherwise the validator silently honours the
+   wrong file on case-insensitive filesystems and silently ignores
+   it on case-sensitive ones).
+
+The test exists so this drift can never silently recur and so any
+future refactor that re-introduces a lowercase magic string fails
+CI.
+
+### DEFECT 2 (Claude, fixed in this commit)
+
+`standards-experimental/v1/EXP-V1-0004-documentation/examples/apss.yaml`
+renamed via `git mv` to `examples/APSS.yaml`. Both that file and
+`examples/README.md` now carry the canonical merged schema id
+`apss.project/v1`, with the example structure updated to reflect
+AGENTS canonical / CLAUDE.md symlink and the absence-equals-enabled
+convention.
+
+### DEFECT 3 (Claude, fixed in this commit)
+
+PR 61 body test-plan bullet that claimed Clippy and Format were red
+is corrected to show all five CI checks green.
+
 ## Rules carried from the brief
 
 1. Do not merge PR 61. Keep CI green on every push.

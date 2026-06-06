@@ -7,10 +7,10 @@ description: "Example configuration and compliant project structure for EXP-V1-0
 
 ## Example Configuration
 
-Configuration lives in a single root-level `apss.yaml` owned by the meta-standard (APS-V1-0000.CF01). This standard registers the slug `docs` and contributes the `docs:` section. A minimal apss.yaml for a project adopting the documentation standard:
+Configuration lives in a single root-level `APSS.yaml` owned by the meta-standard (APS-V1-0000.CF01). This standard registers the slug `docs` and contributes the `docs:` section. A minimal `APSS.yaml` for a project adopting the documentation standard:
 
 ```yaml
-schema: apss.config/v1
+schema: apss.project/v1
 
 docs:
   root: docs
@@ -20,21 +20,21 @@ docs:
       - security
 ```
 
-The full default `docs:` section (every key) is in [`apss.yaml`](apss.yaml).
+The full default `docs:` section (every key) is in [`APSS.yaml`](APSS.yaml).
 
 ## Example Compliant Directory Structure
 
 ```
 my-project/
-├── apss.yaml                    # APSS configuration (meta-standard owned)
+├── APSS.yaml                    # APSS configuration (meta-standard owned)
 ├── docs/
 │   ├── README.md                # Has ## Index auto-generated
-│   ├── CLAUDE.md                # "See README.md for index"
-│   ├── AGENTS.md                # "See README.md for index"
+│   ├── AGENTS.md                # Canonical agent context for this directory
+│   ├── CLAUDE.md                # Symlink to AGENTS.md
 │   └── adrs/
 │       ├── README.md            # Has ## Index of ADRs
-│       ├── CLAUDE.md
-│       ├── AGENTS.md
+│       ├── AGENTS.md            # Canonical agent context for ADRs
+│       ├── CLAUDE.md            # Symlink to AGENTS.md
 │       ├── ADR-001-initial-architecture.md
 │       └── ADR-002-auth-strategy.md
 ├── CLAUDE.md                    # Root context, references docs/
@@ -42,6 +42,8 @@ my-project/
 └── src/
     └── ...
 ```
+
+The standard ships no `GEMINI.md`; Gemini reads `AGENTS.md` natively. The docs-area `AGENTS.md` files are scaffolded by the installer when absent and never overwritten on subsequent installs (see `docs/02_install_contract.md` Section 1.5).
 
 (The `.apss/` dotdir, if it exists, holds generated artifacts only such as cached indexes; it MUST NOT hold configuration.)
 
@@ -77,7 +79,7 @@ Overview of all architectural decisions for this project.
 | [Auth Strategy](ADR-002-auth-strategy.md) | Authentication and authorization approach |
 ```
 
-## Example CLAUDE.md (Directory-Level Pointer)
+## Example AGENTS.md (Directory-Level Pointer)
 
 ```markdown
 ---
@@ -87,3 +89,5 @@ description: "AI context for Architecture Decision Records"
 
 See [README.md](README.md) for full index and overview of this directory.
 ```
+
+`CLAUDE.md` in the same directory is a symlink to `AGENTS.md` so Claude Code follows the symlink and reads the same content.

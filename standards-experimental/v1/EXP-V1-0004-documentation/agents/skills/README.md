@@ -33,7 +33,7 @@ Every command emits diagnostics in the format defined in [Section 9.2 of the spe
 
 ## What "valid" means
 
-The per-doc-type definition of valid structure is in [Section 9.4 of the spec](../../docs/01_spec.md#94-git-pre-commit-hook-contract). The configurable surface is in [Section 3](../../docs/01_spec.md#3-configuration); a full example is in [`examples/apss.yaml`](../../examples/apss.yaml). Configuration lives in a single root-level `apss.yaml` owned by the meta-standard; the docs standard registers the `docs` slug and contributes the `docs:` block.
+The per-doc-type definition of valid structure is in [Section 9.4 of the spec](../../docs/01_spec.md#94-git-pre-commit-hook-contract). The configurable surface is in [Section 3](../../docs/01_spec.md#3-configuration); a full example is in [`examples/APSS.yaml`](../../examples/APSS.yaml). Configuration lives in a single root-level `APSS.yaml` owned by the meta-standard (CF01 owns the canonical filename via `apss_core::CONFIG_FILENAME`); the docs standard registers the `docs` slug and contributes the `docs:` block.
 
 ## Backlinking
 

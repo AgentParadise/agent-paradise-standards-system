@@ -1,0 +1,22 @@
+# Example APSS.yaml for a project adopting EXP-V1-0004 (Documentation).
+#
+# Configuration lives in a single root-level APSS.yaml owned by the
+# meta-standard (APS-V1-0000.CF01). The documentation standard registers
+# the slug "docs" and contributes this docs: section.
+#
+# Copy the relevant pieces into your project's APSS.yaml and customize.
+# Per the absence-equals-enabled convention (parent spec Section 3.2)
+# the empty section is the happy path: write a key only to opt out
+# (disable: true) or to override a non-disable default. `disable: false`
+# is the default the validator applies for absence and MUST NOT appear
+# in real or example configs.
+#
+# Substandard keys use the substandard's kebab-case slug (matches its
+# substandard.toml). Scalar field names inside each section are
+# snake_case (matches the Rust struct contract).
+
+schema: "apss.project/v1"
+
+docs:
+  adr:
+    required_adr_keywords: ["security", "testing"]
