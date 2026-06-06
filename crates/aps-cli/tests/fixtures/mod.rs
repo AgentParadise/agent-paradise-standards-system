@@ -16,12 +16,12 @@ pub fn repo_root() -> PathBuf {
     path
 }
 
-/// Get the path to the aps binary.
+/// Get the path to the aps-cli binary (renamed to `apss-dev` after the CF01 merge).
 pub fn aps_binary() -> PathBuf {
     let mut path = std::env::current_exe().unwrap();
     path.pop(); // Remove test binary name
     path.pop(); // Remove deps
-    path.push("aps");
+    path.push("apss-dev");
     path
 }
 
