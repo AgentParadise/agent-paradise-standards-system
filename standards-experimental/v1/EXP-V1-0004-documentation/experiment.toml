@@ -40,6 +40,14 @@ crate = "glob"
 rationale = "ADR substandard validates docs.backlinking.scan globs at config load"
 
 [[dependencies.allowed_external]]
+crate = "thiserror"
+rationale = "Error derive for validator diagnostics surfaced through apss-core"
+
+[[dependencies.allowed_external]]
+crate = "toml"
+rationale = "DI01 register() takes a toml::Value config block passed in by the unified installer"
+
+[[dependencies.allowed_external]]
 crate = "tempfile"
 rationale = "Dev-only dependency used in integration tests"
 

@@ -1,11 +1,14 @@
 [package]
-name = "documentation"
+name = "apss-v1-0004-documentation"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Documentation and Context Engineering - ADR enforcement, README/index validation, agent context (Experimental)"
+
+[lib]
+name = "documentation"
 
 [dependencies]
 apss-core.workspace = true
@@ -16,6 +19,7 @@ walkdir.workspace = true
 glob.workspace = true
 thiserror.workspace = true
 regex = "1"
+toml.workspace = true
 
 [dev-dependencies]
 tempfile = "3.14"

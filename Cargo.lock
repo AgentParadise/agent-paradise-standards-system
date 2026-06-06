@@ -83,9 +83,9 @@ dependencies = [
  "apss-v1-0001-lang01-rust",
  "apss-v1-0001-viz01-dashboard",
  "apss-v1-0003-fitness-functions",
+ "apss-v1-0004-documentation",
  "chrono",
  "clap",
- "documentation",
  "documentation-adr",
  "documentation-purpose-and-vision",
  "documentation-retrospectives",
@@ -297,6 +297,22 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "apss-v1-0004-documentation"
+version = "0.1.0"
+dependencies = [
+ "apss-core",
+ "glob",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "walkdir",
 ]
 
 [[package]]
@@ -543,26 +559,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "documentation"
-version = "0.1.0"
-dependencies = [
- "apss-core",
- "glob",
- "regex",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "tempfile",
- "thiserror",
- "walkdir",
-]
-
-[[package]]
 name = "documentation-adr"
 version = "0.1.0"
 dependencies = [
  "apss-core",
- "documentation",
+ "apss-v1-0004-documentation",
  "glob",
  "regex",
  "tempfile",
@@ -574,7 +575,7 @@ name = "documentation-purpose-and-vision"
 version = "0.1.0"
 dependencies = [
  "apss-core",
- "documentation",
+ "apss-v1-0004-documentation",
  "tempfile",
 ]
 
@@ -583,7 +584,7 @@ name = "documentation-retrospectives"
 version = "0.1.0"
 dependencies = [
  "apss-core",
- "documentation",
+ "apss-v1-0004-documentation",
  "regex",
  "tempfile",
 ]

@@ -225,8 +225,10 @@ fn test_root_context_valid() {
 fn test_full_validator_disabled() {
     let dir = tempdir().unwrap();
 
-    let mut config = DocsConfig::default();
-    config.disable = true;
+    let config = DocsConfig {
+        disable: true,
+        ..DocsConfig::default()
+    };
 
     let validator = DocValidator::with_config(dir.path(), config);
     let diagnostics = validator.validate();

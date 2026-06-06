@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "Purpose and Vision substandard: enforces the project's North Star document used by agents during plan and design"
 
 [dependencies]
-documentation = { path = "../.." }
+documentation = { package = "apss-v1-0004-documentation", path = "../.." }
 apss-core.workspace = true
 
 [dev-dependencies]

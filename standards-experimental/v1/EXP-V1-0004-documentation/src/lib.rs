@@ -37,6 +37,48 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Slug aliases accepted by `resolve_standard`.
 pub const ALIASES: &[&str] = &["documentation", "doc", "exp-v1-0004"];
 
+/// Register this package with a composed APSS runner.
+///
+/// DI01 (distribution) requires every standard crate to export a `register`
+/// function so the unified installer can wire the standard into a project
+/// without compile-time knowledge of which standards are active.
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: ID.to_string(),
+            slug: SLUG.to_string(),
+            name: NAME.to_string(),
+            description: DESCRIPTION.to_string(),
+            version: VERSION.to_string(),
+            commands: Vec::new(),
+        },
+        Box::new(NoopCommandHandler),
+    );
+}
+
+/// Placeholder command handler used by `register`. The CLI invokes
+/// `aps run docs <command>` through the dispatcher in `aps-cli`; this handler
+/// exists so the registry has a non-null command implementation.
+struct NoopCommandHandler;
+
+impl apss_core::registry::CommandHandler for NoopCommandHandler {
+    fn execute(
+        &self,
+        _command: &str,
+        _args: &[String],
+        _config: &toml::Value,
+    ) -> i32 {
+        eprintln!(
+            "docs commands are dispatched through `apss-dev run docs <command>`; this register hook is a placeholder."
+        );
+        5
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        Vec::new()
+    }
+}
+
 // ─── Error Codes ────────────────────────────────────────────────────────────
 
 /// Diagnostic codes emitted by the documentation validators.

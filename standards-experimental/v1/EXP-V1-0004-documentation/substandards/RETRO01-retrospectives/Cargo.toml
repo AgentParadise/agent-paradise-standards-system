@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "Retrospectives substandard: enforces append-only retrospective history with consistent naming and required sections"
 
 [dependencies]
-documentation = { path = "../.." }
+documentation = { package = "apss-v1-0004-documentation", path = "../.." }
 apss-core.workspace = true
 regex = "1"
 

@@ -8,7 +8,7 @@ rust-version.workspace = true
 description = "ADR enforcement substandard - naming conventions, front matter, required keywords, backlinking"
 
 [dependencies]
-documentation = { path = "../.." }
+documentation = { package = "apss-v1-0004-documentation", path = "../.." }
 apss-core.workspace = true
 glob.workspace = true
 regex = "1"
