@@ -206,7 +206,29 @@ Each dimension version follows SemVer independently. The status field is normati
 | `incubating` | Specified but at least one promotion requirement (§3.3) is unmet. | All rules run as advisory. Rule severity is **downgraded** at evaluation time: any `error` configured on an incubating dimension MUST be reported as `warning` in the output with a `downgraded_from_error` flag. Incubating dimensions MUST NOT cause exit code `1`. Contributes to system-level score only if the user explicitly sets `system_fitness.include_incubating = true` (default: `false`). |
 | `deprecated` | Scheduled for removal in a future major version. | Rules continue to run but produce a deprecation warning. New projects SHOULD NOT adopt deprecated dimensions. |
 
-Implementers MUST emit the diagnostic code `INCUBATING_DIMENSION_ERROR_DOWNGRADED` (§12) for every rule whose configured severity was downgraded due to incubating status. This makes the soft enforcement visible rather than silent - users know exactly which assertions are advisory and why.
+Implementers MUST emit the diagnostic code `INCUBATING_DIMENSION_ERROR_DOWNGRADED` (§12) for every rule whose configured severity was downgraded due to incubating status. This makes the soft enforcement visible rather than silent: users know exactly which assertions are advisory and why.
+
+#### 3.4.1 Project-Local Promotion of Incubating Dimensions
+
+A project MAY locally promote an `incubating` dimension to build-breaking severity. The promotion is local to the project and does not change the dimension's status in this standard; the standard-level status remains `incubating` and the dimension still satisfies fewer than five of the R1-R5 requirements (§3.3) globally.
+
+Project-local promotion is permitted only when all of the following are true:
+
+- The promotion is documented in an in-repo ADR (typically under `docs/adrs/`) that names the dimension being promoted, identifies the unmet R1-R5 requirement(s), and supplies the concrete project-specific thresholds that make the dimension enforceable in this codebase (for example, latency / throughput SLOs for PF01, availability and error-budget SLOs for AV01).
+- The promotion is expressed in `fitness.toml` via configuration the engine already supports (for example `system_fitness.include_incubating = true` to fold the dimension into the composite, together with rule-level severities the project chooses to honour). The engine continues to emit `INCUBATING_DIMENSION_ERROR_DOWNGRADED` for the rules involved.
+- The project accepts that this is a local choice. Other projects that adopt this standard MUST NOT assume the same dimension is build-breaking for them, and tools that consume `promotion_status` from the fitness report MUST continue to treat it as `incubating`.
+
+The standard-level status of a dimension changes only through the global promotion process described in §3.3 and §3.4; project-local promotion does not satisfy that process and does not relieve the standard's maintainers from the R1-R5 evidence requirement.
+
+#### 3.4.2 Composition With Non-APSS Checks
+
+This standard is **one input** to a project's overall quality gates, not the whole of them. Adopters MAY layer additional checks alongside the standard - for example, a harness-native performance gate, a domain-specific contract test, an internal license catalog check, or a security policy enforced by a separate scanner. Such checks are outside the standard's scope and §3.4 does not constrain them. Specifically:
+
+- The lifecycle in §3.4 governs how this standard treats its own dimensions. It does not govern, restrict, or compete with checks that originate outside APSS.
+- Non-APSS checks MAY fail the build (or produce any other outcome the adopter chooses) independent of the fitness composite. They MAY cover the same architectural concern as an `incubating` APSS dimension without that dimension being promoted standard-side; conversely they MAY cover concerns this standard does not address at all.
+- Conformance to APS-V1-0002 is unaffected by the presence, absence, or outcome of non-APSS checks. A project that runs APSS fitness as part of CI conforms to this standard regardless of what additional gates it layers on top, provided the APSS-side rules are configured per §4 and the report meets §7.
+
+The recommended composition pattern is to treat APSS dimensions as one slot of the project's quality gate aggregator and project-native checks as another slot, so that each slot's outcomes remain attributable and the standard's per-dimension diagnostics survive the aggregation. See `INTEGRATION.md` for a worked example.
 
 ### 3.5 Artifact Contracts
 

@@ -167,24 +167,34 @@ Every exception REQUIRES an `issue` reference - it MUST be tracked work, not jus
 
 ## 6. CI integration
 
-GitHub Actions example (both commands in one job):
+GitHub Actions example using the **slot-composition pattern**: APSS dimensions are one input slot, and project-native checks (e.g., a harness performance gate) occupy another.
 
 ```yaml
-- name: Analyze code topology
-  run: apss run code-topology analyze
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-- name: Validate architecture fitness
-  run: apss run architecture-fitness validate
+      # Slot 1: APSS Architecture Fitness
+      - name: APSS Fitness
+        run: |
+          apss run code-topology analyze
+          apss run architecture-fitness validate
 
-- name: Upload fitness report
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: fitness-report
-    path: fitness-report.json
+      # Slot 2: Project-native checks (layered alongside APSS)
+      - name: Native Performance Gate
+        run: ./scripts/harness-perf-check.sh --threshold 200ms
+
+      - name: Upload fitness report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fitness-report
+          path: fitness-report.json
 ```
 
-For pull-request trend tracking, cache the previous run's `fitness-report.json` and pass it with `--previous-report path/to/prior.json` (the flag is `--previous-report`, not `--previous`; relative paths resolve against the validate target). The engine emits `system_fitness.trend` deltas so reviewers can see whether a PR improves or regresses each dimension.
+For pull-request trend tracking, cache the previous run's `fitness-report.json` and pass it with `--previous-report path/to/prior.json`. The engine emits `system_fitness.trend` deltas so reviewers can see whether a PR improves or regresses each dimension.
 
 ## 7. Progressive rollout
 
@@ -209,6 +219,83 @@ include_incubating = true   # OPTIONAL: include PF01's score in the composite.
 
 Once a project lands an ADR setting concrete SLOs for PF01 or AV01, the dimension can promote to active for that project. Universal promotion in the standard requires industry-wide threshold citations.
 
+## 8. Slot-composition pattern (APSS as one input)
+
+Per spec §3.4.2, APSS-V1-0002 is **one input** to a project's quality gates, not the whole of them. Adopters are encouraged to layer additional non-APSS checks alongside the standard. The lifecycle in §3.4 does not constrain those checks: a project MAY fail the build on a project-native gate that this standard does not address, and APSS conformance is unaffected by their presence or outcome.
+
+Treat each source as its own slot of an aggregator. The example below uses two slots: APSS architecture fitness as Slot A, and a project-native harness performance gate as Slot B. The aggregator records each slot's exit status separately so per-dimension APSS diagnostics survive the rollup.
+
+```yaml
+# .github/workflows/quality-gates.yml
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Slot A: APSS architecture fitness (this standard).
+      # Six active dimensions (MT01, MD01, ST01, SC01, LG01, AC01) run in
+      # strict-artifact mode. PF01 / AV01 remain incubating per ADR 0003.
+      - name: Slot A - APSS Fitness
+        id: apss
+        run: |
+          apss run code-topology analyze
+          apss run architecture-fitness validate --report fitness-report.json
+
+      # Slot B: project-native performance gate (NOT part of APS-V1-0002).
+      # The standard does not constrain this script; it MAY fail the build
+      # independently and its outcome does not affect APSS conformance.
+      - name: Slot B - Harness Performance Gate
+        id: perf
+        run: ./scripts/harness-perf-check.sh --p95-budget-ms 250
+
+      # Aggregator: surface each slot's outcome and the APSS fitness report
+      # together so the per-dimension diagnostics from Slot A remain visible.
+      - name: Upload quality artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gates
+          path: |
+            fitness-report.json
+            perf-result.json
+```
+
+### Locally promoting an incubating dimension (§3.4.1)
+
+A project MAY locally promote `PF01` or `AV01` to build-breaking without changing the dimension's status in this standard. Per §3.4.1 the promotion requires an in-repo ADR that names the dimension, identifies the unmet R1-R5 requirement, and supplies the concrete thresholds. Once that ADR exists, the configuration that wires it into CI looks like:
+
+```toml
+# fitness.toml (project-local promotion of PF01)
+[dimensions]
+PF01 = true                          # enable the rules
+
+[system_fitness]
+include_incubating = true            # fold PF01 into the composite
+min_score = 0.85                     # project-specific threshold per the ADR
+
+[system_fitness.weights]
+MT01 = 0.20
+MD01 = 0.20
+ST01 = 0.15
+SC01 = 0.15
+LG01 = 0.10
+AC01 = 0.10
+PF01 = 0.10                          # weight justified in the ADR
+
+[[rules.threshold]]
+id = "pf01-p95-latency"
+name = "Maximum p95 Latency"
+dimension = "PF01"
+source = "adapters/pf01/p95.json"
+field = "metrics.p95_ms"
+max = 250                            # SLO from the project ADR
+scope = "system"
+severity = "error"
+```
+
+The engine still treats `PF01` as `incubating` in `fitness-report.json`'s `promotion_status` field (the standard-level status is unchanged) and continues to emit `INCUBATING_DIMENSION_ERROR_DOWNGRADED` for the rule. CI failure comes from the composite falling below `min_score`, or from a separately-configured `severity = "error"` outcome that the project's aggregator treats as blocking - the project decides, not the standard.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -222,6 +309,8 @@ Once a project lands an ADR setting concrete SLOs for PF01 or AV01, the dimensio
 ## Canonical references
 
 - [Spec §3.3](./01_spec.md) for R1-R5 promotion requirements
+- [Spec §3.4.1](./01_spec.md) for project-local promotion of incubating dimensions
+- [Spec §3.4.2](./01_spec.md) for composition with non-APSS checks
 - [Spec §3.5](./01_spec.md) for Artifact Contracts
 - [ADR 0002](./adrs/0002-mt01-md01-promotion.md) for why MT01 and MD01 are active
 - [ADR 0003](./adrs/0003-six-dimension-promotion.md) for why ST01, SC01, LG01, AC01 promoted alongside them
