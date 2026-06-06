@@ -442,9 +442,7 @@ fn compile_reference_matcher(stem_re: &Regex) -> Result<Regex, regex::Error> {
 /// glued to a previous one with only a hyphen, for example
 /// `ADR-001-foo-ADR-002-bar`.
 fn compile_adjacent_splitter(stem_re: &str) -> Option<Regex> {
-    let Some(split_prefix_end) = stem_re.find(r"\d") else {
-        return None;
-    };
+    let split_prefix_end = stem_re.find(r"\d")?;
     let prefix = stem_re[..split_prefix_end].trim();
     if prefix.is_empty() {
         return None;
