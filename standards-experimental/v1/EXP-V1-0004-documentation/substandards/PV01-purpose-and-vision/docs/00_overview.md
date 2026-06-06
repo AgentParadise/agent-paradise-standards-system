@@ -19,7 +19,9 @@ root index by `description`.
 ## What It Enforces
 
 - The North Star document exists at the configured location (default
-  `docs/north-star.md`).
+  `north-star.md`, resolved relative to `docs.root` per the parent
+  spec Section 3.3 path-resolution rule; the default
+  `docs.root: docs` makes it `docs/north-star.md`).
 - It carries frontmatter with `name`, `description`, and `status`.
 - It contains, in order, a `## Mission` section, a `## Vision` section,
   and a `## Position` section.
@@ -72,7 +74,7 @@ this substandard. To override the default location:
 ```yaml
 docs:
   north-star:
-    location: docs/my-north-star.md
+    location: my-north-star.md  # docs-root-relative; lands at <docs.root>/my-north-star.md
 ```
 
 Disabling: set `disable: true`. Absence is the default.

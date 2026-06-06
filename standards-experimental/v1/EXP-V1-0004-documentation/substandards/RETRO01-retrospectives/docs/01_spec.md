@@ -19,9 +19,19 @@ The append-only rule is the key invariant: a retrospective is a record of what w
 
 ## 2. Directory (RETRO01-dir-not-found)
 
-A directory MUST exist at `docs.retrospectives.directory` (default: `docs/retrospectives/`).
+A directory MUST exist at `<docs.root>/<docs.retrospectives.directory>`
+(default: `<docs.root>/retrospectives/`, resolving to
+`docs/retrospectives/` when `docs.root` carries its default).
 
-Diagnostic: `RETRO01-dir-not-found` (error). Hint: "Create the directory at `<directory>` or set `docs.retrospectives.disable = true` in `APSS.yaml`."
+The `directory` value is **docs-root-relative** per the parent spec
+Section 3.3 path-resolution rule. RETRO01 and ADR01 follow the same
+convention so a reader who customises `docs.root` does not have to
+guess. A leading `/` (`RETRO01-absolute-directory`) and `..` escapes
+(`RETRO01-directory-out-of-tree`) are hard errors.
+
+Diagnostic: `RETRO01-dir-not-found` (error). Hint: "Create the
+directory at `<resolved-directory>` or set
+`docs.retrospectives.disable = true` in `APSS.yaml`."
 
 The retrospective directory inherits the parent rules: it MUST contain a `README.md` with a `## Index` section (auto generated from frontmatter) and per directory `CLAUDE.md` and `AGENTS.md`.
 
@@ -74,7 +84,7 @@ Diagnostic: `RETRO01-missing-section` (warning) with the missing section name in
 
 ## 6. Lifecycle status (RETRO01-invalid-status)
 
-`status` MUST be one of `proposed`, `active`, `deprecated`, `superseded`.
+`status` MUST be one of `proposed`, `active`, `deprecated`, `superseded`. RETRO01 chooses `active` as the "in force" term per the parent spec Section 8.1 per-doc-type table; ADR01 uses `accepted`, PV01 and RETRO01 use `active`. The slash in the parent's `accepted / active` notation means "every doc type picks one"; an adopter who writes `accepted` here gets `RETRO01-invalid-status` (error) with a hint pointing at the per-doc-type vocabulary table.
 
 - `proposed`: draft retro, written but not yet socialized.
 - `active`: published retro, kept as is.
@@ -114,7 +124,7 @@ Configuration: `docs.retrospectives.append_only = true` (default). Setting it to
 ```yaml
 docs:
   retrospectives:
-    directory:      docs/retrospectives
+    directory:      retrospectives   # docs-root-relative; lands at <docs.root>/retrospectives
     naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
     append_only:    true
 ```

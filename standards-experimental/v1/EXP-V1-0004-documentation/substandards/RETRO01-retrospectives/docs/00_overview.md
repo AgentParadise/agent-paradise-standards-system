@@ -9,7 +9,7 @@ A retrospective is the project's institutional memory. RETRO01 keeps that memory
 
 ## What It Enforces
 
-- A retrospective directory exists at the configured location (default `docs/retrospectives/`).
+- A retrospective directory exists at the configured location (default `retrospectives`, resolved relative to `docs.root` per the parent spec Section 3.3 path-resolution rule; the default `docs.root: docs` makes it `docs/retrospectives/`).
 - Every retro file matches the naming pattern (default `RETRO-\d{3,5}-<slug>.md`).
 - Every retro has frontmatter with `name`, `description`, `date`, and `status`.
 - Every retro contains `## Context`, `## What Went Well`, `## What Did Not`, and `## Followups`.

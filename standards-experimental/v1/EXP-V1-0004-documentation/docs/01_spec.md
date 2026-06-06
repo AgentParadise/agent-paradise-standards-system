@@ -137,7 +137,18 @@ required for other reasons).
 
 ### 3.3 Schema
 
-The schema is normative. Keys not listed here under the `docs` section MUST be rejected with `unknown-config-field`. The schema below shows the `docs` block as it appears inside `APSS.yaml`. Every line below is a default that the validator applies for absence; per Section 3.2 a project only writes a key to opt out (`disable: true`) or to override a non-`disable` value. The surrounding top-level structure (schema declaration, project identity, standard activation) is owned by CF01.
+The schema is normative. **Scalar fields not listed here under a KNOWN nested section MUST be rejected with `unknown-config-field`.** Unknown nested keys under `docs` (for example `docs.<some-future-slug>`) are tolerated per Section 3.4 forward-compatibility. The schema below shows the `docs` block as it appears inside `APSS.yaml`. Every line below is a default that the validator applies for absence; per Section 3.2 a project only writes a key to opt out (`disable: true`) or to override a non-`disable` value. The surrounding top-level structure (schema declaration, project identity, standard activation) is owned by CF01.
+
+**Path resolution (normative).** Every doc-type location key in this
+schema is **docs-root-relative**: the validator resolves it as
+`<docs.root>/<location-value>` (or `<docs.root>/<directory-value>`).
+The schema example below shows the resolved-when-defaults-apply value
+inline as a comment so an adopter scanning the file sees both the
+literal value and where it lands. A doc-type config value that
+starts with `/` is a hard error (`docs-absolute-location`); a value
+that escapes the docs root via `..` segments is also rejected
+(`docs-location-out-of-tree`). Substandards inherit this convention
+and MUST NOT define their own path semantics.
 
 ```yaml
 docs:
@@ -203,16 +214,16 @@ docs:
   # the substandard's kebab-case slug (matches `substandard.toml`).
 
   adr:
-    directory: adrs
+    directory: adrs               # docs-root-relative; resolves to <docs.root>/adrs
     naming_pattern: "ADR-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
     required_adr_keywords: []
 
   north-star:
     # Disable with docs.north-star.disable: true
-    location: docs/north-star.md  # Default file path. See PV01.
+    location: north-star.md       # docs-root-relative; resolves to <docs.root>/north-star.md
 
   retrospectives:
-    directory: docs/retrospectives
+    directory: retrospectives     # docs-root-relative; resolves to <docs.root>/retrospectives
     naming_pattern: "RETRO-\\d{3,5}-[a-zA-Z0-9-]+\\.md"
 ```
 
@@ -375,11 +386,25 @@ Diagnostics: `agents-md-missing` (warning), `claude-md-missing`
 
 ### 6.1 DOC03-root-claude-md
 
-The repository root MUST contain `CLAUDE.md`. Diagnostic: `root-claude-md-missing` (error).
+The repository root MUST contain `CLAUDE.md`. Diagnostic:
+`root-claude-md-missing` (**warning**, downgraded from error).
+
+The downgrade is deliberate. Per the operator's earlier Correction 2
+the standard does not own the root context file's content (the
+root file is project-specific and the installer MUST NOT scaffold it,
+per `02_install_contract.md` Section 1.5). Emitting `error` on a
+file the installer is not allowed to create produces a hard block on
+the operator's first commit, which contradicts the install
+contract. The standard records the missing file as a warning so
+adopters see it in CI without being blocked, and the install step 5
+banner names the missing root files explicitly so they are not
+silently skipped.
 
 ### 6.2 DOC03-root-agents-md
 
-The repository root MUST contain `AGENTS.md`. Diagnostic: `root-agents-md-missing` (error).
+The repository root MUST contain `AGENTS.md`. Diagnostic:
+`root-agents-md-missing` (**warning**, downgraded from error, for
+the same reason documented in Section 6.1).
 
 ### 6.3 DOC03-self-reference
 
@@ -456,6 +481,34 @@ fn enforce_rate_limit(...) {
 
 The agent-context template at `docs/adrs/AGENTS.md` (shipped by the ADR01 substandard) MUST repeat this guidance so the convention is on hand whenever an agent opens the ADR directory.
 
+#### 7.1.2 Word-boundary rule (normative)
+
+A backlink token MUST be surrounded by characters that are NOT
+alphanumeric and NOT `-` (hyphen): whitespace, punctuation, line
+starts and line ends all satisfy the rule. The reference validator
+MUST treat the alphanumeric-or-hyphen class as a single greedy run
+and MUST anchor token extraction with word-boundary equivalents
+(`\b` in regex terms) on BOTH sides so:
+
+- `BADR-001-foo` does NOT extract `ADR-001-foo` (left boundary
+  prevents an embedded match).
+- `ADR-001-foo-ADR-002-bar` extracts TWO tokens (`ADR-001-foo` and
+  `ADR-002-bar`) rather than the merged `ADR-001-foo-ADR-002-bar`.
+- `ADR-001-foo-` (trailing hyphen, common in markdown bullets)
+  extracts `ADR-001-foo` (trailing `-` MUST be stripped before
+  lookup, OR the slug pattern MUST end with `[a-zA-Z0-9]`).
+
+The validator's emitted diagnostic for a non-resolving token MUST
+quote the token verbatim so a reader can tell whether a false
+positive came from a malformed boundary; the spec language above is
+the contract the validator implements.
+
+Authors writing prose that mentions an ADR identifier inside a
+hyphenated sentence (for example "supersedes ADR-001-foo-and-also")
+MUST surround the identifier with whitespace or punctuation; the
+validator does NOT attempt to disambiguate prose hyphens from slug
+hyphens.
+
 ### 7.2 Reference accuracy
 
 The validator MUST scan source files in the repository (respecting `docs.backlinking.scan` and, for backward compatibility, the deprecated `docs.backlinking.file_types`) and validate every backlink token it finds against the corresponding doc type's on-disk state.
@@ -493,22 +546,47 @@ The standard does not require code files to be auto generated with backlinks. It
 
 The parent standard defines the doc type registry. Each doc type is implemented as a substandard under `substandards/`. The shipped doc types are:
 
-| Doc type | Substandard | Default location | Config key in `APSS.yaml` |
+| Doc type | Substandard | Default location (resolved with default `docs.root: docs`) | Config key in `APSS.yaml` |
 |----------|-------------|------------------|---------------------------|
-| Architecture Decision Records | `EXP-V1-0004.ADR01` | `docs/adrs/` | `docs.adr` |
-| North Star (Mission, Vision, Position) | `EXP-V1-0004.PV01` | `docs/north-star.md` | `docs.north-star` |
-| Retrospectives | `EXP-V1-0004.RETRO01` | `docs/retrospectives/` | `docs.retrospectives` |
+| Architecture Decision Records | `EXP-V1-0004.ADR01` | `docs/adrs/` (literal config value: `adrs`) | `docs.adr` |
+| North Star (Mission, Vision, Position) | `EXP-V1-0004.PV01` | `docs/north-star.md` (literal config value: `north-star.md`) | `docs.north-star` |
+| Retrospectives | `EXP-V1-0004.RETRO01` | `docs/retrospectives/` (literal config value: `retrospectives`) | `docs.retrospectives` |
 
-### 8.1 Lifecycle status (shared)
+All location values are docs-root-relative per Section 3.3 normative
+path resolution. A literal value that starts with `/` or escapes
+`docs.root` with `..` segments MUST be rejected.
 
-Doc types that have lifecycle status MUST use a shared vocabulary so tooling can be uniform across types:
+### 8.1 Lifecycle status (shared, with per-doc-type table)
+
+Doc types that have lifecycle status share the four-value
+vocabulary so tooling can be uniform across types:
 
 - `proposed`: under discussion, not yet adopted.
-- `accepted` / `active`: current source of truth.
+- `accepted` / `active`: current source of truth. The slash means
+  **each doc type picks one** (see the per-doc-type table below);
+  it does NOT mean both are interchangeable for the same doc type.
 - `deprecated`: discouraged but still informative.
-- `superseded`: replaced by another doc of the same type; the front matter MUST include `superseded_by: <doc-id>`.
+- `superseded`: replaced by another doc of the same type; the
+  front matter MUST include `superseded_by: <doc-id>`.
 
-ADRs are never revised; they are superseded. Retrospectives are append only. North Star documents follow the same status field but typically remain `active` for long stretches.
+Per-doc-type vocabulary (normative):
+
+| Doc type | "Proposed" | "In force" | "Discouraged but informative" | "Replaced" |
+|----------|-----------|-----------|-------------------------------|------------|
+| ADR (`ADR01`)              | `proposed` | `accepted` | `deprecated` | `superseded` |
+| North Star (`PV01`)         | `proposed` | `active`   | `deprecated` | `superseded` |
+| Retrospectives (`RETRO01`)  | `proposed` | `active`   | `deprecated` | `superseded` |
+
+ADRs adopt `accepted` to match the Nygard tradition the substandard
+cites; PV01 and RETRO01 adopt `active` because the North Star and
+retrospectives describe an ongoing reality rather than a discrete
+decision moment. A substandard's validator MUST emit
+`<SUBSTANDARD-ID>-invalid-status` (error) when a document uses the
+wrong term for its type, with a hint pointing at this table.
+
+ADRs are never revised; they are superseded. Retrospectives are
+append only. North Star documents follow the same status field but
+typically remain `active` for long stretches.
 
 ### 8.2 Adding a new doc type
 
@@ -614,7 +692,7 @@ The installed hook is a small shell wrapper that calls into `aps run docs hook -
 
 **What "valid structure" means per doc type**:
 
-- ADR (`EXP-V1-0004.ADR01`): the ADR directory exists, every file matches the naming pattern, every ADR has the required frontmatter and `status`, required topic keywords are satisfied, context files exist with referencing guidance, no backlink is superseded, and every `ADR-NNN-<slug>` token found in the file set defined by `docs.backlinking.scan` (defaults in Section 3.3; deprecated `file_types` honoured with a `backlinking-file-types-deprecated` warning) resolves to a real ADR file matching `docs.adr.naming_pattern` (`ADR01-unknown-reference`, error). See the ADR01 spec for the per rule diagnostic codes.
+- ADR (`EXP-V1-0004.ADR01`): the ADR directory exists, every non-`.example` file matches the naming pattern, every ADR has the required frontmatter and `status` (per the per-doc-type table in Section 8.1: ADRs use `accepted` for in-force), required topic keywords are satisfied, context files exist with referencing guidance, every `ADR-NNN-<slug>` token found in the file set defined by `docs.backlinking.scan` (defaults in Section 3.3; deprecated `file_types` honoured with a `backlinking-file-types-deprecated` warning) resolves to a real ADR file matching `docs.adr.naming_pattern` (`ADR01-unknown-reference`, error), and resolved references are split between `ADR01-superseded-reference` (warning) for `status: superseded` targets and `ADR01-deprecated-reference` (warning) for `status: deprecated` targets. See the ADR01 spec for the per rule diagnostic codes.
 - North Star (`EXP-V1-0004.PV01`): a single `north-star.md` (or configured location) exists with frontmatter, a `## Mission` section, a `## Vision` section, a `## Position` section, and a current `status`. See PV01 spec.
 - Retrospectives (`EXP-V1-0004.RETRO01`): the retrospective directory exists, each file matches the naming pattern, files are append only (no historical retros modified in the staged change set), and required sections are present. See RETRO01 spec.
 
@@ -651,8 +729,10 @@ Existing numeric or composite codes (for example, `ADR01-001`) MAY be retained a
 | `frontmatter-missing` | warning | DOC02 | `.md` file lacks a frontmatter block. |
 | `frontmatter-unclosed` | error | DOC02 | Frontmatter block has no closing delimiter. |
 | `frontmatter-field-missing` | warning | DOC02 | Required frontmatter field absent. |
-| `root-claude-md-missing` | error | DOC03 | Root missing `CLAUDE.md`. |
-| `root-agents-md-missing` | error | DOC03 | Root missing `AGENTS.md`. |
+| `root-claude-md-missing` | warning | DOC03 | Root missing `CLAUDE.md`. Downgraded from error per Section 6.1: the standard cannot scaffold the root file (Install Contract Section 1.5), so it MUST NOT block the operator's first commit on it. |
+| `root-agents-md-missing` | warning | DOC03 | Root missing `AGENTS.md`. Same reasoning as `root-claude-md-missing`. |
+| `docs-absolute-location` | error | Config | A doc-type `location` or `directory` value starts with `/`; all doc-type paths are docs-root-relative per Section 3.3. |
+| `docs-location-out-of-tree` | error | Config | A doc-type `location` or `directory` value escapes `docs.root` via `..` segments. |
 | `root-self-reference-missing` | warning | DOC03 | Root context file missing required APSS, docs, or doc-type references. |
 | `skills-format-violation` | warning | DOC03 | Skill README does not follow the Claude Code skills format. |
 | `backlink-dead-reference` | warning | Backlink | Code references a doc identifier that does not exist; superseded by a substandard-specific accuracy code when one applies. |

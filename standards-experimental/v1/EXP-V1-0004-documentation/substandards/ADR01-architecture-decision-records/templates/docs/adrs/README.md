@@ -48,8 +48,12 @@ Every ADR carries a `status` in its YAML frontmatter:
 
 ADRs are never edited in place. If a decision changes, write a new ADR
 that supersedes the old one and update the old one's status. Code that
-backlinks the retired ADR will surface as a `ADR01-superseded-reference`
-warning so the references can be retargeted.
+backlinks the retired ADR will surface as a
+`ADR01-superseded-reference` warning when the target is `superseded`
+(the hint names the `superseded_by` target so the backlink can be
+retargeted) or `ADR01-deprecated-reference` when the target is
+`deprecated` (the warning suggests retarget or annotate the reference
+as intentional, since deprecated ADRs are still informative).
 
 ## File naming
 
@@ -88,7 +92,7 @@ superseded ADRs are surfaced automatically.
 
 ## Writing a new ADR
 
-1. Copy `ADR-000-template.md` to a new file named
+1. Copy `ADR-000-template.md.example` to a new file named
    `ADR-<NNN>-<imperative-slug>.md`.
 2. Fill in the frontmatter (`name`, `description`, `status: proposed`).
 3. Write `## Context`, `## Decision`, and `## Consequences`. The

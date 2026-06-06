@@ -23,7 +23,10 @@ The docs root (default `docs/`) MUST contain an ADR directory (default `adrs/`).
 
 ## 2. Naming Convention (ADR01-invalid-naming)
 
-Every `.md` file in the ADR directory (excluding `README.md`, `CLAUDE.md`, `AGENTS.md`) MUST match the configured naming pattern.
+Every file in the ADR directory MUST match the configured naming pattern, with the following exclusions applied first:
+
+- Structural docs files: `README.md`, `CLAUDE.md`, `AGENTS.md` (the directory itself is a docs subdirectory and these are the parent standard's structural files).
+- Template files with the suffix `.example` (the installer materialises the shipped Nygard template as `ADR-000-template.md.example`; see Install Contract Section 1.4). The validator MUST NOT count `.example` files as ADRs for naming, frontmatter, status, keyword, or backlink purposes. The parent indexer MUST NOT include them in the generated index.
 
 **Default pattern:** `ADR-\d{3,5}-[a-zA-Z0-9-]+\.md`
 
@@ -104,7 +107,7 @@ This enables bidirectional discovery:
 - From code → ADR: developers and agents find the governing decision
 - From ADR → code: `grep ADR-001-security` finds all implementing files
 
-## 6. ADR Reference Accuracy (ADR01-unknown-reference, ADR01-superseded-reference)
+## 6. ADR Reference Accuracy (ADR01-unknown-reference, ADR01-superseded-reference, ADR01-deprecated-reference)
 
 This is the mechanical enforcement of the parent-level backlinking rule for
 ADRs. The validator scans source files across the repository for ADR
@@ -154,13 +157,27 @@ supersedes the parent-level `backlink-dead-reference` warning for ADRs.
 When `ADR01-unknown-reference` is applicable, the validator MUST NOT also
 emit `backlink-dead-reference` for the same finding.
 
-### 6.3 Superseded reference
+### 6.3 Stale reference (split by lifecycle status)
 
-A resolved reference whose target ADR has `status: superseded` or
-`status: deprecated` MUST be reported as `ADR01-superseded-reference`
-(severity: warning) so the operator can retarget the backlink to the
-current ADR. The diagnostic MUST include file, line, and token, identically
-to `ADR01-unknown-reference`.
+A resolved reference whose target ADR has `status: superseded` MUST
+be reported as `ADR01-superseded-reference` (severity: warning) so
+the operator can retarget the backlink to the current ADR. The
+hint MUST name the value of the target ADR's `superseded_by` field
+so the retarget is unambiguous.
+
+A resolved reference whose target ADR has `status: deprecated` MUST
+be reported as `ADR01-deprecated-reference` (severity: warning).
+Deprecated ADRs are "discouraged but still informative" per the
+shared lifecycle vocabulary; a code file may legitimately keep the
+backlink to preserve historical context, so the diagnostic message
+MUST suggest "retarget or annotate this reference as intentional"
+rather than asserting the reference is wrong.
+
+The two diagnostics MUST NOT be merged under a single code: an
+adopter who wants to filter superseded-only or deprecated-only in
+CI cannot do so when the same code covers both. Both diagnostics
+MUST include the source file path, the line number, and the
+offending token verbatim, identically to `ADR01-unknown-reference`.
 
 ### 6.4 Placement guidance for the operator
 
@@ -186,10 +203,11 @@ and files inside the ADR directory itself (so an ADR's own body can
 reference other ADRs without tripping the validator).
 
 **Severity:** error (`ADR01-unknown-reference`), warning
-(`ADR01-superseded-reference`).
+(`ADR01-superseded-reference`), warning
+(`ADR01-deprecated-reference`).
 
 **Controlled by:** `docs.backlinking.disable` in `APSS.yaml`. When backlinking
-is disabled both codes are suppressed.
+is disabled all three codes are suppressed.
 
 ### 6.6 Migration from `ADR01-dead-reference`
 
@@ -289,4 +307,5 @@ matches the operator invariant for human-readable codes.
 | ADR01-unknown-reference | error | Source file references an ADR token that does not resolve to a real file in `docs.adr.directory` matching `docs.adr.naming_pattern` (replaces the earlier `ADR01-dead-reference` warning) |
 | ADR01-missing-header | warning | ADR file missing required section header |
 | ADR01-invalid-status | error | ADR missing or invalid `status` field |
-| ADR01-superseded-reference | warning | Source file references a superseded or deprecated ADR |
+| ADR01-superseded-reference | warning | Source file references an ADR whose `status` is `superseded`; hint MUST name the target's `superseded_by` value |
+| ADR01-deprecated-reference | warning | Source file references an ADR whose `status` is `deprecated`; hint MUST suggest "retarget or annotate as intentional" |

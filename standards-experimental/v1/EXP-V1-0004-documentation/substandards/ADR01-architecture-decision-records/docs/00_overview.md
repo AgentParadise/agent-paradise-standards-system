@@ -117,7 +117,7 @@ creates the following files (create-if-missing, never overwrite):
   this substandard ships no `GEMINI.md`.
 - `docs/adrs/CLAUDE.md` - a symlink to the adjacent `AGENTS.md`, so
   Claude Code follows the symlink and reads the same content.
-- `docs/adrs/ADR-000-template.md` - a Nygard-style ADR template with the
+- `docs/adrs/ADR-000-template.md.example` - a Nygard-style ADR template with the
   required frontmatter and `## Context`, `## Decision`, `## Consequences`
   sections.
 
@@ -180,7 +180,8 @@ names the condition, so a single line of CLI output
 | `ADR01-unknown-reference` | Source file references an ADR that does not resolve to a real file in `docs.adr.directory` matching the configured naming pattern (error; replaces the earlier `ADR01-dead-reference` warning) |
 | `ADR01-missing-header` | ADR file missing required section header |
 | `ADR01-invalid-status` | ADR missing or invalid `status` field |
-| `ADR01-superseded-reference` | Source file references superseded or deprecated ADR |
+| `ADR01-superseded-reference` | Source file references an ADR whose `status` is `superseded` (warning; hint names the `superseded_by` target) |
+| `ADR01-deprecated-reference` | Source file references an ADR whose `status` is `deprecated` (warning; hint suggests retarget or annotate as intentional) |
 
 ## Source
 

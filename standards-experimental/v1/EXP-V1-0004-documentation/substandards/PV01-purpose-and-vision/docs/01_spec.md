@@ -29,11 +29,21 @@ its `description`.
 
 ## 2. Document location (PV01-document-missing)
 
-A file MUST exist at `docs.north-star.location` (default:
-`docs/north-star.md`).
+A file MUST exist at `<docs.root>/<docs.north-star.location>`
+(default: `<docs.root>/north-star.md`, which resolves to
+`docs/north-star.md` when `docs.root` carries its default).
+
+The `location` value is **docs-root-relative** per the parent spec
+Section 3.3 normative path-resolution paragraph; the parent standard
+unifies this convention across every doc type so a reader who
+customises `docs.root` does not have to guess. A leading `/` in
+`location` is treated as a hard error
+(`PV01-absolute-location`); embed `..` segments to escape the docs
+root are also rejected (`PV01-location-out-of-tree`).
 
 Diagnostic: `PV01-document-missing` (error). Hint: "Create the file at
-`<location>` or set `docs.north-star.disable = true` in `APSS.yaml`."
+`<resolved-location>` or set `docs.north-star.disable = true` in
+`APSS.yaml`."
 
 ## 3. Frontmatter (PV01-frontmatter-missing, PV01-frontmatter-field-missing)
 
@@ -100,7 +110,13 @@ honoured when present.
 ## 6. Lifecycle status (PV01-invalid-status, PV01-superseded-without-pointer)
 
 `status` MUST be one of: `proposed`, `active`, `deprecated`,
-`superseded`.
+`superseded`. PV01 chooses `active` as the "in force" term per the
+parent spec Section 8.1 per-doc-type table: the parent's
+`accepted / active` slash means "every doc type picks one"; ADR01
+uses `accepted` (consistent with the Nygard tradition) and PV01 /
+RETRO01 use `active`. Adopters who write `accepted` on a North Star
+get `PV01-invalid-status` (error) with a hint pointing them at the
+per-doc-type vocabulary table.
 
 - `proposed`: under discussion. Validators MUST NOT block a project
   for having `status: proposed`; this is the normal state during

@@ -43,7 +43,7 @@ Steps, in order:
    - The block MUST be placed at the end of any existing `#!` shebang block and before any user-defined hook body, so that a user hook that exits early does not skip APSS validation.
    - Re-running the installer MUST replace the existing apss block in place rather than appending a duplicate. Detection is by sentinel match.
 4. **Materialise template files for active doc types.** Every active doc type substandard MAY ship a set of starter files (directory READMEs, agent-context files, document templates). For each templated file, the installer MUST create the destination file only when it is missing and MUST NOT overwrite an existing target file under any circumstance. If the destination directory is absent, create it first. `--force` does NOT change this rule for template files: an existing file is always preserved. The installer MUST emit `install-template-conflict` (warning) for each existing file it skipped, naming both the template and the target so the operator can compare manually. See Section 1.4 for the per-substandard template inventory.
-5. **Print the resolved doc type registry.** After install completes, the CLI MUST print a one-line summary of every active doc type, its resolved location, and the templates it materialised, so the operator immediately sees what just became enforced.
+5. **Print the resolved doc type registry and the ACTION REQUIRED banner.** After install completes, the CLI MUST print a one-line summary of every active doc type, its resolved location, and the templates it materialised, so the operator immediately sees what just became enforced. The CLI MUST ALSO print an "ACTION REQUIRED" block listing every file required by the standard's validator that the installer is forbidden from scaffolding (per Section 1.5 and the DOC03 self-reference rule), with a one-line content suggestion the operator can copy or adapt. As of this contract that list is the repository root `AGENTS.md` and `CLAUDE.md`; the banner MUST recommend writing a short orientation paragraph that names APSS, the docs root, every active doc-type location, and the backlink rule. The banner is printed regardless of whether the files already exist, so the operator is reminded of the DOC03 self-reference content rules even when the files exist but lack the required references.
 6. **Exit code.** `0` on success, `2` on any unrecoverable install error. Diagnostics MUST use the human readable scheme.
 
 ### 1.2 `uninstall` semantics
@@ -68,8 +68,34 @@ Steps, in order:
 ### 1.4 Template inventory per active doc type
 
 Each substandard's templates ship inside the substandard's crate at
-`templates/<relative-target-path>` and are materialised verbatim into the
-target repository at the corresponding path under the docs root.
+`templates/<relative-target-path>` and are materialised into the
+target repository at the corresponding path **after the docs-root
+rewrite described below.**
+
+**Template path resolution under custom `docs.root` and
+`docs.<slug>.directory` (normative).** Templates are stored on disk
+with the literal default path (e.g. ADR01 ships
+`templates/docs/adrs/AGENTS.md`) so the source tree is
+self-explanatory. On install, the installer MUST rewrite the leading
+components of the template's relative path as follows:
+
+1. Strip the leading `docs/` segment that matches the parent
+   standard's default `docs.root` value, and replace it with the
+   resolved `<docs.root>` value from `APSS.yaml`.
+2. For substandards that contribute a directory key
+   (`docs.adr.directory`, `docs.retrospectives.directory`, etc.),
+   strip the substandard's default directory segment (e.g. `adrs/`
+   for ADR01) and replace it with the resolved configured value.
+3. Any further sub-path segments after the substandard's directory
+   prefix are preserved verbatim.
+
+So a project that sets `docs.root: documentation` and
+`docs.adr.directory: decisions` receives the ADR templates at
+`documentation/decisions/README.md`,
+`documentation/decisions/AGENTS.md`, etc. A project that leaves the
+defaults receives `docs/adrs/README.md` and so on. The "verbatim"
+clause in earlier drafts applied to **file content**, not to the
+path; this section is the authoritative path rule.
 
 `AGENTS.md` is the canonical agent context file. `CLAUDE.md` ships as
 a symlink to the adjacent `AGENTS.md` (Claude Code follows the symlink
@@ -82,6 +108,23 @@ installer MUST instead copy the link target's contents.
 
 The shipped inventory at the time of this contract:
 
+- **EXP-V1-0004 parent (docs-root bootstrap)** ships, relative to the
+  resolved `docs.root`:
+  - `README.md` - the docs-root README with a placeholder
+    `## Subdirectories` block (linked under the docs root) and the
+    placeholder `## Index` section that the index generator
+    overwrites on first hook run.
+  - `AGENTS.md` - canonical agent-context file for the docs root,
+    pointing at the README and naming the active doc-type
+    directories.
+  - `CLAUDE.md` (symlink to `AGENTS.md`).
+
+  These three templates exist so a fresh adopter does not trip
+  `readme-missing` (error) at the docs root on the first commit
+  (Reviewer finding A4). They are scaffolded once on first install
+  per the create-if-missing rule in Section 1.5 and are never
+  touched afterwards.
+
 - **EXP-V1-0004.ADR01 (Architecture Decision Records)** ships, relative
   to the ADR directory resolved from `docs.adr.directory`:
   - `README.md` - directory README summarising what an ADR is, when to
@@ -92,9 +135,14 @@ The shipped inventory at the time of this contract:
     backlink rule, and references back to the ADR01 substandard spec.
   - `CLAUDE.md` (symlink to `AGENTS.md`) - so Claude Code follows the
     symlink and reads the AGENTS.md content.
-  - `ADR-000-template.md` - Nygard-style template with the required
-    frontmatter (`name`, `description`, `status`) and the `## Context`,
-    `## Decision`, `## Consequences` sections.
+  - `ADR-000-template.md.example` - Nygard-style template with the
+    required frontmatter (`name`, `description`, `status`) and the
+    `## Context`, `## Decision`, `## Consequences` sections. The
+    installer MUST materialise this with the literal `.example`
+    suffix so the ADR01 naming validator skips it (see ADR01 spec
+    Section 2 exclusion rule) and the parent indexer omits it from
+    the `## Index` table. A project that wants to copy the template
+    renames it to `ADR-<NNN>-<slug>.md` and fills in the frontmatter.
 
 - **EXP-V1-0004.PV01 (North Star: Mission, Vision, Position)** and
   **EXP-V1-0004.RETRO01 (Retrospectives)** MAY ship their own
@@ -103,9 +151,19 @@ The shipped inventory at the time of this contract:
   out of scope for the install-contract surface beyond the rule "copy
   what the substandard ships at `templates/`, skip on conflict".
 
+The repository root `AGENTS.md` and root `CLAUDE.md` are NOT shipped
+as templates and the installer MUST NOT scaffold them. Their content
+is project-specific per Section 1.5 and the operator's Correction 2.
+The DOC03 root-context diagnostics are emitted at **warning**
+severity (parent spec Section 6.1, 6.2) so a missing root file does
+not block the first commit; install step 5 prints an "ACTION
+REQUIRED" banner naming the missing root files instead.
+
 All substandard templates MUST live under `<substandard-crate>/templates/`
 inside the standard package, version-controlled alongside the
 substandard's spec, so the installer ships a single coherent bundle.
+The parent's docs-root bootstrap templates live under the parent
+crate's `templates/`.
 
 ### 1.5 AGENTS.md and CLAUDE.md scaffolding (create-if-missing, never-overwrite)
 
@@ -220,7 +278,7 @@ The `machine_readable` field MUST contain the same content as `diagnostics`/`sum
 
 The validator MUST enforce, for each active doc type:
 
-- **ADR (`EXP-V1-0004.ADR01`)**: directory exists, every file matches the configured naming regex, every ADR has the required frontmatter and `status`, required topic keywords are satisfied, context files exist, no superseded backlinks, and every `ADR-NNN-...` token (3 to 5 digit number) found in the file set defined by `docs.backlinking.scan` (defaults documented in Section 3.3 of `01_spec.md`; deprecated `file_types` honoured with a `backlinking-file-types-deprecated` warning) resolves to a real ADR file in `docs.adr.directory` whose name satisfies `docs.adr.naming_pattern` (diagnostic: `ADR01-unknown-reference`, error). See Section 7.2 of `01_spec.md` for the reference-accuracy contract.
+- **ADR (`EXP-V1-0004.ADR01`)**: directory exists, every non-`.example` file matches the configured naming regex, every ADR has the required frontmatter and `status` (with the per-doc-type lifecycle vocabulary from Section 8.1 of `01_spec.md`: ADRs use `accepted` for the in-force value), required topic keywords are satisfied, context files exist, every `ADR-NNN-...` token (3 to 5 digit number) found in the file set defined by `docs.backlinking.scan` (defaults documented in Section 3.3 of `01_spec.md`; deprecated `file_types` honoured with a `backlinking-file-types-deprecated` warning) resolves to a real ADR file in `docs.adr.directory` whose name satisfies `docs.adr.naming_pattern` (diagnostic: `ADR01-unknown-reference`, error), and resolved references to ADRs with `status: superseded` are flagged as `ADR01-superseded-reference` (warning, hint naming the `superseded_by` target) and references to `status: deprecated` ADRs are flagged as `ADR01-deprecated-reference` (warning, hint suggesting retarget or annotate as intentional). See Section 7.2 of `01_spec.md` for the reference-accuracy contract.
 - **North Star (`EXP-V1-0004.PV01`)**: a single document exists at the configured location with required frontmatter, `## Mission`, `## Vision`, `## Position`, and a current `status`.
 - **Retrospectives (`EXP-V1-0004.RETRO01`)**: directory exists, each file matches the naming regex, files are append only (`Changed` scope: no historical retro file appears in the staged diff with content modifications outside the appended sections), and required sections are present.
 
@@ -293,9 +351,24 @@ The installed `.git/hooks/pre-commit` block MUST do nothing more than call this 
 
 ### 4.2 Steps (normative)
 
+0. **Honour `docs.disable: true`.** If the resolved `docs` block sets
+   `disable: true`, the hook MUST short-circuit immediately, print a
+   single-line "docs validation disabled via `docs.disable: true`"
+   notice to stderr, and exit `0` WITHOUT running the index
+   generator (step 3) or the validator (step 4). The kill switch
+   covers both the read side (validation) and the write side
+   (index regeneration) so a migration window the operator wanted
+   quiet does not silently rewrite `README.md` files.
 1. **Resolve scope.** `repo_root = git rev-parse --show-toplevel`; `staged = git diff --cached --name-only --diff-filter=ACMR`. If `repo_root` is missing, exit `2` with `hook-not-in-repo`.
 2. **Load config.** If `APSS.yaml` fails to load, emit `invalid-apss-yaml` and exit `2`. The hook MUST NOT proceed with defaults when the config file exists but is malformed; the operator should fix it before committing. (The hook reads the `docs` block out of the file the meta-validator already cascade-resolved.)
-3. **Refresh indexes.** Compute the set of docs directories whose contents appear in `staged`. Call the index generator with `mode = Write` for that set. For each rewritten `README.md`, the hook MUST run `git add <path>` so the regenerated index is part of the commit. If a write fails, exit `2`.
+3. **Refresh indexes.** Compute the **set of docs directories
+   whose contents appear in `staged`**, defined as the parent
+   directory of every staged path that lies under `docs.root`, plus
+   `docs.root` itself when any path under it is staged. Call the
+   index generator with `mode = Write` for that set. For each
+   rewritten `README.md`, the hook MUST run `git add <path>` so the
+   regenerated index is part of the commit. If a write fails,
+   exit `2`. See Section 4.3 for the `git commit -p` interaction.
 4. **Validate.** Call `validate(repo_root, config, Changed { staged_paths: staged })`.
 5. **Report.** Print all error and warning diagnostics in human readable form (color when TTY, plain otherwise). When stdout is being piped, also write the `machine_readable` JSON to a temporary file referenced in the human output, so CI can pick it up.
 6. **Exit.**
@@ -309,10 +382,25 @@ The installed `.git/hooks/pre-commit` block MUST do nothing more than call this 
 - The hook MUST NOT call itself recursively. Re-staging `README.md` files (step 3) MUST use `git add`, not `git commit`.
 - The hook MUST tolerate a missing `aps` binary by exiting `2` with `hook-missing-aps` rather than blocking with a cryptic shell error.
 
+**`git commit -p` interaction (normative).** Step 3 re-stages
+regenerated `README.md` files unconditionally so the commit's index
+state matches the validator's view of the docs tree. Under `git
+commit -p` this means a regenerated docs README is **always**
+included in the commit even when the operator did not explicitly
+stage the hunk. The hook MUST print one line per re-staged file in
+the form `regenerated and added: <path>` so an operator using `-p`
+can `git restore --staged <path>` before completing the commit. The
+auto-add is intentional: index drift inside a commit that touched
+docs is a worse default than a one-line banner, and the standard's
+core contract is "the index is correct at every commit". Operators
+who want strict `-p` semantics for indexes can set
+`docs.index.disable: true` for the affected commit and re-enable
+afterward.
+
 ### 4.4 Escape hatches
 
 - `git commit --no-verify` continues to skip the hook entirely. This is a human operator escape hatch. The standard MUST NOT teach agents to use `--no-verify`.
-- Setting `docs.disable: true` in `APSS.yaml` is the supported way to keep the hook installed but silent for a temporary period (for example, during a large migration).
+- Setting `docs.disable: true` in `APSS.yaml` is the supported way to keep the hook installed but silent for a temporary period (for example, during a large migration). Per Section 4.2 step 0 the kill switch short-circuits the hook (no index regeneration, no validation, exit 0) so the migration is genuinely quiet.
 
 ### 4.5 Hook diagnostics
 

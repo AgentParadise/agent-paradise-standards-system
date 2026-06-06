@@ -28,7 +28,7 @@ project is free to edit.
 - The directory `README.md` summarises what ADRs are, when to write
   one, the lifecycle, and the naming convention. Read it before
   writing your first ADR in this project.
-- The reusable starting point is `ADR-000-template.md`.
+- The reusable starting point is `ADR-000-template.md.example`.
 
 ## When to use an ADR
 
@@ -107,8 +107,13 @@ EXP-V1-0004 documentation standard. The pre-commit hook surfaces:
   or misnamed). This replaces the earlier `ADR01-dead-reference`
   warning.
 - `ADR01-superseded-reference` (warning) when code points at an ADR
-  whose `status` is `deprecated` or `superseded`. Retarget the
-  backlink to the current ADR.
+  whose `status` is `superseded`. The hint names the target ADR's
+  `superseded_by` value so retargeting the backlink is unambiguous.
+- `ADR01-deprecated-reference` (warning) when code points at an ADR
+  whose `status` is `deprecated`. A deprecated ADR is "discouraged
+  but still informative", so the hint suggests retargeting OR
+  annotating the reference as intentional, depending on whether the
+  historical context is load-bearing for the code that backlinks it.
 
 Backlinking exists so a fresh-context agent can recover the "why"
 without scraping prose. The reference validator is the mechanical
@@ -116,7 +121,7 @@ enforcement: if your token does not resolve, the commit is blocked.
 
 ## How to add a new ADR
 
-1. Copy `ADR-000-template.md` to
+1. Copy `ADR-000-template.md.example` to
    `ADR-<NNN>-<imperative-slug>.md`. Pick the next free number.
 2. Fill in the YAML frontmatter (`name`, `description`,
    `status: proposed`).

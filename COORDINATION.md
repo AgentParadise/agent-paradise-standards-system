@@ -310,3 +310,160 @@ is corrected to show all five CI checks green.
 2. No em or en dashes anywhere.
 3. Conventional commit messages.
 4. Commit and push incrementally with clear messages.
+
+## Adversarial review round 2 (2026-06-06)
+
+Operator final-gate review spawned two parallel reviewers; findings
+live at `~/swarm-tasks/pr61-review-findings.md` (604 lines). Per the
+operator's round-2 disposition policy: A1 already fixed by the prior
+APSS.yaml commit; remaining CRITICAL and HIGH are MUST-FIX; MEDIUM
+may be fixed or carry a one-line justification under each; LOW are
+swept. Claude owns Section A spec/contract fixes; Codex owns Section
+B code and tests plus any A items that are code.
+
+### Claude (spec/contract) - this commit
+
+All Claude dispositions are appended under each finding in
+`~/swarm-tasks/pr61-review-findings.md` Section C; the commit lands:
+
+- A2 ADR01 substandard.toml slug to `adr`.
+- A3 DOC03 root-context severity downgraded to warning (parent spec
+  Section 6.1 and 6.2; Section 10.1 table).
+- A3 install contract Section 1.1 step 5 ACTION REQUIRED banner.
+- A4 install contract Section 1.4 parent-docs-root bootstrap
+  templates (`docs/README.md`, `docs/AGENTS.md`, docs/CLAUDE.md`
+  symlink) shipped from the parent crate.
+- A5 parent Section 3.3 normative docs-root-relative path rule;
+  PV01 and RETRO01 spec text updated; Section 10.1 adds
+  `docs-absolute-location` and `docs-location-out-of-tree`.
+- A6 parent Section 8.1 per-doc-type lifecycle vocabulary table;
+  PV01 and RETRO01 specs cross-link the table.
+- A7 install contract Section 1.4 template path resolution rule
+  (strip default `docs/` segment, strip substandard default
+  directory segment, preserve deeper sub-path).
+- A8 install contract Section 4.3 `git commit -p` rule (auto-stage
+  + visible "regenerated and added" banner per file).
+- A9 install contract Section 4.2 step 0 `docs.disable: true`
+  short-circuit; Section 4.4 references back.
+- A10 parent Section 3.3 unknown-field rule tightened (scalar only,
+  per known section).
+- A11 JUSTIFIED inline in findings dispositions.
+- A12 ADR01 spec Section 2 `.example` exclusion; install contract
+  Section 1.4 ships `ADR-000-template.md.example`; template file on
+  disk renamed via `git mv`; overview and template AGENTS.md /
+  README.md mention swept.
+- A13 install contract Section 4.2 step 3 "docs directories"
+  definition.
+- A14 ADR01 spec Section 6 split into
+  `ADR01-superseded-reference` and `ADR01-deprecated-reference`;
+  parent Section 9.4 and install contract Section 2.5 updated;
+  template README and AGENTS.md swept.
+- A15 already fixed in `fcd9cab`.
+- A16 PR 61 body sweep `RET01` to `RETRO01` accompanies via
+  `gh pr edit`.
+- A17 JUSTIFIED inline.
+- A18 parent Section 7.1.2 (new, normative) word-boundary rule;
+  Codex implements the matching regex hardening per below.
+
+### Codex (validator code + tests) - PENDING
+
+The Section B finding list maps to a single PR-61 follow-up commit
+or commit chain on the same branch. Implementation work owns:
+
+1. **B1, B2, B3, A18 regex hardening.** Anchor the reference-
+   extraction regex with `\b` on both sides; strip trailing `-`
+   after extraction; verify left-boundary so `BADR-001-init` does
+   not yield an inner `ADR-001-init`. Regression tests:
+   - `ADR-001-foo-ADR-002-bar` extracts two tokens.
+   - `BADR-001-init` extracts nothing.
+   - `LOAD-ADR-001-payload` extracts nothing.
+   - `- ADR-001-foo-` (markdown bullet with trailing hyphen)
+     resolves correctly to `ADR-001-foo`.
+
+2. **B4 deprecation warning emit.** When `docs.backlinking.file_types`
+   is set in `APSS.yaml`, the validator MUST emit
+   `backlinking-file-types-deprecated` (warning, per parent spec
+   Section 7.2) once at config load; the existing
+   `compile_backlinking_patterns` continues to union the legacy
+   list. Constant `BACKLINKING_FILE_TYPES_DEPRECATED` exists in
+   `error_codes` already; wire it.
+
+3. **A14 split code emission.** Update
+   `validate_adr_references` to read the resolved ADR target's
+   `status` and emit `ADR01-superseded-reference` for
+   `status: superseded` (with the `superseded_by` value in the
+   hint) and `ADR01-deprecated-reference` for `status: deprecated`
+   (with "retarget or annotate as intentional" in the hint).
+   Drop the old conflated `ADR01-superseded-reference` for the
+   deprecated case. Add a unit test exercising both branches.
+
+4. **A12 `.example` skip.** The validator MUST skip files ending
+   in `.example` from naming, frontmatter, status, keyword, and
+   backlink validation. The parent indexer MUST skip them too.
+   Regression test: a synthetic `ADR-000-template.md.example` in
+   the ADR directory does not produce any diagnostic and does not
+   appear in the generated `## Index`.
+
+5. **A2 docs.adr lookup alignment.** With ADR01's slug now `adr`,
+   verify the registry lookup path keys off the new slug everywhere
+   (config struct field is already `adr`; meta-validator + DI01
+   `register()` may need a touch).
+
+6. **A11 + A4 templates on disk.** Author the parent crate's
+   `templates/docs/{README.md, AGENTS.md, CLAUDE.md}` (CLAUDE.md as
+   a symlink to AGENTS.md) so the install contract Section 1.4
+   inventory matches the on-disk template set. Content should be
+   minimal: AGENTS.md/CLAUDE.md the same one-paragraph DOC03
+   pointer; README.md the docs-root index placeholder.
+
+7. **B5 test refactor.** Switch the unit tests in
+   `substandards/ADR01-architecture-decision-records/src/lib.rs`
+   `mod tests` to exercise `extract_adr_references_with_lines`
+   (the production path), with line-number assertions. Delete the
+   `#[allow(dead_code)]` extract function once tests cover the
+   live path.
+
+8. **B6 cross-context scans.** Add regression tests covering
+   string-literal ADR references in Rust, fenced code blocks in
+   markdown, and shell-script comments. Document that the
+   validator behavior is "literal find across the whole file"
+   per parent spec Section 6.1.2.
+
+9. **B7 dedupe.** Dedupe `(path, line, adr_ref)` triples before
+   pushing into `Diagnostics`. Regression test:
+   `[ADR-001-link](path/to/ADR-001-link.md)` produces exactly one
+   `ADR01-unknown-reference` if `ADR-001-link.md` does not exist.
+
+10. **B8 strip-prefix fallback.** Emit a `scan-path-outside-repo`
+    (warning) when `path.strip_prefix(&canonical_repo)` fails so
+    silent under-scanning becomes loud. Add a unit test that
+    simulates the failure path.
+
+11. **B11 status constants.** Extract `SUPERSEDED_STATUSES` and
+    `DEPRECATED_STATUSES` slices from `VALID_ADR_STATUSES` so the
+    warning emitter shares one source of truth with the lifecycle
+    constants.
+
+12. **B12 keyword tighten.** Tighten `ADR_REFERENCE_KEYWORDS` per
+    finding B12.
+
+13. **B13 dead constant cleanup.** Delete
+    `MISSING_ADR_BACKLINK` and update the uniqueness test.
+
+14. **B14 hint sweep.** Append "(other patterns still apply)" to
+    the `ADR01-invalid-reference-glob` hint.
+
+15. **B16 `scan: []` doc + test.** Add a unit test for
+    `compile_backlinking_patterns` with an explicit empty
+    `scan: []`, asserting silent opt-out (no patterns, no scan).
+    Spec note added by Claude in a follow-up patch when needed.
+
+B9 and B10 (perf-only) are deferred to post-experimental promotion;
+their dispositions are recorded as JUSTIFIED in findings Section C.
+
+### Out-of-scope for PR 61 (still tracked)
+
+- B9 perf single-`find_iter` rewrite.
+- B10 `adr_statuses` re-parse caching.
+- A17 schema-id coupling between examples and CF01 (justified;
+  any restructure waits for CF01 schema bump).
