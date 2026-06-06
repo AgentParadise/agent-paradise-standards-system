@@ -62,12 +62,7 @@ pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
 struct NoopCommandHandler;
 
 impl apss_core::registry::CommandHandler for NoopCommandHandler {
-    fn execute(
-        &self,
-        _command: &str,
-        _args: &[String],
-        _config: &toml::Value,
-    ) -> i32 {
+    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
         eprintln!(
             "docs commands are dispatched through `apss-dev run docs <command>`; this register hook is a placeholder."
         );
@@ -281,7 +276,7 @@ mod tests {
 
     #[test]
     fn test_error_codes_are_unique() {
-        let codes = vec![
+        let codes = [
             error_codes::MISSING_README,
             error_codes::MISSING_CLAUDE_MD,
             error_codes::MISSING_AGENTS_MD,
