@@ -244,6 +244,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "apss-v1-0003-agent-recipe"
+version = "0.1.0"
+dependencies = [
+ "apss-core",
+ "serde",
+ "serde_yaml_ng",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "apss-v1-0003-documentation"
 version = "0.1.0"
 dependencies = [

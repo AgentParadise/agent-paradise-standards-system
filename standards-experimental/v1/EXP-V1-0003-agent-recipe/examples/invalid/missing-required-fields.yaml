@@ -1,0 +1,3 @@
+# Invalid: missing `agent` and `model` entirely, and `name` is empty.
+# Expect: AGENT_RECIPE_MISSING_NAME, AGENT_RECIPE_MISSING_AGENT, AGENT_RECIPE_MISSING_MODEL
+name: ""

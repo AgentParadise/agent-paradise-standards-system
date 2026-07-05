@@ -1,0 +1,11 @@
+# Invalid: `model.effort` is not one of low/medium/high, and
+# `system_instructions.mode` is not one of append/replace.
+# Expect: AGENT_RECIPE_INVALID_MODEL_EFFORT, AGENT_RECIPE_INVALID_INSTRUCTIONS_MODE
+name: bad-recipe
+agent: claude
+model:
+  name: anthropic/claude-opus-4-8
+  effort: extreme
+system_instructions:
+  mode: overwrite
+  content: "do the thing"

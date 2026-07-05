@@ -1,0 +1,7 @@
+# Invalid: `agent` is not one of the recognized v1 harness values.
+# Expect: AGENT_RECIPE_UNKNOWN_AGENT
+name: bad-recipe
+agent: gemini
+model:
+  name: google/gemini-3-pro
+  effort: medium
