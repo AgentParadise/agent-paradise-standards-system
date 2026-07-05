@@ -39,6 +39,6 @@ system_instructions:
 
 ```bash
 cargo run -p aps-cli --bin apss-dev -- v1 validate experiment EXP-V1-0003
-cargo test -p agent-recipe
+cargo test -p apss-v1-0003-agent-recipe
 ```
 

@@ -65,7 +65,7 @@ An **agent recipe** (or **recipe**) is a declarative document that identifies wh
 
 ### 2.2 Harness
 
-A **harness** is the underlying agent CLI or SDK that executes the recipe (for example, Claude Code or OpenAI Codex CLI). The recipe schema is harness-neutral: the `agent` field is an open, extensible enumeration so additional harnesses (e.g. `opencode`, `gemini`) MAY be added in future minor versions without breaking existing recipes.
+A **harness** is the underlying agent CLI or SDK that executes the recipe (for example, Claude Code or OpenAI Codex CLI). The recipe schema is harness-neutral: the `agent` field is a closed enumeration within any single version of this standard, but is version-extensible, so additional harnesses (e.g. `opencode`, `gemini`) MAY be added in future minor versions without breaking existing recipes.
 
 ### 2.3 Skill Reference
 
