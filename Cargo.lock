@@ -250,7 +250,6 @@ dependencies = [
  "apss-core",
  "serde",
  "serde_yaml_ng",
- "tempfile",
  "thiserror",
  "toml",
 ]

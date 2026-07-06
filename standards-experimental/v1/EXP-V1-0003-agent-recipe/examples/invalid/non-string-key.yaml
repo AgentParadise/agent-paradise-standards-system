@@ -1,0 +1,10 @@
+# Invalid: a non-string mapping key (`1`) is not a recognized schema field.
+# All required fields are present and valid, so this guards against the
+# validator silently accepting a stray non-string key.
+# Expect: AGENT_RECIPE_UNKNOWN_FIELD
+name: bad-recipe
+agent: claude
+model:
+  name: anthropic/claude-opus-4-8
+  effort: high
+1: stray-value

@@ -408,7 +408,18 @@ fn check_unknown_keys(
     diagnostics: &mut Diagnostics,
 ) {
     for key in mapping.keys() {
-        let Some(key) = key.as_str() else { continue };
+        let Some(key) = key.as_str() else {
+            // A non-string key (e.g. `1: value`) can never be a recognized
+            // schema field, so it is reported rather than silently skipped.
+            diagnostics.push(
+                Diagnostic::error(
+                    error_codes::UNKNOWN_FIELD,
+                    format!("`{prefix}<non-string key>` is not a recognized field"),
+                )
+                .with_hint(format!("recognized fields: {}", allowed.join(", "))),
+            );
+            continue;
+        };
         if !allowed.contains(&key) {
             diagnostics.push(
                 Diagnostic::error(
@@ -497,6 +508,16 @@ mod tests {
     fn unknown_top_level_field_is_rejected() {
         let yaml = "name: x\nagent: claude\nmodel:\n  name: foo\n  effort: low\nnotarealfield: 1\n";
         let diagnostics = validate_document(yaml);
+        let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+        assert!(codes.contains(&error_codes::UNKNOWN_FIELD));
+    }
+
+    #[test]
+    fn non_string_key_is_rejected() {
+        // Required fields are all valid; the only problem is a non-string key.
+        let yaml = "name: x\nagent: claude\nmodel:\n  name: foo\n  effort: low\n1: stray\n";
+        let diagnostics = validate_document(yaml);
+        assert!(diagnostics.has_errors());
         let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
         assert!(codes.contains(&error_codes::UNKNOWN_FIELD));
     }

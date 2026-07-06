@@ -12,6 +12,6 @@ Tests for the experimental standard.
 ## Running Tests
 
 ```bash
-cargo test -p agent-recipe
+cargo test -p apss-v1-0003-agent-recipe
 ```
 
