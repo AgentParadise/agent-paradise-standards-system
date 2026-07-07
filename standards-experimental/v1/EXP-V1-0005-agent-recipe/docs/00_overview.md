@@ -19,6 +19,10 @@ pr-reviewer/
 
 The presence of `recipe.yaml` is the marker that says "this directory is a recipe".
 
+## Credits / Prior Art
+
+This standard is **derived from [pi.recipes](https://introspection.dev)**, the recipe format from the **introspection.dev** project (reference implementation: [introspection-recipes/pi-codex](https://github.com/introspection-recipes/pi-codex)). pi.recipes contributed the core idea: capture an agent run as a reusable, declarative artifact (agent, model, skills, instructions) instead of reconstructing it from CLI flags each time. EXP-V1-0005 generalizes that into a harness-neutral, language-neutral *directory* standard. See [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md) for the full "how we got here" story and [02-pi-compatibility.md](./02-pi-compatibility.md) for the deliberate deltas.
+
 ## Why does it matter?
 
 As agent orchestration spreads across multiple harnesses (Claude Code, Codex, and others to come), tooling needs a stable, harness-neutral way to say "run this agent, configured this way" that does not hard-code any one harness's flags or SDK shape. This standard provides:
@@ -129,6 +133,7 @@ A workspace or executor (living in another repository, for example Plan B's `itm
 - Read the [full specification](./01_spec.md)
 - See the [pi.recipes compatibility notes](./02-pi-compatibility.md)
 - See the [Syntropic137 mapping](./03-syntropic137-mapping.md)
+- Read the [rationale and prior art](./04-rationale-and-prior-art.md)
 - Check out [examples](../examples/)
 - See [agent skills](../agents/skills/)
 

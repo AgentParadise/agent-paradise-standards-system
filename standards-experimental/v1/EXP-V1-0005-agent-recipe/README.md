@@ -12,6 +12,17 @@ A declarative, harness-neutral **directory shape** for an agent recipe: what age
 executes. Adopted from the `pi.recipes` shape. See [docs/00_overview.md](docs/00_overview.md)
 for a quick tour and [docs/01_spec.md](docs/01_spec.md) for the normative specification.
 
+## Credits / Prior Art
+
+The recipe-directory concept is **derived from [pi.recipes](https://introspection.dev)**, the
+recipe format from the **introspection.dev** project (reference implementation:
+[introspection-recipes/pi-codex](https://github.com/introspection-recipes/pi-codex)). pi.recipes
+established the core idea this standard builds on - an agent run captured as a reusable, declarative
+artifact (agent, model, skills, instructions) rather than reconstructed from CLI flags each time.
+EXP-V1-0005 generalizes that idea into a harness-neutral, language-neutral directory standard. See
+[docs/04-rationale-and-prior-art.md](docs/04-rationale-and-prior-art.md) for the full derivation
+story and [docs/02-pi-compatibility.md](docs/02-pi-compatibility.md) for the deliberate deltas.
+
 A recipe is a directory (the presence of `recipe.yaml` is the marker):
 
 ```text
@@ -53,6 +64,7 @@ cargo run -p aps-cli --bin apss-dev -- run agent-recipe validate ./my-recipe
 - [Specification](docs/01_spec.md)
 - [pi.recipes Compatibility](docs/02-pi-compatibility.md)
 - [Syntropic137 Mapping](docs/03-syntropic137-mapping.md)
+- [Rationale and Prior Art](docs/04-rationale-and-prior-art.md)
 - [Examples](examples/)
 - [Tests](tests/)
 - [Agent Skills](agents/skills/)

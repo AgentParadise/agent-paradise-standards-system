@@ -5,6 +5,15 @@ recipe as a directory of agent manifests plus shared assets) and generalized so
 it is not tied to any single harness or runtime. This document records the
 deltas: where EXP-V1-0005 deliberately diverges from `pi.recipes`, and why.
 
+> **Credit:** `pi.recipes` is the recipe format from the
+> [introspection.dev](https://introspection.dev) project (reference
+> implementation:
+> [introspection-recipes/pi-codex](https://github.com/introspection-recipes/pi-codex)).
+> It contributed the core idea this standard builds on - an agent run as a
+> reusable, declarative artifact. See
+> [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md) for the full
+> derivation story.
+
 ## Summary of Deltas
 
 | Concern | pi.recipes | EXP-V1-0005 |
