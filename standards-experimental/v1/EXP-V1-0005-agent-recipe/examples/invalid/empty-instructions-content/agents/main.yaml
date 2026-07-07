@@ -1,0 +1,8 @@
+name: main
+agent: claude
+model:
+  name: anthropic/claude-opus-4-8
+  effort: high
+system_instructions:
+  mode: append
+  content: ""

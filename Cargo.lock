@@ -95,7 +95,7 @@ dependencies = [
  "apss-v1-0001-code-topology",
  "apss-v1-0002-architecture-fitness",
  "apss-v1-0003-documentation",
- "apss-v1-0004-agent-recipe",
+ "apss-v1-0005-agent-recipe",
  "clap",
  "regex",
  "serde",
@@ -261,8 +261,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "apss-v1-0004-agent-recipe"
-version = "0.1.0"
+name = "apss-v1-0005-agent-recipe"
+version = "0.2.0"
 dependencies = [
  "apss-core",
  "serde",

@@ -378,6 +378,7 @@ fn main() -> ExitCode {
                         code_topology::register(&mut collector);
                         architecture_fitness::register(&mut collector);
                         documentation::register(&mut collector);
+                        agent_recipe::register(&mut collector);
 
                         let package_dirs: Vec<std::path::PathBuf> =
                             packages.iter().map(|p| p.path.clone()).collect();
@@ -1013,7 +1014,7 @@ fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
             name: documentation::NAME,
             version: documentation::VERSION,
         }),
-        "agent-recipe" | "recipe" | "exp-v1-0004" => Some(StandardCliInfo {
+        "agent-recipe" | "recipe" | "exp-v1-0005" => Some(StandardCliInfo {
             id: agent_recipe::ID,
             slug: "agent-recipe",
             name: agent_recipe::NAME,
@@ -1116,7 +1117,7 @@ fn dispatch_documentation(command: &str, args: &[String], verbose: bool) -> Exit
 /// Dispatch agent-recipe commands through the standard's own command handler.
 ///
 /// The recipe-directory validate logic lives in the agent-recipe crate behind
-/// `agent_recipe::cli::AgentRecipeCommandHandler` (EXP-V1-0004). aps-cli
+/// `agent_recipe::cli::AgentRecipeCommandHandler` (EXP-V1-0005). aps-cli
 /// delegates here and converts the handler's `i32` exit code into an
 /// `ExitCode`. This experimental standard has no verbose output, so the flag
 /// is not threaded through.
