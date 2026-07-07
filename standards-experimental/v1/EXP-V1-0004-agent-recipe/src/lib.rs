@@ -16,15 +16,21 @@
 //! - [`validate`] - [`validate::validate_recipe_dir`], a diagnostics-producing
 //!   validator built on top of the loader (loading and validation share one
 //!   code path).
+//! - [`generate`] - [`generate::scaffold_recipe`], which writes a conformant
+//!   recipe directory from the embedded template. Generator output always
+//!   validates (see `tests/round_trip_test.rs`).
 //! - [`cli`] - the composed-CLI command handler backing
-//!   `apss-dev run agent-recipe validate <recipe-dir>`.
+//!   `apss-dev run agent-recipe validate <recipe-dir>` and
+//!   `apss-dev run agent-recipe create <name>`.
 //!
 //! ⚠️ EXPERIMENTAL: This standard is in incubation and may change significantly.
 
 pub mod cli;
+pub mod generate;
 pub mod schema;
 pub mod validate;
 
+pub use generate::{RecipeTemplateContext, scaffold_recipe};
 pub use schema::{
     AgentKind, AgentManifest, EffortLevel, InstructionMode, ModelSpec, Recipe, RecipeLoadError,
     RecipeManifest, SystemInstructions, load_recipe_dir, resolved_system,

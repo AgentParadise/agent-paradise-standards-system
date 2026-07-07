@@ -269,7 +269,23 @@ A recipe directory is **compliant** with this standard if:
 
 ---
 
-## 10. Future Extensions
+## 10. Generator
+
+A conformant recipe directory can be scaffolded from the canonical template in `templates/recipe/skeleton/`:
+
+```text
+apss-dev run agent-recipe create <name> [--dir <parent>]
+```
+
+This writes `<parent>/<name>/` (parent defaults to the current directory) containing `recipe.yaml` (with `{{name}}` substituted), `agents/main.yaml` (a `claude` default agent plus a commented `codex` example), `SYSTEM.md`, and an empty `skills/` (kept with a `.gitkeep`). The generator refuses to overwrite an existing destination.
+
+The library entry point is `generate::scaffold_recipe(name, dest)`. The template files are embedded into the crate via `include_str!`, so the generator is self-contained and works from any working directory, and its output can never drift from the reviewed on-disk skeleton.
+
+**Round-trip guarantee (normative):** generator output MUST always pass `validate_recipe_dir` with zero errors. This is enforced by `tests/round_trip_test.rs`, which scaffolds into a temp directory and validates the result.
+
+---
+
+## 11. Future Extensions
 
 Potential future additions, to be pursued only after this experiment gathers feedback:
 
@@ -278,23 +294,22 @@ Potential future additions, to be pursued only after this experiment gathers fee
 - Recipe inheritance / composition (`extends: <recipe-name>`).
 - Per-skill or per-tool configuration parameters, if injected skills/tools need arguments beyond a bare reference.
 - JSON Schema artifact generation for editor tooling and IDE autocompletion.
-- `aps v1 create recipe <name>` generator with a round-trip validation guarantee.
 
 ---
 
-## 11. Security Considerations
+## 12. Security Considerations
 
-### 11.1 No Credentials in Recipes
+### 12.1 No Credentials in Recipes
 
 Recipe directories MUST NOT contain credentials, tokens, or other secrets. Recipes are expected to be committed to version control; secret material belongs in the `credentials` component of a `RunSpec` (informative, see 1.5), not in the recipe.
 
-### 11.2 System Instruction Content
+### 12.2 System Instruction Content
 
 `system_instructions.content` (and `SYSTEM.md`) is free-form text that becomes part of an agent's effective system prompt. Consumers SHOULD treat recipe sources with the same trust level as other executable configuration (for example, CI workflow files): a recipe from an untrusted source can materially change agent behavior via `mode: replace` or injected `skills`/`tools`.
 
 ---
 
-## 12. References
+## 13. References
 
 - [RFC 2119: Key words for use in RFCs](https://datatracker.ietf.org/doc/html/rfc2119)
 - [Semantic Versioning](https://semver.org/)

@@ -13,6 +13,10 @@ Tests for the experimental standard.
   `examples/valid/` (asserting zero errors) and `examples/invalid/` (asserting
   each case emits the error code declared in its `README.md` `# Expect:`
   header), so the shipped examples never drift from the validator's behavior.
+- `tests/round_trip_test.rs` is the generate-leg guarantee: it scaffolds a
+  recipe with `scaffold_recipe` into a temp directory and asserts
+  `validate_recipe_dir` reports zero errors, so the template can never emit a
+  non-conformant recipe.
 
 ## Running Tests
 
