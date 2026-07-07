@@ -64,4 +64,3 @@ cargo run -p aps-cli --bin apss-dev -- run agent-recipe validate ./my-recipe
 cargo run -p aps-cli --bin apss-dev -- v1 validate experiment EXP-V1-0005
 cargo test -p apss-v1-0005-agent-recipe
 ```
-
