@@ -243,6 +243,7 @@ fn main() -> ExitCode {
                 code_topology::register(&mut collector);
                 architecture_fitness::register(&mut collector);
                 documentation::register(&mut collector);
+                agent_recipe::register(&mut collector);
                 for (info, _handler) in collector.entries() {
                     println!("  {} ({}) v{}", info.slug, info.id, info.version);
                     println!("    {}", info.description);
@@ -1012,6 +1013,12 @@ fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
             name: documentation::NAME,
             version: documentation::VERSION,
         }),
+        "agent-recipe" | "recipe" | "exp-v1-0004" => Some(StandardCliInfo {
+            id: agent_recipe::ID,
+            slug: "agent-recipe",
+            name: agent_recipe::NAME,
+            version: agent_recipe::VERSION,
+        }),
         _ => None,
     }
 }
@@ -1025,6 +1032,7 @@ fn dispatch_standard_cli(info: &StandardCliInfo, args: &[String], verbose: bool)
         "topology" => dispatch_topology(command, cmd_args, verbose),
         "architecture-fitness" => dispatch_architecture_fitness(command, cmd_args, verbose),
         "documentation" => dispatch_documentation(command, cmd_args, verbose),
+        "agent-recipe" => dispatch_agent_recipe(command, cmd_args),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -1101,6 +1109,21 @@ fn dispatch_documentation(command: &str, args: &[String], verbose: bool) -> Exit
     }
 
     let handler = documentation::cli::DocumentationCommandHandler::new();
+    let code = handler.execute(command, args, &toml::Value::Table(Default::default()));
+    ExitCode::from(code as u8)
+}
+
+/// Dispatch agent-recipe commands through the standard's own command handler.
+///
+/// The recipe-directory validate logic lives in the agent-recipe crate behind
+/// `agent_recipe::cli::AgentRecipeCommandHandler` (EXP-V1-0004). aps-cli
+/// delegates here and converts the handler's `i32` exit code into an
+/// `ExitCode`. This experimental standard has no verbose output, so the flag
+/// is not threaded through.
+fn dispatch_agent_recipe(command: &str, args: &[String]) -> ExitCode {
+    use apss_core::registry::CommandHandler;
+
+    let handler = agent_recipe::cli::AgentRecipeCommandHandler::new();
     let code = handler.execute(command, args, &toml::Value::Table(Default::default()));
     ExitCode::from(code as u8)
 }

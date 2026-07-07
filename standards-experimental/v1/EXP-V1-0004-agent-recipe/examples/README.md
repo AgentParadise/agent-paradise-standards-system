@@ -3,21 +3,31 @@
 As of the directory-shape rework (see `docs/01_spec.md`), a recipe is a
 **directory**, not a single YAML file.
 
-## Available Examples
+These directories are the **canonical fixtures** the directory validator
+(`validate::validate_recipe_dir`) is tested against, and which downstream
+consumers (Plan B / `itmux`) vendor (plan revision R9). Each `invalid/<case>/`
+directory declares the error code it must trigger in its `README.md`
+(`# Expect: <CODE>`); `tests/conformance_test.rs` walks both trees and asserts
+`valid/` produces zero errors and each `invalid/` case emits its declared code.
+
+## Valid Examples
 
 | Example | Description |
 |---------|--------------|
 | `valid/pr-reviewer/` | A complete, conformant recipe directory: `recipe.yaml`, two agents (`main` with a `claude` harness, a subagent, skills, tools, and an append `system_instructions`; `reviewer` with a `codex` harness), a `SYSTEM.md`, and a bundled `skills/code-review/` package. |
 
-`examples/invalid/<case>/` directories (each documenting which error code(s)
-it is expected to trigger) and the conformance test that walks both
-`examples/valid/` and `examples/invalid/` are added by Task 2 of the
-directory-recipe rework plan, alongside `validate_recipe_dir`.
+## Invalid Examples
 
-Schema-level fixtures exercising the loader (`load_recipe_dir`) directly -
-including the failure cases (missing marker, unresolved `default_agent`,
-malformed agent YAML) - live under `tests/fixtures/` instead; see
-`tests/README.md`.
+| Example | Expected code |
+|---------|---------------|
+| `invalid/missing-marker/` | `RECIPE_MISSING_MARKER` |
+| `invalid/unresolved-default-agent/` | `RECIPE_DEFAULT_AGENT_UNRESOLVED` |
+| `invalid/unresolved-subagent/` | `RECIPE_SUBAGENT_UNRESOLVED` |
+| `invalid/malformed-agent/` | `RECIPE_MALFORMED_AGENT_YAML` |
+
+Additional schema-level fixtures exercising the loader (`load_recipe_dir`)
+directly - including a minimal recipe with no optional `skills/`/`SYSTEM.md` -
+live under `tests/fixtures/`; see `tests/README.md`.
 
 ## Purpose
 

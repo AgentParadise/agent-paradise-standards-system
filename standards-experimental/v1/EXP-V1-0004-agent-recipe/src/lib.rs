@@ -13,47 +13,52 @@
 //!   and the canonical loader ([`schema::load_recipe_dir`]). No CLI-only
 //!   dependencies: downstream consumers (e.g. `itmux`, Plan B) can depend on
 //!   this crate as a plain library.
+//! - [`validate`] - [`validate::validate_recipe_dir`], a diagnostics-producing
+//!   validator built on top of the loader (loading and validation share one
+//!   code path).
+//! - [`cli`] - the composed-CLI command handler backing
+//!   `apss-dev run agent-recipe validate <recipe-dir>`.
 //!
 //! ⚠️ EXPERIMENTAL: This standard is in incubation and may change significantly.
 
+pub mod cli;
 pub mod schema;
+pub mod validate;
 
 pub use schema::{
     AgentKind, AgentManifest, EffortLevel, InstructionMode, ModelSpec, Recipe, RecipeLoadError,
     RecipeManifest, SystemInstructions, load_recipe_dir, resolved_system,
 };
+pub use validate::validate_recipe_dir;
+
+/// Immutable standard identifier.
+pub const ID: &str = "EXP-V1-0004";
+
+/// CLI dispatch slug.
+pub const SLUG: &str = "agent-recipe";
+
+/// Human-readable standard name.
+pub const NAME: &str = "Agent Recipe Standard";
+
+/// Version of this crate / standard.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Register this package with a composed APSS runner.
 ///
-/// No composed CLI commands are exposed yet: this experiment's surface area
-/// is the [`schema`] module, consumed directly by Rust callers (see
-/// `agents/skills/README.md`). A CLI subcommand (e.g. `aps v1 validate
-/// recipe <dir>`) is a natural follow-up once `validate_recipe_dir` (Task 2)
-/// lands.
+/// Exposes a single command, `validate <recipe-dir>`, backed by
+/// [`cli::AgentRecipeCommandHandler`], which wraps
+/// [`validate::validate_recipe_dir`].
 pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
     registry.register(
         apss_core::registry::RegisteredStandard {
-            id: "EXP-V1-0004".to_string(),
-            slug: "agent-recipe".to_string(),
-            name: "Agent Recipe Standard".to_string(),
+            id: ID.to_string(),
+            slug: SLUG.to_string(),
+            name: NAME.to_string(),
             description: "Harness-neutral, directory-based agent recipe schema experiment"
                 .to_string(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            commands: Vec::new(),
+            version: VERSION.to_string(),
+            commands: cli::COMMAND_NAMES.iter().map(|s| s.to_string()).collect(),
         },
-        Box::new(NoopCommandHandler),
+        Box::new(cli::AgentRecipeCommandHandler::new()),
     );
-}
-
-struct NoopCommandHandler;
-
-impl apss_core::registry::CommandHandler for NoopCommandHandler {
-    fn execute(&self, _command: &str, _args: &[String], _config: &toml::Value) -> i32 {
-        eprintln!("No composed CLI commands are registered for agent-recipe yet.");
-        5
-    }
-
-    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
-        Vec::new()
-    }
 }

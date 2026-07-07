@@ -217,6 +217,10 @@ A conforming implementation MUST be able to deserialize a valid recipe directory
 
 ## 8. Error Codes
 
+### 8.1 Loader Codes
+
+These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validate::validate_recipe_dir`. They correspond one-to-one with `schema::RecipeLoadError` variants (`RecipeLoadError::code()` returns the matching constant from `schema::error_codes`).
+
 | Code | Meaning |
 |------|---------|
 | `RECIPE_MISSING_MARKER` | `recipe.yaml` is absent from the candidate directory. |
@@ -225,9 +229,30 @@ A conforming implementation MUST be able to deserialize a valid recipe directory
 | `RECIPE_DEFAULT_AGENT_UNRESOLVED` | `default_agent` does not name any file actually present under `agents/`. |
 | `RECIPE_IO_ERROR` | An I/O error occurred while reading the recipe directory (unreadable file, permission error, etc.). |
 
-These codes correspond one-to-one with `schema::RecipeLoadError` variants (`RecipeLoadError::code()` returns the matching constant from `schema::error_codes`).
+### 8.2 Validator Codes
 
-The directory-level validator (`validate_recipe_dir`, a follow-on task of the directory-recipe rework plan, `src/validate.rs`) additionally defines directory-wide diagnostics beyond a single failed load - for example `RECIPE_SUBAGENT_UNRESOLVED` for a `subagents` entry with no matching sibling agent file, and per-rule codes for malformed `skills`/`tools` references - reporting *all* violations via `apss_core::Diagnostics` rather than failing on the first one the way `load_recipe_dir` does. Per that plan's revision R1, `validate_recipe_dir` is expected to share `load_recipe_dir`'s code path (`load_recipe_dir(...).map(|_| ()).or(<diagnostics from RecipeLoadError>)`), so this table and the loader's error codes MUST stay in lockstep.
+`validate::validate_recipe_dir` is built on top of the loader (plan revision R1: loading and validation share one code path). On a failed load it surfaces exactly one loader code from §8.1. On a recipe that loads cleanly it runs the additional structural rules below, reporting *all* violations via `apss_core::Diagnostics` rather than failing on the first one. These codes live in `validate::error_codes`.
+
+| Code | Meaning |
+|------|---------|
+| `RECIPE_SUBAGENT_UNRESOLVED` | A `subagents` entry names an agent with no matching `agents/<name>.yaml`. |
+| `RECIPE_EMPTY_RECIPE_NAME` | `recipe.yaml`'s `name` is present but empty/whitespace. |
+| `RECIPE_EMPTY_AGENT_NAME` | An agent manifest's `name` is present but empty/whitespace. |
+| `RECIPE_EMPTY_MODEL_NAME` | An agent manifest's `model.name` is present but empty/whitespace. |
+| `RECIPE_INVALID_SKILL_REF` | A `skills` entry is an empty string. |
+| `RECIPE_INVALID_TOOL_REF` | A `tools` entry is an empty string. |
+
+Field-shape rules (unknown fields, non-string keys, unrecognized `agent`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_AGENT_YAML` on the offending file rather than as separate validator codes.
+
+### 8.3 CLI
+
+`validate_recipe_dir` is wired into the composed development CLI as a registered standard command:
+
+```text
+apss-dev run agent-recipe validate <recipe-dir>
+```
+
+(aliases: `recipe`, `exp-v1-0004`). Exit code 0 means no errors; 1 means one or more error diagnostics. This is the same `apss-dev run <slug> <command>` surface the official standards (`topology`, `architecture-fitness`, `documentation`) use to expose their validators. The separate `apss-dev v1 validate experiment EXP-V1-0004` command remains a purely structural meta-standard check of the crate's package layout and does not take a recipe-directory argument.
 
 ---
 

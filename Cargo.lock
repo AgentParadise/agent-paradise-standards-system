@@ -95,6 +95,7 @@ dependencies = [
  "apss-v1-0001-code-topology",
  "apss-v1-0002-architecture-fitness",
  "apss-v1-0003-documentation",
+ "apss-v1-0004-agent-recipe",
  "clap",
  "regex",
  "serde",

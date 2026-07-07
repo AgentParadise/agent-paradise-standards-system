@@ -268,6 +268,19 @@ impl RecipeLoadError {
             Self::Io { .. } => error_codes::RECIPE_IO_ERROR,
         }
     }
+
+    /// The filesystem path this error is anchored to, for attaching a precise
+    /// diagnostic location. For [`RecipeLoadError::DefaultAgentUnresolved`]
+    /// this is the searched `agents/` directory.
+    pub fn path(&self) -> &Path {
+        match self {
+            Self::MissingMarker { path } => path,
+            Self::MalformedManifest { path, .. } => path,
+            Self::MalformedAgent { path, .. } => path,
+            Self::DefaultAgentUnresolved { agents_dir, .. } => agents_dir,
+            Self::Io { path, .. } => path,
+        }
+    }
 }
 
 /// Load and fully parse a recipe directory.
