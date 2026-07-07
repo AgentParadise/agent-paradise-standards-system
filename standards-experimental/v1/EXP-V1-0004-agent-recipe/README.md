@@ -7,24 +7,25 @@
 
 ⚠️ **EXPERIMENTAL**: This standard is in incubation and may change significantly before promotion.
 
-A declarative, harness-neutral schema for an **agent recipe**: what agent to run (harness, model,
-reasoning effort, skills, system instructions), independent of where or how it executes. Adopted
-from the `pi.recipes` shape. See [docs/00_overview.md](docs/00_overview.md) for a quick tour and
-[docs/01_spec.md](docs/01_spec.md) for the normative specification.
+A declarative, harness-neutral **directory shape** for an agent recipe: what agent(s) to run
+(harness, model, reasoning effort, skills, system instructions), independent of where or how it
+executes. Adopted from the `pi.recipes` shape. See [docs/00_overview.md](docs/00_overview.md)
+(pending update) for a quick tour and [docs/01_spec.md](docs/01_spec.md) for the normative
+specification.
 
-```yaml
-name: pr-reviewer
-agent: claude
-model:
-  name: anthropic/claude-opus-4-8
-  effort: high
-skills:
-  - code-review
-system_instructions:
-  mode: append
-  content: |
-    Focus exclusively on correctness and security issues.
+```text
+pr-reviewer/
+  recipe.yaml            # name, version, default_agent
+  agents/
+    main.yaml             # harness, model, skills, system_instructions, tools, subagents
+    reviewer.yaml
+  skills/
+    code-review/
+  SYSTEM.md
 ```
+
+See [examples/valid/pr-reviewer/](examples/valid/pr-reviewer/) for this recipe as a real directory,
+and `agent_recipe::load_recipe_dir` (in `src/schema.rs`) for the canonical loader.
 
 ## Index
 

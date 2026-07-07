@@ -4,28 +4,40 @@
 
 ## Usage
 
-An AI agent authoring or reviewing an agent recipe file (see `docs/01_spec.md`) should:
+An AI agent authoring or reviewing an agent recipe directory (see
+`docs/01_spec.md`) should:
 
-1. Confirm the document is a single YAML mapping with the required fields:
-   `name`, `agent`, `model.name`, `model.effort`.
-2. Confirm `agent` is one of the v1 harness values: `claude`, `codex`.
-3. Confirm `model.effort` is one of `low`, `medium`, `high`.
-4. If `skills` is present, confirm every entry is a non-empty string reference.
-5. If `system_instructions` is present, confirm `mode` is `append` or `replace`
-   and `content` is non-empty.
-6. Reject any field not in the schema (`AGENT_RECIPE_UNKNOWN_FIELD`) rather than
-   guessing at its intent.
-7. Never place credentials, tokens, or other secrets inside a recipe document
-   (see spec section 8.1); recipes are expected to be committed to version
-   control.
+1. Confirm the directory has a `recipe.yaml` marker with `name`, `version`,
+   and `default_agent`.
+2. Confirm `default_agent` names a file that actually exists under
+   `agents/<default_agent>.yaml`.
+3. For every `agents/*.yaml` file, confirm it has `name`, `agent`
+   (`claude` | `codex`), and `model.name` / `model.effort`
+   (`low` | `medium` | `high`).
+4. If `skills` is present, confirm every entry is a non-empty string
+   reference; entries resolve to `skills/<ref>/` inside the recipe if that
+   subdirectory exists, else the ref is treated as an external skill
+   path/name.
+5. If `system_instructions` is present, confirm `mode` is `append` or
+   `replace` and `content` is non-empty.
+6. Reject any field not in the schema - the Rust types use
+   `#[serde(deny_unknown_fields)]`, so this happens automatically on load.
+7. Never place credentials, tokens, or other secrets inside a recipe
+   directory; recipes are expected to be committed to version control.
 
-No CLI subcommand is exposed for this experiment yet. The reference validator
-is `agent_recipe::validate_document` in `src/lib.rs`, callable from Rust:
+No CLI subcommand is exposed for this experiment yet. The reference loader
+is `agent_recipe::load_recipe_dir` in `src/schema.rs`, callable from Rust:
 
 ```rust
-let diagnostics = agent_recipe::validate_document(yaml_text);
-if diagnostics.has_errors() {
-    // report diagnostics
+use std::path::Path;
+
+match agent_recipe::load_recipe_dir(Path::new("path/to/recipe")) {
+    Ok(recipe) => {
+        // recipe.manifest, recipe.agents, recipe.skills, recipe.system_md
+    }
+    Err(error) => {
+        // error.code() is a stable machine-readable code (see
+        // schema::error_codes), error itself carries the offending path.
+    }
 }
 ```
-

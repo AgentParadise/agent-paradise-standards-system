@@ -1,8 +1,0 @@
-# Invalid: `temperature` is not part of the recipe schema.
-# Expect: AGENT_RECIPE_UNKNOWN_FIELD
-name: bad-recipe
-agent: claude
-model:
-  name: anthropic/claude-opus-4-8
-  effort: high
-temperature: 0.7

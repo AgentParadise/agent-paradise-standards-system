@@ -1,13 +1,15 @@
-name: pr-reviewer
+name: main
 agent: claude
 model:
   name: anthropic/claude-opus-4-8
   effort: high
 skills:
   - code-review
-  - security-review
 system_instructions:
   mode: append
   content: |
     Focus exclusively on correctness and security issues.
-    Do not comment on style unless it affects readability of a security-relevant path.
+tools:
+  - shell
+subagents:
+  - reviewer
