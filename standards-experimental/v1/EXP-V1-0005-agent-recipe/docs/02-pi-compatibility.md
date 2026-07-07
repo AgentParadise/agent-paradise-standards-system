@@ -3,11 +3,11 @@
 The Agent Recipe directory shape is adopted from the `pi.recipes` convention (a
 recipe as a directory of agent manifests plus shared assets) and generalized so
 it is not tied to any single harness or runtime. This document records the
-deltas: where EXP-V1-0004 deliberately diverges from `pi.recipes`, and why.
+deltas: where EXP-V1-0005 deliberately diverges from `pi.recipes`, and why.
 
 ## Summary of Deltas
 
-| Concern | pi.recipes | EXP-V1-0004 |
+| Concern | pi.recipes | EXP-V1-0005 |
 |---------|------------|-------------|
 | Extensions / tools | TypeScript `extensions/` with executable code | No `extensions/`; `tools` are references (names) only, no code |
 | Harness selection | Runtime-level | Per agent (`agent: claude \| codex`) - one recipe can mix harnesses |
@@ -17,7 +17,7 @@ deltas: where EXP-V1-0004 deliberately diverges from `pi.recipes`, and why.
 ## 1. No TypeScript `extensions/` - `tools` are references only
 
 `pi.recipes` allows an `extensions/` directory of executable (TypeScript)
-extension code that the runtime loads. EXP-V1-0004 deliberately does **not**
+extension code that the runtime loads. EXP-V1-0005 deliberately does **not**
 carry executable code inside a recipe:
 
 - There is no `extensions/` directory in the directory shape.
@@ -33,7 +33,7 @@ free of any runtime/language dependency, so downstream consumers can depend on
 
 ## 2. Harness is per-agent
 
-In EXP-V1-0004 the harness is chosen **per agent**, via the required `agent`
+In EXP-V1-0005 the harness is chosen **per agent**, via the required `agent`
 field on each `agents/<name>.yaml`:
 
 ```yaml
@@ -50,7 +50,7 @@ unrecognized values fail to parse rather than being silently coerced.
 
 ## 3. `effort` instead of `thinking_level`
 
-`pi.recipes` (Claude-oriented) uses `thinking_level`. EXP-V1-0004 uses a
+`pi.recipes` (Claude-oriented) uses `thinking_level`. EXP-V1-0005 uses a
 harness-neutral `model.effort` with three coarse levels:
 
 ```yaml
@@ -67,7 +67,7 @@ into a harness's native parameter is the adapter's job, not the recipe's.
 ## 4. Agents and subagents unified in one `agents/` directory
 
 `pi.recipes` treats agents and subagents as related but distinct concepts.
-EXP-V1-0004 **unifies** them:
+EXP-V1-0005 **unifies** them:
 
 - Every agent - default agent and subagent alike - is one YAML file under
   `agents/`.

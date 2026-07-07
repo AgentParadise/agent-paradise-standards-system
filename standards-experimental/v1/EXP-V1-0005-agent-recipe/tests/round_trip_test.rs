@@ -1,4 +1,4 @@
-//! Round-trip guarantee for the generate leg of EXP-V1-0004: generator output
+//! Round-trip guarantee for the generate leg of EXP-V1-0005: generator output
 //! always validates. This scaffolds a recipe into a temp directory and asserts
 //! `validate_recipe_dir` reports zero errors. It is the strongest correctness
 //! guarantee for the shape (T1) + validate (T2) + generate (T3) triad: the

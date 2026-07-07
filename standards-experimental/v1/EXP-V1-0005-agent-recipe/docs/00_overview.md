@@ -2,7 +2,7 @@
 
 ## What is this?
 
-**EXP-V1-0004** defines a declarative, harness-neutral shape for an **agent recipe**: a *directory* describing *what agent(s) to run* (which harness, which model, which skills, which system instructions) without any knowledge of *where* or *how* execution happens.
+**EXP-V1-0005** defines a declarative, harness-neutral shape for an **agent recipe**: a *directory* describing *what agent(s) to run* (which harness, which model, which skills, which system instructions) without any knowledge of *where* or *how* execution happens.
 
 A recipe is a directory, not a single file:
 
@@ -50,7 +50,7 @@ apss-dev run agent-recipe create my-recipe [--dir <parent>]
 apss-dev run agent-recipe validate ./my-recipe
 ```
 
-(aliases for the slug: `recipe`, `exp-v1-0004`). The separate `apss-dev v1 validate experiment EXP-V1-0004` command is a structural meta-standard check of the crate's own package layout and does not take a recipe-directory path.
+(aliases for the slug: `recipe`, `exp-v1-0005`). The separate `apss-dev v1 validate experiment EXP-V1-0005` command is a structural meta-standard check of the crate's own package layout and does not take a recipe-directory path.
 
 ## The Two Manifests
 

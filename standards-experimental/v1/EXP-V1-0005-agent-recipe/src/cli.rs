@@ -1,4 +1,4 @@
-//! Composed CLI for the Agent Recipe Standard (EXP-V1-0004).
+//! Composed CLI for the Agent Recipe Standard (EXP-V1-0005).
 //!
 //! This module hosts the command implementations that back
 //! `apss-dev run agent-recipe validate <recipe-dir>` and
@@ -157,7 +157,7 @@ fn print_help() {
     println!("    apss-dev run agent-recipe <COMMAND> [OPTIONS]");
     println!();
     println!("COMMANDS:");
-    println!("    validate <recipe-dir>       Validate a recipe directory against EXP-V1-0004");
+    println!("    validate <recipe-dir>       Validate a recipe directory against EXP-V1-0005");
     println!("    create <name> [--dir <p>]   Scaffold a conformant recipe directory");
     println!();
     println!("OPTIONS:");
@@ -170,7 +170,7 @@ fn command_infos() -> Vec<CommandInfo> {
     vec![
         CommandInfo {
             name: "validate".to_string(),
-            description: "Validate a recipe directory against EXP-V1-0004".to_string(),
+            description: "Validate a recipe directory against EXP-V1-0005".to_string(),
             usage: "validate <recipe-dir>".to_string(),
         },
         CommandInfo {

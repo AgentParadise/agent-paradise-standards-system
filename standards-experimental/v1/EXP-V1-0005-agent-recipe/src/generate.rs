@@ -1,4 +1,4 @@
-//! Recipe directory generator for EXP-V1-0004 (Agent Recipe Standard).
+//! Recipe directory generator for EXP-V1-0005 (Agent Recipe Standard).
 //!
 //! [`scaffold_recipe`] writes a conformant recipe directory from the canonical
 //! template in `templates/recipe/skeleton/`. The template files are embedded at
