@@ -1,7 +1,7 @@
 schema = "aps.experiment/v1"
 
 [experiment]
-id = "EXP-V1-0003"
+id = "EXP-V1-0004"
 name = "Agent Recipe Standard"
 slug = "agent-recipe"
 version = "0.1.0"

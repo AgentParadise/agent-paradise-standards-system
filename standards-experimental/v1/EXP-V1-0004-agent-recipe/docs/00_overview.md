@@ -2,7 +2,7 @@
 
 ## What is this?
 
-**EXP-V1-0003** defines a declarative, harness-neutral schema for an **agent recipe**: a YAML document describing *what agent to run* (which harness, which model, which skills, which system instructions) without any knowledge of *where* or *how* it executes.
+**EXP-V1-0004** defines a declarative, harness-neutral schema for an **agent recipe**: a YAML document describing *what agent to run* (which harness, which model, which skills, which system instructions) without any knowledge of *where* or *how* it executes.
 
 ## Why does it matter?
 

@@ -1,4 +1,4 @@
-# EXP-V1-0003 - Agent Recipe Standard (Experimental Specification)
+# EXP-V1-0004 - Agent Recipe Standard (Experimental Specification)
 
 **Version**: 0.1.0
 **Status**: Experimental

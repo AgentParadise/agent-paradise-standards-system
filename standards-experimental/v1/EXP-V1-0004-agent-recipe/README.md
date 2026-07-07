@@ -1,6 +1,6 @@
 # Agent Recipe Standard
 
-**ID:** `EXP-V1-0003`
+**ID:** `EXP-V1-0004`
 **Type:** Experiment
 **Slug:** `agent-recipe`
 **Version:** `0.1.0`
@@ -38,7 +38,7 @@ system_instructions:
 ## Validation
 
 ```bash
-cargo run -p aps-cli --bin apss-dev -- v1 validate experiment EXP-V1-0003
-cargo test -p apss-v1-0003-agent-recipe
+cargo run -p aps-cli --bin apss-dev -- v1 validate experiment EXP-V1-0004
+cargo test -p apss-v1-0004-agent-recipe
 ```
 

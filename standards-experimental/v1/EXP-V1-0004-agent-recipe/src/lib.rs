@@ -1,6 +1,6 @@
 //! Agent Recipe Standard (Experimental)
 //!
-//! This crate is the reference implementation of **EXP-V1-0003**, a declarative,
+//! This crate is the reference implementation of **EXP-V1-0004**, a declarative,
 //! harness-neutral schema for an "agent recipe": a description of *what agent to
 //! run* (harness, model, reasoning effort, skills, system instructions),
 //! independent of *where* or *how* it is executed.
@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
     registry.register(
         apss_core::registry::RegisteredStandard {
-            id: "EXP-V1-0003".to_string(),
+            id: "EXP-V1-0004".to_string(),
             slug: "agent-recipe".to_string(),
             name: "Agent Recipe Standard".to_string(),
             description: "Harness-neutral agent recipe schema experiment".to_string(),
