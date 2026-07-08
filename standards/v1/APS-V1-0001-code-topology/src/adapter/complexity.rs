@@ -232,10 +232,21 @@ impl<'g> ComplexityCalculator<'g> {
     /// Compute cognitive complexity for a node.
     ///
     /// Cognitive complexity adds a nesting penalty for each level of nesting.
+    ///
+    /// `node` is expected to be the measured function's own tree-sitter node.
+    /// We visit its CHILDREN at the incoming `nesting_level` rather than the
+    /// function node itself, so the function's own definition does not count as
+    /// a nesting level (which would inflate every construct in its body by one).
+    /// Genuinely-nested functions/closures encountered while descending the body
+    /// are still in `nesting_nodes`, so they correctly add a nesting level.
+    /// This matches the SonarSource Cognitive Complexity reference algorithm.
     pub fn compute_cognitive(&self, node: Node, nesting_level: u32) -> u32 {
         let mut cog = 0;
 
-        self.visit_for_cognitive(node, nesting_level, &mut cog);
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            self.visit_for_cognitive(child, nesting_level, &mut cog);
+        }
 
         cog
     }
@@ -250,7 +261,13 @@ impl<'g> ComplexityCalculator<'g> {
     ) -> u32 {
         let mut cog = 0;
 
-        self.visit_for_cognitive_range(node, start_line, end_line, nesting_level, &mut cog);
+        // Mirror `compute_cognitive`: visit the node's CHILDREN at the incoming
+        // nesting level rather than the node itself, so the enclosing
+        // function/scope does not spuriously count as a nesting level.
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            self.visit_for_cognitive_range(child, start_line, end_line, nesting_level, &mut cog);
+        }
 
         cog
     }
@@ -695,5 +712,96 @@ mod tests {
         assert!(calc.is_operand_node("integer_literal"));
         assert!(calc.is_operand_node("string_literal"));
         assert!(!calc.is_operand_node("+"));
+    }
+
+    // ========================================================================
+    // Cognitive Complexity — SonarSource reference-value tests
+    //
+    // These parse real source with the concrete tree-sitter grammars and
+    // assert the exact values from the SonarSource Cognitive Complexity
+    // specification (https://www.sonarsource.com/docs/CognitiveComplexity.pdf).
+    //
+    // Regression guard: before the "off-by-one nesting" fix, the measured
+    // function's OWN node was counted as a nesting level, so `flat_ifs`
+    // returned 2N instead of N and `nested_ifs_depth_3` returned 9 instead of
+    // 6. The `nested_function` case proves that genuinely-nested
+    // functions/closures STILL add a nesting level after the fix.
+    // ========================================================================
+
+    use crate::adapter::grammars::{RustGrammar, TypeScriptGrammar};
+
+    /// Parse `source` with `grammar`, locate the (first/only) function that
+    /// spans the whole snippet, and return its cognitive complexity.
+    fn cognitive_of(grammar: &dyn Grammar, source: &str) -> u32 {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&grammar.ts_language())
+            .expect("set language");
+        let tree = parser.parse(source, None).expect("parse");
+        let calc = ComplexityCalculator::new(grammar);
+        let end_line = source.lines().count() as u32;
+        let metrics = calc.compute_metrics(&tree, source.as_bytes(), 1, end_line);
+        metrics.cognitive_complexity
+    }
+
+    #[test]
+    fn ts_cognitive_flat_ifs_equals_n() {
+        let grammar = TypeScriptGrammar::new();
+        // N flat, sibling ifs → cognitive == N (each +1, no nesting).
+        let src = "function flat4(a, b, c, d) {\n  if (a) { return; }\n  if (b) { return; }\n  if (c) { return; }\n  if (d) { return; }\n}\n";
+        assert_eq!(cognitive_of(&grammar, src), 4);
+    }
+
+    #[test]
+    fn ts_cognitive_nested_ifs_depth_3_equals_6() {
+        let grammar = TypeScriptGrammar::new();
+        // 3 nested ifs → (1+0) + (1+1) + (1+2) == 6.
+        let src = "function nested3(a) {\n  if (a) {\n    if (a) {\n      if (a) { return; }\n    }\n  }\n}\n";
+        assert_eq!(cognitive_of(&grammar, src), 6);
+    }
+
+    #[test]
+    fn ts_cognitive_nested_function_adds_nesting() {
+        let grammar = TypeScriptGrammar::new();
+        // The inner arrow function nests the `if` one level deeper:
+        // the if is charged 1 + 1 == 2. If nested functions did NOT add a
+        // nesting level, this would be 1 — so this proves the fix preserves
+        // real nesting from inner functions/closures.
+        let src = "function outer(a) {\n  const inner = (b) => {\n    if (b) { return; }\n  };\n  inner(a);\n}\n";
+        assert_eq!(cognitive_of(&grammar, src), 2);
+    }
+
+    #[test]
+    fn ts_cognitive_switch_counted_once_not_per_case() {
+        let grammar = TypeScriptGrammar::new();
+        // A switch with 3 cases → +1 for the switch structure only (nesting 0),
+        // NOT +1 per case. SonarSource treats a switch as a single structural
+        // increment.
+        let src = "function sw(a) {\n  switch (a) {\n    case 1: return;\n    case 2: return;\n    default: return;\n  }\n}\n";
+        assert_eq!(cognitive_of(&grammar, src), 1);
+    }
+
+    #[test]
+    fn rust_cognitive_flat_ifs_equals_n() {
+        let grammar = RustGrammar::new();
+        // Rust's nesting set excludes `function_item`, so the top-level path was
+        // already correct; this asserts the fix is a no-op for Rust.
+        let src = "fn flat2(a: bool) {\n    if a { return; }\n    if a { return; }\n}\n";
+        assert_eq!(cognitive_of(&grammar, src), 2);
+    }
+
+    #[test]
+    fn rust_cognitive_nested_ifs_depth_3_equals_6() {
+        let grammar = RustGrammar::new();
+        let src = "fn nested3(a: bool) {\n    if a {\n        if a {\n            if a { return; }\n        }\n    }\n}\n";
+        assert_eq!(cognitive_of(&grammar, src), 6);
+    }
+
+    #[test]
+    fn rust_cognitive_match_counted_once_not_per_arm() {
+        let grammar = RustGrammar::new();
+        // A match with 3 arms → +1 for the match structure only, not per arm.
+        let src = "fn m(a: i32) -> i32 {\n    match a {\n        1 => 1,\n        2 => 2,\n        _ => 0,\n    }\n}\n";
+        assert_eq!(cognitive_of(&grammar, src), 1);
     }
 }

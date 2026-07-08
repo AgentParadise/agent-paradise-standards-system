@@ -10,7 +10,7 @@
 //! - if/else branches
 //! - for/for-in/for-of loops
 //! - while/do-while loops
-//! - switch cases
+//! - switch statements (counted once, per SonarSource — not once per case)
 //! - catch clauses
 //! - ternary expressions
 //! - logical operators (&& and ||)
@@ -167,7 +167,10 @@ const TS_DECISION_NODES: &[&str] = &[
     "for_in_statement",
     "while_statement",
     "do_statement",
-    "switch_case",
+    // SonarSource charges a switch structure ONCE (+1, plus its nesting
+    // penalty), not once per case. We increment on `switch_statement` (which is
+    // also a nesting node) rather than on each `switch_case`.
+    "switch_statement",
     "catch_clause",
     "ternary_expression",
     "binary_expression", // && and ||
@@ -337,7 +340,9 @@ mod tests {
         assert!(nodes.contains(&"for_in_statement"));
         assert!(nodes.contains(&"while_statement"));
         assert!(nodes.contains(&"do_statement"));
-        assert!(nodes.contains(&"switch_case"));
+        // Switch is charged once on the statement node (SonarSource), not per case.
+        assert!(nodes.contains(&"switch_statement"));
+        assert!(!nodes.contains(&"switch_case"));
         assert!(nodes.contains(&"catch_clause"));
         assert!(nodes.contains(&"ternary_expression"));
         assert!(nodes.contains(&"binary_expression"));

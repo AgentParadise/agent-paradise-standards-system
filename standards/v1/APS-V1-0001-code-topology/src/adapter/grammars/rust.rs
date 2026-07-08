@@ -58,7 +58,10 @@ impl Grammar for RustGrammar {
         &[
             "if_expression",
             "else_clause",
-            "match_arm",
+            // SonarSource charges a match structure ONCE (+1, plus its nesting
+            // penalty), not once per arm. We increment on `match_expression`
+            // (which is also a nesting node), not on each `match_arm`.
+            "match_expression",
             "while_expression",
             "loop_expression",
             "for_expression",
@@ -255,7 +258,9 @@ mod tests {
         let nodes = grammar.decision_nodes();
 
         assert!(nodes.contains(&"if_expression"));
-        assert!(nodes.contains(&"match_arm"));
+        // Match is charged once on the expression node (SonarSource), not per arm.
+        assert!(nodes.contains(&"match_expression"));
+        assert!(!nodes.contains(&"match_arm"));
         assert!(nodes.contains(&"for_expression"));
     }
 
