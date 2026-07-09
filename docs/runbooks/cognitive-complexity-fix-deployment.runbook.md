@@ -21,7 +21,7 @@ baseline against the old (inflated) numbers will see its readings move.
 
 `apss-v1-0001-code-topology` is at `0.2.0` (0.x). Under SemVer, a 0.x
 minor bump signals a breaking change. Because emitted metric values
-shift — which breaks consumers pinning baselines — this is breaking in
+shift, which breaks consumers pinning baselines; this is breaking in
 practice even though it is a bug fix.
 
 Recommended bumps:
@@ -82,4 +82,4 @@ crate. Verify with `cargo search apss-v1-0001-code-topology`.
 Until `0.3.0` is published and adopted, the consumer should source
 cognitive complexity from its ts-morph `complexity.mjs` implementation,
 which is already SonarSource-correct. Do not baseline against the old
-APSS cognitive numbers — they are the inflated values this fix corrects.
+APSS cognitive numbers; they are the inflated values this fix corrects.

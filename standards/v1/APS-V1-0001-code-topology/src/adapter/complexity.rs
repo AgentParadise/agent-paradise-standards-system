@@ -715,7 +715,7 @@ mod tests {
     }
 
     // ========================================================================
-    // Cognitive Complexity — SonarSource reference-value tests
+    // Cognitive Complexity: SonarSource reference-value tests
     //
     // These parse real source with the concrete tree-sitter grammars and
     // assert the exact values from the SonarSource Cognitive Complexity
@@ -765,7 +765,7 @@ mod tests {
         let grammar = TypeScriptGrammar::new();
         // The inner arrow function nests the `if` one level deeper:
         // the if is charged 1 + 1 == 2. If nested functions did NOT add a
-        // nesting level, this would be 1 — so this proves the fix preserves
+        // nesting level, this would be 1, so this proves the fix preserves
         // real nesting from inner functions/closures.
         let src = "function outer(a) {\n  const inner = (b) => {\n    if (b) { return; }\n  };\n  inner(a);\n}\n";
         assert_eq!(cognitive_of(&grammar, src), 2);

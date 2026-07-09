@@ -10,7 +10,7 @@
 //! - if/else branches
 //! - for/for-in/for-of loops
 //! - while/do-while loops
-//! - switch statements (counted once, per SonarSource — not once per case)
+//! - switch statements (counted once, per SonarSource, not once per case)
 //! - catch clauses
 //! - ternary expressions
 //! - logical operators (&& and ||)
