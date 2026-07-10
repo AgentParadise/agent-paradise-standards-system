@@ -4,7 +4,7 @@ schema = "aps.experiment/v1"
 id = "EXP-V1-0001"
 name = "Code Topology and Coupling Analysis"
 slug = "code-topology"
-version = "0.1.0"
+version = "0.1.1"
 category = "technical"
 
 [aps]

@@ -4,7 +4,7 @@ schema = "aps.substandard/v1"
 id = "APS-V1-0001.VZ01"
 name = "Topology Visualization Dashboard"
 slug = "dashboard"
-version = "0.1.0"
+version = "0.1.1"
 parent_id = "APS-V1-0001"
 parent_major = "0"
 
