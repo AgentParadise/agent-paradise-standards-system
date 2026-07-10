@@ -15,7 +15,7 @@ Skills for AI agents to interact with the architectural fitness governance frame
 ```
 configure-dimensions → fitness.toml created
                             ↓
-validate-fitness     → aps run architecture-fitness validate .
+validate-fitness     → apss run architecture-fitness validate .
                             ↓
 interpret-report     → read fitness-report.json, explain findings
 ```

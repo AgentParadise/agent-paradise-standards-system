@@ -28,29 +28,34 @@ This specification defines:
 
 ### 2.1 Root Structure
 
-The APS CLI MUST follow this hierarchy:
+This contract's `run` dispatch surface MUST follow this hierarchy. It is
+implemented by two separate binaries: `apss` (published, consumer-facing,
+`cargo install apss`) provides `run`; `apss-dev` (this repo's own `aps-cli`
+crate, never published) provides `v1` for repo-internal standard authoring.
+Consumer projects only install and invoke `apss`; they never see `v1`.
 
 ```
-aps
-├── run <slug> <command> [args]   # Run standard CLI
-│   └── --list                    # List available standards
-│
-├── v1                            # v1 authoring/meta commands
-│   ├── validate                  # Validate repo structure
-│   ├── create                    # Create packages
-│   ├── list                      # List packages
-│   ├── promote                   # Promote experiments
-│   └── version                   # Version management
-│
-└── v2                            # Future: v2 authoring
+apss                               # published, consumer-facing
+└── run <slug> <command> [args]   # Run standard CLI
+    └── --list                    # List available standards
+
+apss-dev                           # repo-internal only, never published
+└── v1                            # v1 authoring/meta commands
+    ├── validate                  # Validate repo structure
+    ├── create                    # Create packages
+    ├── list                      # List packages
+    ├── promote                   # Promote experiments
+    └── version                   # Version management
+
+(v2)                                # Future: v2 authoring, binary not yet decided
 ```
 
 ### 2.2 Standard Dispatch
 
-The `aps run` command dispatches to standard-specific CLIs:
+The `apss run` command dispatches to standard-specific CLIs:
 
 ```bash
-aps run <slug> <command> [args...]
+apss run <slug> <command> [args...]
 ```
 
 Where:
@@ -112,9 +117,9 @@ Standards MAY implement:
 Path arguments MUST support:
 
 ```bash
-aps run topology analyze .                    # Current directory
-aps run topology analyze /absolute/path       # Absolute path
-aps run topology analyze ./relative/path      # Relative path
+apss run topology analyze .                    # Current directory
+apss run topology analyze /absolute/path       # Absolute path
+apss run topology analyze ./relative/path      # Relative path
 ```
 
 ### 4.2 Common Flags
@@ -285,7 +290,7 @@ fn get_standard_cli(slug: &str) -> Option<Box<dyn StandardCli>> {
 
 ### 8.2 Discovery Command
 
-`aps run --list` MUST output available standards:
+`apss run --list` MUST output available standards:
 
 ```
 Available Standards:
@@ -305,16 +310,16 @@ Available Standards:
 
 ```bash
 # Analyze a Rust project
-aps run topology analyze . --output .topology/
+apss run topology analyze . --output .topology/
 
 # Validate artifacts
-aps run topology validate .topology/
+apss run topology validate .topology/
 
 # Compare branches
-aps run topology diff .topology-base/ .topology-pr/ --format json
+apss run topology diff .topology-base/ .topology-pr/ --format json
 
 # Generate report
-aps run topology report .topology/ --format md
+apss run topology report .topology/ --format md
 ```
 
 ### 9.2 CI Integration
@@ -322,8 +327,8 @@ aps run topology report .topology/ --format md
 ```yaml
 - name: Check Topology
   run: |
-    aps run topology analyze --output .topology-pr/
-    aps run topology diff .topology-base/ .topology-pr/ --format json > diff.json
+    apss run topology analyze --output .topology-pr/
+    apss run topology diff .topology-base/ .topology-pr/ --format json > diff.json
     
     if [ $(jq -r '.status' diff.json) = "error" ]; then
       exit 1

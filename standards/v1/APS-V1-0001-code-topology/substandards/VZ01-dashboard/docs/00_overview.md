@@ -18,17 +18,17 @@ This substandard provides interactive HTML visualizations for code topology data
 ### Generate All Visualizations
 
 ```bash
-aps run topology viz --type all
+apss run topology viz --type all
 open .topology/viz/index.html
 ```
 
 ### Generate Specific Visualization
 
 ```bash
-aps run topology viz --type 3d
-aps run topology viz --type codecity
-aps run topology viz --type clusters
-aps run topology viz --type vsa
+apss run topology viz --type 3d
+apss run topology viz --type codecity
+apss run topology viz --type clusters
+apss run topology viz --type vsa
 ```
 
 ## Features
@@ -45,7 +45,7 @@ aps run topology viz --type vsa
 All visualizations require topology artifacts to be generated first:
 
 ```bash
-aps run topology analyze .
+apss run topology analyze .
 ```
 
 Required files:

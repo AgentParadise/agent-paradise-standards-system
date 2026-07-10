@@ -19,7 +19,7 @@ Closes #
 - [ ] Commit messages follow [conventional commits](https://www.conventionalcommits.org/)
 
 ### If Touching Standards
-- [ ] `aps v1 validate repo` passes
+- [ ] `just aps-validate` passes
 - [ ] Updated `docs/01_spec.md` if spec changed
 - [ ] Added/updated examples
 

@@ -1,8 +1,7 @@
-//! APSS Bootstrap CLI
+//! APSS Bootstrap CLI library.
 //!
-//! Lightweight entry point for the Agent Paradise Standards System.
-//! Handles project initialization, standard installation, and delegates
-//! standard-specific commands to the composed project binary.
+//! Holds the actual CLI implementation so both the `apss` binary and the
+//! deprecated `aps` alias binary (see `src/bin/`) can share it.
 
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
@@ -66,13 +65,13 @@ enum ConfigAction {
 }
 
 // ============================================================================
-// Main
+// Entry point shared by every binary in this crate
 // ============================================================================
 
-fn main() {
+pub fn run() -> i32 {
     let cli = Cli::parse();
 
-    let exit_code = match cli.command {
+    match cli.command {
         Commands::Init(args) => init::run(args),
         Commands::Install(args) => install::run(args),
         Commands::Status => cmd_status(),
@@ -81,9 +80,7 @@ fn main() {
         Commands::Config { action } => match action {
             ConfigAction::Template => cmd_config_template(),
         },
-    };
-
-    process::exit(exit_code);
+    }
 }
 
 // ============================================================================
@@ -135,7 +132,6 @@ fn cmd_status() -> i32 {
         println!("Workspace members: {}", ws.members.join(", "));
     }
 
-    // Check installation state
     let project_root = config_path.parent().unwrap_or(Path::new("."));
     let binary_path = project_root
         .join(
@@ -169,7 +165,6 @@ fn cmd_validate(config_only: bool) -> i32 {
     let diags = apss_core::project_config_validation::validate_project_config(&config_path);
 
     if !config_only {
-        // Also validate installation state
         let project_root = config_path.parent().unwrap_or(Path::new("."));
         let install_diags = apss_core::distribution::validate_installation(project_root);
         let mut all = diags;
@@ -211,7 +206,6 @@ fn cmd_run(args: &[String]) -> i32 {
         return 1;
     }
 
-    // Delegate to composed binary
     let mut cmd_args = vec!["run".to_string()];
     cmd_args.extend_from_slice(args);
 

@@ -4,10 +4,10 @@
 
 ```bash
 # First, analyze the codebase
-aps run topology analyze .
+apss run topology analyze .
 
 # Generate all visualizations with dashboard
-aps run topology viz --type all
+apss run topology viz --type all
 
 # Open the dashboard
 open .topology/viz/index.html
@@ -17,19 +17,19 @@ open .topology/viz/index.html
 
 ```bash
 # 3D Force-Directed coupling graph
-aps run topology viz --type 3d
+apss run topology viz --type 3d
 open topology-3d.html
 
 # CodeCity 3D city metaphor
-aps run topology viz --type codecity
+apss run topology viz --type codecity
 open codecity.html
 
 # 2D Package Clusters
-aps run topology viz --type clusters
+apss run topology viz --type clusters
 open clusters.html
 
 # VSA Matrix diagram
-aps run topology viz --type vsa
+apss run topology viz --type vsa
 open vsa.html
 ```
 

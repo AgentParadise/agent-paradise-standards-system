@@ -23,8 +23,8 @@ The six active dimensions (MT01, MD01, ST01, SC01, LG01, AC01) are evaluated in 
 ## Procedure
 
 1. Check that `fitness.toml` exists at the target path
-2. Check that `.topology/` directory exists (run `aps run topology analyze .` if missing)
-3. Run `aps run architecture-fitness validate <path>` with appropriate options. For trend analysis, pass `--previous-report <file>` (the CLI flag is `--previous-report`, not `--previous`).
+2. Check that `.topology/` directory exists (run `apss run topology analyze .` if missing)
+3. Run `apss run architecture-fitness validate <path>` with appropriate options. For trend analysis, pass `--previous-report <file>` (the CLI flag is `--previous-report`, not `--previous`).
 4. Read the output and report:
    - Overall pass/fail status
    - System-level fitness score and threshold
@@ -44,6 +44,6 @@ The six active dimensions (MT01, MD01, ST01, SC01, LG01, AC01) are evaluated in 
 | Error | Recovery |
 |-------|----------|
 | Missing fitness.toml | Suggest running `configure-dimensions` skill |
-| Missing topology dir | Suggest running `aps run topology analyze .` |
+| Missing topology dir | Suggest running `apss run topology analyze .` |
 | Adapter not found | Report which adapter is missing and dimension affected |
 | System score below threshold | Identify weakest dimensions and suggest focus areas |

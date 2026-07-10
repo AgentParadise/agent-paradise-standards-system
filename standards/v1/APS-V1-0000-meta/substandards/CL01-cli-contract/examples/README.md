@@ -53,6 +53,6 @@ impl MyStandardCli {
 
 ```bash
 # Run the standard
-aps run my-standard validate .
-aps run my-standard analyze . --output .artifacts/
+apss run my-standard validate .
+apss run my-standard analyze . --output .artifacts/
 ```

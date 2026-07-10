@@ -277,7 +277,7 @@ docs:
 The standard provides a default ADR template with the required front matter fields and section headers. Tooling MAY use this template to scaffold new ADRs:
 
 ```bash
-aps run docs new adr <name>     # Scaffold a new ADR from template (future CLI)
+apss run docs new adr <name>     # Scaffold a new ADR from template (future CLI)
 ```
 
 The template includes:

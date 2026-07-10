@@ -32,7 +32,7 @@ agent-paradise-standards-system/
 │   │       ├── promotion.rs      # Experiment → Standard promotion
 │   │       ├── versioning.rs     # SemVer version management
 │   │       └── views.rs          # Registry generation
-│   └── aps-cli/                  # CLI: `aps v1 validate|create|promote|list`
+│   └── aps-cli/                  # Development CLI (apss-dev): v1 validate|create|promote|list
 │       ├── src/main.rs           # CLI entrypoint with clap
 │       └── tests/                # Integration tests
 │
@@ -115,28 +115,28 @@ pub trait Standard {
 
 ```bash
 # Validate entire repo
-aps v1 validate repo
+just aps-validate
 
 # Validate specific package
-aps v1 validate standard APS-V1-0000
+just aps-validate-pkg APS-V1-0000
 
 # Create new packages
-aps v1 create standard my-new-standard
-aps v1 create experiment my-experiment
-aps v1 create substandard APS-V1-0001 GH01
+cargo run -p aps-cli --bin apss-dev -- v1 create standard my-new-standard
+cargo run -p aps-cli --bin apss-dev -- v1 create experiment my-experiment
+cargo run -p aps-cli --bin apss-dev -- v1 create substandard APS-V1-0001 GH01
 
 # Promote experiment to standard
-aps v1 promote EXP-V1-0001
+cargo run -p aps-cli --bin apss-dev -- v1 promote EXP-V1-0001
 
 # Version management
-aps v1 version show APS-V1-0000
-aps v1 version bump APS-V1-0000 patch
+just aps-version-show APS-V1-0000
+just aps-version-bump APS-V1-0000 patch
 
 # List all packages
-aps v1 list
+just aps-list
 
 # Generate registry views
-aps v1 generate views
+just aps-generate
 ```
 
 ## Just Commands
@@ -220,7 +220,7 @@ Every standard/substandard MUST include:
 
 ### Ready to Work On
 Based on this context, I can now help with:
-- Creating new standards/experiments via `aps v1 create`
+- Creating new standards/experiments via `apss-dev v1 create`
 - Implementing the `Standard` trait for new packages
 - Extending CLI commands in `aps-cli`
 - Adding validation rules to `aps-core`

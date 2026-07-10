@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Run a standard's CLI commands via `aps run`.
+Run a standard's CLI commands via `apss run`.
 
 ## Commands
 
 ```bash
 # List available standards
-aps run --list
+apss run --list
 
 # Run a standard command
-aps run <slug> <command> [args...]
+apss run <slug> <command> [args...]
 
 # Examples
-aps run topology analyze .
-aps run topology validate .topology/
-aps run topology diff base/ pr/ --format json
+apss run topology analyze .
+apss run topology validate .topology/
+apss run topology diff base/ pr/ --format json
 ```
 
 ## Common Patterns
@@ -25,10 +25,10 @@ aps run topology diff base/ pr/ --format json
 
 ```bash
 # Generate artifacts
-aps run topology analyze . --output .topology/
+apss run topology analyze . --output .topology/
 
 # Validate they were created correctly
-aps run topology validate .topology/
+apss run topology validate .topology/
 ```
 
 ### CI Diff Check
@@ -36,14 +36,14 @@ aps run topology validate .topology/
 ```bash
 # Analyze base branch
 git checkout main
-aps run topology analyze --output .topology-base/
+apss run topology analyze --output .topology-base/
 
 # Analyze PR branch
 git checkout pr-branch
-aps run topology analyze --output .topology-pr/
+apss run topology analyze --output .topology-pr/
 
 # Compare
-aps run topology diff .topology-base/ .topology-pr/ --format json > diff.json
+apss run topology diff .topology-base/ .topology-pr/ --format json > diff.json
 ```
 
 ## Output Formats
@@ -51,7 +51,7 @@ aps run topology diff .topology-base/ .topology-pr/ --format json > diff.json
 Use `--json` for machine-readable output:
 
 ```bash
-aps run topology validate .topology/ --json
+apss run topology validate .topology/ --json
 ```
 
 Output:
