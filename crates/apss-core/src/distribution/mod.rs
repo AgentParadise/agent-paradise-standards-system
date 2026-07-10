@@ -756,7 +756,7 @@ mod tests {
         // enough; the full matrix lives in crate::ecosystem's own tests.
         assert!(crate::ecosystem::is_ecosystem_crate("apss-core"));
         assert!(crate::ecosystem::is_ecosystem_crate(
-            "aps-v1-0000-cf01-project-config"
+            "apss-v1-0000-cf01-project-config"
         ));
         assert!(!crate::ecosystem::is_ecosystem_crate(
             "apss-v1-0001-code-topology"

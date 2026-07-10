@@ -88,10 +88,10 @@ dependencies = [
 name = "aps-cli"
 version = "1.2.0"
 dependencies = [
- "aps-v1-0000-meta",
  "apss-core",
  "apss-distribution",
  "apss-project-config",
+ "apss-v1-0000-meta",
  "apss-v1-0001-code-topology",
  "apss-v1-0002-architecture-fitness",
  "apss-v1-0003-documentation",
@@ -102,35 +102,6 @@ dependencies = [
  "tempfile",
  "toml",
  "walkdir",
-]
-
-[[package]]
-name = "aps-v1-0000-cli01-cli-contract"
-version = "1.2.1"
-dependencies = [
- "apss-core",
- "serde",
- "serde_json",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "aps-v1-0000-meta"
-version = "1.5.0"
-dependencies = [
- "apss-core",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "aps-v1-0000-ss01-substandard-structure"
-version = "1.1.0"
-dependencies = [
- "apss-core",
- "regex",
- "toml",
 ]
 
 [[package]]
@@ -183,6 +154,35 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0000-cli01-cli-contract"
+version = "1.2.1"
+dependencies = [
+ "apss-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0000-meta"
+version = "1.5.0"
+dependencies = [
+ "apss-core",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0000-ss01-substandard-structure"
+version = "1.1.0"
+dependencies = [
+ "apss-core",
+ "regex",
  "toml",
 ]
 

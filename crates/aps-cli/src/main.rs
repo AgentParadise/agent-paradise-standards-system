@@ -25,7 +25,6 @@
 
 mod cli_exemptions;
 
-use aps_v1_0000_meta::{MetaStandard, Standard};
 use apss_core::discovery::{
     PackageMetadata, PackageType, count_packages, discover_v1_packages, find_package_by_id,
 };
@@ -34,6 +33,7 @@ use apss_core::{
     Diagnostic, Diagnostics, StandardContext, TemplateEngine, bump_version, generate_all_views,
     get_version, promote_experiment,
 };
+use apss_v1_0000_meta::{MetaStandard, Standard};
 use clap::Parser;
 use std::env;
 use std::fs;

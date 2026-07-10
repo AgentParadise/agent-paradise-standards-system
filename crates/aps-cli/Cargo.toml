@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 apss-core.workspace = true
-aps-v1-0000-meta = { version = "1.5.0", path = "../../standards/v1/APS-V1-0000-meta" }
+apss-v1-0000-meta = { version = "1.5.0", path = "../../standards/v1/APS-V1-0000-meta" }
 code-topology = { package = "apss-v1-0001-code-topology", version = "0.2.0", path = "../../standards/v1/APS-V1-0001-code-topology" }
 architecture-fitness = { package = "apss-v1-0002-architecture-fitness", path = "../../standards/v1/APS-V1-0002-architecture-fitness" }
 documentation = { package = "apss-v1-0003-documentation", version = "0.1.0", path = "../../standards/v1/APS-V1-0003-documentation" }
