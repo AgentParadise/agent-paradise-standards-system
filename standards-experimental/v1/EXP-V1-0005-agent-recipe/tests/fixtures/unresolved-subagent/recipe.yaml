@@ -1,0 +1,3 @@
+name: dangling-subagent-recipe
+version: 0.1.0
+default_agent: main

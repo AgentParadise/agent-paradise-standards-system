@@ -95,6 +95,7 @@ dependencies = [
  "apss-v1-0001-code-topology",
  "apss-v1-0002-architecture-fitness",
  "apss-v1-0003-documentation",
+ "apss-v1-0005-agent-recipe",
  "clap",
  "regex",
  "serde",
@@ -257,6 +258,18 @@ dependencies = [
  "thiserror",
  "toml",
  "walkdir",
+]
+
+[[package]]
+name = "apss-v1-0005-agent-recipe"
+version = "0.2.0"
+dependencies = [
+ "apss-core",
+ "serde",
+ "serde_yaml_ng",
+ "tempfile",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]

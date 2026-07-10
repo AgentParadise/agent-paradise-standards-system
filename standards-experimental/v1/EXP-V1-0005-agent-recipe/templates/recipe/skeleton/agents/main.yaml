@@ -1,0 +1,31 @@
+name: main
+agent: claude
+model:
+  name: anthropic/claude-opus-4-8
+  effort: high
+skills: []
+system_instructions:
+  mode: append
+  content: |
+    You are the default agent for this recipe. Replace this text with the
+    behavior you want. In append mode, this is added after the recipe's
+    shared SYSTEM.md; switch to `mode: replace` to ignore SYSTEM.md entirely.
+tools: []
+subagents: []
+
+# Harness-neutral example: a second agent targeting the codex harness.
+# Copy this block into its own file (for example agents/reviewer.yaml),
+# uncomment it, and reference it from `subagents:` above to wire it in.
+#
+# name: reviewer
+# agent: codex
+# model:
+#   name: openai/gpt-5-codex
+#   effort: medium
+# skills: []
+# system_instructions:
+#   mode: replace
+#   content: |
+#     You review changes for correctness and security only.
+# tools: []
+# subagents: []
