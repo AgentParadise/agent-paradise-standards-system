@@ -55,9 +55,9 @@ feature branch --PR--> main  (ci.yml: fmt, clippy, check, test, aps-validation)
 ## Inputs and preconditions
 
 - Changes already merged to `main` that you want to release.
-- A `release` branch exists on origin (see Operational state: it may not yet).
-- For publishing: the `CARGO_REGISTRY_TOKEN` secret and the `release-publish`
-  environment must be configured (see Operational state).
+- The `release` branch exists on origin, and `CARGO_REGISTRY_TOKEN` plus the
+  `release-publish` environment are already configured (see Operational
+  state for the gotchas learned bootstrapping this).
 
 ## Workflow: cutting a release
 
@@ -107,37 +107,84 @@ substandards, and everything under `standards-experimental/`. These still get
 git tags and release notes, but no `cargo publish`. Treat that exclusion as
 load-bearing: the publish job filters them out by directory prefix.
 
-## Operational state (as of 2026-06-15)
+## Operational state (as of 2026-07-10)
 
-This section is the high-churn layer. The workflow code above is stable; the
-items below describe what is wired versus what still needs one-time setup, and
-will change once setup happens.
+The pipeline is now **live and proven end to end**: the `release` branch
+exists, `CARGO_REGISTRY_TOKEN` and the `release-publish` environment (required
+reviewer: repo owner) are configured, and the first real release
+(`v1.2.0`, PR #102) went through the gate clean and published all five
+publishable crates to crates.io successfully. Treat the workflow-level
+description above as trustworthy; this section now tracks known gotchas
+instead of "not wired yet" caveats.
 
-- **No `release` branch and no `v1.*` tags exist yet.** The gate and
-  release-create have never run. The first release must bootstrap the `release`
-  branch (for example, branch it from the last commit that matches what is
-  currently published, then open the first `main -> release` PR). With no prior
-  tag, `release-create` treats every crate as new.
-- **Publishing is coded but not operational.** The `publish` job runs real
-  `cargo publish`, but it depends on the `CARGO_REGISTRY_TOKEN` secret and the
-  `release-publish` GitHub Environment (an approval gate). Neither is configured
-  yet, so the publish step would fail at the token until they are added.
-- **Crates were published manually before this automation.** Confirm current
-  crates.io versions before a first automated publish; publishing a version that
-  already exists is rejected by crates.io (the idempotency check guards against
-  this, but verify rather than assume).
+- **Never push directly to `release`.** It is a real branch with a real
+  `push` trigger: any push, including a one-off debugging fix, fires
+  `release-create.yml` for real (tags + a GitHub Release get created
+  immediately, no gate). This happened by accident while bootstrapping the
+  pipeline; the `release-publish` approval gate is what prevented an
+  accidental crates.io publish, but the stray tags and a garbage GitHub
+  Release still had to be deleted by hand. Always land changes to `release`
+  through a gated `main -> release` PR, never `git push origin ...:release`.
+- **Local reusable workflows cannot live in a subdirectory of
+  `.github/workflows/`.** `uses: ./.github/workflows/checks/foo.yml` is
+  silently rejected by GitHub Actions ("workflows must be defined at the top
+  level of the .github/workflows/ directory"). This isn't caught by
+  `actionlint` and doesn't show up as a normal failed run with useful
+  logs, it manifests as the workflow's `pull_request` trigger never firing
+  at all, forever, with GitHub's push-time workflow validation quietly
+  logging a 0-job "failure" on every unrelated push in the repo. If a
+  workflow that calls local reusable workflows never seems to trigger, check
+  this first. All check workflows now live flat in `.github/workflows/`
+  (`source-branch-check.yml`, `version-bump-check.yml`,
+  `changelog-check.yml`), not in a `checks/` subdirectory.
+- **`cargo test`'s positional filter matches the full test *name*, not the
+  file name.** `cargo test -p foo -- self_validation` silently matches zero
+  tests (and reports success) if no test function's name contains that exact
+  substring. Use `cargo test -p foo --test self_validation_test` (selects by
+  binary/file name, runs every test in it) for gate/CI test-selection steps,
+  never a bare positional substring filter you haven't verified matches
+  something.
+- **The changelog in the GitHub Release can come out thin.** `create-release`
+  extracts release notes via `git log -1 --pretty=%B` on the merge commit, but
+  a standard GitHub PR-merge commit only contains a short "Merge pull request
+  #N from ..." summary, not the full PR body, even though the PR body is what
+  `changelog-check` validated. The version table still comes through
+  correctly; the prose changelog does not. Known gap, not yet fixed in the
+  workflow; expect to edit the GitHub Release notes by hand after a merge if
+  you want the full PR body preserved there.
+- **`release-create.yml`'s crate-name and version derivation are regex/grep
+  based and have had real bugs**, not just cosmetic ones: extracting a
+  standard's numeric ID from its directory name via `sed 's/-.*//'` cut at
+  the first hyphen (`APS-V1-0000-meta` -> `APS`, not `0000`), and a
+  workspace-inherited crate's version was read via `grep '^version'` on its
+  own `Cargo.toml`, which matched the literal string `version.workspace =
+  true` when that crate has no direct version line. Both are fixed, but if a
+  future refactor changes directory-naming or `Cargo.toml` shape, re-verify
+  this script by extracting it and running it locally against real repo
+  history (`git log`, redirecting `$GITHUB_OUTPUT` to a file) before trusting
+  a real run, the failure mode is silent corruption, not an error.
+- **Crates were published manually before this automation existed.** The
+  idempotency check (skip if already on crates.io) protects against
+  re-publishing, but if crate layout or naming ever changes, confirm current
+  crates.io versions before trusting a first automated publish of a
+  previously-manual crate.
 
-To make publishing live: add `CARGO_REGISTRY_TOKEN` as a repo/org secret, create
-the `release-publish` environment (with required reviewers if you want a manual
-approval gate), create the `release` branch, then run the workflow once on a
-small change to confirm the path end to end.
+## Recommended practices (as of 2026-07-10)
 
-## Recommended practices (as of 2026-06-15)
-
-- **Prep without publishing first.** For an unproven release path, do the bumps,
-  open the `main -> release` PR, and let the gate pass, then stop before merging.
-  The merge into `release` is the irreversible step (tags + crates.io). Review
-  the gate result before pulling that trigger.
+- **Prep without publishing first** for anything unproven: do the bumps, open
+  the `main -> release` PR, and let the gate pass, then stop before merging.
+  The merge into `release` is the irreversible step (tags + a GitHub Release
+  happen immediately and automatically; crates.io publish pauses for manual
+  approval on `release-publish`, but the tags/release do not). Review the
+  gate result before pulling that trigger.
+- **If the release gate's `pull_request` trigger doesn't fire on a PR at
+  all** (no check appears, not even a red X, just nothing), check
+  `mergeable`/`mergeStateStatus` on the PR first
+  (`gh pr view N --json mergeable,mergeStateStatus`). GitHub cannot evaluate
+  `pull_request` triggers against a PR it can't compute a merge for; a
+  `CONFLICTING` PR silently never gets checks, which looks identical to a
+  broken workflow registration from the outside. Resolve the conflict, then
+  it fires immediately.
 - **Keep rename/sweep changes out of source comments when avoidable.** The
   version-bump check counts any non-`docs/` change (including a comment-only edit
   to a `.rs` file) as bump-requiring, so a broad sweep forces patch bumps across
@@ -149,11 +196,15 @@ small change to confirm the path end to end.
 ## Workflow file map
 
 - `.github/workflows/ci.yml`: main trunk CI (no version-bump gate).
-- `.github/workflows/release-gate.yml`: the `main -> release` PR gate.
-- `.github/workflows/checks/source-branch-check.yml`: head must be `main`.
-- `.github/workflows/checks/version-bump-check.yml`: changed units must bump
+- `.github/workflows/main-to-release-gate.yml`: the `main -> release` PR gate
+  (`name: Release Gate`; the file is not named `release-gate.yml` because
+  that path had a permanently stuck workflow registration and had to be
+  renamed to force GitHub to re-register it, see Operational state above).
+- `.github/workflows/source-branch-check.yml`: head must be `main`.
+- `.github/workflows/version-bump-check.yml`: changed units must bump
   (docs-only exempt; any level).
-- `.github/workflows/checks/changelog-check.yml`: PR body needs a changelog
+- `.github/workflows/changelog-check.yml`: PR body needs a changelog
   section.
-- `.github/workflows/release-create.yml`: on merge to `release`, tags + GitHub
-  Release + tiered crates.io publish.
+- `.github/workflows/release-create.yml`: on push to `release`, tags + GitHub
+  Release + tiered crates.io publish (the `publish` job pauses for manual
+  approval on the `release-publish` environment).
