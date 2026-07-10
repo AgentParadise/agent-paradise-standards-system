@@ -79,7 +79,7 @@ fn test_init_preserves_existing_root_gitignore() {
 }
 
 #[test]
-fn test_init_with_standard_flag() {
+fn test_init_with_known_standard_flag_resolves_real_id() {
     let temp = tempfile::tempdir().unwrap();
 
     let status = Command::new(APSS_BIN)
@@ -98,8 +98,39 @@ fn test_init_with_standard_flag() {
         apss_yaml.contains("version: \">=1.0.0\""),
         "missing version requirement:\n{apss_yaml}"
     );
+    // code-topology is a known, officially published standard, so init
+    // should resolve its real ID directly instead of leaving a FIXME for
+    // the user to fill in by hand.
+    assert!(
+        apss_yaml.contains("id: APS-V1-0001"),
+        "missing resolved standard id:\n{apss_yaml}"
+    );
+    assert!(
+        !apss_yaml.contains("FIXME"),
+        "known standard should not need a FIXME placeholder:\n{apss_yaml}"
+    );
+}
+
+#[test]
+fn test_init_with_unknown_standard_flag_falls_back_to_fixme() {
+    let temp = tempfile::tempdir().unwrap();
+
+    let status = Command::new(APSS_BIN)
+        .args(["init", "--standard", "some-future-standard@>=1.0.0"])
+        .current_dir(temp.path())
+        .status()
+        .expect("failed to invoke apss init --standard");
+    assert!(status.success(), "apss init exited non-zero: {status}");
+
+    let apss_yaml = std::fs::read_to_string(temp.path().join("apss.yaml")).unwrap();
+    assert!(
+        apss_yaml.contains("  some-future-standard:"),
+        "missing standards.some-future-standard section:\n{apss_yaml}"
+    );
+    // An unrecognized slug can't be resolved without a network call, so it
+    // must still fall back to the FIXME placeholder hint.
     assert!(
         apss_yaml.contains("FIXME"),
-        "missing FIXME placeholder hint for standard id:\n{apss_yaml}"
+        "missing FIXME placeholder hint for unresolvable standard id:\n{apss_yaml}"
     );
 }
