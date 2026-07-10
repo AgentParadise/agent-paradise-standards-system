@@ -10,7 +10,7 @@
 //! - if/else branches
 //! - for/for-in/for-of loops
 //! - while/do-while loops
-//! - switch cases
+//! - switch statements (counted once, per SonarSource, not once per case)
 //! - catch clauses
 //! - ternary expressions
 //! - logical operators (&& and ||)
@@ -75,6 +75,10 @@ impl Grammar for TypeScriptGrammar {
 
     fn decision_nodes(&self) -> &'static [&'static str] {
         TS_DECISION_NODES
+    }
+
+    fn cognitive_decision_nodes(&self) -> &'static [&'static str] {
+        TS_COGNITIVE_DECISION_NODES
     }
 
     fn nesting_nodes(&self) -> &'static [&'static str] {
@@ -143,6 +147,10 @@ impl Grammar for TsxGrammar {
         TS_DECISION_NODES
     }
 
+    fn cognitive_decision_nodes(&self) -> &'static [&'static str] {
+        TS_COGNITIVE_DECISION_NODES
+    }
+
     fn nesting_nodes(&self) -> &'static [&'static str] {
         TS_NESTING_NODES
     }
@@ -160,6 +168,8 @@ impl Grammar for TsxGrammar {
 // Shared complexity rules
 // ============================================================================
 
+// CYCLOMATIC (McCabe) decision set. Each `switch_case` is a separate decision
+// (+1 apiece), matching the pre-SonarSource McCabe count for a switch.
 const TS_DECISION_NODES: &[&str] = &[
     "if_statement",
     "else_clause",
@@ -168,6 +178,23 @@ const TS_DECISION_NODES: &[&str] = &[
     "while_statement",
     "do_statement",
     "switch_case",
+    "catch_clause",
+    "ternary_expression",
+    "binary_expression", // && and ||
+];
+
+// COGNITIVE (SonarSource) decision set. Identical to the cyclomatic set except
+// a switch is charged ONCE on `switch_statement` (+1, plus its nesting penalty)
+// rather than once per `switch_case`. `switch_statement` is also a nesting node,
+// so its body raises the nesting level.
+const TS_COGNITIVE_DECISION_NODES: &[&str] = &[
+    "if_statement",
+    "else_clause",
+    "for_statement",
+    "for_in_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
     "catch_clause",
     "ternary_expression",
     "binary_expression", // && and ||
@@ -337,10 +364,25 @@ mod tests {
         assert!(nodes.contains(&"for_in_statement"));
         assert!(nodes.contains(&"while_statement"));
         assert!(nodes.contains(&"do_statement"));
+        // CYCLOMATIC (McCabe): each case is a decision, so the per-case node is
+        // in the set and the switch statement node is not.
         assert!(nodes.contains(&"switch_case"));
+        assert!(!nodes.contains(&"switch_statement"));
         assert!(nodes.contains(&"catch_clause"));
         assert!(nodes.contains(&"ternary_expression"));
         assert!(nodes.contains(&"binary_expression"));
+    }
+
+    #[test]
+    fn test_cognitive_decision_nodes() {
+        let grammar = TypeScriptGrammar::new();
+        let nodes = grammar.cognitive_decision_nodes();
+
+        // COGNITIVE (SonarSource): a switch is charged once on the statement
+        // node, not per case.
+        assert!(nodes.contains(&"switch_statement"));
+        assert!(!nodes.contains(&"switch_case"));
+        assert!(nodes.contains(&"if_statement"));
     }
 
     #[test]
