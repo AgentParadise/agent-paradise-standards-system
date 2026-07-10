@@ -31,7 +31,7 @@ This specification defines:
 The APS CLI MUST follow this hierarchy:
 
 ```
-aps
+apss
 ├── run <slug> <command> [args]   # Run standard CLI
 │   └── --list                    # List available standards
 │

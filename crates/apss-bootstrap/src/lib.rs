@@ -7,8 +7,8 @@ use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::process;
 
-pub mod init;
-pub mod install;
+mod init;
+mod install;
 
 // ============================================================================
 // CLI Definition

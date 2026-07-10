@@ -30,7 +30,7 @@ apss run topology --help           # Show topology commands
 ### Command Hierarchy
 
 ```
-aps
+apss
 ├── run <slug> <command>        # Run standard CLI
 ├── v1                          # v1 authoring commands
 └── v2                          # Future v2 commands
