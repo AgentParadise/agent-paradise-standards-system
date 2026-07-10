@@ -11,12 +11,16 @@ name: Version Bump Check
 on:
   workflow_call:
 
+# Least-privilege default: this check only reads the repo to diff versions.
+permissions:
+  contents: read
+
 jobs:
   version-bump:
     name: Check version bumps
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 

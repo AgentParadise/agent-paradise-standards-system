@@ -27,8 +27,10 @@ on:
   push:
     branches: [release]
 
+# Least-privilege default: only the create-release job pushes tags and
+# creates a GitHub Release, so only it declares contents: write below.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -37,6 +39,8 @@ jobs:
   detect-changes:
     name: Detect version changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       system_changed: ${{ steps.detect.outputs.system_changed }}
       system_version: ${{ steps.detect.outputs.system_version }}
@@ -45,7 +49,7 @@ jobs:
       tag_list: ${{ steps.detect.outputs.tag_list }}
       has_changes: ${{ steps.detect.outputs.has_changes }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -131,7 +135,7 @@ jobs:
           # Standards
           for dir in standards/v1/APS-V1-*; do
             [ -d "$dir" ] || continue
-            id=$(basename "$dir" | sed 's/-.*//' | sed 's/APS-V1-//')
+            id=$(basename "$dir" | sed -E 's/^APS-V1-([0-9]+)-.*/\1/')
             slug=$(basename "$dir" | sed 's/^APS-V1-[0-9]*-//')
             crate_name="apss-v1-${id}-${slug}"
             tag_prefix="APS-V1-${id}"
@@ -180,9 +184,11 @@ jobs:
             detect_crate "$dir" "experiment.toml" "$exp_name" "$exp_name" "3"
           done
 
-          # Bootstrap binary
+          # Bootstrap binary. Its Cargo.toml uses `version.workspace = true`,
+          # not a literal version string, so its version is always the
+          # system version computed above, never grepped from its own file.
           if [ -d "crates/apss-bootstrap" ] && ! git diff --quiet "$BASE" HEAD -- "crates/apss-bootstrap" 2>/dev/null; then
-            BOOT_VER=$(grep '^version' crates/apss-bootstrap/Cargo.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+            BOOT_VER="$SYSTEM_VERSION"
             if [ -n "$BOOT_VER" ]; then
               echo "  Changed: apss (bootstrap) @ $BOOT_VER (tier 4)"
               CHANGED_CRATES=$(echo "$CHANGED_CRATES" | jq --arg ver "$BOOT_VER" \
@@ -210,10 +216,13 @@ jobs:
           echo "Tags: $TAG_LIST"
           echo "Changed crates: $(echo "$CHANGED_CRATES" | jq -c '.')"
 
-          # Set outputs
+          # Set outputs. changed_crates must be compacted to one line: the
+          # GITHUB_OUTPUT file format requires single-line values for a plain
+          # key=value entry, and jq pretty-prints by default, so writing the
+          # multi-line $CHANGED_CRATES directly corrupts the output file.
           echo "system_changed=$SYSTEM_CHANGED" >> "$GITHUB_OUTPUT"
           echo "system_version=$SYSTEM_VERSION" >> "$GITHUB_OUTPUT"
-          echo "changed_crates=$CHANGED_CRATES" >> "$GITHUB_OUTPUT"
+          echo "changed_crates=$(echo "$CHANGED_CRATES" | jq -c '.')" >> "$GITHUB_OUTPUT"
           echo "standards_changed=$STANDARDS_CHANGED" >> "$GITHUB_OUTPUT"
           echo "tag_list=$TAG_LIST" >> "$GITHUB_OUTPUT"
           echo "has_changes=$HAS_CHANGES" >> "$GITHUB_OUTPUT"
@@ -229,7 +238,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -309,10 +318,12 @@ jobs:
     if: needs.detect-changes.outputs.system_changed == 'true' || needs.detect-changes.outputs.standards_changed == 'true'
     runs-on: ubuntu-latest
     environment: release-publish
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Publish APSS crates
         env:

