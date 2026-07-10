@@ -40,7 +40,11 @@ fn test_aps_status_delegates_to_same_cli_as_apss() {
         .output()
         .expect("failed to invoke aps status");
 
-    assert_eq!(output.status.code(), Some(1), "aps status should fail like apss status does with no apss.yaml");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "aps status should fail like apss status does with no apss.yaml"
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("No apss.yaml found"),
