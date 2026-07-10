@@ -11,6 +11,10 @@ on:
         required: true
         type: string
 
+# Least-privilege default: this check only inspects the PR body text.
+permissions:
+  contents: read
+
 jobs:
   changelog:
     name: Check changelog
