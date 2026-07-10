@@ -35,6 +35,10 @@ pub struct RecipeTemplateContext {
 /// Failure modes of [`scaffold_recipe`].
 #[derive(Debug, thiserror::Error)]
 pub enum GenerateError {
+    /// The requested recipe `name` is not a safe single path component / YAML
+    /// scalar (see [`validate_recipe_name`]).
+    #[error("invalid recipe name: {0}")]
+    InvalidName(String),
     /// The destination already exists; the generator never overwrites.
     #[error("destination already exists: {0}")]
     AlreadyExists(PathBuf),
@@ -52,15 +56,54 @@ pub enum GenerateError {
     },
 }
 
+/// Validate that `name` is safe to use as both a recipe directory name and a
+/// YAML scalar in the generated `recipe.yaml`.
+///
+/// The name must be a single, non-empty path component containing only ASCII
+/// letters, digits, `-`, `_`, or `.` (and not the `.` / `..` traversal names).
+/// This rules out path separators and `..` (which could escape the target
+/// directory) and YAML-special / whitespace characters (which could yield a
+/// manifest that fails to parse or is renamed by Handlebars escaping), so the
+/// generator's "output always validates" guarantee holds for every accepted
+/// `name`.
+pub fn validate_recipe_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("recipe name must not be empty".to_string());
+    }
+    if name == "." || name == ".." {
+        return Err("recipe name must not be '.' or '..'".to_string());
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err(format!(
+            "recipe name '{name}' may only contain ASCII letters, digits, '-', '_', or '.' (no path separators, whitespace, or YAML-special characters)"
+        ));
+    }
+    Ok(())
+}
+
 /// Scaffold a conformant recipe directory named `name` at `dest`.
 ///
 /// `dest` is the recipe directory itself (for example `./my-recipe`). It MUST
-/// NOT already exist. On success, returns the list of files written, sorted.
+/// NOT already exist, and `name` MUST satisfy [`validate_recipe_name`]. On
+/// success, returns the list of files written, sorted.
 ///
-/// The emitted directory always passes [`crate::validate_recipe_dir`].
+/// The emitted directory always passes [`crate::validate_recipe_dir`]: `name`
+/// is validated up front so it can never produce a manifest that fails to load.
 pub fn scaffold_recipe(name: &str, dest: &Path) -> Result<Vec<PathBuf>, GenerateError> {
-    if dest.exists() {
-        return Err(GenerateError::AlreadyExists(dest.to_path_buf()));
+    validate_recipe_name(name).map_err(GenerateError::InvalidName)?;
+
+    match dest.try_exists() {
+        Ok(true) => return Err(GenerateError::AlreadyExists(dest.to_path_buf())),
+        Ok(false) => {}
+        Err(source) => {
+            return Err(GenerateError::Io {
+                path: dest.to_path_buf(),
+                source,
+            });
+        }
     }
 
     let engine = TemplateEngine::new();
@@ -106,10 +149,8 @@ mod tests {
 
     #[test]
     fn scaffold_writes_expected_files() {
-        let temp = std::env::temp_dir().join(format!("apss-recipe-gen-{}", std::process::id()));
-        let dest = temp.join("my-recipe");
-        // Best-effort clean slate.
-        let _ = fs::remove_dir_all(&temp);
+        let temp = tempfile::tempdir().expect("temp dir");
+        let dest = temp.path().join("my-recipe");
 
         let written = scaffold_recipe("my-recipe", &dest).expect("scaffold should succeed");
         assert_eq!(written.len(), 4);
@@ -121,19 +162,54 @@ mod tests {
         let recipe = fs::read_to_string(dest.join("recipe.yaml")).unwrap();
         assert!(recipe.contains("name: my-recipe"));
         assert!(recipe.contains("default_agent: main"));
-
-        let _ = fs::remove_dir_all(&temp);
     }
 
     #[test]
     fn scaffold_refuses_existing_destination() {
-        let temp = std::env::temp_dir().join(format!("apss-recipe-gen-x-{}", std::process::id()));
-        let dest = temp.join("exists");
+        let temp = tempfile::tempdir().expect("temp dir");
+        let dest = temp.path().join("exists");
         fs::create_dir_all(&dest).unwrap();
 
         let error = scaffold_recipe("exists", &dest).expect_err("should refuse existing dest");
         assert!(matches!(error, GenerateError::AlreadyExists(_)));
+    }
 
-        let _ = fs::remove_dir_all(&temp);
+    #[test]
+    fn scaffold_rejects_invalid_names() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        for bad in [
+            "",
+            ".",
+            "..",
+            "../escape",
+            "nested/name",
+            "back\\slash",
+            "with space",
+            "yaml:colon",
+            "hash#comment",
+        ] {
+            let dest = temp.path().join("dest");
+            let error =
+                scaffold_recipe(bad, &dest).expect_err(&format!("name {bad:?} should be rejected"));
+            assert!(
+                matches!(error, GenerateError::InvalidName(_)),
+                "name {bad:?} should be an InvalidName error, got {error:?}"
+            );
+            // A rejected name must never create the destination directory.
+            assert!(
+                !dest.exists(),
+                "rejected name {bad:?} must not create {dest:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_recipe_name_accepts_safe_names() {
+        for good in ["pr-reviewer", "my_recipe", "recipe.v1", "abc123"] {
+            assert!(
+                validate_recipe_name(good).is_ok(),
+                "name {good:?} should be accepted"
+            );
+        }
     }
 }

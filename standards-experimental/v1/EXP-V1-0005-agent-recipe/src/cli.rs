@@ -14,7 +14,7 @@
 
 use apss_core::registry::{CommandHandler, CommandInfo};
 
-use crate::generate::scaffold_recipe;
+use crate::generate::{scaffold_recipe, validate_recipe_name};
 use crate::validate::validate_recipe_dir;
 
 /// Handler that backs `run agent-recipe <command>` in the dev CLI.
@@ -66,28 +66,49 @@ fn dispatch(command: &str, args: &[String], repo_root: &std::path::Path) -> i32 
 /// `create <name> [--dir <parent>]` writes `<parent>/<name>/` (parent defaults
 /// to the current directory).
 fn create(args: &[String], repo_root: &std::path::Path) -> i32 {
+    const USAGE: &str = "Usage: apss-dev run agent-recipe create <name> [--dir <parent>]";
     let mut name: Option<&str> = None;
     let mut parent: Option<std::path::PathBuf> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "--dir" => {
-                parent = args.get(i + 1).map(std::path::PathBuf::from);
-                i += 2;
-            }
+            "--dir" => match args.get(i + 1) {
+                Some(value) if !value.starts_with('-') => {
+                    parent = Some(std::path::PathBuf::from(value));
+                    i += 2;
+                }
+                _ => {
+                    eprintln!("Error: --dir requires a parent directory value");
+                    eprintln!("{USAGE}");
+                    return 3;
+                }
+            },
             arg if !arg.starts_with('-') && name.is_none() => {
                 name = Some(arg);
                 i += 1;
             }
-            _ => i += 1,
+            other => {
+                eprintln!("Error: unexpected argument '{other}'");
+                eprintln!("{USAGE}");
+                return 3;
+            }
         }
     }
 
     let Some(name) = name else {
         eprintln!("Error: a recipe name is required");
-        eprintln!("Usage: apss-dev run agent-recipe create <name> [--dir <parent>]");
+        eprintln!("{USAGE}");
         return 3;
     };
+
+    // Reject unsafe names up front (path traversal, separators, YAML-special
+    // characters) so scaffolding always operates on a valid single-component
+    // name and its "output always validates" guarantee holds.
+    if let Err(reason) = validate_recipe_name(name) {
+        eprintln!("Error: {reason}");
+        eprintln!("{USAGE}");
+        return 3;
+    }
 
     let parent = parent.unwrap_or_else(|| repo_root.to_path_buf());
     let parent = if parent.is_absolute() {
@@ -183,3 +204,40 @@ fn command_infos() -> Vec<CommandInfo> {
 
 /// Command names registered by `register()`; kept in sync with [`command_infos`].
 pub(crate) const COMMAND_NAMES: [&str; 2] = ["validate", "create"];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn s(values: &[&str]) -> Vec<String> {
+        values.iter().map(|v| v.to_string()).collect()
+    }
+
+    #[test]
+    fn create_rejects_dir_flag_without_value() {
+        let root = std::path::PathBuf::from(".");
+        // Trailing `--dir` with no value must be a usage error, not a silent
+        // fallback to repo_root.
+        assert_eq!(create(&s(&["my-recipe", "--dir"]), &root), 3);
+        // `--dir` immediately followed by another flag is also missing a value.
+        assert_eq!(create(&s(&["my-recipe", "--dir", "--help"]), &root), 3);
+    }
+
+    #[test]
+    fn create_rejects_missing_name() {
+        let root = std::path::PathBuf::from(".");
+        assert_eq!(create(&s(&["--dir", "/tmp"]), &root), 3);
+    }
+
+    #[test]
+    fn create_rejects_unsafe_names() {
+        let root = std::path::PathBuf::from(".");
+        for bad in ["/abs/path", "../outside", "nested/name", "with space"] {
+            assert_eq!(
+                create(&s(&[bad]), &root),
+                3,
+                "name {bad:?} should be rejected as a usage error"
+            );
+        }
+    }
+}
