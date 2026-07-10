@@ -423,7 +423,7 @@ Historical snapshots enable trend analysis:
 
 Diff artifacts compare two topology snapshots for CI integration. The diff schema provides a standardized format for detecting regressions and generating PR comments.
 
-**Storage:** `.topology/diffs/<name>.json` or stdout from `aps run topology diff`
+**Storage:** `.topology/diffs/<name>.json` or stdout from `apss run topology diff`
 
 ```json
 {
@@ -1415,16 +1415,16 @@ The CLI provides built-in visualization generators that don't require separate p
 
 ```bash
 # Generate all visualizations + dashboard
-aps run topology viz .topology --type all
+apss run topology viz .topology --type all
 
 # Generate specific visualization
-aps run topology viz .topology --type codecity
-aps run topology viz .topology --type clusters
-aps run topology viz .topology --type vsa
-aps run topology viz .topology --type 3d
+apss run topology viz .topology --type codecity
+apss run topology viz .topology --type clusters
+apss run topology viz .topology --type vsa
+apss run topology viz .topology --type 3d
 
 # Custom output
-aps run topology viz .topology --type codecity --output my-city.html
+apss run topology viz .topology --type codecity --output my-city.html
 ```
 
 #### 9.8.1 Available Visualization Types

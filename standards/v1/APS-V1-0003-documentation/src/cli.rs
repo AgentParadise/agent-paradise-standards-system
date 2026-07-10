@@ -59,7 +59,7 @@ impl CommandHandler for DocumentationCommandHandler {
 /// Load docs config from a custom path (for the `--config` flag).
 ///
 /// Mirrors [`crate::config::load_config`] but works against an arbitrary path
-/// so operators can point `aps run docs validate` at a non-default
+/// so operators can point `apss run docs validate` at a non-default
 /// `apss.yaml`. YAML format per the unified-config brief (2026-06-04); other
 /// top-level sections owned by other standards are tolerated and ignored.
 fn load_docs_config(path: &str) -> Result<ApssConfig, ConfigError> {

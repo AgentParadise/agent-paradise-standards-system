@@ -23,8 +23,8 @@ The contract has four parts:
 ## 1. Install Entry Point
 
 ```
-aps run docs install   [<repo-root>] [--force] [--no-config]
-aps run docs uninstall [<repo-root>]
+apss run docs install   [<repo-root>] [--force] [--no-config]
+apss run docs uninstall [<repo-root>]
 ```
 
 ### 1.1 `install` semantics
@@ -39,7 +39,7 @@ Steps, in order:
    - The hook MUST insert a block delimited by the sentinels:
      ```
      # >>> apss-docs-hook >>>
-     aps run docs hook --staged || exit $?
+     apss run docs hook --staged || exit $?
      # <<< apss-docs-hook <<<
      ```
    - The block MUST be placed at the end of any existing `#!` shebang block and before any user-defined hook body, so that a user hook that exits early does not skip APSS validation.
@@ -240,7 +240,7 @@ enum ValidationScope {
 }
 ```
 
-- `Full`: walk the entire docs root and every active doc type directory. Used by `aps run docs validate` and by CI.
+- `Full`: walk the entire docs root and every active doc type directory. Used by `apss run docs validate` and by CI.
 - `Changed`: only inspect docs touched by `staged_paths`. The hook MUST use this scope. The validator MUST still load enough surrounding state (for example, the doc type directories themselves) to detect dead backlinks introduced by the change set.
 
 When `scope = Changed` and the staged set contains an `apss.yaml` modification, the validator MUST run the `Full` set of checks; config changes can invalidate the entire tree.
@@ -273,7 +273,7 @@ The `machine_readable` field MUST contain the same content as `diagnostics`/`sum
 
 ### 2.4 Exit behavior
 
-- `aps run docs validate` exits `0` iff `summary.errors == 0`. Warnings do not cause a non-zero exit.
+- `apss run docs validate` exits `0` iff `summary.errors == 0`. Warnings do not cause a non-zero exit.
 - A panic, uncaught IO error, or regex compile failure on a built-in pattern MUST be reported as `validator-internal-error` (error severity) and MUST result in a non-zero exit. The validator MUST NOT exit `0` after eating an internal error.
 
 ### 2.5 What "valid structure" means
@@ -334,8 +334,8 @@ When a docs directory has no indexable `.md` siblings, the generator MUST still 
 
 ### 3.5 Exit behavior
 
-- `aps run docs index` (dry run) exits `0` regardless of whether content would change, as long as no file read fails.
-- `aps run docs index --write` exits `0` when every write succeeds, even if no file actually changed. A write failure MUST emit `index-write-failed` and exit non zero.
+- `apss run docs index` (dry run) exits `0` regardless of whether content would change, as long as no file read fails.
+- `apss run docs index --write` exits `0` when every write succeeds, even if no file actually changed. A write failure MUST emit `index-write-failed` and exit non zero.
 
 ---
 
@@ -346,7 +346,7 @@ The hook is the operator facing surface of the install. Its job is to keep index
 ### 4.1 Entry point
 
 ```
-aps run docs hook --staged
+apss run docs hook --staged
 ```
 
 The installed `.git/hooks/pre-commit` block MUST do nothing more than call this command and forward its exit code. The hook's logic lives in the Rust binary so it can be tested and version controlled.
@@ -421,7 +421,7 @@ These are emitted in addition to the validator and generator diagnostics above; 
 A typical commit flow with the standard installed:
 
 1. Operator edits `docs/adrs/ADR-001-security.md` and commits.
-2. Pre-commit hook fires `aps run docs hook --staged`.
+2. Pre-commit hook fires `apss run docs hook --staged`.
 3. The hook regenerates `docs/adrs/README.md` (the index), `git add`s it.
 4. The hook runs the validator in `Changed` scope. ADR01 checks pass. Backlink checks see no new dangling references. Frontmatter and `status` are valid.
 5. The hook prints a one-line success banner and exits `0`. The commit completes with the regenerated index included.

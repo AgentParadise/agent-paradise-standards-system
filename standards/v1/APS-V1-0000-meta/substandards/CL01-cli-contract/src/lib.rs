@@ -7,11 +7,11 @@
 //!
 //! ```bash
 //! # Run a standard's CLI
-//! aps run topology analyze .
-//! aps run topology validate .topology/
+//! apss run topology analyze .
+//! apss run topology validate .topology/
 //!
 //! # Discovery
-//! aps run --list
+//! apss run --list
 //! ```
 //!
 //! ## Implementing StandardCli
@@ -324,7 +324,7 @@ impl CliCommandInfo {
 
 /// Trait for standards that expose CLI commands.
 ///
-/// Implement this trait to register a standard's CLI with the `aps run` dispatcher.
+/// Implement this trait to register a standard's CLI with the `apss run` dispatcher.
 pub trait StandardCli: Send + Sync {
     /// Standard slug for command dispatch (e.g., "topology").
     fn slug(&self) -> &str;

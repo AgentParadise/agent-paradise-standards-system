@@ -16,13 +16,13 @@ This substandard defines how APS standards expose their functionality through th
 
 ```bash
 # Run a standard's CLI
-aps run topology analyze .
-aps run topology validate .topology/
-aps run topology diff base/ pr/
+apss run topology analyze .
+apss run topology validate .topology/
+apss run topology diff base/ pr/
 
 # Discovery
-aps run --list                    # Show available standards
-aps run topology --help           # Show topology commands
+apss run --list                    # Show available standards
+apss run topology --help           # Show topology commands
 ```
 
 ## Key Concepts

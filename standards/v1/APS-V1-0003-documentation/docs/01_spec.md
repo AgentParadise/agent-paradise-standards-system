@@ -316,8 +316,8 @@ Rendering rules:
 When `docs.index.auto_generate` is `true`, the CLI and the install hook MAY write indexes directly into `README.md` files. The dry run and write paths MUST produce identical content for the same input directory:
 
 ```bash
-aps run docs index [path]          # Dry run: print the indexes that would be written
-aps run docs index [path] --write  # Write indexes into README.md files
+apss run docs index [path]          # Dry run: print the indexes that would be written
+apss run docs index [path] --write  # Write indexes into README.md files
 ```
 
 The generator MUST traverse only file entries; a directory named `something.md` MUST NOT be treated as a document.
@@ -614,8 +614,8 @@ This section is normative. Installing this standard into a project installs thre
 ### 9.1 Install entry point
 
 ```bash
-aps run docs install [<repo-root>]
-aps run docs uninstall [<repo-root>]
+apss run docs install [<repo-root>]
+apss run docs uninstall [<repo-root>]
 ```
 
 Behavior:
@@ -647,7 +647,7 @@ The validator is the source of truth. The hook and the standalone CLI MUST call 
 
 **Exit behavior**:
 
-- `aps run docs validate` MUST exit `0` only when `summary.errors == 0`.
+- `apss run docs validate` MUST exit `0` only when `summary.errors == 0`.
 - The hook MUST refuse the commit when `summary.errors > 0`. Warnings MUST be printed but MUST NOT block the commit.
 - An internal failure (panic, IO error, regex compile failure on a built in pattern) MUST be reported as the synthetic diagnostic `validator-internal-error` with severity `error` and MUST block the commit. The validator MUST NOT swallow internal errors silently.
 
@@ -668,12 +668,12 @@ The index generator and the validator MUST agree:
 
 **Exit behavior**:
 
-- `aps run docs index --write` MUST exit `0` after a successful write, even if it made no changes.
+- `apss run docs index --write` MUST exit `0` after a successful write, even if it made no changes.
 - Failure to write any individual file MUST emit `index-write-failed` and MUST exit non zero.
 
 ### 9.4 Git pre-commit hook contract
 
-The installed hook is a small shell wrapper that calls into `aps run docs hook --staged`. The hook MUST:
+The installed hook is a small shell wrapper that calls into `apss run docs hook --staged`. The hook MUST:
 
 1. Resolve the repository root and the staged file list (`git diff --cached --name-only --diff-filter=ACMR`).
 2. Refresh indexes for any docs directory whose contents changed in the staged set, by calling the index generator in `--write` mode. The hook MUST re-stage rewritten `README.md` files (`git add`) so the commit is self consistent.
@@ -749,11 +749,11 @@ Substandard codes are defined in their own specs.
 This section specifies the full CLI surface this standard MUST expose. The `validate` and `index` subcommands are implemented today. The `install`, `uninstall`, and `hook` subcommands are a forward specification and are NOT yet implemented by the handler (planned follow-up, contract in Section 9 and [`02_install_contract.md`](02_install_contract.md)).
 
 ```bash
-aps run docs install [<repo-root>]                 # Planned (not yet implemented): install hook + default config (idempotent)
-aps run docs uninstall [<repo-root>]               # Planned (not yet implemented): remove hook (config preserved)
-aps run docs validate [<path>] [--json]            # Run validator (CI-friendly)
-aps run docs index [<path>] [--write]              # Run index generator
-aps run docs hook --staged                         # Planned (not yet implemented): hook entry point (used by pre-commit)
+apss run docs install [<repo-root>]                 # Planned (not yet implemented): install hook + default config (idempotent)
+apss run docs uninstall [<repo-root>]               # Planned (not yet implemented): remove hook (config preserved)
+apss run docs validate [<path>] [--json]            # Run validator (CI-friendly)
+apss run docs index [<path>] [--write]              # Run index generator
+apss run docs hook --staged                         # Planned (not yet implemented): hook entry point (used by pre-commit)
 ```
 
 Every command MUST emit the same diagnostics shape as the validator (Section 9.2).
