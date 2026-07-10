@@ -5,7 +5,7 @@ Tests for the CLI contract are included in `src/lib.rs`.
 Run tests with:
 
 ```bash
-cargo test -p aps-v1-0000-cli01-cli-contract
+cargo test -p apss-v1-0000-cli01-cli-contract
 ```
 
 ## Test Coverage

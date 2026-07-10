@@ -86,12 +86,12 @@ dependencies = [
 
 [[package]]
 name = "aps-cli"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
- "aps-v1-0000-meta",
  "apss-core",
  "apss-distribution",
  "apss-project-config",
+ "apss-v1-0000-meta",
  "apss-v1-0001-code-topology",
  "apss-v1-0002-architecture-fitness",
  "apss-v1-0003-documentation",
@@ -105,37 +105,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "aps-v1-0000-cli01-cli-contract"
-version = "1.2.0"
-dependencies = [
- "apss-core",
- "serde",
- "serde_json",
- "thiserror",
- "toml",
-]
-
-[[package]]
-name = "aps-v1-0000-meta"
-version = "1.5.0"
-dependencies = [
- "apss-core",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "aps-v1-0000-ss01-substandard-structure"
-version = "1.1.0"
-dependencies = [
- "apss-core",
- "regex",
- "toml",
-]
-
-[[package]]
 name = "apss"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "apss-core",
  "clap",
@@ -148,7 +119,7 @@ dependencies = [
 
 [[package]]
 name = "apss-core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "handlebars",
  "semver",
@@ -187,8 +158,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "apss-v1-0000-cli01-cli-contract"
+version = "1.2.1"
+dependencies = [
+ "apss-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0000-meta"
+version = "1.5.1"
+dependencies = [
+ "apss-core",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "apss-v1-0000-ss01-substandard-structure"
+version = "1.1.1"
+dependencies = [
+ "apss-core",
+ "regex",
+ "toml",
+]
+
+[[package]]
 name = "apss-v1-0001-code-topology"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "apss-core",
  "chrono",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0002-architecture-fitness"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "apss-core",
  "chrono",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0003-documentation"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "apss-core",
  "glob",
@@ -327,9 +327,9 @@ checksum = "175812e0be2bccb6abe50bb8d566126198344f707e304f45c648fd8f2cc0365e"
 
 [[package]]
 name = "bytes"
-version = "1.11.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b35204fbdc0b3f4446b89fc1ac2cf84a8a68971995d0bf2e925ec7cd960f9cb3"
+checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cc"
@@ -1584,9 +1584,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.9"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7df23109aa6c1567d1c575b9952556388da57401e4ace1d15f79eedad0d8f53"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "ring",
  "rustls-pki-types",

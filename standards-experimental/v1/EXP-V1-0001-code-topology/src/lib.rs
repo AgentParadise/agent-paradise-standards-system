@@ -959,7 +959,7 @@ impl Default for CodeTopologyStandard {
 }
 
 // TODO: Implement Standard trait in Milestone 4
-// impl aps_v1_0000_meta::Standard for CodeTopologyStandard {
+// impl apss_v1_0000_meta::Standard for CodeTopologyStandard {
 //     fn validate_package(&self, path: &Path) -> Diagnostics { ... }
 //     fn validate_repo(&self, path: &Path) -> Diagnostics { ... }
 // }

@@ -490,7 +490,7 @@ The `issue` field is **REQUIRED**. Exceptions without issue references MUST caus
 
 1. **Budget enforcement**: If `value` is specified and the actual metric value exceeds the exception's `value`, the exception is **insufficient** - the violation is reported as unexcepted.
 2. **Stale detection**: If an entity no longer exists in the topology artifacts, or its metric value is now within the rule's threshold, the exception is **stale**. Stale exceptions MUST be reported in the validation output.
-3. **Monotonic decrease**: When regenerating exceptions (via the planned, not-yet-implemented `aps run architecture-fitness ratchet` command), new `value` entries MUST NOT exceed previous values. The ratchet only tightens.
+3. **Monotonic decrease**: When regenerating exceptions (via the planned, not-yet-implemented `apss run architecture-fitness ratchet` command), new `value` entries MUST NOT exceed previous values. The ratchet only tightens.
 
 ---
 
@@ -962,7 +962,7 @@ severity = "warning"
 
 ## 11. CLI Interface (Informative)
 
-> This section is informative. The CLI is provided by the `aps` tool.
+> This section is informative. The CLI is provided by the `apss` tool.
 
 > **Implementation status.** The implemented CLI surface is the single
 > `validate` subcommand with the flags `--config`, `--report`, and
@@ -974,25 +974,25 @@ severity = "warning"
 
 ```bash
 # Validate all rules (implemented)
-aps run architecture-fitness validate <path>
+apss run architecture-fitness validate <path>
 
 # Write JSON report (implemented)
-aps run architecture-fitness validate . --report fitness-report.json
+apss run architecture-fitness validate . --report fitness-report.json
 
 # Trend deltas against a prior report (implemented)
-aps run architecture-fitness validate . --previous-report prior.json
+apss run architecture-fitness validate . --previous-report prior.json
 
 # PLANNED, not yet implemented: validate specific dimensions only
-aps run architecture-fitness validate . --dimensions MT01,MD01
+apss run architecture-fitness validate . --dimensions MT01,MD01
 
 # PLANNED, not yet implemented: auto-generate exceptions from current violations
-aps run architecture-fitness ratchet <path>
+apss run architecture-fitness ratchet <path>
 
 # PLANNED, not yet implemented: show system-level fitness summary
-aps run architecture-fitness summary <path>
+apss run architecture-fitness summary <path>
 
 # PLANNED, not yet implemented: show report in specific format
-aps run architecture-fitness report <path> --format human|json
+apss run architecture-fitness report <path> --format human|json
 ```
 
 ### 11.2 Options

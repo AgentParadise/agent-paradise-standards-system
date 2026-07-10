@@ -9,12 +9,39 @@ Agent Paradise Standards System (APSS) is a Rust workspace for executable, versi
 ## Repository Layout
 
 - `crates/aps-core/` - core library for diagnostics, discovery, metadata, config, lockfiles, registry, and standard resolution.
-- `crates/aps-cli/` - `aps` CLI for running standards and managing V1 standard lifecycle commands.
-- `crates/apss-bootstrap/` - `apss` bootstrap CLI for consumer project initialization, installation, status, and dispatch.
+- `crates/aps-cli/` - `apss-dev` CLI, repo-internal only (never published), for authoring/validating/promoting this repo's own V1 standard packages.
+- `crates/apss-bootstrap/` - `apss` bootstrap CLI (published, `cargo install apss`), the binary consumer projects install: initialization, installation, status, config, and `run <slug> <command>` dispatch. Also ships a deprecated `aps` alias binary that warns and delegates to `apss`; new docs and scripts must always use `apss`, never `aps`.
 - `standards/v1/APS-V1-0000-meta/` - meta-standard defining structure, validation, config, CLI, distribution, experiment lifecycle, and promotion rules.
 - `standards/v1/` - official standards governed by the meta-standard.
 - `standards-experimental/v1/` - incubating experimental standards governed by the meta-standard.
 - `.github/workflows/` - CI, release gate, and release creation workflows.
+
+## CLI Binaries: `apss` vs `apss-dev`
+
+This repo ships two unrelated CLI binaries. Do not conflate them, and never
+write a bare `aps` command in docs, comments, or examples, it does not exist
+except as the deprecated alias described below.
+
+- **`apss`** (`crates/apss-bootstrap`, published to crates.io, installed via
+  `cargo install apss`): the binary consumer projects install. Commands:
+  `init`, `install`, `status`, `validate` (checks a consumer project's
+  `apss.yaml` and its installed standards), `config`, and `run <slug>
+  <command>` (dispatches to a project's composed standards CLI). There is no
+  `v1` subcommand on this binary.
+- **`apss-dev`** (`crates/aps-cli`, binary name `apss-dev`, never published):
+  repo-internal tooling for authoring this repo's own standards. Commands
+  live under `v1`: `v1 validate repo/package/standard/distribution/config`,
+  `v1 create standard/experiment/substandard`, `v1 promote`, `v1 version
+  show/bump`, `v1 list`, `v1 generate views`. Invoke via `just aps-*` recipes
+  or `cargo run -p aps-cli --bin apss-dev -- v1 ...`, never bare on PATH.
+
+`apss v1 validate` is not a real command: bare `validate` (no `v1`) is the
+consumer-facing `apss` command; `v1 validate ...` only exists on `apss-dev`.
+
+`apss-bootstrap` also ships a deprecated `aps` binary that prints a warning
+to stderr and delegates to `apss`, for backward compatibility with anyone
+who already has `aps` scripted or installed. It is not a third CLI, it is
+`apss` under an old name.
 
 ## Setup Commands
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:apss:schema:aps-v1-0002:fitness-report:1.0.0",
   "title": "Fitness Report",
-  "description": "Schema for fitness-report.json - output of `aps run architecture-fitness validate` per APS-V1-0002 §7.",
+  "description": "Schema for fitness-report.json - output of `apss run architecture-fitness validate` per APS-V1-0002 §7.",
   "type": "object",
   "required": [
     "schema_version",

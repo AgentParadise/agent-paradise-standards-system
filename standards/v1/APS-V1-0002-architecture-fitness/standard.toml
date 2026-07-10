@@ -4,7 +4,7 @@ schema = "aps.standard/v1"
 id = "APS-V1-0002"
 name = "Architecture Fitness Functions"
 slug = "architecture-fitness"
-version = "1.0.0"
+version = "1.0.1"
 category = "technical"
 status = "active"
 

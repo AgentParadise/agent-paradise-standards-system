@@ -7,7 +7,7 @@ See the Code Topology standard (EXP-V1-0001) for a complete implementation.
 ### Basic Implementation
 
 ```rust
-use aps_v1_0000_cli01_cli_contract::{
+use apss_v1_0000_cli01_cli_contract::{
     StandardCli, CliResult, CliCommandInfo, CliDiagnostic
 };
 
@@ -53,6 +53,6 @@ impl MyStandardCli {
 
 ```bash
 # Run the standard
-aps run my-standard validate .
-aps run my-standard analyze . --output .artifacts/
+apss run my-standard validate .
+apss run my-standard analyze . --output .artifacts/
 ```

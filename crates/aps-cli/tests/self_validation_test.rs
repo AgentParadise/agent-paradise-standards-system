@@ -5,8 +5,8 @@
 
 mod fixtures;
 
-use aps_v1_0000_meta::{MetaStandard, Standard};
 use apss_core::discovery::{PackageType, discover_v1_packages};
+use apss_v1_0000_meta::{MetaStandard, Standard};
 use fixtures::repo_root;
 use std::process::Command;
 

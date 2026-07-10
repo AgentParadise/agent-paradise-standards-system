@@ -24,10 +24,10 @@ Test complete validation workflows:
 
 ```bash
 # Run all tests for this crate
-cargo test -p aps-v1-0000-meta
+cargo test -p apss-v1-0000-meta
 
 # Run with verbose output
-cargo test -p aps-v1-0000-meta -- --nocapture
+cargo test -p apss-v1-0000-meta -- --nocapture
 ```
 
 ## Test Requirements

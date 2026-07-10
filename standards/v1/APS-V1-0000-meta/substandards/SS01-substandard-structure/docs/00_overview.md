@@ -29,12 +29,12 @@ A **substandard** is a domain-specific extension of a parent standard. Substanda
 
 ```bash
 # Create a new substandard
-aps v1 create substandard APS-V1-0001 --profile GH01 --name "GitHub Profile"
+cargo run -p aps-cli --bin apss-dev -- v1 create substandard APS-V1-0001 --profile GH01 --name "GitHub Profile"
 
 # Validate a substandard
-aps v1 validate substandard APS-V1-0001.GH01
+cargo run -p aps-cli --bin apss-dev -- v1 validate substandard APS-V1-0001.GH01
 
 # Bump substandard version
-aps v1 version bump APS-V1-0001.GH01 minor
+cargo run -p aps-cli --bin apss-dev -- v1 version bump APS-V1-0001.GH01 minor
 ```
 

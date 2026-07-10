@@ -134,7 +134,7 @@ and have well-formed frontmatter.
 
 ```bash
 # Validate ADRs (runs as part of docs validate)
-aps run docs validate .
+apss run docs validate .
 
 # Configure required ADR keywords in apss.yaml at the repo root
 # (config is owned by APS-V1-0000.CF01; the docs standard contributes the docs: block)

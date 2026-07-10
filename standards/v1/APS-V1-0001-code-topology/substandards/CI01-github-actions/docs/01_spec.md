@@ -161,20 +161,20 @@ graph LR
 
 ## 5. Command Interface
 
-The workflow calls these commands via the `aps run` dispatcher:
+The workflow calls these commands via the `apss run` dispatcher:
 
 ```bash
 # Analyze a project
-aps run topology analyze . --output .topology-pr/
+apss run topology analyze . --output .topology-pr/
 
 # Compare two topology directories
-aps run topology diff .topology-base/ .topology-pr/ --format json > diff.json
+apss run topology diff .topology-base/ .topology-pr/ --format json > diff.json
 
 # Check against thresholds
-aps run topology check diff.json --config .topology/config.toml
+apss run topology check diff.json --config .topology/config.toml
 
 # Generate PR comment markdown
-aps run topology comment diff.json --config .topology/config.toml > comment.md
+apss run topology comment diff.json --config .topology/config.toml > comment.md
 ```
 
 ## 6. Exit Codes

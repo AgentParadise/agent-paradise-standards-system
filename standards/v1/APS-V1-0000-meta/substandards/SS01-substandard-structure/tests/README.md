@@ -40,9 +40,9 @@ Tests should verify that `substandard.toml` parsing works correctly and validati
 
 ```bash
 # Run substandard tests
-cargo test -p aps-v1-0000-ss01-substandard-structure
+cargo test -p apss-v1-0000-ss01-substandard-structure
 
 # Run via CLI
-aps v1 validate substandard APS-V1-0000.SS01
+cargo run -p aps-cli --bin apss-dev -- v1 validate substandard APS-V1-0000.SS01
 ```
 

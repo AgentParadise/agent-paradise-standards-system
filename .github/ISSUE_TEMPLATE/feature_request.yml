@@ -39,7 +39,7 @@ body:
       label: Area
       description: Which part of the system does this affect?
       options:
-        - CLI (aps command)
+        - CLI (apss command)
         - Core library (apss-core)
         - Meta-standard
         - Documentation

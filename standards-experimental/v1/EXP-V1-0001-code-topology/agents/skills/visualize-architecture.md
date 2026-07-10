@@ -15,22 +15,22 @@ Generate visual representations of code architecture from `.topology/` artifacts
 ## Prerequisites
 
 - `.topology/` directory must exist with valid artifacts
-- Run `aps run topology analyze` first if artifacts don't exist
+- Run `apss run topology analyze` first if artifacts don't exist
 
 ## CLI Usage
 
 ```bash
 # Generate all visualizations (recommended)
-aps run topology viz .topology --type all
+apss run topology viz .topology --type all
 
 # Generate specific visualization
-aps run topology viz .topology --type codecity
-aps run topology viz .topology --type clusters
-aps run topology viz .topology --type vsa
-aps run topology viz .topology --type 3d
+apss run topology viz .topology --type codecity
+apss run topology viz .topology --type clusters
+apss run topology viz .topology --type vsa
+apss run topology viz .topology --type 3d
 
 # Custom output location
-aps run topology viz .topology --type codecity --output my-city.html
+apss run topology viz .topology --type codecity --output my-city.html
 ```
 
 ## Built-in Visualizations
@@ -144,7 +144,7 @@ User: Show me the architecture of this codebase.
 
 Agent: I'll generate all visualizations for you.
 
-[Runs: aps run topology viz .topology --type all]
+[Runs: apss run topology viz .topology --type all]
 
 Generated:
 - .topology/viz/index.html (dashboard)
@@ -217,8 +217,8 @@ Recommendations:
 
 | Error | Action |
 |-------|--------|
-| No modules.json | Run `aps run topology analyze` first |
-| No coupling-matrix.json | Run `aps run topology analyze` first |
+| No modules.json | Run `apss run topology analyze` first |
+| No coupling-matrix.json | Run `apss run topology analyze` first |
 | Unknown --type | Show available types |
 
 ## Related Skills

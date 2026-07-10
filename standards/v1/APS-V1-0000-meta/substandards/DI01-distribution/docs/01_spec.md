@@ -503,7 +503,7 @@ main ──PR──► release branch
 The release gate MUST validate:
 
 1. `just ci` passes (format, lint, typecheck, test, build, aps-validate)
-2. `apss-dev v1 validate distribution` passes (hard gate, not advisory)
+2. `cargo run -p aps-cli --bin apss-dev -- v1 validate distribution` passes (hard gate, not advisory)
 3. Version bump detected for every changed standard/substandard
 4. System version bumped if any system crate changed
 5. `cargo audit` passes (supply chain security)

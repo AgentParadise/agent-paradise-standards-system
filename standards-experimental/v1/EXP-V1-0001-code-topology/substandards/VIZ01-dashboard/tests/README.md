@@ -27,8 +27,8 @@ For visual verification:
 
 ```bash
 # Generate sample visualizations
-aps run topology analyze .
-aps run topology viz --type all
+apss run topology analyze .
+apss run topology viz --type all
 
 # Open each and verify:
 # - Page loads without console errors

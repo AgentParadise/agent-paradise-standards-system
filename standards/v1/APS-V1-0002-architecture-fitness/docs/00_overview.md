@@ -104,7 +104,7 @@ scope = "module"
 
 **Run:**
 ```bash
-aps run architecture-fitness validate .
+apss run architecture-fitness validate .
 ```
 
 ## What's New vs EXP-V1-0003
@@ -131,7 +131,7 @@ Promoted from EXP-V1-0003 with significantly expanded scope:
 
 ### 1. Generate topology artifacts
 ```bash
-aps run topology analyze . --output .topology
+apss run topology analyze . --output .topology
 ```
 
 ### 2. Create fitness.toml
@@ -151,7 +151,7 @@ scope = "function"
 
 ### 3. Validate
 ```bash
-aps run architecture-fitness validate .
+apss run architecture-fitness validate .
 ```
 
 ### 4. Handle violations
@@ -165,7 +165,7 @@ issue = "#138"
 ### 5. Add to CI
 ```yaml
 - name: Check architectural fitness
-  run: aps run architecture-fitness validate .
+  run: apss run architecture-fitness validate .
 ```
 
 ## Status
@@ -182,7 +182,7 @@ MT01, MD01, ST01, SC01, LG01 are default-enabled and active; AC01 is opt-in and 
 - Full metrics catalog with 20+ metrics, formulas, authors, and cited thresholds
 - Reference Rust implementation (dimensional scoring engine, system-level composite, adapter contract, trend tracking, strict-artifact enforcement)
 - JSON Schemas for fitness.toml, fitness-exceptions.toml, fitness-report.json with example round-trip tests
-- CLI integration via `aps run architecture-fitness validate`
+- CLI integration via `apss run architecture-fitness validate`
 
 ## Related Standards
 

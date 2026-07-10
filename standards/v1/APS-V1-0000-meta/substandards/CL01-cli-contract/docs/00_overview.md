@@ -16,25 +16,33 @@ This substandard defines how APS standards expose their functionality through th
 
 ```bash
 # Run a standard's CLI
-aps run topology analyze .
-aps run topology validate .topology/
-aps run topology diff base/ pr/
+apss run topology analyze .
+apss run topology validate .topology/
+apss run topology diff base/ pr/
 
 # Discovery
-aps run --list                    # Show available standards
-aps run topology --help           # Show topology commands
+apss run --list                    # Show available standards
+apss run topology --help           # Show topology commands
 ```
 
 ## Key Concepts
 
 ### Command Hierarchy
 
+This contract's `run` dispatch is implemented by two separate binaries, not one:
+
 ```
-aps
-├── run <slug> <command>        # Run standard CLI
-├── v1                          # v1 authoring commands
-└── v2                          # Future v2 commands
+apss                             # published, consumer-facing (cargo install apss)
+└── run <slug> <command>        # Run standard CLI
+
+apss-dev                         # this repo's own aps-cli crate, never published
+└── v1                          # v1 authoring commands (repo-internal only)
+
+(v2)                             # Future v2 commands, binary not yet decided
 ```
+
+Consumer projects only ever see `apss`; `apss-dev` is repo-internal tooling for
+authoring standards and has no consumer-facing equivalent.
 
 ### Standard Commands
 

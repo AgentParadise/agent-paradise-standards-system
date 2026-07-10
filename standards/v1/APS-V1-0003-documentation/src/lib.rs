@@ -25,13 +25,13 @@ use std::path::{Path, PathBuf};
 
 /// Canonical standard identifier.
 pub const ID: &str = "APS-V1-0003";
-/// CLI slug used in `aps run <slug>` and as the matching key for dispatch.
+/// CLI slug used in `apss run <slug>` and as the matching key for dispatch.
 /// Must equal the `slug` in standard.toml: the composed consumer runner matches
 /// this registered slug against the apss.yaml standard key.
 pub const SLUG: &str = "documentation";
 /// Human-readable standard name.
 pub const NAME: &str = "Documentation and Context Engineering";
-/// Short standard description (shown by `aps run --list`).
+/// Short standard description (shown by `apss run --list`).
 pub const DESCRIPTION: &str =
     "Structured docs with frontmatter-driven indexing for automation and AI agents";
 /// Comma-separated CLI subcommands.

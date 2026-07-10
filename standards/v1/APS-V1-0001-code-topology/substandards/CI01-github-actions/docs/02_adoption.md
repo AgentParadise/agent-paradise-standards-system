@@ -57,7 +57,7 @@ EOF
 Generate initial topology artifacts:
 
 ```bash
-aps run topology analyze . --output .topology/
+apss run topology analyze . --output .topology/
 
 # Optionally commit the baseline
 git add .topology/
