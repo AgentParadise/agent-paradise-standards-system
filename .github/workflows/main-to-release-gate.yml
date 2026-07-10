@@ -37,13 +37,13 @@ jobs:
   # Reusable checks
   # ---------------------------------------------------------------------------
   source-branch-check:
-    uses: ./.github/workflows/checks/source-branch-check.yml
+    uses: ./.github/workflows/source-branch-check.yml
 
   version-bump-check:
-    uses: ./.github/workflows/checks/version-bump-check.yml
+    uses: ./.github/workflows/version-bump-check.yml
 
   changelog-check:
-    uses: ./.github/workflows/checks/changelog-check.yml
+    uses: ./.github/workflows/changelog-check.yml
     with:
       pr_body: ${{ github.event.pull_request.body }}
 
