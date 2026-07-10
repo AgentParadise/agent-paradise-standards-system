@@ -25,8 +25,20 @@ An AI agent authoring or reviewing an agent recipe directory (see
 7. Never place credentials, tokens, or other secrets inside a recipe
    directory; recipes are expected to be committed to version control.
 
-No CLI subcommand is exposed for this experiment yet. The reference loader
-is `agent_recipe::load_recipe_dir` in `src/schema.rs`, callable from Rust:
+A CLI is exposed through the development runner:
+
+```bash
+# Scaffold a new conformant recipe directory
+apss-dev run agent-recipe create <name> [--dir <parent>]
+
+# Validate a recipe directory (exit 0 = clean, 1 = errors, 3 = usage error)
+apss-dev run agent-recipe validate <recipe-dir>
+```
+
+(slug aliases: `recipe`, `exp-v1-0005`)
+
+For programmatic use, the reference loader is
+`agent_recipe::load_recipe_dir` in `src/schema.rs`, callable from Rust:
 
 ```rust
 use std::path::Path;
