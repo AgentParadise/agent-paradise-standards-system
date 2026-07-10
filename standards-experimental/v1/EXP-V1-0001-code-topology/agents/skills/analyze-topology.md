@@ -57,25 +57,25 @@ Generate `.topology/` artifacts from a codebase by running complexity analysis a
 
 ```bash
 # Analyze the current directory (auto-detect languages)
-aps run topology analyze .
+apss run topology analyze .
 
 # Analyze only Python files
-aps run topology analyze . --language python
+apss run topology analyze . --language python
 
 # Analyze only Rust files
-aps run topology analyze . --language rust
+apss run topology analyze . --language rust
 
 # Analyze with custom output location
-aps run topology analyze . --output .topology/
+apss run topology analyze . --output .topology/
 
 # Validate existing artifacts
-aps run topology validate .topology/
+apss run topology validate .topology/
 
 # Generate a report
-aps run topology report .topology/
+apss run topology report .topology/
 
 # Show supported languages
-aps run topology --help
+apss run topology --help
 ```
 
 ## Example Usage

@@ -3,7 +3,7 @@
 //
 // This file defines the structure of diff artifacts:
 // - .topology/diffs/<name>.json
-// - Output of `aps run topology diff`
+// - Output of `apss run topology diff`
 //
 // Diff artifacts compare two topology snapshots and provide
 // a standardized format for CI integration and tooling.
@@ -18,12 +18,12 @@ option go_package = "github.com/AgentParadise/topology/v1;topologyv1";
 import "metrics.proto";
 
 // ============================================================================
-// Diff File (.topology/diffs/<name>.json or stdout from `aps run topology diff`)
+// Diff File (.topology/diffs/<name>.json or stdout from `apss run topology diff`)
 // ============================================================================
 
 // Comparison between two topology snapshots.
 // Stored at: .topology/diffs/<name>.json
-// Also output by: `aps run topology diff <base> <target> --format json`
+// Also output by: `apss run topology diff <base> <target> --format json`
 message DiffFile {
   // Schema version
   string schema_version = 1 [json_name = "schema_version"];

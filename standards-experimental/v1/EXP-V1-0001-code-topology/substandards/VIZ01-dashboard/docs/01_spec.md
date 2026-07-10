@@ -142,13 +142,13 @@ let html = index::generate(module_count, slice_count, avg_health);
 
 ```bash
 # Generate specific type
-aps run topology viz --type 3d
+apss run topology viz --type 3d
 
 # Generate all with dashboard
-aps run topology viz --type all
+apss run topology viz --type all
 
 # Custom output path
-aps run topology viz --type codecity --output my-city.html
+apss run topology viz --type codecity --output my-city.html
 ```
 
 ## 4. Health Color Scale
