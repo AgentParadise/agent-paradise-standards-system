@@ -28,21 +28,26 @@ This specification defines:
 
 ### 2.1 Root Structure
 
-The APS CLI MUST follow this hierarchy:
+This contract's `run` dispatch surface MUST follow this hierarchy. It is
+implemented by two separate binaries: `apss` (published, consumer-facing,
+`cargo install apss`) provides `run`; `apss-dev` (this repo's own `aps-cli`
+crate, never published) provides `v1` for repo-internal standard authoring.
+Consumer projects only install and invoke `apss`; they never see `v1`.
 
 ```
-apss
-├── run <slug> <command> [args]   # Run standard CLI
-│   └── --list                    # List available standards
-│
-├── v1                            # v1 authoring/meta commands
-│   ├── validate                  # Validate repo structure
-│   ├── create                    # Create packages
-│   ├── list                      # List packages
-│   ├── promote                   # Promote experiments
-│   └── version                   # Version management
-│
-└── v2                            # Future: v2 authoring
+apss                               # published, consumer-facing
+└── run <slug> <command> [args]   # Run standard CLI
+    └── --list                    # List available standards
+
+apss-dev                           # repo-internal only, never published
+└── v1                            # v1 authoring/meta commands
+    ├── validate                  # Validate repo structure
+    ├── create                    # Create packages
+    ├── list                      # List packages
+    ├── promote                   # Promote experiments
+    └── version                   # Version management
+
+(v2)                                # Future: v2 authoring, binary not yet decided
 ```
 
 ### 2.2 Standard Dispatch
