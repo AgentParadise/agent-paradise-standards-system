@@ -686,7 +686,7 @@ The installed hook is a small shell wrapper that calls into `apss run docs hook 
 - `STDIN`: none.
 - `STDOUT`: human readable report (color when TTY).
 - `STDERR`: diagnostics on failure.
-- `Exit codes`: `0` on success, `1` on validation errors, `2` on internal hook errors (config load failure, missing `aps` binary, ...). The hook MUST NOT exit `0` after re-staging modified files unless the validator also passes.
+- `Exit codes`: `0` on success, `1` on validation errors, `2` on internal hook errors (config load failure, missing `apss` binary, ...). The hook MUST NOT exit `0` after re-staging modified files unless the validator also passes.
 
 **Escape hatch**: the operator's standard `git commit --no-verify` continues to work. The standard MUST NOT teach agents to use `--no-verify`; that flag is a human operator escape hatch, not a documented workflow.
 

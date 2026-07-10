@@ -962,7 +962,7 @@ severity = "warning"
 
 ## 11. CLI Interface (Informative)
 
-> This section is informative. The CLI is provided by the `aps` tool.
+> This section is informative. The CLI is provided by the `apss` tool.
 
 > **Implementation status.** The implemented CLI surface is the single
 > `validate` subcommand with the flags `--config`, `--report`, and

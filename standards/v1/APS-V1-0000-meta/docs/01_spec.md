@@ -339,7 +339,7 @@ Meta substandards MUST:
 
 - Implement validation rules as part of their Rust crate (via the `Standard` trait or domain-specific traits)
 - Define error codes (§16.2) for each compliance rule they enforce
-- Be composable  -  their validation SHOULD be invocable independently or as part of a full `apss-dev v1 validate repo` sweep
+- Be composable  -  their validation SHOULD be invocable independently or as part of a full `cargo run -p aps-cli --bin apss-dev -- v1 validate repo` sweep
 
 Meta substandards SHOULD:
 
@@ -467,7 +467,7 @@ dependency is necessary (not just what it does).
 
 #### 8.4.3 Validation
 
-The meta standard validator (`apss-dev v1 validate repo`) checks each package's
+The meta standard validator (`cargo run -p aps-cli --bin apss-dev -- v1 validate repo`) checks each package's
 `Cargo.toml` against its allowlist. Unapproved external dependencies produce
 `UNAPPROVED_EXTERNAL_DEP` errors.
 
@@ -685,7 +685,7 @@ Experiments:
 An experiment MAY be promoted to an official APS standard via:
 
 ```bash
-apss-dev v1 promote EXP-V1-XXXX --to APS-V1-YYYY
+cargo run -p aps-cli --bin apss-dev -- v1 promote EXP-V1-XXXX --to APS-V1-YYYY
 ```
 
 If promoted:
@@ -703,8 +703,8 @@ If promoted:
 Tooling MAY generate registry views from the canonical filesystem:
 
 ```bash
-apss-dev v1 generate views --format json|toml|md
-apss-dev v1 generate views --filter official|experimental|all
+cargo run -p aps-cli --bin apss-dev -- v1 generate views --format json|toml|md
+cargo run -p aps-cli --bin apss-dev -- v1 generate views --filter official|experimental|all
 ```
 
 ### 15.2 View Outputs
@@ -719,7 +719,7 @@ This directory SHOULD be gitignored. Views MUST include a header:
 
 ```
 # GENERATED  -  DO NOT EDIT
-# Regenerate with: apss-dev v1 generate views
+# Regenerate with: cargo run -p aps-cli --bin apss-dev -- v1 generate views
 ```
 
 ---

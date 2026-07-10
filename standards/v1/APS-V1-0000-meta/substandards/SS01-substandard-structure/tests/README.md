@@ -43,6 +43,6 @@ Tests should verify that `substandard.toml` parsing works correctly and validati
 cargo test -p aps-v1-0000-ss01-substandard-structure
 
 # Run via CLI
-apss-dev v1 validate substandard APS-V1-0000.SS01
+cargo run -p aps-cli --bin apss-dev -- v1 validate substandard APS-V1-0000.SS01
 ```
 

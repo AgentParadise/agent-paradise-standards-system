@@ -133,13 +133,13 @@ The CLI enforces:
 
 ```bash
 # Patch: Bug fix
-apss-dev v1 version bump patch   # 1.2.3 → 1.2.4
+cargo run -p aps-cli --bin apss-dev -- v1 version bump patch   # 1.2.3 → 1.2.4
 
 # Minor: New feature
-apss-dev v1 version bump minor   # 1.2.3 → 1.3.0
+cargo run -p aps-cli --bin apss-dev -- v1 version bump minor   # 1.2.3 → 1.3.0
 
 # Major: Breaking change
-apss-dev v1 version bump major   # 1.2.3 → 2.0.0
+cargo run -p aps-cli --bin apss-dev -- v1 version bump major   # 1.2.3 → 2.0.0
 ```
 
 ### Consumer Lock File

@@ -26,10 +26,10 @@ Templates are used by the CLI:
 
 ```bash
 # Create a new standard
-apss-dev v1 create standard my-new-standard
+cargo run -p aps-cli --bin apss-dev -- v1 create standard my-new-standard
 
 # Create a new experiment
-apss-dev v1 create experiment my-experiment
+cargo run -p aps-cli --bin apss-dev -- v1 create experiment my-experiment
 ```
 
 ## Template Variables

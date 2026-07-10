@@ -376,13 +376,13 @@ The installed `.git/hooks/pre-commit` block MUST do nothing more than call this 
 6. **Exit.**
    - `0` when `summary.errors == 0` (warnings allowed).
    - `1` when `summary.errors > 0`.
-   - `2` for any internal hook error (config load failure, index write failure, missing `aps` binary).
+   - `2` for any internal hook error (config load failure, index write failure, missing `apss` binary).
 
 ### 4.3 Concurrency and recursion
 
 - The hook MUST be safe to run from `git commit -p` and from inside an interactive rebase. It MUST NOT call `git commit` itself.
 - The hook MUST NOT call itself recursively. Re-staging `README.md` files (step 3) MUST use `git add`, not `git commit`.
-- The hook MUST tolerate a missing `aps` binary by exiting `2` with `hook-missing-aps` rather than blocking with a cryptic shell error.
+- The hook MUST tolerate a missing `apss` binary by exiting `2` with `hook-missing-apss` rather than blocking with a cryptic shell error.
 
 **`git commit -p` interaction (normative).** Step 3 re-stages
 regenerated `README.md` files unconditionally so the commit's index
@@ -409,7 +409,7 @@ afterward.
 | Code | Severity | Description |
 |------|----------|-------------|
 | `hook-not-in-repo` | error | `git rev-parse --show-toplevel` failed. |
-| `hook-missing-aps` | error | The `aps` binary is not on `PATH`. |
+| `hook-missing-apss` | error | The `apss` binary is not on `PATH`. |
 | `hook-staged-rewrite-failed` | error | A `git add` for a regenerated index failed. |
 
 These are emitted in addition to the validator and generator diagnostics above; the hook is just the runner.

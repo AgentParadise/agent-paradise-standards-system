@@ -72,8 +72,8 @@ runs all six dimensions across `standards/v1/` and
 `01_spec.md` of the meta-standard; this document specifies the new
 checks that MUST run inside it.
 
-The release pipeline (DI01 §9.2) already requires `apss-dev v1 validate
-repo` to pass. Therefore all CF01 conformance is enforced on every
+The release pipeline (DI01 §9.2) already requires `cargo run -p aps-cli
+--bin apss-dev -- v1 validate repo` to pass. Therefore all CF01 conformance is enforced on every
 release candidate.
 
 ### 3.2 Required Checks
@@ -186,14 +186,14 @@ ergonomics evolve and CF01 should not pin a specific runner shape.
 
 ### 5.2 Release Gate Integration
 
-DI01 §9.2 already lists `apss-dev v1 validate distribution` as a hard
+DI01 §9.2 already lists `cargo run -p aps-cli --bin apss-dev -- v1 validate distribution` as a hard
 gate. Under the unified model, that command's scope MUST include:
 
 - the install-contract round-trip from
   `06_unified_install_seam.md` §6 (DI01 side),
 - the schema-stale check from `03_contribution_schema.md` §5.3.
 
-Other dimensions are already covered by `apss-dev v1 validate repo`,
+Other dimensions are already covered by `cargo run -p aps-cli --bin apss-dev -- v1 validate repo`,
 which is also a hard gate via `just ci`.
 
 ---
@@ -256,7 +256,7 @@ them is a major bump of CF01.
 ## 8. Backward Compatibility
 
 The QA harness specified here is additive. Existing CF01 v1
-standards that pass `apss-dev v1 validate repo` today will continue to
+standards that pass `cargo run -p aps-cli --bin apss-dev -- v1 validate repo` today will continue to
 pass for everything except:
 
 - the new `CF_MISSING_CONTRIBUTION_TRAIT` check, which fires for
