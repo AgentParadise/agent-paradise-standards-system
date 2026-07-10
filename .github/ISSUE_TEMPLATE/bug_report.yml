@@ -22,7 +22,7 @@ body:
       label: Steps to Reproduce
       description: How can we reproduce this issue?
       placeholder: |
-        1. Run `aps v1 validate ...`
+        1. Run `apss-dev v1 validate ...`
         2. See error...
     validations:
       required: true

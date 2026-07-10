@@ -9,8 +9,8 @@ These skills teach AI agents how to work with APS standards safely and effective
 When creating or modifying APS standards:
 
 1. **Follow directory contracts** — Every standard needs `docs/`, `examples/`, `tests/`, `agents/skills/`, `src/`
-2. **Use the CLI** — Always use `aps v1 create standard <slug>` to scaffold new standards
-3. **Validate before commit** — Run `aps v1 validate standard <id>` before committing changes
+2. **Use the CLI** — Always use `apss-dev v1 create standard <slug>` to scaffold new standards
+3. **Validate before commit** — Run `apss-dev v1 validate standard <id>` before committing changes
 
 ### Version Management
 
@@ -31,7 +31,7 @@ Before introducing a breaking change:
 
 ### Experimental Standards
 
-1. Create experiments with `aps v1 create experiment <slug>`
+1. Create experiments with `apss-dev v1 create experiment <slug>`
 2. Experiments use `EXP-V1-XXXX` IDs
 3. Experiments MUST pass the same validation as official standards
 4. Promotion requires peer review and security audit
@@ -48,15 +48,15 @@ Before introducing a breaking change:
 
 ```bash
 # Create a new standard
-aps v1 create standard my-standard
+apss-dev v1 create standard my-standard
 
 # Validate your work
-aps v1 validate standard APS-V1-XXXX
+apss-dev v1 validate standard APS-V1-XXXX
 
 # Create an experiment
-aps v1 create experiment my-experiment
+apss-dev v1 create experiment my-experiment
 
 # Promote experiment to official
-aps v1 promote EXP-V1-XXXX --to APS-V1-YYYY
+apss-dev v1 promote EXP-V1-XXXX --to APS-V1-YYYY
 ```
 

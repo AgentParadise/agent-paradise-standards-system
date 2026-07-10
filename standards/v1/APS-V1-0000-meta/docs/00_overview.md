@@ -31,14 +31,14 @@ It defines:
 
 ### For Standard Authors
 
-1. Use `aps v1 create standard <slug>` to scaffold a new standard
+1. Use `apss-dev v1 create standard <slug>` to scaffold a new standard
 2. Implement the `Standard` trait in your crate
 3. Add examples and tests
-4. Run `aps v1 validate standard <id>` to check compliance
+4. Run `apss-dev v1 validate standard <id>` to check compliance
 
 ### For Standard Consumers
 
-1. Check if the standard you need exists: `aps v1 list`
+1. Check if the standard you need exists: `apss-dev v1 list`
 2. Review the standard's `docs/01_spec.md` for requirements
 3. Use the standard's templates for adoption assets
 

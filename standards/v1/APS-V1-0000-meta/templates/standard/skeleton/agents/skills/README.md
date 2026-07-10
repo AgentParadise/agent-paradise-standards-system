@@ -10,7 +10,7 @@ TODO: Add usage instructions for agents
 
 ### Validation
 
-Run `aps v1 validate standard {{id}}` to check compliance.
+Run `apss-dev v1 validate standard {{id}}` to check compliance.
 
 ## Anti-Patterns to Avoid
 

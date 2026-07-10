@@ -39,7 +39,7 @@ templates/substandard/
 
 ```bash
 # Create via CLI
-aps v1 create substandard APS-V1-0001 --profile GH01 --name "GitHub Profile"
+apss-dev v1 create substandard APS-V1-0001 --profile GH01 --name "GitHub Profile"
 
 # Or programmatically
 let context = SubstandardContext::new(
