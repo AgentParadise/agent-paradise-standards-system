@@ -29,7 +29,7 @@ impl Default for {{id}}Standard {
 }
 
 // TODO: Implement the Standard trait
-// impl aps_v1_0000_meta::Standard for {{id}}Standard {
+// impl apss_v1_0000_meta::Standard for {{id}}Standard {
 //     fn validate_package(&self, path: &Path) -> Diagnostics {
 //         Diagnostics::new()
 //     }

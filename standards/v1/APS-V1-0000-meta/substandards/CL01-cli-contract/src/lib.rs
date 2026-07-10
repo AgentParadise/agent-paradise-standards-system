@@ -19,7 +19,7 @@
 //! Standards that expose CLI commands implement the `StandardCli` trait:
 //!
 //! ```ignore
-//! use aps_v1_0000_cli01_cli_contract::{StandardCli, CliResult, CliCommandInfo};
+//! use apss_v1_0000_cli01_cli_contract::{StandardCli, CliResult, CliCommandInfo};
 //!
 //! struct TopologyCli;
 //!

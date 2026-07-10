@@ -35,7 +35,7 @@ pub fn is_valid_substandard_id(id: &str) -> bool {
 ///
 /// # Example
 /// ```
-/// use aps_v1_0000_ss01_substandard_structure::extract_parent_id;
+/// use apss_v1_0000_ss01_substandard_structure::extract_parent_id;
 /// assert_eq!(extract_parent_id("APS-V1-0000.SS01"), Some("APS-V1-0000".to_string()));
 /// ```
 pub fn extract_parent_id(substandard_id: &str) -> Option<String> {

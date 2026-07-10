@@ -5,7 +5,7 @@
 
 mod fixtures;
 
-use aps_v1_0000_meta::{MetaStandard, Standard, error_codes};
+use apss_v1_0000_meta::{MetaStandard, Standard, error_codes};
 use fixtures::{
     InvalidKind, create_invalid_standard, create_test_workspace, create_valid_standard,
 };

@@ -5,7 +5,7 @@
 
 mod fixtures;
 
-use aps_v1_0000_meta::{MetaStandard, Standard, error_codes};
+use apss_v1_0000_meta::{MetaStandard, Standard, error_codes};
 use fixtures::{
     InvalidSubstandardKind, create_invalid_substandard, create_test_workspace,
     create_valid_standard, create_valid_substandard,
