@@ -259,7 +259,7 @@ pub enum RecipeLoadError {
     },
     /// `default_agent` does not name any file actually present in `agents/`.
     #[error(
-        "default_agent '{default_agent}' does not resolve to {agents_dir}/{default_agent}.yaml"
+        "default_agent '{default_agent}' does not resolve to {agents_dir}/{default_agent}.yaml (or .yml)"
     )]
     DefaultAgentUnresolved {
         /// The unresolved `default_agent` value from `recipe.yaml`.

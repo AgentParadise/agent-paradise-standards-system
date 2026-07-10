@@ -173,12 +173,12 @@ fn validate_agent(
                 Diagnostic::error(
                     error_codes::RECIPE_SUBAGENT_UNRESOLVED,
                     format!(
-                        "agent '{stem}' references subagent '{subagent}' with no matching {AGENTS_DIR}/{subagent}.yaml"
+                        "agent '{stem}' references subagent '{subagent}' with no matching {AGENTS_DIR}/{subagent}.yaml (or .yml)"
                     ),
                 )
                 .with_path(agent_path.clone())
                 .with_hint(format!(
-                    "add {AGENTS_DIR}/{subagent}.yaml or remove '{subagent}' from subagents"
+                    "add {AGENTS_DIR}/{subagent}.yaml (or .yml) or remove '{subagent}' from subagents"
                 )),
             );
         }
@@ -282,5 +282,21 @@ mod tests {
         assert!(codes(&diagnostics).contains(&error_codes::RECIPE_SUBAGENT_UNRESOLVED.to_string()));
         // The recipe otherwise loads cleanly, so this is the only error.
         assert_eq!(diagnostics.error_count(), 1);
+    }
+
+    #[test]
+    fn unresolved_subagent_hint_mentions_both_extensions() {
+        // The fix hint must not hardcode `.yaml`: a `.yml` agent file also
+        // resolves a subagent reference, so the hint should mention both.
+        let diagnostics = validate_recipe_dir(&fixtures_dir().join("unresolved-subagent"));
+        let hint = diagnostics
+            .iter()
+            .find(|d| d.code == error_codes::RECIPE_SUBAGENT_UNRESOLVED)
+            .and_then(|d| d.fix_hint.as_deref())
+            .expect("subagent-unresolved diagnostic should carry a fix hint");
+        assert!(
+            hint.contains(".yml"),
+            "hint should mention the .yml extension, got: {hint:?}"
+        );
     }
 }
