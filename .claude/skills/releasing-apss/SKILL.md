@@ -1,0 +1,210 @@
+---
+name: releasing-apss
+description: >-
+  Use when cutting, gating, tagging, or publishing a release of this APSS repo,
+  or when explaining how releases work here. Trigger phrases: "cut a release",
+  "release APSS", "publish to crates.io", "create a release PR", "main to
+  release", "promote main to release", "bump versions for the release", "tag a
+  release", "run the release gate", "how do releases work here", "what gets
+  published", "ship a new version". Covers the trunk-based main -> release
+  branch flow, the Release Gate checks (source-branch, version-bump, changelog,
+  QA, APS validation, security), and release-create.yml tagging plus tiered
+  crates.io publishing. Do NOT use for routine feature PRs into main (those need
+  no release and no version bump), mid-feature version bumps, authoring
+  standards, or consumer-side `apss install` (see the adopt/visualize runbooks).
+---
+
+# Releasing APSS
+
+## Overview
+
+APSS uses trunk-based development with a single `release` branch. Feature work
+merges into `main` freely, with no version-bump pressure. A release is a
+`main -> release` pull request that the **Release Gate** validates; merging that
+PR into `release` triggers `release-create.yml`, which creates git tags, a
+GitHub Release, and (once configured) publishes crates to crates.io.
+
+The single most load-bearing idea: **version bumps are enforced once, at the
+release gate, against the previous release. They are not required on merges to
+main.** That is deliberate. Per-merge bump enforcement causes version churn and
+merge conflicts on the version files when several PRs land between releases.
+Bumping at release time lets changes accumulate on main and get versioned once.
+
+## The release model
+
+```
+feature branch --PR--> main  (ci.yml: fmt, clippy, check, test, aps-validation)
+                        |        no version-bump pressure here
+                        |
+                  main --PR--> release   (release-gate.yml: the hard gate)
+                                  |
+                          merge into release
+                                  |
+                        release-create.yml: tags + GitHub Release + crates.io
+```
+
+- **`main` is the trunk.** `ci.yml` runs on every push/PR to main and does NOT
+  run the version-bump check. Merge features here without bumping.
+- **`release` is the only branch releases come from.** A release PR's head must
+  be `main` (the `source-branch-check` rejects anything else), so any version
+  bumps must already be on `main` before you open the release PR.
+- **Tags are per-unit.** The system tag is `v<workspace-version>`; each changed
+  standard/substandard gets its own tag (for example `APS-V1-0001-v0.2.1`,
+  `APS-V1-0000.CF01-v1.0.1`).
+
+## Inputs and preconditions
+
+- Changes already merged to `main` that you want to release.
+- The `release` branch exists on origin, and `CARGO_REGISTRY_TOKEN` plus the
+  `release-publish` environment are already configured (see Operational
+  state for the gotchas learned bootstrapping this).
+
+## Workflow: cutting a release
+
+1. **Find what changed since the last release.** The gate diffs the release PR
+   against the release base (the `release` branch tip, which equals the last
+   release). Compute the same set locally:
+   `git diff --name-only origin/release..main`. A package needs a bump if it has
+   any changed file outside its `docs/` directory.
+
+2. **Bump versions on main.** For each changed standard/substandard, bump the
+   `version` in its `standard.toml` / `substandard.toml` AND the matching
+   `Cargo.toml`. If any system crate (`apss-core`, `aps-cli`, `apss-bootstrap`)
+   changed, bump the `[workspace.package] version` in the root `Cargo.toml`. Any
+   semver level satisfies the gate; there is no level enforcement, so patch is
+   fine for backwards-compatible changes. Land these via a normal PR into main.
+
+3. **Open the release PR: `main` -> `release`.** The PR body MUST contain a
+   `## Changelog` (or `## Release Notes` / `## What Changed` / `## Changes`)
+   section; `changelog-check` fails without it, and `release-create` extracts
+   that section into the GitHub Release notes.
+
+4. **Let the Release Gate run and pass.** It runs source-branch-check,
+   version-bump-check, changelog-check, full QA (fmt, clippy `-D warnings`,
+   check, test, release build), APS validation (`v1 validate repo` +
+   `distribution` + self-validation/backwards-compat/CF01/DI01 tests),
+   cargo-audit, and dependency-review. The `release-gate-success` job aggregates
+   them and is the required status check.
+
+5. **Merge into `release`.** This fires `release-create.yml`, which tags every
+   changed unit, pushes tags, creates the GitHub Release from the changelog, and
+   runs the publish job.
+
+6. **Verify the publish.** The publish job is idempotent (it skips crates whose
+   version is already on crates.io), so a re-run is safe.
+
+## What publishes and what does not
+
+`release-create.yml` publishes in dependency-tier order, only for changed units:
+
+- **Tier 1:** `apss-core` (only when a system crate changed).
+- **Tier 2/3:** changed **official** standard crates under
+  `standards/v1/APS-V1-XXXX-<slug>` where `XXXX != 0000`, in dependency order.
+- **Last:** `apss` (the bootstrap binary).
+
+**Never published:** the meta-standard (`APS-V1-0000`) and its internal
+substandards, and everything under `standards-experimental/`. These still get
+git tags and release notes, but no `cargo publish`. Treat that exclusion as
+load-bearing: the publish job filters them out by directory prefix.
+
+## Operational state (as of 2026-07-10)
+
+The pipeline is now **live and proven end to end**: the `release` branch
+exists, `CARGO_REGISTRY_TOKEN` and the `release-publish` environment (required
+reviewer: repo owner) are configured, and the first real release
+(`v1.2.0`, PR #102) went through the gate clean and published all five
+publishable crates to crates.io successfully. Treat the workflow-level
+description above as trustworthy; this section now tracks known gotchas
+instead of "not wired yet" caveats.
+
+- **Never push directly to `release`.** It is a real branch with a real
+  `push` trigger: any push, including a one-off debugging fix, fires
+  `release-create.yml` for real (tags + a GitHub Release get created
+  immediately, no gate). This happened by accident while bootstrapping the
+  pipeline; the `release-publish` approval gate is what prevented an
+  accidental crates.io publish, but the stray tags and a garbage GitHub
+  Release still had to be deleted by hand. Always land changes to `release`
+  through a gated `main -> release` PR, never `git push origin ...:release`.
+- **Local reusable workflows cannot live in a subdirectory of
+  `.github/workflows/`.** `uses: ./.github/workflows/checks/foo.yml` is
+  silently rejected by GitHub Actions ("workflows must be defined at the top
+  level of the .github/workflows/ directory"). This isn't caught by
+  `actionlint` and doesn't show up as a normal failed run with useful
+  logs, it manifests as the workflow's `pull_request` trigger never firing
+  at all, forever, with GitHub's push-time workflow validation quietly
+  logging a 0-job "failure" on every unrelated push in the repo. If a
+  workflow that calls local reusable workflows never seems to trigger, check
+  this first. All check workflows now live flat in `.github/workflows/`
+  (`source-branch-check.yml`, `version-bump-check.yml`,
+  `changelog-check.yml`), not in a `checks/` subdirectory.
+- **`cargo test`'s positional filter matches the full test *name*, not the
+  file name.** `cargo test -p foo -- self_validation` silently matches zero
+  tests (and reports success) if no test function's name contains that exact
+  substring. Use `cargo test -p foo --test self_validation_test` (selects by
+  binary/file name, runs every test in it) for gate/CI test-selection steps,
+  never a bare positional substring filter you haven't verified matches
+  something.
+- **The changelog in the GitHub Release can come out thin.** `create-release`
+  extracts release notes via `git log -1 --pretty=%B` on the merge commit, but
+  a standard GitHub PR-merge commit only contains a short "Merge pull request
+  #N from ..." summary, not the full PR body, even though the PR body is what
+  `changelog-check` validated. The version table still comes through
+  correctly; the prose changelog does not. Known gap, not yet fixed in the
+  workflow; expect to edit the GitHub Release notes by hand after a merge if
+  you want the full PR body preserved there.
+- **`release-create.yml`'s crate-name and version derivation are regex/grep
+  based and have had real bugs**, not just cosmetic ones: extracting a
+  standard's numeric ID from its directory name via `sed 's/-.*//'` cut at
+  the first hyphen (`APS-V1-0000-meta` -> `APS`, not `0000`), and a
+  workspace-inherited crate's version was read via `grep '^version'` on its
+  own `Cargo.toml`, which matched the literal string `version.workspace =
+  true` when that crate has no direct version line. Both are fixed, but if a
+  future refactor changes directory-naming or `Cargo.toml` shape, re-verify
+  this script by extracting it and running it locally against real repo
+  history (`git log`, redirecting `$GITHUB_OUTPUT` to a file) before trusting
+  a real run, the failure mode is silent corruption, not an error.
+- **Crates were published manually before this automation existed.** The
+  idempotency check (skip if already on crates.io) protects against
+  re-publishing, but if crate layout or naming ever changes, confirm current
+  crates.io versions before trusting a first automated publish of a
+  previously-manual crate.
+
+## Recommended practices (as of 2026-07-10)
+
+- **Prep without publishing first** for anything unproven: do the bumps, open
+  the `main -> release` PR, and let the gate pass, then stop before merging.
+  The merge into `release` is the irreversible step (tags + a GitHub Release
+  happen immediately and automatically; crates.io publish pauses for manual
+  approval on `release-publish`, but the tags/release do not). Review the
+  gate result before pulling that trigger.
+- **If the release gate's `pull_request` trigger doesn't fire on a PR at
+  all** (no check appears, not even a red X, just nothing), check
+  `mergeable`/`mergeStateStatus` on the PR first
+  (`gh pr view N --json mergeable,mergeStateStatus`). GitHub cannot evaluate
+  `pull_request` triggers against a PR it can't compute a merge for; a
+  `CONFLICTING` PR silently never gets checks, which looks identical to a
+  broken workflow registration from the outside. Resolve the conflict, then
+  it fires immediately.
+- **Keep rename/sweep changes out of source comments when avoidable.** The
+  version-bump check counts any non-`docs/` change (including a comment-only edit
+  to a `.rs` file) as bump-requiring, so a broad sweep forces patch bumps across
+  many units at the next release. Harmless, but it widens the bump set.
+- **Match the changed set exactly.** Bump only units that changed since the last
+  release. Over-bumping unchanged standards creates tags and (if published)
+  releases for units that did not change.
+
+## Workflow file map
+
+- `.github/workflows/ci.yml`: main trunk CI (no version-bump gate).
+- `.github/workflows/main-to-release-gate.yml`: the `main -> release` PR gate
+  (`name: Release Gate`; the file is not named `release-gate.yml` because
+  that path had a permanently stuck workflow registration and had to be
+  renamed to force GitHub to re-register it, see Operational state above).
+- `.github/workflows/source-branch-check.yml`: head must be `main`.
+- `.github/workflows/version-bump-check.yml`: changed units must bump
+  (docs-only exempt; any level).
+- `.github/workflows/changelog-check.yml`: PR body needs a changelog
+  section.
+- `.github/workflows/release-create.yml`: on push to `release`, tags + GitHub
+  Release + tiered crates.io publish (the `publish` job pauses for manual
+  approval on the `release-publish` environment).

@@ -104,15 +104,36 @@ pub trait Grammar: Send + Sync {
     /// ```
     fn import_query(&self) -> &str;
 
-    /// Node types that increase cyclomatic complexity.
+    /// Node types that increase cyclomatic complexity (McCabe).
     ///
     /// Each occurrence of these node types adds 1 to the cyclomatic complexity.
+    /// McCabe counts every branch, so `switch`/`match` are modelled per
+    /// `case`/`arm` (each `switch_case`/`match_arm` is a separate decision).
     /// Common examples:
     /// - `if_statement`, `else_clause`
     /// - `for_statement`, `while_statement`
     /// - `match_arm`, `switch_case`
     /// - `binary_expression` (for && and ||)
+    ///
+    /// This is the CYCLOMATIC decision set. Cognitive complexity uses
+    /// [`Grammar::cognitive_decision_nodes`], which models a `switch`/`match`
+    /// as a single structural decision instead of one per branch.
     fn decision_nodes(&self) -> &'static [&'static str];
+
+    /// Node types that increase cognitive complexity (SonarSource) as a
+    /// structural decision.
+    ///
+    /// Defaults to [`Grammar::decision_nodes`], which is correct for languages
+    /// where the McCabe and SonarSource decision sets coincide. They diverge
+    /// for `switch`/`match`: McCabe charges each `case`/`arm` (+1 apiece), while
+    /// SonarSource charges the `switch`/`match` STRUCTURE once (+1 plus its
+    /// nesting penalty). Grammars with such constructs override this to return
+    /// `switch_statement`/`match_expression` in place of
+    /// `switch_case`/`match_arm`. The structural node is also expected to appear
+    /// in [`Grammar::nesting_nodes`] so its body raises the nesting level.
+    fn cognitive_decision_nodes(&self) -> &'static [&'static str] {
+        self.decision_nodes()
+    }
 
     /// Node types that increase cognitive complexity nesting penalty.
     ///

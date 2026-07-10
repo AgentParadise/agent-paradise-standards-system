@@ -15,12 +15,18 @@ members = [
     "standards/v1/APS-V1-0003-documentation",
     # Experimental standards
     "standards-experimental/v1/EXP-V1-0002-todo-tracker",
+    "standards-experimental/v1/EXP-V1-0005-agent-recipe",
 ]
 exclude = [
+    # Template skeletons contain `name = "{{slug}}"` placeholders that are not
+    # valid package names; excluding them keeps cargo (esp. git-source workspace
+    # resolution by downstream deps like itmux) from trying to parse them.
+    "standards/v1/APS-V1-0000-meta/templates",
+    "standards-experimental/v1/EXP-V1-0005-agent-recipe/templates",
 ]
 
 [workspace.package]
-version = "1.2.0"
+version = "1.3.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/AgentParadise/agent-paradise-standards-system"

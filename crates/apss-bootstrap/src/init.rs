@@ -43,7 +43,12 @@ pub fn run(args: InitArgs) -> i32 {
         for spec in &args.standards {
             let (slug, version) = parse_standard_spec(spec);
             content.push_str(&format!("  {slug}:\n"));
-            content.push_str("    id: APS-V1-XXXX  # FIXME: Replace with correct standard ID (e.g. APS-V1-0001)\n");
+            match resolve_standard_id(&slug) {
+                Some(id) => content.push_str(&format!("    id: {id}\n")),
+                None => content.push_str(
+                    "    id: APS-V1-XXXX  # FIXME: Replace with correct standard ID (e.g. APS-V1-0001)\n",
+                ),
+            }
             content.push_str(&format!("    version: \"{version}\"\n"));
         }
     }
@@ -77,6 +82,25 @@ pub fn run(args: InitArgs) -> i32 {
     println!("  3. Run 'apss run <standard> <command>' to use it");
 
     0
+}
+
+/// Slug -> standard ID for officially published standards, so `apss init
+/// --standard <slug>` can write a real `id:` instead of a FIXME placeholder
+/// for standards it can actually resolve without a network call. Kept in
+/// sync manually as standards are promoted; experimental standards are
+/// deliberately excluded since their IDs are unstable pre-promotion and they
+/// are not installable via crates.io.
+const KNOWN_STANDARD_IDS: &[(&str, &str)] = &[
+    ("code-topology", "APS-V1-0001"),
+    ("architecture-fitness", "APS-V1-0002"),
+    ("documentation", "APS-V1-0003"),
+];
+
+fn resolve_standard_id(slug: &str) -> Option<&'static str> {
+    KNOWN_STANDARD_IDS
+        .iter()
+        .find(|(known_slug, _)| *known_slug == slug)
+        .map(|(_, id)| *id)
 }
 
 fn parse_standard_spec(spec: &str) -> (String, String) {

@@ -1,0 +1,5 @@
+name: main
+agent: claude
+model:
+  name: ""
+  effort: high
