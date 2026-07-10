@@ -55,12 +55,26 @@ impl Grammar for RustGrammar {
     }
 
     fn decision_nodes(&self) -> &'static [&'static str] {
+        // CYCLOMATIC (McCabe): each `match_arm` is a separate decision (+1
+        // apiece), matching the McCabe count for a match.
         &[
             "if_expression",
             "else_clause",
-            // SonarSource charges a match structure ONCE (+1, plus its nesting
-            // penalty), not once per arm. We increment on `match_expression`
-            // (which is also a nesting node), not on each `match_arm`.
+            "match_arm",
+            "while_expression",
+            "loop_expression",
+            "for_expression",
+            "binary_expression", // For && and || operators
+        ]
+    }
+
+    fn cognitive_decision_nodes(&self) -> &'static [&'static str] {
+        // COGNITIVE (SonarSource): a match is charged ONCE on `match_expression`
+        // (+1, plus its nesting penalty), not once per arm. `match_expression`
+        // is also a nesting node, so its arms raise the nesting level.
+        &[
+            "if_expression",
+            "else_clause",
             "match_expression",
             "while_expression",
             "loop_expression",
@@ -258,10 +272,23 @@ mod tests {
         let nodes = grammar.decision_nodes();
 
         assert!(nodes.contains(&"if_expression"));
-        // Match is charged once on the expression node (SonarSource), not per arm.
+        // CYCLOMATIC (McCabe): each arm is a decision, so the per-arm node is in
+        // the set and the match expression node is not.
+        assert!(nodes.contains(&"match_arm"));
+        assert!(!nodes.contains(&"match_expression"));
+        assert!(nodes.contains(&"for_expression"));
+    }
+
+    #[test]
+    fn test_rust_cognitive_decision_nodes() {
+        let grammar = RustGrammar::new();
+        let nodes = grammar.cognitive_decision_nodes();
+
+        // COGNITIVE (SonarSource): a match is charged once on the expression
+        // node, not per arm.
         assert!(nodes.contains(&"match_expression"));
         assert!(!nodes.contains(&"match_arm"));
-        assert!(nodes.contains(&"for_expression"));
+        assert!(nodes.contains(&"if_expression"));
     }
 
     #[test]

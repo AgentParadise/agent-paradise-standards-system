@@ -27,7 +27,11 @@ use super::grammars::Grammar;
 pub struct ComplexityCalculator<'g> {
     #[allow(dead_code)]
     grammar: &'g dyn Grammar,
-    decision_nodes: HashSet<&'static str>,
+    /// CYCLOMATIC (McCabe) decision nodes: each `switch_case`/`match_arm` counts.
+    cyclomatic_decision_nodes: HashSet<&'static str>,
+    /// COGNITIVE (SonarSource) decision nodes: a `switch`/`match` structure
+    /// counts once instead of once per branch.
+    cognitive_decision_nodes: HashSet<&'static str>,
     nesting_nodes: HashSet<&'static str>,
     ignored_nodes: HashSet<&'static str>,
 }
@@ -37,7 +41,8 @@ impl<'g> ComplexityCalculator<'g> {
     pub fn new(grammar: &'g dyn Grammar) -> Self {
         Self {
             grammar,
-            decision_nodes: grammar.decision_nodes().iter().copied().collect(),
+            cyclomatic_decision_nodes: grammar.decision_nodes().iter().copied().collect(),
+            cognitive_decision_nodes: grammar.cognitive_decision_nodes().iter().copied().collect(),
             nesting_nodes: grammar.nesting_nodes().iter().copied().collect(),
             ignored_nodes: grammar.ignored_nodes().iter().copied().collect(),
         }
@@ -114,12 +119,24 @@ impl<'g> ComplexityCalculator<'g> {
 
     /// Check if a node type represents a function.
     fn is_function_node(&self, kind: &str) -> bool {
-        // Common function node types across languages
+        // Common function node types across languages.
+        //
+        // `function_expression` (`const f = function () { ... }`) and the
+        // generator variants are extracted by TS_FUNCTION_QUERY, so they MUST be
+        // recognized here too. Otherwise `compute_metrics` misses the function
+        // node and falls back to the range path, which descends through the
+        // function node itself (a nesting node) and inflates cognitive
+        // complexity by one nesting level. Keeping this list consistent with the
+        // function extractor guarantees every measured function uses the
+        // corrected `compute_cognitive` path.
         matches!(
             kind,
             "function_item"
                 | "function_definition"
                 | "function_declaration"
+                | "function_expression"
+                | "generator_function"
+                | "generator_function_declaration"
                 | "method_definition"
                 | "arrow_function"
                 | "lambda"
@@ -160,7 +177,7 @@ impl<'g> ComplexityCalculator<'g> {
         }
 
         // Check if this is a decision node
-        if self.decision_nodes.contains(kind) {
+        if self.cyclomatic_decision_nodes.contains(kind) {
             // Handle binary expressions specially (only count && and ||)
             if kind == "binary_expression" || kind == "boolean_operator" {
                 if self.is_logical_operator(node) {
@@ -195,7 +212,7 @@ impl<'g> ComplexityCalculator<'g> {
         }
 
         // Check if this is a decision node
-        if self.decision_nodes.contains(kind) {
+        if self.cyclomatic_decision_nodes.contains(kind) {
             if kind == "binary_expression" || kind == "boolean_operator" {
                 if self.is_logical_operator(node) {
                     *cc += 1;
@@ -281,7 +298,7 @@ impl<'g> ComplexityCalculator<'g> {
         }
 
         let is_nesting = self.nesting_nodes.contains(kind);
-        let is_decision = self.decision_nodes.contains(kind);
+        let is_decision = self.cognitive_decision_nodes.contains(kind);
 
         // Decision nodes add base + nesting penalty
         if is_decision {
@@ -331,7 +348,7 @@ impl<'g> ComplexityCalculator<'g> {
         }
 
         let is_nesting = self.nesting_nodes.contains(kind);
-        let is_decision = self.decision_nodes.contains(kind);
+        let is_decision = self.cognitive_decision_nodes.contains(kind);
 
         if is_decision {
             if kind == "binary_expression" || kind == "boolean_operator" {
@@ -651,7 +668,8 @@ mod tests {
         let grammar = TestGrammar;
         let calc = ComplexityCalculator::new(&grammar);
 
-        assert!(calc.decision_nodes.contains("if_statement"));
+        assert!(calc.cyclomatic_decision_nodes.contains("if_statement"));
+        assert!(calc.cognitive_decision_nodes.contains("if_statement"));
         assert!(calc.nesting_nodes.contains("for_statement"));
     }
 
@@ -733,6 +751,17 @@ mod tests {
     /// Parse `source` with `grammar`, locate the (first/only) function that
     /// spans the whole snippet, and return its cognitive complexity.
     fn cognitive_of(grammar: &dyn Grammar, source: &str) -> u32 {
+        metrics_of(grammar, source).cognitive_complexity
+    }
+
+    /// Parse `source` with `grammar`, locate the function spanning the snippet,
+    /// and return its cyclomatic complexity.
+    fn cyclomatic_of(grammar: &dyn Grammar, source: &str) -> u32 {
+        metrics_of(grammar, source).cyclomatic_complexity
+    }
+
+    /// Parse `source` with `grammar` and compute metrics for the whole snippet.
+    fn metrics_of(grammar: &dyn Grammar, source: &str) -> FunctionMetrics {
         let mut parser = tree_sitter::Parser::new();
         parser
             .set_language(&grammar.ts_language())
@@ -740,8 +769,7 @@ mod tests {
         let tree = parser.parse(source, None).expect("parse");
         let calc = ComplexityCalculator::new(grammar);
         let end_line = source.lines().count() as u32;
-        let metrics = calc.compute_metrics(&tree, source.as_bytes(), 1, end_line);
-        metrics.cognitive_complexity
+        calc.compute_metrics(&tree, source.as_bytes(), 1, end_line)
     }
 
     #[test]
@@ -803,5 +831,53 @@ mod tests {
         // A match with 3 arms → +1 for the match structure only, not per arm.
         let src = "fn m(a: i32) -> i32 {\n    match a {\n        1 => 1,\n        2 => 2,\n        _ => 0,\n    }\n}\n";
         assert_eq!(cognitive_of(&grammar, src), 1);
+    }
+
+    // ========================================================================
+    // Metrics divergence: switch/match must count per case/arm for CYCLOMATIC
+    // (McCabe) but once for COGNITIVE (SonarSource). These paired tests guard
+    // the regression where sharing one decision set made cyclomatic under-count
+    // switches/matches after the cognitive fix.
+    // ========================================================================
+
+    #[test]
+    fn ts_cyclomatic_switch_counts_each_case() {
+        let grammar = TypeScriptGrammar::new();
+        // switch with `case 1`, `case 2`, `default` → two `switch_case` nodes
+        // (default is a `switch_default`), so McCabe == 1 (base) + 2 == 3.
+        let src = "function sw(a) {\n  switch (a) {\n    case 1: return;\n    case 2: return;\n    default: return;\n  }\n}\n";
+        assert_eq!(cyclomatic_of(&grammar, src), 3);
+        // Same snippet, cognitive charges the switch structure once.
+        assert_eq!(cognitive_of(&grammar, src), 1);
+    }
+
+    #[test]
+    fn rust_cyclomatic_match_counts_each_arm() {
+        let grammar = RustGrammar::new();
+        // match with 3 arms (including the wildcard `_`) → three `match_arm`
+        // nodes, so McCabe == 1 (base) + 3 == 4.
+        let src = "fn m(a: i32) -> i32 {\n    match a {\n        1 => 1,\n        2 => 2,\n        _ => 0,\n    }\n}\n";
+        assert_eq!(cyclomatic_of(&grammar, src), 4);
+        // Same snippet, cognitive charges the match structure once.
+        assert_eq!(cognitive_of(&grammar, src), 1);
+    }
+
+    #[test]
+    fn ts_cognitive_function_expression_not_off_by_one() {
+        let grammar = TypeScriptGrammar::new();
+        // `const f = function () { if (a) { if (b) {} } }`.
+        // The outer if is at nesting 0 (+1), the inner if at nesting 1 (+2),
+        // so cognitive == 3, identical to the equivalent function_declaration.
+        //
+        // Before recognizing `function_expression` in `is_function_node`, this
+        // fell back to the range path, which descends through the
+        // function_expression node itself (a nesting node) and inflated the
+        // result to 5. This asserts the corrected `compute_cognitive` path runs.
+        let src = "const f = function () {\n  if (a) {\n    if (b) {\n    }\n  }\n};\n";
+        assert_eq!(cognitive_of(&grammar, src), 3);
+
+        // Equivalence check: the same body as a function_declaration.
+        let decl = "function f() {\n  if (a) {\n    if (b) {\n    }\n  }\n}\n";
+        assert_eq!(cognitive_of(&grammar, decl), 3);
     }
 }
