@@ -30,13 +30,13 @@ jobs:
   # Reusable checks
   # ---------------------------------------------------------------------------
   source-branch-check:
-    uses: ./.github/workflows/checks/source-branch-check.yml
+    uses: ./.github/workflows/source-branch-check.yml
 
   version-bump-check:
-    uses: ./.github/workflows/checks/version-bump-check.yml
+    uses: ./.github/workflows/version-bump-check.yml
 
   changelog-check:
-    uses: ./.github/workflows/checks/changelog-check.yml
+    uses: ./.github/workflows/changelog-check.yml
     with:
       pr_body: ${{ github.event.pull_request.body }}
 
@@ -89,10 +89,10 @@ jobs:
         run: cargo run -p aps-cli --release -- v1 validate distribution
 
       - name: Run self-validation tests
-        run: cargo test -p aps-cli --release -- self_validation
+        run: cargo test -p aps-cli --release --test self_validation_test
 
       - name: Run backwards compatibility tests
-        run: cargo test -p aps-cli --release -- backwards_compat
+        run: cargo test -p aps-cli --release --test backwards_compat_test
 
       - name: Run CF01 config validation tests
         run: cargo test -p apss-project-config --release
