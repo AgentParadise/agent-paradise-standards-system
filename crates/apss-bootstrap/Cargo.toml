@@ -12,7 +12,7 @@ categories = ["development-tools", "command-line-utilities"]
 
 [[bin]]
 name = "apss"
-path = "src/main.rs"
+path = "src/bin/apss.rs"
 
 [dependencies]
 apss-core.workspace = true
