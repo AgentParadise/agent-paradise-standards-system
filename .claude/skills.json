@@ -21,6 +21,13 @@
       "category": "review",
       "summary": "Prioritize review comments by severity: security > logic > style",
       "version": 1
+    },
+    {
+      "id": "releasing-apss",
+      "domain": "release-engineering",
+      "category": "devops",
+      "summary": "Cut, gate, tag, and publish an APSS release: trunk-based main -> release branch flow, the Release Gate checks, and release-create.yml tiered crates.io publishing",
+      "version": 1
     }
   ]
 }
