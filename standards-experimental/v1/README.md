@@ -61,10 +61,10 @@ maintainers = ["AgentParadise"]
 
 ```bash
 # Scaffold a new experiment
-aps v1 create experiment my-experiment
+cargo run -p aps-cli --bin apss-dev -- v1 create experiment my-experiment
 
 # Validate your experiment
-aps v1 validate experiment EXP-V1-0001
+cargo run -p aps-cli --bin apss-dev -- v1 validate experiment EXP-V1-0001
 ```
 
 ## Promotion Workflow
@@ -73,7 +73,7 @@ After peer review and security audit:
 
 ```bash
 # Promote experiment to official standard
-aps v1 promote EXP-V1-0001 --to APS-V1-0005
+cargo run -p aps-cli --bin apss-dev -- v1 promote EXP-V1-0001 --to APS-V1-0005
 ```
 
 This will:

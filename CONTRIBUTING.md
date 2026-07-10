@@ -47,7 +47,7 @@ All new standards start as **experiments** to allow iteration before promotion.
 ### 1. Create an Experiment
 
 ```bash
-aps v1 create experiment my-idea
+cargo run -p aps-cli --bin apss-dev -- v1 create experiment my-idea
 ```
 
 This scaffolds:
@@ -76,7 +76,7 @@ Every standard must include:
 ### 3. Validate Your Work
 
 ```bash
-aps v1 validate repo
+just aps-validate
 ```
 
 This checks:
@@ -95,7 +95,7 @@ This checks:
 After community review and iteration, experiments can be promoted:
 
 ```bash
-aps v1 promote EXP-V1-XXXX
+cargo run -p aps-cli --bin apss-dev -- v1 promote EXP-V1-XXXX
 ```
 
 This moves the experiment to `standards/v1/APS-V1-XXXX-slug/`.
@@ -127,7 +127,7 @@ docs: update contributing guide
 Before submitting:
 
 - [ ] `just check` passes (format, lint, test)
-- [ ] `aps v1 validate repo` passes (if touching standards)
+- [ ] `just aps-validate` passes (if touching standards)
 - [ ] Commit messages follow conventions
 - [ ] Added/updated relevant documentation
 - [ ] Added tests for new functionality
