@@ -13,16 +13,17 @@
 //! This module owns the typed contract ([`RecipeManifest`], [`AgentManifest`],
 //! [`Recipe`]) and the canonical loader ([`load_recipe_dir`]). It has **no
 //! CLI-only dependencies** so that downstream consumers (notably `itmux`,
-//! Plan B) can depend on this crate purely as a library, per the design in
-//! `docs/design/plans/2026-07-07-planA-agent-recipe-directory-standard.md`
-//! (agentic-primitives, revision R2).
+//! Plan B) can depend on this crate purely as a library.
 //!
 //! Validating a directory against every rule in the spec (unresolved
 //! `subagents`, malformed skill refs, directory-level diagnostics with error
-//! codes, etc.) is `validate_recipe_dir` in `src/validate.rs` (Task 2). Per
-//! revision R1 of the plan, loading and validation share one code path:
-//! `validate_recipe_dir` is expected to be implemented as
-//! `load_recipe_dir(...).map(|_| ()).or(<diagnostics from RecipeLoadError>)`.
+//! codes, etc.) is `validate_recipe_dir` in `src/validate.rs`. Loading and
+//! validation share one code path: `validate_recipe_dir` calls
+//! `load_recipe_dir` and, on a successful load, applies the additional
+//! structural rules the typed loader does not enforce on its own (empty
+//! `name`/`model.name`/`system_instructions.content`, unresolved `subagents`,
+//! malformed skill/tool refs). A failed load is surfaced as a single
+//! diagnostic carrying the loader's stable error code.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -169,9 +170,16 @@ pub struct Recipe {
     /// Every parsed `agents/*.yaml`, keyed by file stem (the agent name used
     /// by `default_agent` and `subagents` references).
     pub agents: BTreeMap<String, AgentManifest>,
-    /// Entries found directly under `skills/`, sorted, if that directory
-    /// exists. This is the recipe's bundled skill inventory, not a resolved
-    /// per-agent reference list (see [`AgentManifest::skills`] for that).
+    /// The concrete source file each agent was loaded from, keyed by the same
+    /// file stem as [`Recipe::agents`]. Retains the real extension (`.yaml` vs
+    /// `.yml`) so diagnostics can point at the file that actually exists.
+    pub agent_sources: BTreeMap<String, PathBuf>,
+    /// Skill package subdirectories found directly under `skills/`, sorted, if
+    /// that directory exists. Only directories are listed (loose files such as
+    /// the generator's `.gitkeep` are ignored), so a freshly scaffolded recipe
+    /// with an empty `skills/` reports an empty inventory. This is the recipe's
+    /// bundled skill inventory, not a resolved per-agent reference list (see
+    /// [`AgentManifest::skills`] for that).
     pub skills: Vec<PathBuf>,
     /// Contents of `SYSTEM.md`, if present.
     pub system_md: Option<String>,
@@ -311,7 +319,7 @@ impl RecipeLoadError {
 /// directly rather than re-implementing the shape (plan revision R2).
 pub fn load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError> {
     let manifest_path = path.join(RECIPE_MARKER_FILE);
-    if !manifest_path.exists() {
+    if !path_exists(&manifest_path)? {
         return Err(RecipeLoadError::MissingMarker {
             path: manifest_path,
         });
@@ -330,7 +338,7 @@ pub fn load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError> {
     // Track the source file per stem so a `main.yaml` / `main.yml` collision is
     // reported instead of the second file silently overwriting the first.
     let mut stem_sources: BTreeMap<String, PathBuf> = BTreeMap::new();
-    if agents_dir.is_dir() {
+    if dir_exists(&agents_dir)? {
         for entry_path in list_yaml_files(&agents_dir)? {
             let content = read_to_string(&entry_path)?;
             let agent: AgentManifest = serde_yaml::from_str(&content).map_err(|source| {
@@ -354,6 +362,7 @@ pub fn load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError> {
             agents.insert(stem, agent);
         }
     }
+    let agent_sources = stem_sources;
 
     if !agents.contains_key(&manifest.default_agent) {
         return Err(RecipeLoadError::DefaultAgentUnresolved {
@@ -363,15 +372,15 @@ pub fn load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError> {
     }
 
     let system_md_path = path.join(SYSTEM_MD_FILE);
-    let system_md = if system_md_path.exists() {
+    let system_md = if path_exists(&system_md_path)? {
         Some(read_to_string(&system_md_path)?)
     } else {
         None
     };
 
     let skills_dir = path.join(SKILLS_DIR);
-    let skills = if skills_dir.is_dir() {
-        list_dir_entries(&skills_dir)?
+    let skills = if dir_exists(&skills_dir)? {
+        list_skill_dirs(&skills_dir)?
     } else {
         Vec::new()
     };
@@ -379,6 +388,7 @@ pub fn load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError> {
     Ok(Recipe {
         manifest,
         agents,
+        agent_sources,
         skills,
         system_md,
     })
@@ -414,38 +424,89 @@ fn read_to_string(path: &Path) -> Result<String, RecipeLoadError> {
     })
 }
 
+/// Check whether `path` exists, surfacing a real I/O failure (e.g. permission
+/// denied) as [`RecipeLoadError::Io`] instead of treating it as "absent".
+///
+/// Unlike [`Path::exists`], which collapses every I/O error to `false`, this
+/// uses [`Path::try_exists`] so an unreadable recipe fails with `RECIPE_IO_ERROR`
+/// per the spec rather than masquerading as a missing marker / missing file.
+fn path_exists(path: &Path) -> Result<bool, RecipeLoadError> {
+    path.try_exists().map_err(|source| RecipeLoadError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+/// Whether `path` exists and is a directory. `Ok(false)` only for a definite
+/// "not found"; any other I/O failure surfaces as [`RecipeLoadError::Io`].
+fn dir_exists(path: &Path) -> Result<bool, RecipeLoadError> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.is_dir()),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(source) => Err(RecipeLoadError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
 /// List `*.yaml`/`*.yml` files directly under `dir`, sorted by path for
-/// deterministic loading order.
+/// deterministic loading order. A per-entry read failure is propagated as
+/// [`RecipeLoadError::Io`] rather than silently dropped.
 fn list_yaml_files(dir: &Path) -> Result<Vec<PathBuf>, RecipeLoadError> {
-    let mut entries: Vec<PathBuf> = fs::read_dir(dir)
-        .map_err(|source| RecipeLoadError::Io {
+    let mut entries = Vec::new();
+    for entry in read_dir(dir)? {
+        let entry = entry.map_err(|source| RecipeLoadError::Io {
             path: dir.to_path_buf(),
             source,
-        })?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| {
-            path.is_file()
-                && path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| ext == "yaml" || ext == "yml")
-        })
-        .collect();
+        })?;
+        let path = entry.path();
+        let is_yaml = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext == "yaml" || ext == "yml");
+        let file_type = entry.file_type().map_err(|source| RecipeLoadError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        if file_type.is_file() && is_yaml {
+            entries.push(path);
+        }
+    }
     entries.sort();
     Ok(entries)
 }
 
-/// List every entry directly under `dir`, sorted by path.
-fn list_dir_entries(dir: &Path) -> Result<Vec<PathBuf>, RecipeLoadError> {
-    let mut entries: Vec<PathBuf> = fs::read_dir(dir)
-        .map_err(|source| RecipeLoadError::Io {
+/// List the skill-package subdirectories directly under `dir`, sorted by path.
+///
+/// Only directories count as skill packages; loose files (such as the
+/// generator's `.gitkeep`) are ignored. A per-entry read failure is propagated
+/// as [`RecipeLoadError::Io`] rather than silently dropped.
+fn list_skill_dirs(dir: &Path) -> Result<Vec<PathBuf>, RecipeLoadError> {
+    let mut entries = Vec::new();
+    for entry in read_dir(dir)? {
+        let entry = entry.map_err(|source| RecipeLoadError::Io {
             path: dir.to_path_buf(),
             source,
-        })?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .collect();
+        })?;
+        let file_type = entry.file_type().map_err(|source| RecipeLoadError::Io {
+            path: entry.path(),
+            source,
+        })?;
+        if file_type.is_dir() {
+            entries.push(entry.path());
+        }
+    }
     entries.sort();
     Ok(entries)
+}
+
+/// Open `dir` for reading, mapping the failure to [`RecipeLoadError::Io`].
+fn read_dir(dir: &Path) -> Result<fs::ReadDir, RecipeLoadError> {
+    fs::read_dir(dir).map_err(|source| RecipeLoadError::Io {
+        path: dir.to_path_buf(),
+        source,
+    })
 }
 
 #[cfg(test)]
@@ -602,6 +663,57 @@ subagents:
             .expect("minimal fixture (no skills/, no SYSTEM.md) should load");
         assert!(recipe.system_md.is_none());
         assert!(recipe.skills.is_empty());
+    }
+
+    #[test]
+    fn load_recipe_dir_resolves_yml_default_agent() {
+        // A `default_agent` MUST resolve to a `.yml` agent file, not only
+        // `.yaml`, and the retained source path keeps the real extension.
+        let temp = tempfile::tempdir().expect("temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join(RECIPE_MARKER_FILE),
+            "name: yml-recipe\nversion: 0.1.0\ndefault_agent: main\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join(AGENTS_DIR)).unwrap();
+        fs::write(
+            root.join(AGENTS_DIR).join("main.yml"),
+            "name: main\nagent: claude\nmodel:\n  name: anthropic/claude-opus-4-8\n  effort: high\n",
+        )
+        .unwrap();
+
+        let recipe = load_recipe_dir(root).expect("recipe with a .yml default agent should load");
+        assert!(recipe.default_agent().is_some());
+        assert_eq!(
+            recipe.agent_sources.get("main").map(|p| p.as_path()),
+            Some(root.join(AGENTS_DIR).join("main.yml").as_path())
+        );
+    }
+
+    #[test]
+    fn load_recipe_dir_ignores_loose_files_in_skills() {
+        // Only skill-package directories count; a `.gitkeep` file is not a skill.
+        let temp = tempfile::tempdir().expect("temp dir");
+        let root = temp.path();
+        fs::write(
+            root.join(RECIPE_MARKER_FILE),
+            "name: r\nversion: 0.1.0\ndefault_agent: main\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join(AGENTS_DIR)).unwrap();
+        fs::write(
+            root.join(AGENTS_DIR).join("main.yaml"),
+            "name: main\nagent: claude\nmodel:\n  name: m\n  effort: low\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join(SKILLS_DIR)).unwrap();
+        fs::write(root.join(SKILLS_DIR).join(".gitkeep"), "").unwrap();
+        fs::create_dir_all(root.join(SKILLS_DIR).join("code-review")).unwrap();
+
+        let recipe = load_recipe_dir(root).expect("should load");
+        assert_eq!(recipe.skills.len(), 1, "only the directory should count");
+        assert!(recipe.skills[0].ends_with("code-review"));
     }
 
     #[test]

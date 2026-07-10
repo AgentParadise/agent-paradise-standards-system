@@ -68,7 +68,7 @@ fn diagnostic_from_load_error(error: &RecipeLoadError) -> Diagnostic {
             diagnostic.with_hint(format!("add a {RECIPE_MARKER_FILE} manifest at the recipe root"))
         }
         RecipeLoadError::DefaultAgentUnresolved { default_agent, .. } => diagnostic
-            .with_hint(format!("add {AGENTS_DIR}/{default_agent}.yaml or point default_agent at an existing agent file")),
+            .with_hint(format!("add {AGENTS_DIR}/{default_agent}.yaml (or .yml) or point default_agent at an existing agent file")),
         _ => diagnostic,
     }
 }
@@ -101,10 +101,15 @@ fn validate_agent(
     recipe: &Recipe,
     diagnostics: &mut Diagnostics,
 ) {
-    // The loader discards each agent's concrete source path (a `.yaml` vs
-    // `.yml` extension is not retained), so the diagnostic location is
-    // reconstructed as `agents/<stem>.yaml` for a readable pointer.
-    let agent_path = root.join(AGENTS_DIR).join(format!("{stem}.yaml"));
+    // Anchor diagnostics to the file the agent was actually loaded from, so a
+    // `.yml` manifest points at `agents/<stem>.yml` rather than a non-existent
+    // `agents/<stem>.yaml`. Fall back to the reconstructed `.yaml` path only if
+    // the source was not retained (should not happen for a loaded recipe).
+    let agent_path = recipe
+        .agent_sources
+        .get(stem)
+        .cloned()
+        .unwrap_or_else(|| root.join(AGENTS_DIR).join(format!("{stem}.yaml")));
 
     if agent.name.trim().is_empty() {
         diagnostics.push(
@@ -236,6 +241,38 @@ mod tests {
         assert!(
             codes(&diagnostics)
                 .contains(&schema::error_codes::RECIPE_MALFORMED_AGENT_YAML.to_string())
+        );
+    }
+
+    #[test]
+    fn diagnostic_anchors_to_real_yml_source() {
+        // A validator-only diagnostic for an agent loaded from `main.yml` must
+        // point at `main.yml`, not a non-existent `main.yaml`.
+        let temp = tempfile::tempdir().expect("temp dir");
+        let root = temp.path();
+        std::fs::write(
+            root.join("recipe.yaml"),
+            "name: r\nversion: 0.1.0\ndefault_agent: main\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("agents")).unwrap();
+        std::fs::write(
+            root.join("agents").join("main.yml"),
+            // Empty model.name triggers a validator-only diagnostic.
+            "name: main\nagent: claude\nmodel:\n  name: ''\n  effort: low\n",
+        )
+        .unwrap();
+
+        let diagnostics = validate_recipe_dir(root);
+        assert!(codes(&diagnostics).contains(&error_codes::RECIPE_EMPTY_MODEL_NAME.to_string()));
+        let anchored = diagnostics
+            .iter()
+            .find(|d| d.code == error_codes::RECIPE_EMPTY_MODEL_NAME)
+            .and_then(|d| d.location.path.as_ref())
+            .expect("diagnostic should carry a path");
+        assert!(
+            anchored.ends_with("agents/main.yml"),
+            "diagnostic should anchor to the real .yml source, got {anchored:?}"
         );
     }
 
