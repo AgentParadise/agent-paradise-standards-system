@@ -20,6 +20,13 @@ name: Release Gate
 on:
   pull_request:
     branches: [release]
+  # TEMPORARY diagnostic trigger: this workflow's pull_request trigger has
+  # never fired in this repo's history. workflow_dispatch lets us invoke it
+  # manually to isolate whether the workflow itself is broken (it isn't,
+  # per actionlint and local simulation) or whether GitHub's pull_request
+  # event matching for this specific workflow/repo is the actual problem.
+  # Remove once the pull_request trigger is confirmed working again.
+  workflow_dispatch:
 
 permissions:
   contents: read
