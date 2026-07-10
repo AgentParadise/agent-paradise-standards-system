@@ -239,10 +239,10 @@ aps-generate:
 [group('aps')]
 aps-test:
     @echo '{{ YELLOW }}Running APS validation tests...{{ NORMAL }}'
-    cargo test -p aps-cli -- --test-threads=1 self_validation
-    cargo test -p aps-cli -- --test-threads=1 backwards_compat
-    cargo test -p aps-cli -- --test-threads=1 template_test
-    cargo test -p aps-cli -- --test-threads=1 workflow_test
+    cargo test -p aps-cli --test self_validation_test -- --test-threads=1
+    cargo test -p aps-cli --test backwards_compat_test -- --test-threads=1
+    cargo test -p aps-cli --test template_test -- --test-threads=1
+    cargo test -p aps-cli --test workflow_test -- --test-threads=1
     @echo '{{ GREEN }}✓ APS tests passed{{ NORMAL }}'
 
 # Validate distribution compliance for all standard crates (DI01)
