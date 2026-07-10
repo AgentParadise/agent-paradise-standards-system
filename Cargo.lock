@@ -86,7 +86,7 @@ dependencies = [
 
 [[package]]
 name = "aps-cli"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "aps-v1-0000-meta",
  "apss-core",
@@ -135,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "apss"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "apss-core",
  "clap",
@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "apss-core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "handlebars",
  "semver",
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0001-code-topology"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "apss-core",
  "chrono",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0002-architecture-fitness"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "apss-core",
  "chrono",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0003-documentation"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "apss-core",
  "glob",
