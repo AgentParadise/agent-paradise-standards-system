@@ -83,6 +83,9 @@ mod tests {
     fn test_generate_no_unrendered_handlebars() {
         // Guard against accidentally leaving `{{unknown}}` in the template.
         let html = generate("x", 1, 1, 0.5);
-        assert!(!html.contains("{{"), "unrendered handlebars token in output");
+        assert!(
+            !html.contains("{{"),
+            "unrendered handlebars token in output"
+        );
     }
 }

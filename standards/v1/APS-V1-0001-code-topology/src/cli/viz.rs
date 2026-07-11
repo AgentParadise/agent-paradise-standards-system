@@ -140,7 +140,16 @@ pub(super) fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, ver
         positions,
     });
 
-    // Build enriched module data for visualizations
+    // Build enriched module data for visualizations. The typed row is
+    // defined once in viz_dashboard::model (when VZ01 is enabled) so
+    // downstream dashboard vizzes can consume the same struct. When VZ01
+    // is off (only the 3d viz is available) we fall back to a
+    // structurally identical local definition so this module still
+    // compiles without the dashboard feature.
+    #[cfg(feature = "VZ01")]
+    use crate::substandards::viz_dashboard::VizModule;
+
+    #[cfg(not(feature = "VZ01"))]
     #[derive(serde::Serialize)]
     struct VizModule {
         id: String,
@@ -501,4 +510,3 @@ pub(super) fn topology_viz(path: &str, viz_type: &str, output: Option<&str>, ver
 
     0
 }
-

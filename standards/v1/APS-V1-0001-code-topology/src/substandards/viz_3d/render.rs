@@ -60,7 +60,10 @@ pub fn edge_color(strength: f64) -> String {
 }
 
 /// Build a `Scene3D` for the supplied topology using the given config.
-pub fn build_scene(topology: &Topology, cfg: &ForceDirectedConfig) -> Result<Scene3D, ProjectorError> {
+pub fn build_scene(
+    topology: &Topology,
+    cfg: &ForceDirectedConfig,
+) -> Result<Scene3D, ProjectorError> {
     // Build module metrics lookup
     let module_metrics: std::collections::HashMap<_, _> =
         topology.modules.iter().map(|m| (m.id.clone(), m)).collect();
@@ -151,13 +154,19 @@ mod tests {
     #[test]
     fn health_color_is_green_when_on_main_sequence() {
         let color = health_color(0.0);
-        assert!(color.contains("cc"), "healthy color should have green: {color}");
+        assert!(
+            color.contains("cc"),
+            "healthy color should have green: {color}"
+        );
     }
 
     #[test]
     fn health_color_is_red_when_far_from_main_sequence() {
         let color = health_color(1.0);
-        assert!(color.starts_with("#ff"), "needs attention should be red: {color}");
+        assert!(
+            color.starts_with("#ff"),
+            "needs attention should be red: {color}"
+        );
     }
 
     #[test]
