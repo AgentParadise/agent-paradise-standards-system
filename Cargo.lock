@@ -193,6 +193,7 @@ version = "0.2.2"
 dependencies = [
  "apss-core",
  "chrono",
+ "handlebars",
  "proc-macro2",
  "quote",
  "serde",
