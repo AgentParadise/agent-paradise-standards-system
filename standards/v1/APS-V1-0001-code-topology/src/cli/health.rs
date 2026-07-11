@@ -1,7 +1,7 @@
 //! Shared health-score and layer-detection helpers used by visualizations.
 
 /// Calculate health score for a module (0.0 to 1.0)
-pub(super) fn calculate_health(
+pub(crate) fn calculate_health(
     function_count: u32,
     total_cyclomatic: u32,
     total_cognitive: u32,
@@ -61,7 +61,7 @@ pub(super) fn calculate_health(
 }
 
 /// Convert health score (0.0-1.0) to hex color
-pub(super) fn health_to_color(health: f64) -> &'static str {
+pub(crate) fn health_to_color(health: f64) -> &'static str {
     match health {
         h if h >= 0.80 => "#00ff88", // Excellent
         h if h >= 0.65 => "#44dd77", // Good
@@ -73,7 +73,7 @@ pub(super) fn health_to_color(health: f64) -> &'static str {
 }
 
 /// Get health label from score
-pub(super) fn health_label(health: f64) -> &'static str {
+pub(crate) fn health_label(health: f64) -> &'static str {
     match health {
         h if h >= 0.80 => "Excellent",
         h if h >= 0.65 => "Good",
@@ -85,7 +85,7 @@ pub(super) fn health_label(health: f64) -> &'static str {
 }
 
 /// Detect architectural layer from module path
-pub(super) fn detect_layer(module_path: &str) -> &'static str {
+pub(crate) fn detect_layer(module_path: &str) -> &'static str {
     let path_lower = module_path.to_lowercase();
 
     // Check patterns in order of specificity - includes Rust patterns
@@ -188,7 +188,7 @@ pub(super) fn detect_layer(module_path: &str) -> &'static str {
 
 /// Get slice (top-level package) from module ID
 /// For Rust: crates::foo -> "crates::foo", standards-experimental::v1::NAME -> "NAME"
-pub(super) fn get_slice_from_id(module_id: &str) -> String {
+pub(crate) fn get_slice_from_id(module_id: &str) -> String {
     // Handle Rust-style paths with ::
     if module_id.contains("::") {
         let parts: Vec<&str> = module_id.split("::").collect();

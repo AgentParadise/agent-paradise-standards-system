@@ -18,6 +18,7 @@ mod analyze;
 mod diff;
 mod health;
 mod report;
+pub mod sensors;
 mod validate;
 mod viz;
 pub mod vsa_config;
@@ -119,6 +120,7 @@ fn dispatch(command: &str, args: &[String], repo_root: &std::path::Path, verbose
             let path = args.first().map(|s| s.as_str()).unwrap_or(".topology");
             report::topology_report(path, verbose)
         }
+        "sensors" => sensors::topology_sensors(args, repo_root, verbose),
         "viz" | "3d" | "visualize" => {
             // Parse options first
             let viz_type = args
@@ -178,6 +180,7 @@ fn print_help() {
     println!("    check <diff.json>  Check diff against thresholds");
     println!("    comment <diff.json> Generate PR comment markdown");
     println!("    report <path>      Generate human-readable report");
+    println!("    sensors <path>     Emit agent-queryable JSON sensor signals from .topology/");
     println!("    viz <path>         Generate visualizations from .topology/");
     println!();
     println!("OPTIONS:");
@@ -235,6 +238,13 @@ fn command_infos() -> Vec<CommandInfo> {
             usage: "report <path>".to_string(),
         },
         CommandInfo {
+            name: "sensors".to_string(),
+            description: "Emit agent-queryable JSON sensor signals from .topology/".to_string(),
+            usage:
+                "sensors <path> [--by MODE] [--top N] [--format FMT] [--output FILE] [--persist]"
+                    .to_string(),
+        },
+        CommandInfo {
             name: "viz".to_string(),
             description: "Generate visualizations from .topology/".to_string(),
             usage: "viz <path>".to_string(),
@@ -243,6 +253,6 @@ fn command_infos() -> Vec<CommandInfo> {
 }
 
 /// Command names registered by `register()`; kept in sync with [`command_infos`].
-pub(crate) const COMMAND_NAMES: [&str; 7] = [
-    "analyze", "validate", "diff", "check", "comment", "report", "viz",
+pub(crate) const COMMAND_NAMES: [&str; 8] = [
+    "analyze", "validate", "diff", "check", "comment", "report", "sensors", "viz",
 ];
