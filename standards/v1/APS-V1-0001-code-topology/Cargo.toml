@@ -1,6 +1,6 @@
 [package]
 name = "apss-v1-0001-code-topology"
-version = "0.2.2"
+version = "0.2.3"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

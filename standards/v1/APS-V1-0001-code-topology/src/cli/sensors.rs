@@ -478,7 +478,7 @@ pub(super) fn topology_sensors(args: &[String], _repo_root: &Path, verbose: bool
         Ok(o) => o,
         Err(e) => {
             eprintln!("Error: {e}");
-            eprintln!("Run 'apss-dev run topology sensors --help' for usage.");
+            eprintln!("Run 'apss run code-topology sensors --help' for usage.");
             return 3;
         }
     };
@@ -488,7 +488,7 @@ pub(super) fn topology_sensors(args: &[String], _repo_root: &Path, verbose: bool
         Ok(r) => r,
         Err(e) => {
             eprintln!("Error: {e}");
-            eprintln!("Run 'apss-dev run topology analyze' first.");
+            eprintln!("Run 'apss run code-topology analyze' first.");
             return 1;
         }
     };
@@ -544,7 +544,7 @@ pub(super) fn topology_sensors(args: &[String], _repo_root: &Path, verbose: bool
 }
 
 fn print_help() {
-    println!("apss-dev run topology sensors [<path>] [OPTIONS]");
+    println!("apss run code-topology sensors [<path>] [OPTIONS]");
     println!();
     println!("Project .topology/metrics/modules.json into an agent-queryable JSON");
     println!("document ranking modules by a chosen signal. Deterministic: same");

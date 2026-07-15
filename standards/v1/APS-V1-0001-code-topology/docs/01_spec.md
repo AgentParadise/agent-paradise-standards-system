@@ -115,8 +115,10 @@ Topology artifacts MUST be stored in a `.topology/` directory with the following
 │   └── coupling-matrix.json   # Module coupling coefficients
 ├── snapshots/                 # OPTIONAL: Historical snapshots
 │   └── YYYY-MM-DD.json        # Dated full snapshot
-└── diffs/                     # OPTIONAL: Comparison artifacts
-    └── <name>.json            # Diff between two snapshots
+├── diffs/                     # OPTIONAL: Comparison artifacts
+│   └── <name>.json            # Diff between two snapshots
+└── sensors/                   # OPTIONAL: Agent-queryable ranked signals
+    └── sensors.json           # Ranked, reason-annotated projection of modules.json
 ```
 
 ### 3.2 Manifest Schema (`manifest.toml`)
@@ -491,6 +493,73 @@ Diff artifacts compare two topology snapshots for CI integration. The diff schem
 | `INCREASED_COMPLEXITY` | Existing function became more complex |
 | `COUPLING_INCREASE` | Module coupling increased |
 | `ZONE_OF_PAIN` | Module moved toward Zone of Pain |
+
+### 3.7 Sensors Schema (`sensors/sensors.json`)
+
+The **sensors** artifact is an OPTIONAL, agent-queryable projection of `metrics/modules.json` that ranks modules by a chosen signal (health, complexity, coupling, instability, or a composite risk score) and annotates each entry with machine-parseable reasons. It exists so downstream agents can consume a ranked, reason-annotated view without re-deriving the signal from raw metrics.
+
+**Storage:** `.topology/sensors/sensors.json` (or stdout from `apss run code-topology sensors`). Written only when the caller passes `--persist` or an explicit `--output` target; the file is not required for conformance.
+
+**Determinism:** The sensors artifact MUST be deterministic. Given the same `metrics/modules.json` input, ranking mode, and top-N, implementations MUST produce byte-identical output. Ties in the primary sort key MUST be broken by module `id` in ascending order.
+
+**Versioning:** The sensors document carries its own `schema_version` (currently `0.1.0`) that is independent from the `modules.json` schema version. The source schema version is recorded in `source_schema_version` so consumers can detect drift between the projection and its input artifact.
+
+```json
+{
+  "schema_version": "0.1.0",
+  "source_schema_version": "0.1.0",
+  "ranking": "health",
+  "top_n": 10,
+  "total_modules": 42,
+  "modules": [
+    {
+      "rank": 1,
+      "id": "auth",
+      "name": "auth",
+      "path": "src/auth/",
+      "layer": "services",
+      "slice": "auth",
+      "languages": ["rust"],
+      "health": 0.32,
+      "health_label": "Warning",
+      "color": "#ddaa33",
+      "function_count": 18,
+      "avg_cyclomatic": 12.4,
+      "avg_cognitive": 18.1,
+      "total_cyclomatic": 223,
+      "total_cognitive": 326,
+      "lines_of_code": 620,
+      "ca": 3,
+      "ce": 5,
+      "total_coupling": 8,
+      "instability": 0.625,
+      "abstractness": 0.2,
+      "distance_from_main_sequence": 0.175,
+      "risk_score": 2.16,
+      "reasons": [
+        "avg_cyclomatic 12.40 exceeds high threshold 10",
+        "total_coupling 8 exceeds nominal threshold 5"
+      ]
+    }
+  ]
+}
+```
+
+#### 3.7.1 Ranking Modes
+
+| Mode | Primary sort key | Direction |
+|------|------------------|-----------|
+| `health` | `health` | ascending (worst first) |
+| `complexity` | `avg_cyclomatic` | descending |
+| `coupling` | `total_coupling` (`ca + ce`) | descending |
+| `instability` | `instability` | descending |
+| `risk` | `risk_score` (composite of low health, high complexity, high coupling) | descending |
+
+Implementations MUST support the modes listed above. The `risk_score` field MUST be present on every entry regardless of the active ranking mode, so consumers can compare signals across modes without re-deriving the score.
+
+#### 3.7.2 Entry Fields
+
+Every entry MUST include the fields shown above. The `reasons` array carries short, lower-case, machine-parseable snippets naming the thresholds a module tripped; its order MUST be stable across runs for a given input. The `color` field mirrors the health-bucket color used by the visualization dashboards (Section 9.8.2) so agents can correlate their signal choice with what a human reviewer sees.
 
 ---
 
