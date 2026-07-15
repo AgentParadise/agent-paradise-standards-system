@@ -84,21 +84,21 @@
             CodeCity visualizes your codebase as a living city. Each building is a source module,
             each district is a package or bounded context. The metaphor is intuitive: you can
             <em>see</em> complexity hotspots (tall buildings), large modules (wide footprints),
-            and unhealthy code (red buildings) at a glance — no spreadsheets needed.
+            and unhealthy code (red buildings) at a glance, no spreadsheets needed.
         </p>
         <p>
             The goal is to make structural problems <strong style="color:#ccc">visible and visceral</strong>.
-            A 3,000-line file with cyclomatic complexity of 50 isn't just a number — it's a
+            A 3,000-line file with cyclomatic complexity of 50 isn't just a number: it's a
             skyscraper towering over its neighbors, impossible to ignore.
         </p>
 
         <h3>Inspirations</h3>
         <a href="https://wettel.github.io/download/Wettel07b-vissoft.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
-            <strong>Wettel &amp; Lanza — "Software Systems as Cities" (VISSOFT 2007) ↗</strong>
+            <strong>Wettel &amp; Lanza, "Software Systems as Cities" (VISSOFT 2007) ↗</strong>
             <span>The original CodeCity paper. Established the building metaphor: height = methods, footprint = attributes, color = nesting depth.</span>
         </a>
         <a href="https://wettel.github.io/download/Wettel11a-icse.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
-            <strong>Wettel &amp; Lanza — Controlled Experiment (ICSE 2011) ↗</strong>
+            <strong>Wettel &amp; Lanza, Controlled Experiment (ICSE 2011) ↗</strong>
             <span>Empirical validation: developers using CodeCity completed tasks 20% faster than with standard tools.</span>
         </a>
         <a href="https://codecharta.com/" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
@@ -106,7 +106,7 @@
             <span>Modern open-source tool that added treemap layouts, metric switching, and delta comparison between versions.</span>
         </a>
         <a href="https://vanwijk.win.tue.nl/stm.pdf" target="_blank" rel="noopener" class="reading-item" style="display:block; text-decoration:none; color:inherit; cursor:pointer;">
-            <strong>Squarified Treemaps — Bruls, Huizing &amp; van Wijk (2000) ↗</strong>
+            <strong>Squarified Treemaps: Bruls, Huizing &amp; van Wijk (2000) ↗</strong>
             <span>The layout algorithm used for district and building placement. Optimizes for square-ish rectangles to minimize wasted space.</span>
         </a>
 
@@ -139,26 +139,26 @@
 
         <h3>How to Read the City</h3>
         <p>
-            <strong style="color:#ccc">Tall red buildings</strong> — complexity hotspots. These are the files most likely
+            <strong style="color:#ccc">Tall red buildings</strong>: complexity hotspots. These are the files most likely
             to harbor bugs and resist refactoring. Prioritize these for cleanup.
         </p>
         <p>
-            <strong style="color:#ccc">Large green blocks</strong> — big but healthy modules. These have lots of code
+            <strong style="color:#ccc">Large green blocks</strong>: big but healthy modules. These have lots of code
             but good averages per function. Monitor but don't panic.
         </p>
         <p>
-            <strong style="color:#ccc">Tiny scattered buildings</strong> — small utility modules.
+            <strong style="color:#ccc">Tiny scattered buildings</strong>: small utility modules.
             If there are too many, it may indicate over-decomposition.
         </p>
         <p>
-            <strong style="color:#ccc">Dense districts</strong> — packages with many modules.
+            <strong style="color:#ccc">Dense districts</strong>: packages with many modules.
             If they also have lots of red, the bounded context may need decomposition.
         </p>
 
         <h3>Data Source</h3>
         <p>
             All metrics are derived deterministically from the AST (Abstract Syntax Tree) using
-            tree-sitter parsing. No heuristics, no opinions — just structural facts.
+            tree-sitter parsing. No heuristics, no opinions, just structural facts.
             Same code + same seed = same visualization.
         </p>
         <p style="color:#555; font-size:11px; margin-top:20px;">
