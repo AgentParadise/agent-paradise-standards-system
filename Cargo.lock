@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0001-code-topology"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "apss-core",
  "chrono",

@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use super::layout::run_force_simulation;
 use super::model::{Camera, ForceDirectedConfig, NodeMetrics, Scene3D, SceneEdge, SceneNode};
-use crate::substandards::viz_dashboard::render::render_template;
+use crate::substandards::render_shared::render_template;
 
 const TEMPLATE: &str = include_str!("templates/scene.hbs");
 

@@ -1,8 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{{> page_head}}
     <title>Code Topology - 3D Coupling Visualization</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace; display: flex; background: #0f0f1a; }
@@ -193,14 +189,7 @@
         <h2>Modules <span id="module-count"></span></h2>
         <div id="module-list"></div>
     </div>
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-        }
-    }
-    </script>
+{{> three_importmap}}
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
