@@ -1,22 +1,25 @@
 //! TypeScript and TSX language grammars for tree-sitter based analysis.
 //!
 //! Both `TypeScriptGrammar` (`.ts`) and `TsxGrammar` (`.tsx`) share identical
-//! queries and complexity rules — TSX is TypeScript plus JSX syntax, and JSX
-//! nodes do not affect cyclomatic complexity.
+//! queries and complexity rules. TSX is TypeScript plus JSX syntax, and JSX
+//! nodes do not affect complexity.
 //!
 //! ## Complexity Rules
 //!
-//! **Increases CC:**
-//! - if/else branches
+//! Structures that add a decision point (both cyclomatic McCabe and cognitive
+//! SonarSource, unless noted):
+//! - if/else-if/else branches
 //! - for/for-in/for-of loops
 //! - while/do-while loops
-//! - switch statements (counted once, per SonarSource, not once per case)
-//! - catch clauses
-//! - ternary expressions
-//! - logical operators (&& and ||)
+//! - switch statements. Cyclomatic counts each `case`; cognitive (SonarSource)
+//!   counts the `switch` structure once.
+//! - catch clauses (cognitive: also a nesting structure; `try` is not)
+//! - ternary expressions (cognitive: also a nesting structure)
+//! - logical operators (&& and ||). Cognitive charges one increment per
+//!   sequence of the same operator, not one per operator token.
 //!
-//! **Does NOT increase CC:**
-//! - optional chaining (`?.`) — idiomatic null-safety, no penalty
+//! Does NOT add a decision point:
+//! - optional chaining (`?.`): idiomatic null-safety, no penalty
 
 use std::path::Path;
 
@@ -200,6 +203,15 @@ const TS_COGNITIVE_DECISION_NODES: &[&str] = &[
     "binary_expression", // && and ||
 ];
 
+// COGNITIVE (SonarSource) nesting structures. A nested structure that also
+// increments (if, ternary, switch, loops, catch) gets the B3 nesting penalty on
+// top of its +1; nested functions/lambdas raise the nesting level without an
+// increment of their own.
+//
+// SonarSource specifics encoded here:
+// - `catch_clause` nests (its body is one level deeper) but `try_statement`
+//   does NOT: a `try` block adds no nesting or increment (finding 2).
+// - `ternary_expression` both increments and nests (finding 3).
 const TS_NESTING_NODES: &[&str] = &[
     "if_statement",
     "for_statement",
@@ -207,16 +219,19 @@ const TS_NESTING_NODES: &[&str] = &[
     "while_statement",
     "do_statement",
     "switch_statement",
-    "try_statement",
+    "catch_clause",
+    "ternary_expression",
     "arrow_function",
     "function",
     "function_declaration",
     "function_expression",
+    "generator_function",
+    "generator_function_declaration",
     "method_definition",
 ];
 
 const TS_IGNORED_NODES: &[&str] = &[
-    "optional_chain", // ?. operator — idiomatic null-safety, no CC penalty
+    "optional_chain", // ?. operator: idiomatic null-safety, no CC penalty
 ];
 
 // ============================================================================
@@ -247,11 +262,20 @@ fn compute_ts_module_path(file_path: &Path, root: &Path) -> String {
 
 /// Tree-sitter query for extracting TypeScript/TSX function definitions.
 ///
-/// Captures named functions, arrow functions, methods, and function expressions.
-/// Note: function expressions use `function_expression`, not `function`.
+/// Captures named functions, arrow functions, methods, function expressions,
+/// and generator functions (both `function* g()` declarations and
+/// `const g = function* ()` expressions). tree-sitter names the generator
+/// forms `generator_function_declaration` and `generator_function`, distinct
+/// from the non-generator `function_declaration`/`function_expression`; each
+/// needs its own pattern here or generators are never measured.
 const TS_FUNCTION_QUERY: &str = r#"
 ; Named function declarations
 (function_declaration
+  name: (identifier) @function.name
+  body: (statement_block) @function.body) @function
+
+; Named generator function declarations: function* g() { ... }
+(generator_function_declaration
   name: (identifier) @function.name
   body: (statement_block) @function.body) @function
 
@@ -270,6 +294,12 @@ const TS_FUNCTION_QUERY: &str = r#"
 (variable_declarator
   name: (identifier) @function.name
   value: (function_expression
+    body: (statement_block) @function.body) @function)
+
+; Generator function expressions: const g = function* () { ... }
+(variable_declarator
+  name: (identifier) @function.name
+  value: (generator_function
     body: (statement_block) @function.body) @function)
 
 ; Exported function declarations
