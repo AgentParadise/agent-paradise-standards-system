@@ -117,32 +117,56 @@ impl<'g> ComplexityCalculator<'g> {
         None
     }
 
-    /// Find the outermost function-like node fully ENCLOSED by `[start, end]`.
+    /// Find the SINGLE outermost function-like node fully ENCLOSED by
+    /// `[start, end]`, or `None` if the range encloses zero or several sibling
+    /// functions.
     ///
     /// Complements `find_node_in_range` (which finds a function CONTAINING the
     /// range). Used by the fallback so a function whose enclosing construct
     /// (class body, export wrapper) is the outer node is still measured at
     /// nesting level 0 rather than descended-through and inflated (finding 1).
+    ///
+    /// We only delegate to `compute_cognitive` when EXACTLY ONE function is
+    /// enclosed. When the range encloses multiple sibling top-level functions,
+    /// returning the first preorder match would silently measure just that one
+    /// function and ignore the rest. In that case we return `None` so the caller
+    /// retains the range-traversal path and accounts for every enclosed function.
     fn find_enclosed_function<'a>(
         &self,
         node: Node<'a>,
         start_line: u32,
         end_line: u32,
     ) -> Option<Node<'a>> {
+        let mut found = Vec::new();
+        self.collect_enclosed_functions(node, start_line, end_line, &mut found);
+        match found.as_slice() {
+            [only] => Some(*only),
+            _ => None,
+        }
+    }
+
+    /// Collect the outermost function-like nodes fully ENCLOSED by
+    /// `[start, end]` without descending into a function once one is found (so
+    /// nested functions are not double-collected).
+    fn collect_enclosed_functions<'a>(
+        &self,
+        node: Node<'a>,
+        start_line: u32,
+        end_line: u32,
+        out: &mut Vec<Node<'a>>,
+    ) {
         let node_start = node.start_position().row as u32 + 1;
         let node_end = node.end_position().row as u32 + 1;
 
         if node_start >= start_line && node_end <= end_line && self.is_function_node(node.kind()) {
-            return Some(node);
+            out.push(node);
+            return;
         }
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if let Some(found) = self.find_enclosed_function(child, start_line, end_line) {
-                return Some(found);
-            }
+            self.collect_enclosed_functions(child, start_line, end_line, out);
         }
-        None
     }
 
     /// Check if a node type represents a function.
@@ -497,17 +521,32 @@ impl<'g> ComplexityCalculator<'g> {
         None
     }
 
-    /// Whether `node`'s parent is a logical binary using the same operator.
-    /// Used to charge only the FIRST node of each same-operator run (finding 5).
+    /// Whether `node`'s effective logical parent is a logical binary using the
+    /// same operator. Used to charge only the FIRST node of each same-operator
+    /// run (finding 5).
+    ///
+    /// Parentheses are TRANSPARENT for operator continuation: SonarSource charges
+    /// +1 per RUN of the same operator, and a parenthesized subexpression does
+    /// NOT split a run. tree-sitter models `a && (b && c)` so the inner `&&`'s
+    /// direct parent is a `parenthesized_expression`, not the outer
+    /// `binary_expression`/`boolean_operator`. We therefore walk UP through any
+    /// `parenthesized_expression` ancestors before comparing the operator token;
+    /// otherwise a parenthesized same-operator subexpression is mistaken for a
+    /// fresh run and over-counted by one.
     fn parent_is_same_logical_operator(&self, node: Node, op: &str) -> bool {
-        match node.parent() {
-            Some(parent)
-                if parent.kind() == "binary_expression" || parent.kind() == "boolean_operator" =>
-            {
-                self.logical_operator_of(parent) == Some(op)
+        let mut current = node;
+        while let Some(parent) = current.parent() {
+            match parent.kind() {
+                "parenthesized_expression" => {
+                    current = parent;
+                }
+                "binary_expression" | "boolean_operator" => {
+                    return self.logical_operator_of(parent) == Some(op);
+                }
+                _ => return false,
             }
-            _ => false,
         }
+        false
     }
 
     // ========================================================================
@@ -1062,6 +1101,28 @@ mod tests {
         assert_eq!(cognitive_of(&grammar, method), 3);
     }
 
+    #[test]
+    fn ts_cognitive_range_with_multiple_sibling_functions_measures_all() {
+        // When a range encloses several sibling top-level functions, the fallback
+        // must NOT collapse to just the first function's value. Before the fix,
+        // `find_enclosed_function` returned the first preorder function, so only
+        // `a`'s single decision was measured (cognitive == 1). The fix returns
+        // `None` for a multi-function range so the range-traversal path accounts
+        // for both functions' decisions, yielding a value greater than 1.
+        let grammar = TypeScriptGrammar::new();
+        let src = "function a() {\n  if (x) {\n  }\n}\nfunction b() {\n  if (y) {\n  }\n}\n";
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&grammar.ts_language()).unwrap();
+        let tree = parser.parse(src, None).unwrap();
+        let calc = ComplexityCalculator::new(&grammar);
+        let end = src.lines().count() as u32;
+        let cognitive = calc.compute_cognitive_range(tree.root_node(), 1, end, 0);
+        assert!(
+            cognitive > 1,
+            "multi-function range must not collapse to the first function's value of 1, got {cognitive}"
+        );
+    }
+
     // --- Finding 2: try does not nest; catch increments and nests --------
 
     #[test]
@@ -1131,6 +1192,69 @@ mod tests {
             cognitive_of(
                 &grammar,
                 "function f() {\n  if (a || b || c && d) {\n  }\n}\n"
+            ),
+            3
+        );
+    }
+
+    // --- Parenthesized same-operator runs are transparent ----------------
+    //
+    // SonarSource charges +1 per RUN of the same logical operator, and
+    // parentheses do NOT split a run. Before walking up through
+    // `parenthesized_expression` ancestors, the inner logical node's direct
+    // parent was the parens (not a logical binary), so it was mistaken for a
+    // fresh run and over-counted by one.
+
+    #[test]
+    fn ts_cognitive_parenthesized_same_operator_run_not_overcounted() {
+        let grammar = TypeScriptGrammar::new();
+        // if (a && (b && c)): one `&&` run (+1) plus the `if` (+1) == 2.
+        // Before the fix this returned 3 (the parenthesized inner `&&` counted
+        // as a second run).
+        assert_eq!(
+            cognitive_of(&grammar, "function f() {\n  if (a && (b && c)) {\n  }\n}\n"),
+            2
+        );
+        // if (a && (b || c) && d): outer `&&` run (+1), the parenthesized `||`
+        // differs from its `&&` parent (+1), plus the `if` (+1) == 3. This value
+        // must be unchanged by the fix (it was already 3, not 4).
+        assert_eq!(
+            cognitive_of(
+                &grammar,
+                "function f() {\n  if (a && (b || c) && d) {\n  }\n}\n"
+            ),
+            3
+        );
+        // Unparenthesized regressions must stay put: `&&` + `||` + `if` == 3.
+        assert_eq!(
+            cognitive_of(&grammar, "function f() {\n  if (a && b || c) {\n  }\n}\n"),
+            3
+        );
+        // and a single `&&` run + `if` == 2.
+        assert_eq!(
+            cognitive_of(&grammar, "function f() {\n  if (a && b && c) {\n  }\n}\n"),
+            2
+        );
+    }
+
+    #[test]
+    fn python_cognitive_parenthesized_same_operator_run_not_overcounted() {
+        let grammar = PythonGrammar::new();
+        // if a and (b and c): one `and` run (+1) plus the `if` (+1) == 2.
+        // Before the fix this returned 3.
+        assert_eq!(
+            cognitive_of(
+                &grammar,
+                "def f(a, b, c):\n    if a and (b and c):\n        pass\n"
+            ),
+            2
+        );
+        // if a and (b or c) and d: `and` run (+1), parenthesized `or` differs
+        // (+1), plus `if` (+1) == 3.
+        assert_eq!(
+            cognitive_of(
+                &grammar,
+                "def f(a, b, c, d):\n    if a and (b or c) and d:\n        pass\n"
             ),
             3
         );
