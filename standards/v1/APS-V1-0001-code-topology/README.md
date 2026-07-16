@@ -27,7 +27,15 @@ apss init --standard code-topology   # declare the standard in apss.yaml (set id
 apss install                    # resolve, pin, and build the composed binary
 apss run code-topology analyze .            # analyze the codebase into .topology/
 apss run code-topology viz .topology --type all   # render the visualizations
+apss run code-topology sensors .topology --by health --top 10   # agent-queryable JSON signals
 ```
+
+The `sensors` subcommand projects `.topology/metrics/modules.json` into a
+deterministic, schema-versioned JSON document ranking modules by `health`,
+`complexity`, `coupling`, `instability`, or a composite `risk` score, with a
+per-module `reasons` array. Same input artifact, same output every run. Pass
+`--persist` to also write the document to `<topology>/sensors/sensors.json`
+alongside the visualizations.
 
 Commit `apss.yaml` and `apss.lock`. The generated `.apss/` runtime is build
 output and stays out of git.

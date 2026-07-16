@@ -5,16 +5,19 @@
 //!
 //! ## Complexity Rules (from spec §7.2)
 //!
-//! **Increases CC:**
+//! Adds a decision point:
 //! - if/elif/else branches
 //! - for/while loops
-//! - try/except (each except +1)
+//! - try/except (each except is a decision; the `try` itself is not)
+//! - match/case. Cyclomatic counts each `case`; cognitive (SonarSource) counts
+//!   the `match` structure once.
 //! - list comprehensions with conditions
 //! - assert statements
-//! - logical operators (and, or)
+//! - logical operators (and, or). Cognitive charges one increment per sequence
+//!   of the same operator, not one per operator token.
 //!
-//! **Does NOT increase CC:**
-//! - with statements (context managers)
+//! Does NOT add a decision point:
+//! - with statements (context managers): nesting only, no increment
 //! - finally clause
 //! - raise statements
 
@@ -74,6 +77,8 @@ impl Grammar for PythonGrammar {
     }
 
     fn decision_nodes(&self) -> &'static [&'static str] {
+        // CYCLOMATIC (McCabe): each branch is a decision, so each `case_clause`
+        // of a `match` counts (+1 apiece), like each `elif_clause`.
         &[
             "if_statement",
             "elif_clause",
@@ -81,6 +86,7 @@ impl Grammar for PythonGrammar {
             "for_statement",
             "while_statement",
             "except_clause",
+            "case_clause",        // Each match case is a McCabe branch
             "list_comprehension", // With conditions
             "conditional_expression",
             "boolean_operator", // and, or
@@ -88,12 +94,37 @@ impl Grammar for PythonGrammar {
         ]
     }
 
+    fn cognitive_decision_nodes(&self) -> &'static [&'static str] {
+        // COGNITIVE (SonarSource): a `match` is charged ONCE on
+        // `match_statement` (+1 plus its nesting penalty), not once per case, so
+        // `case_clause` is replaced by `match_statement`. `match_statement` is
+        // also a nesting node, so its cases raise the nesting level.
+        &[
+            "if_statement",
+            "elif_clause",
+            "else_clause",
+            "for_statement",
+            "while_statement",
+            "except_clause",
+            "match_statement", // Charged once (not per case)
+            "list_comprehension",
+            "conditional_expression",
+            "boolean_operator",
+            "assert_statement",
+        ]
+    }
+
     fn nesting_nodes(&self) -> &'static [&'static str] {
+        // SonarSource: `except` (catch) nests but `try` does NOT (finding 2);
+        // `match` nests so its cases sit one level deeper (finding 6);
+        // a ternary (`conditional_expression`) both increments and nests.
         &[
             "if_statement",
             "for_statement",
             "while_statement",
-            "try_statement",
+            "except_clause",
+            "match_statement",
+            "conditional_expression",
             "with_statement",
             "function_definition",
             "class_definition",
