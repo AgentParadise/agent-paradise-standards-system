@@ -10,6 +10,13 @@
 //! - `RS01` -> Rust Language Adapter
 //! - `VZ01` -> Topology Visualization Dashboard
 
+// Shared, ungated Handlebars renderer and page-shell partials. Used by both
+// FD01 (viz_3d) and VZ01 (viz_dashboard), so it must not sit under either
+// feature gate; otherwise building one substandard alone would fail to
+// resolve the render helper.
+#[cfg(any(feature = "FD01", feature = "VZ01"))]
+pub mod render_shared;
+
 #[cfg(feature = "CI01")]
 pub mod ci_github_actions;
 
