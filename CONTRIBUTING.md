@@ -151,20 +151,20 @@ Releases follow the `main` -> `release` branch pattern:
 ### Version Bumps
 
 - **Standards/substandards**: Bump the version in `standard.toml` / `substandard.toml` and `Cargo.toml`
-- **System crates** (`aps-core`, `aps-cli`, `apss`): Bump `[workspace.package].version` in root `Cargo.toml`
+- **System crates** (`apss-core`, `aps-cli`, `apss-bootstrap`): Bump `[workspace.package].version` in root `Cargo.toml`
 - Docs-only changes are exempt from version bumps
 
 For first-time setup, see [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md).
 
 ## For AI Agents
 
-See [AGENTS.md](AGENTS.md) for the RIPER-5 operational protocol designed for AI coding assistants.
+See [AGENTS.md](AGENTS.md) for the full operating guidance for AI coding assistants working in this repository.
 
 Key points:
-- Always declare your current mode
-- Follow the Research → Innovate → Plan → Execute → Review flow
-- Use `just check` after Execute mode
-- Commit with conventional messages
+- This repo ships two distinct CLI binaries; do not conflate them. `apss` (`crates/apss-bootstrap`, published to crates.io) is the consumer-facing binary (`init`, `install`, `status`, `validate`, `config`, `run <slug> <command>`). `apss-dev` (`crates/aps-cli`, never published) is repo-internal tooling for authoring this repo's own standards, with commands under `v1` (`v1 validate`, `v1 create`, `v1 promote`, `v1 version`, `v1 list`, `v1 generate views`). Never write a bare `aps` command in docs or examples.
+- Run `just check` before finishing, and `just aps-validate` if you touched standards.
+- Commit with conventional messages, and only commit when explicitly asked to.
+- No em dashes anywhere in the repo; use colons or commas instead.
 
 ## Getting Help
 
