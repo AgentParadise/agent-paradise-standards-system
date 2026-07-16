@@ -4,7 +4,7 @@ schema = "aps.standard/v1"
 id = "APS-V1-0000"
 name = "APS Meta-Standard"
 slug = "meta"
-version = "1.5.1"
+version = "1.5.2"
 category = "governance"
 status = "active"
 

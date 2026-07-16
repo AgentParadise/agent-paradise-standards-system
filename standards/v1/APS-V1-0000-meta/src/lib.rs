@@ -602,25 +602,24 @@ impl Standard for MetaStandard {
         self.validate_structure(path, &mut diagnostics);
 
         // Validate metadata and extract dependency policy
-        let dep_policy;
-        if path.join("standard.toml").exists() {
+        let dep_policy = if path.join("standard.toml").exists() {
             self.validate_standard_metadata(path, &mut diagnostics);
-            dep_policy = metadata::parse_standard_metadata(&path.join("standard.toml"))
+            metadata::parse_standard_metadata(&path.join("standard.toml"))
                 .map(|m| m.dependencies)
-                .unwrap_or_default();
+                .unwrap_or_default()
         } else if path.join("substandard.toml").exists() {
             self.validate_substandard_metadata(path, &mut diagnostics);
-            dep_policy = metadata::parse_substandard_metadata(&path.join("substandard.toml"))
+            metadata::parse_substandard_metadata(&path.join("substandard.toml"))
                 .map(|m| m.dependencies)
-                .unwrap_or_default();
+                .unwrap_or_default()
         } else if path.join("experiment.toml").exists() {
             self.validate_experiment_metadata(path, &mut diagnostics);
-            dep_policy = metadata::parse_experiment_metadata(&path.join("experiment.toml"))
+            metadata::parse_experiment_metadata(&path.join("experiment.toml"))
                 .map(|m| m.dependencies)
-                .unwrap_or_default();
+                .unwrap_or_default()
         } else {
-            dep_policy = metadata::DependencyPolicy::default();
-        }
+            metadata::DependencyPolicy::default()
+        };
 
         // Validate dependency policy
         self.validate_dependencies(path, &dep_policy.allowed_external, &mut diagnostics);

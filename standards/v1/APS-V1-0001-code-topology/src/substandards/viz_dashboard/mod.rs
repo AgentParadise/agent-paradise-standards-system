@@ -29,7 +29,11 @@ pub mod clusters;
 pub mod codecity;
 pub mod force_3d;
 pub mod index;
+pub mod model;
+pub mod render;
 pub mod vsa;
+
+pub use model::{VizModule, VizStats};
 
 // Re-exports for convenience
 pub use clusters::generate as generate_clusters;

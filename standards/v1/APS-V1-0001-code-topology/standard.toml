@@ -4,7 +4,8 @@ schema = "aps.standard/v1"
 id = "APS-V1-0001"
 name = "Code Topology and Coupling Analysis"
 slug = "code-topology"
-version = "0.2.2"
+
+version = "0.3.0"
 category = "technical"
 status = "active"
 
