@@ -152,8 +152,8 @@ That message names the token, not the crate, so it is easy to misread as a
 workflow bug. It is not. The workflow handles new packages correctly: detection
 is a `git diff` against the last release tag (a directory that did not exist
 reads as changed), the crate name is derived from the directory name rather than
-from history, and the idempotency check fails open when `cargo search` finds
-nothing.
+from history, and the publish attempt is made unconditionally, so a crate that
+has never been published is never skipped.
 
 ### The flow
 
