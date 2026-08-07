@@ -95,6 +95,7 @@ dependencies = [
  "apss-v1-0001-code-topology",
  "apss-v1-0002-architecture-fitness",
  "apss-v1-0003-documentation",
+ "apss-v1-0004-session-capture",
  "apss-v1-0005-agent-recipe",
  "clap",
  "regex",
@@ -265,6 +266,7 @@ dependencies = [
 name = "apss-v1-0004-session-capture"
 version = "1.0.0"
 dependencies = [
+ "apss-core",
  "jsonschema",
  "regex",
  "serde",

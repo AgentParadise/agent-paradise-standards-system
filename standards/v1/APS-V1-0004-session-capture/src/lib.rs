@@ -55,10 +55,41 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod cli;
 pub mod content_hash;
 pub mod reconstitution;
 
 pub use content_hash::{ContentHashError, content_hash_for};
+
+/// Standard identifier.
+pub const ID: &str = "APS-V1-0004";
+
+/// CLI dispatch slug.
+pub const SLUG: &str = "session-capture";
+
+/// Human-readable name.
+pub const NAME: &str = "Session Capture Standard";
+
+/// Short description.
+pub const DESCRIPTION: &str = "One capture contract so agent sessions from any runtime back up uniformly, stay searchable, and can be resumed on another machine";
+
+/// Version of this standard, kept in step with `Cargo.toml`.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Register this standard with a composing CLI binary (APS-V1-0000.DI01).
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: ID.to_string(),
+            slug: SLUG.to_string(),
+            name: NAME.to_string(),
+            description: DESCRIPTION.to_string(),
+            version: VERSION.to_string(),
+            commands: cli::COMMAND_NAMES.iter().map(|s| s.to_string()).collect(),
+        },
+        Box::new(cli::SessionCaptureCommandHandler::new()),
+    );
+}
 
 /// The envelope schema version this crate implements (section 4.2).
 ///
