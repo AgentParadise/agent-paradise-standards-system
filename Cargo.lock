@@ -171,7 +171,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0000-meta"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "apss-core",
  "tempfile",
@@ -259,6 +259,16 @@ dependencies = [
  "thiserror",
  "toml",
  "walkdir",
+]
+
+[[package]]
+name = "apss-v1-0004-session-capture"
+version = "1.0.0"
+dependencies = [
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]

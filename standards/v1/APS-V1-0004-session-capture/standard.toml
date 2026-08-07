@@ -1,0 +1,38 @@
+schema = "aps.standard/v1"
+
+[standard]
+id = "APS-V1-0004"
+name = "Session Capture Standard"
+slug = "session-capture"
+version = "1.0.0"
+category = "technical"
+status = "active"
+
+[aps]
+aps_major = "v1"
+backwards_compatible_major_required = true
+
+[ownership]
+maintainers = ["AgentParadise"]
+
+# Promotion metadata
+[promotion]
+promoted_from = "EXP-V1-0003"
+promoted_at = "2026-08-06"
+
+[dependencies]
+[[dependencies.allowed_external]]
+crate = "serde"
+rationale = "Workspace dependency for deserialising the session envelope schema types shared by all three conformance profiles"
+
+[[dependencies.allowed_external]]
+crate = "serde_json"
+rationale = "Workspace dependency for JSON encoding of envelopes and the opaque raw payload"
+
+[[dependencies.allowed_external]]
+crate = "toml"
+rationale = "Parses the shipped reconstitution registry (registry/reconstitution.toml) that maps source_format to harness path templates and resume descriptors"
+
+[[dependencies.allowed_external]]
+crate = "jsonschema"
+rationale = "Dev-only dependency: conformance tests validate the shipped examples against the embedded session-envelope JSON Schema"

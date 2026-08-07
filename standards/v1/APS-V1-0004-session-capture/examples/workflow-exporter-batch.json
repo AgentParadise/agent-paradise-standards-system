@@ -1,0 +1,45 @@
+{
+  "note": "Exporter (push) profile: the body of POST /v1/sessions/batch for one syntropic137 multi-agent run. One envelope PER AGENT; the run is grouped by a shared metadata.workflow_id. Sent with Authorization: Bearer <sessions:write token>.",
+  "envelopes": [
+    {
+      "scs_version": "1.0",
+      "origin": { "host": "syn137-runner-7", "environment": "workflow" },
+      "agent": "Codex",
+      "source_format": "codex-turns-v1",
+      "session_id": "run-4820-agent-planner",
+      "parent_session_id": null,
+      "started_at": "2026-05-02T09:00:02Z",
+      "last_activity_at": "2026-05-02T09:04:51Z",
+      "content_hash": "sha256:aa11bb22cc33dd44ee55ff6677889900aabbccddeeff00112233445566778899",
+      "metadata": {
+        "repo": "owner/service",
+        "project": "service",
+        "model": "gpt-5.5",
+        "tags": ["ci", "planner"],
+        "message_count": 12,
+        "workflow_id": "run-4820"
+      },
+      "raw": { "note": "Codex-native transcript, verbatim." }
+    },
+    {
+      "scs_version": "1.0",
+      "origin": { "host": "syn137-runner-7", "environment": "workflow" },
+      "agent": "ClaudeCode",
+      "source_format": "claude-jsonl-v1",
+      "session_id": "run-4820-agent-implementer",
+      "parent_session_id": null,
+      "started_at": "2026-05-02T09:05:10Z",
+      "last_activity_at": "2026-05-02T09:22:37Z",
+      "content_hash": "sha256:bb22cc33dd44ee55ff6677889900aabbccddeeff00112233445566778899aabb",
+      "metadata": {
+        "repo": "owner/service",
+        "project": "service",
+        "model": "claude-opus-4-8",
+        "tags": ["ci", "implementer"],
+        "message_count": 58,
+        "workflow_id": "run-4820"
+      },
+      "raw": { "note": "Claude-native transcript, verbatim." }
+    }
+  ]
+}
