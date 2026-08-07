@@ -28,8 +28,8 @@ agent context.
   full-text over content is a fallback. Semantic search may not be available.
 - **Idempotency is free.** Re-emitting the same session is safe: the batch
   endpoint dedups on `(session_id, content_hash)`. An agent building an envelope
-  does NOT compute `content_hash`; the store derives it over the sanitized stored
-  form (spec 4.2.3). Omit the field.
+  does NOT compute `content_hash`; the store derives it at ingest over the
+  captured content (spec 4.2.3). Omit the field.
 - **The server sanitizes.** An agent should still pre-redact obvious secrets,
   but the store always sanitizes before persisting.
 - **`raw` must be captured verbatim, as bytes.** For a line-delimited transcript,

@@ -23,29 +23,42 @@
 //!
 //! # Example
 //!
+//! An envelope as a producer emits it: no `content_hash` (the store computes it
+//! at ingest, section 4.2.3), and `raw` as the transcript's verbatim bytes, which
+//! is what a reconstitutable `source_format` requires (section 4.3.1).
+//!
 //! ```
-//! use session_capture::SessionEnvelope;
+//! use session_capture::{SessionEnvelope, content_hash_for};
 //!
 //! let json = r#"{
 //!   "scs_version": "1.0",
 //!   "origin": { "host": "macbook-neural", "environment": "local" },
 //!   "agent": "ClaudeCode",
 //!   "source_format": "claude-jsonl-v1",
-//!   "session_id": "abc-123",
+//!   "session_id": "019973e4-58a9-7b83-9f21-2b6c4d0a1e77",
 //!   "started_at": "2026-05-02T14:03:11Z",
 //!   "last_activity_at": "2026-05-02T15:20:44Z",
-//!   "content_hash": "sha256:deadbeef",
-//!   "raw": { "messages": [] }
+//!   "raw": "{\"type\":\"user\",\"message\":\"hello\"}\n"
 //! }"#;
 //!
-//! let envelope: SessionEnvelope = serde_json::from_str(json).unwrap();
-//! assert!(envelope.validate().is_ok());
+//! let mut envelope: SessionEnvelope = serde_json::from_str(json).unwrap();
+//! envelope.validate().unwrap();
 //! assert_eq!(envelope.origin.environment, "local");
+//!
+//! // In flight there is no dedup key yet.
+//! assert!(envelope.idempotency_key().is_none());
+//!
+//! // What a store does at ingest, before sanitizing.
+//! envelope.content_hash = Some(content_hash_for(&envelope).unwrap());
+//! envelope.validate_stored().unwrap();
 //! ```
 
 use serde::{Deserialize, Serialize};
 
+pub mod content_hash;
 pub mod reconstitution;
+
+pub use content_hash::{ContentHashError, content_hash_for};
 
 /// The envelope schema version this crate implements (section 4.2).
 ///
@@ -217,7 +230,7 @@ impl std::fmt::Display for ValidationError {
             ValidationError::MissingStoredContentHash => {
                 write!(
                     f,
-                    "a stored envelope must carry a content_hash computed by the store over the sanitized form"
+                    "a stored envelope must carry a content_hash computed by the store over the captured content"
                 )
             }
             ValidationError::MalformedScsVersion => {
@@ -305,13 +318,30 @@ impl SessionEnvelope {
     }
 }
 
+/// Days in a month, accounting for leap years per the proleptic Gregorian rule.
+fn days_in_month(year: u32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            // `%` rather than `is_multiple_of`, which is newer than the
+            // workspace MSRV of 1.85.
+            if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
+    }
+}
+
 /// Check that a timestamp is RFC3339 (section 4.2.2).
 ///
-/// Validates shape and calendar-plausible ranges, not exact month lengths or
-/// leap years: the point is to reject capture-time placeholders and obviously
-/// malformed values, which is what the schema's `format: date-time` also aims
-/// at. Full date arithmetic would require a date dependency this definitional
-/// crate deliberately avoids.
+/// Validates the full grammar including real month lengths and leap years, so
+/// `2026-02-31T12:00:00Z` is rejected rather than merely being implausible.
+/// Second 60 is accepted only at `23:59:60` in the value's own offset, which is
+/// where RFC3339 permits a leap second.
 fn is_rfc3339(value: &str) -> bool {
     let bytes = value.as_bytes();
     // Minimum: 1970-01-01T00:00:00Z
@@ -334,11 +364,17 @@ fn is_rfc3339(value: &str) -> bool {
         return false;
     }
     let num = |range: std::ops::Range<usize>| value[range].parse::<u32>().unwrap_or(u32::MAX);
-    if !(1..=12).contains(&num(5..7)) || !(1..=31).contains(&num(8..10)) {
+    let (year, month, day) = (num(0..4), num(5..7), num(8..10));
+    if !(1..=12).contains(&month) || day < 1 || day > days_in_month(year, month) {
         return false;
     }
-    // 24:00:00 is not permitted by RFC3339; leap second 60 is.
-    if num(11..13) > 23 || num(14..16) > 59 || num(17..19) > 60 {
+    // 24:00:00 is not permitted by RFC3339. Second 60 is a leap second, valid
+    // only at the final second of a day (23:59:60 in the stated offset).
+    let (hour, minute, second) = (num(11..13), num(14..16), num(17..19));
+    if hour > 23 || minute > 59 || second > 60 {
+        return false;
+    }
+    if second == 60 && !(hour == 23 && minute == 59) {
         return false;
     }
 
@@ -536,6 +572,72 @@ mod tests {
     }
 
     #[test]
+    fn timestamps_are_validated_against_the_real_calendar() {
+        let mut env: SessionEnvelope = serde_json::from_str(valid_json()).unwrap();
+        for good in [
+            "2026-05-02T14:03:11Z",
+            "2026-05-02t14:03:11z",
+            "2024-02-29T00:00:00Z",      // leap year
+            "2026-05-02T14:03:11.123Z",  // fractional seconds
+            "2026-05-02T14:03:11+02:00", // offset
+            "2026-05-02T14:03:11-08:00",
+            "2016-12-31T23:59:60Z", // leap second at end of day
+        ] {
+            env.started_at = good.to_string();
+            assert!(env.validate().is_ok(), "must accept RFC3339 {good}");
+        }
+        for bad in [
+            "2026-02-31T12:00:00Z",  // February has no 31st
+            "2025-02-29T12:00:00Z",  // 2025 is not a leap year
+            "1900-02-29T12:00:00Z",  // century non-leap year
+            "2026-04-31T12:00:00Z",  // April has 30 days
+            "2026-01-01T12:00:60Z",  // leap second not at end of day
+            "2026-01-01T24:00:00Z",  // hour 24 is not RFC3339
+            "2026-13-01T12:00:00Z",  // month 13
+            "2026-00-01T12:00:00Z",  // month 0
+            "2026-01-00T12:00:00Z",  // day 0
+            "2026-05-02 14:03:11Z",  // space instead of T
+            "2026-05-02T14:03:11",   // offset is required
+            "2026-05-02T14:03:11.Z", // empty fraction
+            "2026-05-02T14:03:11+2:00",
+            "2026-05-02T14:03:11+02:60",
+            "not-a-timestamp",
+        ] {
+            env.started_at = bad.to_string();
+            assert_eq!(
+                env.validate(),
+                Err(ValidationError::MalformedTimestamp("started_at")),
+                "must reject non-RFC3339 {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn scalar_raw_is_rejected() {
+        let mut env: SessionEnvelope = serde_json::from_str(valid_json()).unwrap();
+        for scalar in [
+            serde_json::json!(42),
+            serde_json::json!(true),
+            serde_json::Value::Null,
+        ] {
+            env.raw = scalar.clone();
+            assert_eq!(
+                env.validate(),
+                Err(ValidationError::InvalidRawType),
+                "a scalar is not a transcript: {scalar}"
+            );
+        }
+        for ok in [
+            serde_json::json!({}),
+            serde_json::json!([]),
+            serde_json::Value::String(String::new()),
+        ] {
+            env.raw = ok;
+            assert!(env.validate().is_ok());
+        }
+    }
+
+    #[test]
     fn malformed_content_hash_is_rejected() {
         let mut env: SessionEnvelope = serde_json::from_str(valid_json()).unwrap();
         env.content_hash = Some("not-a-hash".to_string());
@@ -564,7 +666,7 @@ mod tests {
             "but a stored envelope must carry one"
         );
 
-        // Stored: the store has computed it over the sanitized form.
+        // Stored: the store has computed it over the captured content.
         env.content_hash = Some("sha256:deadbeef01".to_string());
         env.validate_stored()
             .expect("a stored envelope with a hash is conformant");

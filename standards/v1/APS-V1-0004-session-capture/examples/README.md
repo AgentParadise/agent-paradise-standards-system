@@ -37,9 +37,12 @@ envelopes; see [`../tests/`](../tests/).
   `model`, and `tags` are what a store filters and queries on. See section 7 of
   the spec.
 - **Idempotency.** The batch endpoint dedups on `(session_id, content_hash)`, so
-  re-sends are safe. The examples show `content_hash` populated because that is
-  how a *stored* envelope looks; producers do not compute it. The store derives it
-  over the sanitized stored form and overwrites anything a producer sent
-  (spec 4.2.3).
+  re-sends are safe. Note that **no example carries `content_hash`**: these model
+  envelopes in flight, and producers do not compute the hash. The store derives it
+  at ingest over the captured content and overwrites anything a producer sent
+  (spec 4.2.3). A test enforces that the examples stay this way.
+- **`raw` is a verbatim string.** Both `source_format` values here appear in the
+  reconstitution registry, so their transcripts MUST be captured as exact bytes
+  rather than parsed into objects (spec 4.3.1). Parsing would forfeit resume.
 - **Origin attribution.** The Source example is `origin.environment = local`;
   the Exporter examples are `origin.environment = workflow`.

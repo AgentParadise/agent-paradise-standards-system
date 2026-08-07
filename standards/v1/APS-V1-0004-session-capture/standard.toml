@@ -38,5 +38,13 @@ crate = "regex"
 rationale = "Validates an untrusted session_id against the reconstitution registry entry's session_id_pattern before it is interpolated into a resume command (spec 6.4.5)"
 
 [[dependencies.allowed_external]]
+crate = "sha2"
+rationale = "Computes the SHA-256 content_hash the standard mandates (spec 4.2.3); shipping the implementation is what makes the hash interoperable rather than merely described"
+
+[[dependencies.allowed_external]]
+crate = "serde_json_canonicalizer"
+rationale = "RFC 8785 (JCS) serialization of the content_hash input, so independent stores produce byte-identical digests for identical content (spec 4.2.3)"
+
+[[dependencies.allowed_external]]
 crate = "jsonschema"
 rationale = "Dev-only dependency: conformance tests validate the shipped examples against the embedded session-envelope JSON Schema"

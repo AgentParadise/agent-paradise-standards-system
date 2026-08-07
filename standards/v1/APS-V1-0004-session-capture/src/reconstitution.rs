@@ -209,19 +209,17 @@ impl Entry {
 ///
 /// An unanchored pattern would match a substring, so `abc; rm -rf ~` could
 /// satisfy a pattern intended to describe only `abc`.
+///
+/// The wrapping is UNCONDITIONAL. An earlier version skipped it when the pattern
+/// already began with `^` or ended with `$`, which alternation defeats: given
+/// `^foo|bar$`, the pattern parses as `(^foo)|(bar$)`, so `fooATTACK` matches the
+/// first branch. Wrapping in a non-capturing group with absolute anchors makes
+/// that impossible regardless of what the pattern contains.
+///
+/// `\A` and `\z` are used rather than `^` and `$` so that a pattern enabling
+/// multi-line mode cannot reinterpret the anchors as line boundaries.
 fn anchor(pattern: &str) -> String {
-    let mut anchored = String::with_capacity(pattern.len() + 4);
-    if !pattern.starts_with('^') {
-        anchored.push_str("^(?:");
-    }
-    anchored.push_str(pattern);
-    if !pattern.starts_with('^') {
-        anchored.push(')');
-    }
-    if !pattern.ends_with('$') {
-        anchored.push('$');
-    }
-    anchored
+    format!(r"\A(?:{pattern})\z")
 }
 
 /// Whether a string is a conservative identifier: alphanumeric start, then
@@ -239,16 +237,43 @@ fn is_safe_identifier(s: &str) -> bool {
 
 /// Windows reserved device names. Writing to any of these, with or without an
 /// extension, targets a device rather than a file under the root.
-const WINDOWS_RESERVED: [&str; 22] = [
+///
+/// Includes the superscript `COM¹`/`LPT²` forms, which Windows also resolves to
+/// devices and which an ASCII-only list would miss.
+const WINDOWS_RESERVED: [&str; 28] = [
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "COM9", "COM¹", "COM²", "COM³", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8",
+    "LPT9", "LPT¹", "LPT²", "LPT³",
 ];
 
+/// Characters Windows forbids in a filename. `:` matters most: it introduces an
+/// NTFS alternate data stream, so `ordinary.jsonl:hidden` writes a hidden stream
+/// rather than the file it appears to name.
+const WINDOWS_FORBIDDEN_CHARS: [char; 7] = [':', '"', '<', '>', '|', '*', '?'];
+
 fn is_windows_reserved(segment: &str) -> bool {
-    let stem = segment.split('.').next().unwrap_or(segment);
+    // Windows strips trailing dots and spaces, so `NUL ` and `NUL.` both resolve
+    // to the NUL device. Strip them before comparing.
+    let trimmed = segment.trim_end_matches([' ', '.']);
+    let stem = trimmed.split('.').next().unwrap_or(trimmed);
+    let stem = stem.trim_end_matches([' ', '.']);
     WINDOWS_RESERVED
         .iter()
         .any(|reserved| stem.eq_ignore_ascii_case(reserved))
+}
+
+/// Whether a path segment is unsafe on a Windows host.
+///
+/// Applied on every platform. A corpus is shared across machines, so an envelope
+/// captured on macOS may be reconstituted on Windows; rejecting uniformly keeps
+/// conformance from depending on which host happens to restore.
+fn is_unsafe_windows_segment(segment: &str) -> bool {
+    is_windows_reserved(segment)
+        || segment.contains(WINDOWS_FORBIDDEN_CHARS)
+        // A segment ending in a space or dot is silently renamed by Windows,
+        // so the path written is not the path validated.
+        || segment.ends_with(' ')
+        || segment.ends_with('.')
 }
 
 /// Whether an untrusted `metadata.source_path` passes the LEXICAL half of the
@@ -295,7 +320,7 @@ pub fn is_safe_source_path(source_path: &str) -> bool {
                 }
             }
             other => {
-                if is_windows_reserved(other) {
+                if is_unsafe_windows_segment(other) {
                     return false;
                 }
                 depth += 1;
@@ -334,6 +359,10 @@ pub fn resolve_within_root(
     let canonical_root = root
         .canonicalize()
         .map_err(|_| RegistryError::UnsafeSourcePath)?;
+    // A non-directory root would make every child path meaningless.
+    if !canonical_root.is_dir() {
+        return Err(RegistryError::UnsafeSourcePath);
+    }
 
     // Normalize separators so a Windows-style path resolves on any host.
     let mut candidate = canonical_root.clone();
@@ -351,9 +380,16 @@ pub fn resolve_within_root(
 
     // Resolve the deepest ancestor that exists, so symlinked intermediate
     // components are followed and checked. The leaf itself may not exist yet.
+    //
+    // `symlink_metadata` rather than `exists`: `exists()` follows symlinks and
+    // reports false for a DANGLING one, which would let `root/link/session.jsonl`
+    // (where `link` points outside the root at a target that does not exist yet)
+    // be treated as two nonexistent trailing components and pushed back onto the
+    // canonical root unchecked. Creating the target afterwards would then place
+    // the write outside the root.
     let mut existing = candidate.as_path();
     let mut trailing = Vec::new();
-    while !existing.exists() {
+    while existing.symlink_metadata().is_err() {
         let Some(name) = existing.file_name() else {
             return Err(RegistryError::UnsafeSourcePath);
         };
@@ -362,6 +398,14 @@ pub fn resolve_within_root(
             return Err(RegistryError::UnsafeSourcePath);
         };
         existing = parent;
+    }
+    // The deepest existing component must not itself be a symlink: canonicalize
+    // would follow it, and a dangling one cannot be canonicalized at all.
+    let metadata = existing
+        .symlink_metadata()
+        .map_err(|_| RegistryError::UnsafeSourcePath)?;
+    if metadata.file_type().is_symlink() {
+        return Err(RegistryError::UnsafeSourcePath);
     }
     let mut resolved = existing
         .canonicalize()
@@ -553,6 +597,34 @@ mod tests {
         }
     }
 
+    /// Windows silently strips trailing dots and spaces, and treats `:` as an
+    /// alternate-data-stream separator, so each of these writes somewhere other
+    /// than the name suggests.
+    #[test]
+    fn windows_normalization_and_stream_bypasses_are_rejected() {
+        for bypass in [
+            "NUL ",                  // trailing space normalizes to NUL
+            "NUL.",                  // trailing dot normalizes to NUL
+            "COM1 ",                 // same, numbered device
+            "COM\u{00B9}",           // superscript device name
+            "LPT\u{00B2}",           // superscript device name
+            "NUL:stream",            // ADS on a device
+            "ordinary.jsonl:hidden", // ADS on an ordinary file
+            "trailing ",             // renamed by Windows, so not the validated path
+            "trailing.",             // same
+            "a<b.jsonl",
+            "a|b.jsonl",
+            "a?b.jsonl",
+            "a*b.jsonl",
+            "a\"b.jsonl",
+        ] {
+            assert!(
+                !is_safe_source_path(bypass),
+                "should reject Windows-unsafe segment: {bypass:?}"
+            );
+        }
+    }
+
     #[test]
     fn session_id_is_matched_against_the_registry_pattern_not_a_guess() {
         // A pattern the old heuristic would have mis-handled: it contains no
@@ -667,6 +739,90 @@ mod tests {
         assert!(ok.starts_with(root.canonicalize().unwrap()));
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A dangling symlink is the case `Path::exists()` gets wrong: it follows
+    /// links, so it reports false for a link whose target does not exist yet.
+    /// Treating that as a nonexistent trailing component would push it back onto
+    /// the canonical root unchecked, and creating the target later would place
+    /// the write outside the root.
+    #[test]
+    #[cfg(unix)]
+    fn resolve_within_root_rejects_a_dangling_symlink_component() {
+        let base = std::env::temp_dir().join("apss-scs-dangling-test");
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("root");
+        std::fs::create_dir_all(&root).unwrap();
+
+        // Points outside the root at a target that does not exist yet.
+        std::os::unix::fs::symlink(base.join("outside-not-created"), root.join("link")).unwrap();
+
+        assert!(
+            is_safe_source_path("link/session.jsonl"),
+            "the lexical check cannot see the symlink, which is the point"
+        );
+        assert_eq!(
+            resolve_within_root(&root, "link/session.jsonl").unwrap_err(),
+            RegistryError::UnsafeSourcePath,
+            "a dangling symlink component must be rejected, not deferred"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolve_within_root_requires_a_directory_root() {
+        let base = std::env::temp_dir().join("apss-scs-fileroot-test");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let file_root = base.join("not-a-dir");
+        std::fs::write(&file_root, b"x").unwrap();
+
+        assert_eq!(
+            resolve_within_root(&file_root, "child.jsonl").unwrap_err(),
+            RegistryError::UnsafeSourcePath
+        );
+        assert_eq!(
+            resolve_within_root(&base.join("does-not-exist"), "child.jsonl").unwrap_err(),
+            RegistryError::UnsafeSourcePath,
+            "a nonexistent root must fail closed"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Alternation defeats naive anchoring: `^foo|bar$` parses as
+    /// `(^foo)|(bar$)`, so a prefix match satisfies it.
+    #[test]
+    fn alternation_cannot_defeat_anchoring() {
+        for pattern in ["^foo|bar$", "foo|bar$", "^foo|bar", "foo|bar"] {
+            let entry = Entry {
+                harness: "Test".into(),
+                description: "alternation".into(),
+                path_template: "{session_id}".into(),
+                serialization: "jsonl".into(),
+                session_id_pattern: pattern.into(),
+                prefer_source_path: false,
+                slug_rule: SlugRule {
+                    source: "none".into(),
+                    replace: Vec::new(),
+                },
+                resume: Resume {
+                    program: "true".into(),
+                    args: Vec::new(),
+                    cwd: ".".into(),
+                },
+            };
+            assert!(
+                entry.validate_session_id("foo").is_ok(),
+                "{pattern}: the whole-string match must still succeed"
+            );
+            assert_eq!(
+                entry.validate_session_id("fooATTACK").unwrap_err(),
+                RegistryError::InvalidSessionId,
+                "{pattern}: a prefix match must not satisfy an anchored pattern"
+            );
+        }
     }
 
     #[test]

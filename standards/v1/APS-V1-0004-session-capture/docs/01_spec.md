@@ -388,9 +388,33 @@ Precisely:
   independent stores agree byte for byte. Without a canonical serialization,
   member ordering and number and string escaping vary by implementation and two
   conformant stores would disagree on the digest for identical content.
-- The digest MUST be prefixed by its algorithm (`algo:hexdigest`, for example
-  `sha256:...`) so the algorithm can evolve without ambiguity. `sha256` is the
-  RECOMMENDED algorithm.
+- The algorithm MUST be SHA-256 in `scs_version` 1.x. It is not merely
+  recommended: two stores choosing different algorithms would produce different
+  identities for identical content, which is the exact failure canonicalization
+  exists to prevent. A future major version MAY introduce another algorithm, and
+  the `algo:` prefix exists so that transition is unambiguous.
+- The digest MUST be rendered as `sha256:` followed by **lowercase** hexadecimal.
+  Casing is normative: `sha256:AB…` and `sha256:ab…` are the same digest but
+  different strings, and dedup compares strings.
+
+##### `raw` values that cannot be hashed
+
+RFC 8785 canonicalizes I-JSON ([RFC 7493](https://www.rfc-editor.org/rfc/rfc7493))
+input. A `raw` value that is not I-JSON compatible therefore has no canonical
+form and no conforming digest. In practice this means:
+
+- Object member names within `raw` MUST be unique. Duplicate names have no
+  defined canonical ordering.
+- Numbers within `raw` MUST be representable as IEEE-754 doubles. An
+  arbitrary-precision literal such as `1e400` has no canonical representation.
+
+A store MUST reject an envelope whose `raw` cannot be canonicalized, reporting it
+as `rejected` with a reason (5.3). It MUST NOT coerce the value and hash the
+result, which would silently assign an identity that another store would not
+reproduce.
+
+This constraint does not apply to a string `raw`, which is the shape required for
+any reconstitutable `source_format` (4.3.1) and is always canonicalizable.
 
 ##### Why before sanitization
 
@@ -486,8 +510,9 @@ re-serialize `raw`. Outside of redacted spans and stripped NULs, the stored form
 MUST be byte-identical to what the producer sent, and MUST remain retrievable in
 that form (6.3.5).
 
-Both transformations are inputs to the stored form (2.9) and therefore precede
-hashing (4.2.3).
+Both transformations produce the stored form (2.9), and both happen AFTER
+hashing. `content_hash` is computed over the captured content as received
+(4.2.3), so neither redaction nor NUL stripping can move a session's identity.
 
 ### 4.4 Metadata
 

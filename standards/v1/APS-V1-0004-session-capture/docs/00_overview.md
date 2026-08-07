@@ -58,8 +58,13 @@ churn, because it never claimed to understand their internals.
 
 ## Quick example
 
-A single Claude Code session becomes one envelope. Only the header fields and
-`raw` are required; `metadata` is freeform and powers search.
+A single Claude Code session becomes one envelope, shown here as a producer emits
+it. `metadata` is freeform and powers search. Note two things a producer gets
+right by omission and by shape:
+
+- No `content_hash`. The store computes it at ingest (spec 4.2.3).
+- `raw` is a string holding the transcript's exact bytes, not a parsed object.
+  Only the string shape supports byte-exact resume (spec 4.3.1).
 
 ```jsonc
 {
@@ -67,11 +72,10 @@ A single Claude Code session becomes one envelope. Only the header fields and
   "origin":        { "host": "macbook-neural", "environment": "local" },
   "agent":         "ClaudeCode",
   "source_format": "claude-jsonl-v1",
-  "session_id":    "019973e4-58a9-7b83-...",
+  "session_id":    "019973e4-58a9-7b83-9f21-2b6c4d0a1e77",
   "parent_session_id": null,
   "started_at":    "2026-05-02T14:03:11Z",
   "last_activity_at": "2026-05-02T15:20:44Z",
-  "content_hash":  "sha256:...",
   "metadata": {
     "repo": "AgentParadise/agent-paradise-standards-system",
     "cwd": "/Users/neural/Code/apss",
@@ -79,9 +83,10 @@ A single Claude Code session becomes one envelope. Only the header fields and
     "model": "claude-opus-4-8",
     "tags": ["standards", "authoring"],
     "message_count": 42,
-    "workflow_id": null
+    "workflow_id": null,
+    "source_path": "-Users-neural-Code-apss/019973e4-58a9-7b83-9f21-2b6c4d0a1e77.jsonl"
   },
-  "raw": { "...": "provider-native transcript, preserved verbatim" }
+  "raw": "{\"type\":\"user\",\"message\":{...}}\n{\"type\":\"assistant\",...}\n"
 }
 ```
 
@@ -147,8 +152,9 @@ regardless of source, so a compromised or naive exporter cannot leak secrets int
 the shared store.
 
 Because sanitization changes the bytes, `content_hash` is defined over the
-sanitized stored form and is computed by the store, not the producer. Dedup is
-therefore resolved server-side.
+captured content, before sanitization, and is computed by the store rather than
+the producer. Dedup is therefore resolved server-side, and stays stable across
+sanitizer changes.
 
 ## Versioning and evolution
 

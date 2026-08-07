@@ -39,8 +39,9 @@ wraps each provider's raw transcript verbatim.
   token), and Reconstitutor (restore: write a stored session back to disk on
   another machine and resume it natively).
 - **Sanitization is a security floor.** Stores sanitize unconditionally and never
-  persist pre-sanitization bytes. `content_hash` is defined over the sanitized
-  stored form, so the hash always describes what the store actually holds.
+  persist pre-sanitization bytes. `content_hash` is computed at ingest over the
+  captured content, so a session keeps one stable identity no matter how the
+  sanitizer later evolves.
 - **Resume is a fitness function, not a feature.** Reconstitution turns the
   "preserve `raw` verbatim" requirement into an executable round-trip test.
 - **Server-derived search.** Normalization for cross-provider search is a

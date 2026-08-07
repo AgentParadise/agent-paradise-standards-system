@@ -81,26 +81,51 @@ fn schema_and_rust_validation_agree_on_scs_version() {
 /// dropping any one of them must fail schema validation.
 #[test]
 fn every_required_field_is_actually_enforced() {
+    // The expected set is written out here rather than read from the schema.
+    // Deriving it from `schema["required"]` would test the schema against
+    // itself: deleting `started_at` from the schema would silently delete the
+    // check for `started_at` too, and the test would still pass.
+    const REQUIRED: [&str; 8] = [
+        "scs_version",
+        "origin",
+        "agent",
+        "source_format",
+        "session_id",
+        "started_at",
+        "last_activity_at",
+        "raw",
+    ];
+    // `content_hash` is deliberately NOT here: it is absent in flight and
+    // populated by the store (spec 4.2.3).
+    const NOT_REQUIRED: [&str; 3] = ["content_hash", "metadata", "parent_session_id"];
+
     let validator = compiled_schema();
     let schema = session_envelope_schema();
-    let required: Vec<String> = schema["required"]
+    let declared: Vec<&str> = schema["required"]
         .as_array()
         .expect("schema declares required fields")
         .iter()
-        .map(|v| v.as_str().unwrap().to_string())
+        .map(|v| v.as_str().unwrap())
         .collect();
-    assert!(
-        required.contains(&"raw".to_string()),
-        "raw is the payload; it must be required"
+    assert_eq!(
+        declared, REQUIRED,
+        "the schema's required list changed; update this test deliberately, \
+         because it is a wire-compatibility change"
     );
 
-    for field in &required {
+    for field in REQUIRED {
         let mut instance: serde_json::Value = serde_json::from_str(SOURCE_EXAMPLE).unwrap();
         instance.as_object_mut().unwrap().remove(field);
         assert!(
             validator.validate(&instance).is_err(),
             "schema must reject an envelope missing required field `{field}`"
         );
+    }
+
+    for field in NOT_REQUIRED {
+        let mut instance: serde_json::Value = serde_json::from_str(SOURCE_EXAMPLE).unwrap();
+        instance.as_object_mut().unwrap().remove(field);
+        assert_schema_valid(&validator, &instance);
     }
 }
 
