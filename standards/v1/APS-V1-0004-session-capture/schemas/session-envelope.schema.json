@@ -59,10 +59,11 @@
       "pattern": "^[a-z0-9]+:[0-9a-fA-F]+$"
     },
     "metadata": {
-      "$ref": "#/$defs/Metadata"
+      "description": "Freeform, non-load-bearing metadata. Explicit null is accepted and equivalent to omission, so a producer that always emits the key does not become non-conformant.",
+      "oneOf": [{ "$ref": "#/$defs/Metadata" }, { "type": "null" }]
     },
     "raw": {
-      "description": "The provider-native transcript, preserved verbatim. Opaque to the standard: any JSON value. MAY be inlined or carried as an object-store reference.",
+      "description": "The provider-native transcript, preserved verbatim. Opaque to the standard. A string carries the transcript's exact bytes and is the ONLY shape that supports byte-exact reconstitution, so it is required for any source_format in the reconstitution registry (section 4.3.1). Object and array shapes are valid but not reconstitutable. Scalars (number, boolean, null) are not a transcript and are rejected.",
       "type": ["object", "array", "string"]
     }
   },
@@ -80,8 +81,9 @@
         },
         "environment": {
           "type": "string",
-          "description": "Class of environment the session ran in.",
-          "enum": ["local", "vps", "container", "workflow"]
+          "description": "Class of environment the session ran in. Known values are local, vps, container, and workflow. NOT a closed enum: section 8.3 requires consumers to tolerate values added in a later minor version, so validating against a fixed list here would reject envelopes the standard declares conformant.",
+          "minLength": 1,
+          "examples": ["local", "vps", "container", "workflow"]
         }
       }
     },

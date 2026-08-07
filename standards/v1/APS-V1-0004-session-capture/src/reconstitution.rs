@@ -16,8 +16,25 @@
 //! first into a resume command and uses the second to choose a filesystem write
 //! location. Getting either check wrong is a remote code execution or an
 //! arbitrary file write. Shipping the checks in the standard's own crate means
-//! every consumer inherits one audited implementation instead of writing its
-//! own.
+//! every consumer inherits one implementation instead of writing its own.
+//!
+//! # What this module does and does not guarantee
+//!
+//! Be precise about the boundary, because "the crate handles it" is exactly the
+//! assumption that produces vulnerabilities:
+//!
+//! - [`Entry::validate_session_id`] matches the registry's pattern and
+//!   additionally enforces an ASCII identifier charset. Combined with a resume
+//!   descriptor invoked WITHOUT a shell, this is sufficient against command
+//!   injection. It is NOT sufficient if a caller joins the descriptor into a
+//!   shell string; do not do that.
+//! - [`is_safe_source_path`] is a LEXICAL check only. It cannot see symlinks.
+//! - [`resolve_within_root`] adds filesystem resolution and is what a caller
+//!   should actually use before writing. It still carries a time-of-check to
+//!   time-of-use caveat, documented on that function.
+//!
+//! Nothing here sandboxes the resumed process. Once a harness resumes, it runs
+//! with the invoking user's privileges.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -159,22 +176,28 @@ impl SlugRule {
 }
 
 impl Entry {
-    /// Validate an untrusted `session_id` against this entry's expected shape
-    /// (section 6.4.5).
+    /// Validate an untrusted `session_id` against this entry's
+    /// `session_id_pattern` (section 6.4.5).
     ///
-    /// The pattern in the registry is an anchored character-class expression.
-    /// Rather than pull in a regex engine for two fixed shapes, this checks the
-    /// two forms the registry actually uses: a strict UUID, and a conservative
-    /// identifier charset. Anything not matching is rejected, which is the safe
-    /// direction: a rejected id costs a failed restore, an accepted hostile id
-    /// costs command injection.
+    /// The pattern is compiled and matched for real. An earlier version chose
+    /// between two hard-coded shapes by inspecting the pattern text, which meant
+    /// a future registry entry with a different pattern would silently fall
+    /// through to the wrong check.
+    ///
+    /// A pattern that fails to compile rejects everything. That is deliberate:
+    /// the failure mode of a bad pattern must be a refused restore, never an
+    /// accepted hostile identifier.
     pub fn validate_session_id(&self, session_id: &str) -> Result<(), RegistryError> {
-        let ok = if self.session_id_pattern.contains("{12}") {
-            is_uuid(session_id)
-        } else {
-            is_safe_identifier(session_id)
-        };
-        if ok {
+        // Defence in depth. Even a permissive or malformed registry pattern
+        // cannot admit a value carrying shell metacharacters, whitespace, or
+        // path separators, because this value is interpolated into a resume
+        // argument vector and a path template.
+        if !is_safe_identifier(session_id) {
+            return Err(RegistryError::InvalidSessionId);
+        }
+        let anchored = anchor(&self.session_id_pattern);
+        let re = regex::Regex::new(&anchored).map_err(|_| RegistryError::InvalidSessionId)?;
+        if re.is_match(session_id) {
             Ok(())
         } else {
             Err(RegistryError::InvalidSessionId)
@@ -182,21 +205,30 @@ impl Entry {
     }
 }
 
-/// Whether a string is a canonical 8-4-4-4-12 hex UUID.
-fn is_uuid(s: &str) -> bool {
-    let groups = [8usize, 4, 4, 4, 12];
-    let mut parts = s.split('-');
-    for expected in groups {
-        match parts.next() {
-            Some(p) if p.len() == expected && p.chars().all(|c| c.is_ascii_hexdigit()) => {}
-            _ => return false,
-        }
+/// Force a pattern to match the whole string.
+///
+/// An unanchored pattern would match a substring, so `abc; rm -rf ~` could
+/// satisfy a pattern intended to describe only `abc`.
+fn anchor(pattern: &str) -> String {
+    let mut anchored = String::with_capacity(pattern.len() + 4);
+    if !pattern.starts_with('^') {
+        anchored.push_str("^(?:");
     }
-    parts.next().is_none()
+    anchored.push_str(pattern);
+    if !pattern.starts_with('^') {
+        anchored.push(')');
+    }
+    if !pattern.ends_with('$') {
+        anchored.push('$');
+    }
+    anchored
 }
 
 /// Whether a string is a conservative identifier: alphanumeric start, then
 /// alphanumerics, hyphens, or underscores, bounded in length.
+///
+/// ASCII-only by design. A Unicode-permissive check would admit homoglyphs and
+/// normalization surprises into a value that reaches a command line.
 fn is_safe_identifier(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 128
@@ -205,16 +237,38 @@ fn is_safe_identifier(s: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-/// Whether an untrusted `metadata.source_path` is safe to write to, relative to
-/// a harness session root (section 6.4.5).
+/// Windows reserved device names. Writing to any of these, with or without an
+/// extension, targets a device rather than a file under the root.
+const WINDOWS_RESERVED: [&str; 22] = [
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+fn is_windows_reserved(segment: &str) -> bool {
+    let stem = segment.split('.').next().unwrap_or(segment);
+    WINDOWS_RESERVED
+        .iter()
+        .any(|reserved| stem.eq_ignore_ascii_case(reserved))
+}
+
+/// Whether an untrusted `metadata.source_path` passes the LEXICAL half of the
+/// containment check (section 6.4.5).
 ///
-/// Rejects absolute paths, Windows drive prefixes, UNC prefixes, and any path
-/// that escapes the root once `.` and `..` segments are resolved. NUL is
-/// rejected outright.
+/// Rejects empty strings, embedded NUL, absolute POSIX paths, UNC and Windows
+/// drive-qualified paths, Windows reserved device names, and any path that
+/// escapes the root once `.` and `..` segments are resolved.
 ///
-/// This is a purely lexical check and is deliberately conservative. It does NOT
-/// resolve symlinks, which requires filesystem access: a Reconstitutor MUST also
-/// verify after resolution that the final target remains inside the root.
+/// # This check alone is NOT sufficient
+///
+/// It is purely lexical. It cannot see symlinks: `link/authorized_keys` passes
+/// here, and if `link` is a symlink or directory junction pointing outside the
+/// root, writing the result escapes the root. A caller MUST additionally resolve
+/// the path against the real filesystem and confirm containment. Use
+/// [`resolve_within_root`], which does both.
+///
+/// Validation must also be the LAST string transformation before use. Percent
+/// decoding or Unicode normalization applied after this check can reintroduce
+/// separators it rejected.
 pub fn is_safe_source_path(source_path: &str) -> bool {
     if source_path.is_empty() || source_path.contains('\0') {
         return false;
@@ -240,10 +294,88 @@ pub fn is_safe_source_path(source_path: &str) -> bool {
                     return false;
                 }
             }
-            _ => depth += 1,
+            other => {
+                if is_windows_reserved(other) {
+                    return false;
+                }
+                depth += 1;
+            }
         }
     }
     depth > 0
+}
+
+/// Resolve an untrusted `source_path` to an absolute path proven to sit inside
+/// `root`, doing both halves of the containment check (section 6.4.5).
+///
+/// Performs the lexical check ([`is_safe_source_path`]), then resolves the
+/// deepest existing ancestor of the target through the real filesystem
+/// (following symlinks) and confirms the result is still under the canonicalized
+/// root. This is what catches a `source_path` whose intermediate component is a
+/// symlink out of the root, which the lexical check cannot see.
+///
+/// `root` must exist. The target itself need not: reconstitution creates it.
+///
+/// # Time-of-check to time-of-use
+///
+/// The returned path was contained *at the moment it was checked*. An attacker
+/// who can create symlinks inside the root can swap a component between this
+/// call and the subsequent write. On a single-user machine writing into the
+/// user's own harness directory that is not a meaningful threat. Where it is,
+/// a caller must additionally open with no-follow semantics relative to a
+/// directory descriptor, which this crate does not attempt portably.
+pub fn resolve_within_root(
+    root: &std::path::Path,
+    source_path: &str,
+) -> Result<std::path::PathBuf, RegistryError> {
+    if !is_safe_source_path(source_path) {
+        return Err(RegistryError::UnsafeSourcePath);
+    }
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|_| RegistryError::UnsafeSourcePath)?;
+
+    // Normalize separators so a Windows-style path resolves on any host.
+    let mut candidate = canonical_root.clone();
+    for segment in source_path.split(['/', '\\']) {
+        match segment {
+            "" | "." => continue,
+            ".." => {
+                if !candidate.pop() || !candidate.starts_with(&canonical_root) {
+                    return Err(RegistryError::UnsafeSourcePath);
+                }
+            }
+            other => candidate.push(other),
+        }
+    }
+
+    // Resolve the deepest ancestor that exists, so symlinked intermediate
+    // components are followed and checked. The leaf itself may not exist yet.
+    let mut existing = candidate.as_path();
+    let mut trailing = Vec::new();
+    while !existing.exists() {
+        let Some(name) = existing.file_name() else {
+            return Err(RegistryError::UnsafeSourcePath);
+        };
+        trailing.push(name.to_owned());
+        let Some(parent) = existing.parent() else {
+            return Err(RegistryError::UnsafeSourcePath);
+        };
+        existing = parent;
+    }
+    let mut resolved = existing
+        .canonicalize()
+        .map_err(|_| RegistryError::UnsafeSourcePath)?;
+    if !resolved.starts_with(&canonical_root) {
+        return Err(RegistryError::UnsafeSourcePath);
+    }
+    for name in trailing.into_iter().rev() {
+        resolved.push(name);
+    }
+    if !resolved.starts_with(&canonical_root) {
+        return Err(RegistryError::UnsafeSourcePath);
+    }
+    Ok(resolved)
 }
 
 /// Validate an untrusted `source_path`, returning it when safe.
@@ -396,6 +528,145 @@ mod tests {
         assert!(is_safe_source_path("a/b/../c.jsonl"));
         // Ascending past the root is not, even when a later segment descends.
         assert!(!is_safe_source_path("a/../../b.jsonl"));
+    }
+
+    #[test]
+    fn windows_reserved_device_names_are_rejected() {
+        // Writing to these targets a device, not a child of the root.
+        for reserved in [
+            "NUL",
+            "nul",
+            "CON.txt",
+            "aux",
+            "COM1",
+            "lpt9.jsonl",
+            "a/NUL",
+        ] {
+            assert!(
+                !is_safe_source_path(reserved),
+                "should reject Windows reserved name: {reserved}"
+            );
+        }
+        // Names that merely start with a reserved prefix are fine.
+        for ok in ["NULL.jsonl", "console/x.jsonl", "comic.jsonl"] {
+            assert!(is_safe_source_path(ok), "should accept: {ok}");
+        }
+    }
+
+    #[test]
+    fn session_id_is_matched_against_the_registry_pattern_not_a_guess() {
+        // A pattern the old heuristic would have mis-handled: it contains no
+        // "{12}", so the previous implementation fell through to the identifier
+        // whitelist and accepted "abc".
+        let entry = Entry {
+            harness: "Test".into(),
+            description: "digits only".into(),
+            path_template: "{session_id}".into(),
+            serialization: "jsonl".into(),
+            session_id_pattern: "^[0-9]+$".into(),
+            prefer_source_path: false,
+            slug_rule: SlugRule {
+                source: "none".into(),
+                replace: Vec::new(),
+            },
+            resume: Resume {
+                program: "true".into(),
+                args: Vec::new(),
+                cwd: ".".into(),
+            },
+        };
+        assert!(entry.validate_session_id("12345").is_ok());
+        assert_eq!(
+            entry.validate_session_id("abc").unwrap_err(),
+            RegistryError::InvalidSessionId,
+            "a non-matching id must be rejected by the pattern, not waved through"
+        );
+    }
+
+    #[test]
+    fn an_unanchored_pattern_still_matches_the_whole_id() {
+        let entry = Entry {
+            harness: "Test".into(),
+            description: "unanchored".into(),
+            path_template: "{session_id}".into(),
+            serialization: "jsonl".into(),
+            // Deliberately unanchored: must not match a prefix of a longer id.
+            session_id_pattern: "[0-9]+".into(),
+            prefer_source_path: false,
+            slug_rule: SlugRule {
+                source: "none".into(),
+                replace: Vec::new(),
+            },
+            resume: Resume {
+                program: "true".into(),
+                args: Vec::new(),
+                cwd: ".".into(),
+            },
+        };
+        assert!(entry.validate_session_id("123").is_ok());
+        assert_eq!(
+            entry.validate_session_id("123abc").unwrap_err(),
+            RegistryError::InvalidSessionId
+        );
+    }
+
+    #[test]
+    fn an_uncompilable_pattern_rejects_everything() {
+        let entry = Entry {
+            harness: "Test".into(),
+            description: "broken".into(),
+            path_template: "{session_id}".into(),
+            serialization: "jsonl".into(),
+            session_id_pattern: "^[unclosed".into(),
+            prefer_source_path: false,
+            slug_rule: SlugRule {
+                source: "none".into(),
+                replace: Vec::new(),
+            },
+            resume: Resume {
+                program: "true".into(),
+                args: Vec::new(),
+                cwd: ".".into(),
+            },
+        };
+        // Fail closed: a broken registry entry must refuse restores, never
+        // accept an unvalidated identifier.
+        assert_eq!(
+            entry.validate_session_id("anything").unwrap_err(),
+            RegistryError::InvalidSessionId
+        );
+    }
+
+    #[test]
+    fn resolve_within_root_catches_a_symlink_escape_the_lexical_check_cannot() {
+        let base = std::env::temp_dir().join("apss-scs-symlink-test");
+        let _ = std::fs::remove_dir_all(&base);
+        let root = base.join("root");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, root.join("link")).unwrap();
+        #[cfg(not(unix))]
+        {
+            let _ = &outside;
+            return;
+        }
+
+        // The lexical check cannot see through the symlink and accepts it.
+        assert!(is_safe_source_path("link/authorized_keys"));
+        // The filesystem-aware check rejects it.
+        assert_eq!(
+            resolve_within_root(&root, "link/authorized_keys").unwrap_err(),
+            RegistryError::UnsafeSourcePath,
+            "a symlinked component escaping the root must be rejected"
+        );
+        // A genuine in-root path still resolves.
+        let ok = resolve_within_root(&root, "projects/session.jsonl").unwrap();
+        assert!(ok.starts_with(root.canonicalize().unwrap()));
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

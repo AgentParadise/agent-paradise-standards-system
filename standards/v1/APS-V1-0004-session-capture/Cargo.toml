@@ -17,6 +17,7 @@ name = "session_capture"
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+regex = "1"
 
 [dev-dependencies]
 jsonschema = { workspace = true }

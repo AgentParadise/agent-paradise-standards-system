@@ -10,7 +10,6 @@
   "parent_session_id": null,
   "started_at": "2026-05-02T14:03:11Z",
   "last_activity_at": "2026-05-02T15:20:44Z",
-  "content_hash": "sha256:3b1f2c9a7d4e6f80a1b2c3d4e5f60718293a4b5c6d7e8f9012345678abcdef01",
   "metadata": {
     "repo": "AgentParadise/agent-paradise-standards-system",
     "git_remote": "https://github.com/AgentParadise/agent-paradise-standards-system.git",
@@ -19,14 +18,8 @@
     "model": "claude-opus-4-8",
     "tags": ["standards", "authoring"],
     "message_count": 42,
-    "workflow_id": null
+    "workflow_id": null,
+    "source_path": "-Users-neural-Code-apss/019973e4-58a9-7b83-9f21-2b6c4d0a1e77.jsonl"
   },
-  "raw": {
-    "note": "Provider-native transcript preserved verbatim. For Claude this is the .jsonl transcript content, unmodified. It is opaque to the standard.",
-    "type": "session",
-    "messages": [
-      { "role": "user", "content": [{ "type": "text", "text": "..." }] },
-      { "role": "assistant", "content": [{ "type": "text", "text": "..." }] }
-    ]
-  }
+  "raw": "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"...\"}]}}\n{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"...\"}]}}\n"
 }

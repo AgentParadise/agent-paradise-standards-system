@@ -17,7 +17,7 @@
 //! Step 3 is the executable form of "raw is preserved verbatim" (section 4.3),
 //! which is otherwise only a prose MUST.
 
-use session_capture::reconstitution::Registry;
+use session_capture::reconstitution::{Registry, resolve_within_root};
 use session_capture::{SCS_VERSION, SessionEnvelope, session_envelope_schema};
 use std::path::{Path, PathBuf};
 
@@ -147,19 +147,26 @@ fn assert_schema_valid(envelope: &SessionEnvelope) {
 }
 
 /// The producer round trip for one harness: wrap a real transcript, validate it,
-/// resolve a target path from the registry, write `raw` back, compare bytes.
+/// resolve the target through `metadata.source_path` and the containment check,
+/// write `raw` back at that relocated path, and compare bytes.
+///
+/// Panics rather than returning when no transcript is available. These tests are
+/// `#[ignore]`d precisely so that running them is a deliberate act; a silent pass
+/// on an empty machine would report success while proving nothing.
 fn round_trip(agent: &str, source_format: &str, sessions_root: PathBuf, extension: &str) {
-    if !sessions_root.exists() {
-        eprintln!("SKIP {agent}: {} does not exist", sessions_root.display());
-        return;
-    }
-    let Some(session_path) = find_one_session(&sessions_root, extension) else {
-        eprintln!(
-            "SKIP {agent}: no {extension} transcripts under {}",
+    assert!(
+        sessions_root.exists(),
+        "{agent}: {} does not exist. These tests assert against real transcripts; \
+         run them on a machine that has used this harness.",
+        sessions_root.display()
+    );
+    let session_path = find_one_session(&sessions_root, extension).unwrap_or_else(|| {
+        panic!(
+            "{agent}: no {extension} session transcripts under {}. \
+             Nothing to round trip, so this is a failure rather than a pass.",
             sessions_root.display()
-        );
-        return;
-    };
+        )
+    });
     eprintln!("{agent}: using real transcript {}", session_path.display());
 
     // 1. Capture into an envelope, and validate it as an in-flight envelope.
@@ -184,11 +191,46 @@ fn round_trip(agent: &str, source_format: &str, sessions_root: PathBuf, extensio
         .expect("a real session id must pass the registry's shape check");
     assert_eq!(entry.harness, agent);
 
-    // 3. Reconstitute: write `raw` back to a temp target and compare bytes.
-    let target_dir = std::env::temp_dir().join(format!("apss-scs-roundtrip-{source_format}"));
-    let _ = std::fs::remove_dir_all(&target_dir);
-    std::fs::create_dir_all(&target_dir).expect("temp target dir");
-    let target = target_dir.join(session_path.file_name().expect("session file has a name"));
+    // 3. Reconstitute onto a DIFFERENT root, which is the cross-machine case:
+    //    the harness root differs, so the target must be recomputed rather than
+    //    reusing the captured absolute path (section 6.4.3).
+    let target_root = std::env::temp_dir().join(format!("apss-scs-roundtrip-{source_format}"));
+    let _ = std::fs::remove_dir_all(&target_root);
+    std::fs::create_dir_all(&target_root).expect("temp target root");
+
+    // The relative path under the harness root, exactly what `source_path`
+    // carries. Deriving it here proves the value the example ships is the value
+    // a Source would actually record.
+    let relative = session_path
+        .strip_prefix(&sessions_root)
+        .expect("the transcript lives under the harness root")
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    // Resolve it the way a Reconstitutor must: through the containment check,
+    // against the new root. This is the step that would reject a hostile
+    // source_path, and it is what relocates the file.
+    let target = resolve_within_root(&target_root, &relative)
+        .expect("a real relative transcript path must resolve inside the new root");
+    // Compare against the CANONICAL root: resolve_within_root canonicalizes, and
+    // on macOS /tmp is itself a symlink to /private/tmp, so the uncanonicalized
+    // path is not a prefix of the resolved one.
+    let canonical_root = target_root
+        .canonicalize()
+        .expect("the new harness root exists");
+    assert!(
+        target.starts_with(&canonical_root),
+        "the relocated target must sit under the new harness root: {} not under {}",
+        target.display(),
+        canonical_root.display()
+    );
+    assert_ne!(
+        target, session_path,
+        "reconstitution must write to the relocated path, not the captured one"
+    );
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).expect("create relocated parent dirs");
+    }
 
     let restored = envelope
         .raw
@@ -208,7 +250,7 @@ fn round_trip(agent: &str, source_format: &str, sessions_root: PathBuf, extensio
         source.len()
     );
 
-    let _ = std::fs::remove_dir_all(&target_dir);
+    let _ = std::fs::remove_dir_all(&target_root);
 }
 
 #[test]

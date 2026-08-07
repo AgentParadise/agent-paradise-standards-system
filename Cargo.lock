@@ -266,6 +266,7 @@ name = "apss-v1-0004-session-capture"
 version = "1.0.0"
 dependencies = [
  "jsonschema",
+ "regex",
  "serde",
  "serde_json",
  "toml",

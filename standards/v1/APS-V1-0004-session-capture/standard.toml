@@ -34,5 +34,9 @@ crate = "toml"
 rationale = "Parses the shipped reconstitution registry (registry/reconstitution.toml) that maps source_format to harness path templates and resume descriptors"
 
 [[dependencies.allowed_external]]
+crate = "regex"
+rationale = "Validates an untrusted session_id against the reconstitution registry entry's session_id_pattern before it is interpolated into a resume command (spec 6.4.5)"
+
+[[dependencies.allowed_external]]
 crate = "jsonschema"
 rationale = "Dev-only dependency: conformance tests validate the shipped examples against the embedded session-envelope JSON Schema"

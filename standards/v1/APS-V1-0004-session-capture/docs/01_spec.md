@@ -141,17 +141,22 @@ keeps a multi-source corpus attributable.
 
 **Sanitization** is the store's mandatory, unconditional transformation of an
 envelope before it is persisted: redaction of detected secrets, plus stripping of
-NUL bytes (4.3.1). The output of sanitization is the **stored form**, which is
-what the store persists, hashes (4.2.3), serves, and reconstitutes from. The
-stored form is the store's ground truth; the pre-sanitization bytes are never
-persisted (5.4).
+NUL bytes (4.3.2). The output of sanitization is the **stored form**, which is
+what the store persists, serves, and reconstitutes from. The stored form is the
+store's ground truth; the pre-sanitization bytes are never persisted (5.4).
 
-### 2.10 Sanitizer Version
+### 2.10 Captured Content
+
+The **captured content** is the session as received from a producer, before
+sanitization. It is what `content_hash` is computed over (4.2.3). It is never
+persisted: the store hashes it in memory at ingest and then sanitizes.
+
+### 2.11 Sanitizer Version
 
 The **sanitizer version** identifies the sanitization ruleset a store applied to
-produce a given stored form. Because `content_hash` is defined over the stored
-form (4.2.3), changing the ruleset changes the hash of content that never itself
-changed. Section 5.5 defines how a store MUST handle that.
+produce a given stored form. A store records it so that a ruleset change can be
+followed by re-sanitization of the affected stored forms (5.5). It does not affect
+`content_hash`, which describes captured content rather than the stored form.
 
 ---
 
@@ -240,20 +245,34 @@ says `raw` MUST be preserved verbatim, but nothing could previously prove a
 producer obeyed. A round trip can: capture a session, reconstitute it, and compare
 (6.4.4). The MUST becomes a test.
 
-### 3.9 `content_hash` is over the stored form, not the captured bytes
+### 3.9 `content_hash` is over the captured content, not the stored form
 
 Sanitization is unconditional (3.5), so what a store persists is by definition not
-what the producer captured. Two things then cannot both be true: that the hash
-identifies the captured bytes, and that the hash identifies what is stored and
-served. This standard chooses the second, because the hash's job is idempotent
-dedup of what the store holds (3.6), and a hash that does not describe the stored
-bytes cannot do that job.
+what the producer captured. The hash must therefore describe one or the other, and
+the choice is load-bearing.
 
-The consequence is that producers cannot compute the authoritative hash: they do
-not know what the store's sanitizer will do. Section 4.2.3 therefore moves hash
-authority to the store. The consequence of *that* is that the sanitizer ruleset
-becomes part of session identity, which section 5.5 addresses head-on rather than
-leaving it to be discovered as a dedup bug.
+This standard hashes the **captured content**, before sanitization, because the
+hash's only job is idempotent dedup (3.6) and dedup needs a *stable* identity.
+Hashing the sanitized form would make the sanitizer ruleset part of session
+identity: every improvement to secret detection would change the digest of
+sessions whose content never changed, so re-uploading an untouched session would
+read as new. Worse, no migration could repair it, because reconstructing what a
+fresh ingest under the new ruleset would produce requires the original bytes, and
+3.5 requires those be discarded. The rule would quietly contradict itself.
+
+Hashing before sanitization avoids all of that while giving up nothing: the store
+still never persists unsanitized bytes (5.4), it merely hashes them in memory on
+the way past. Section 5.5 then becomes a short, honest statement instead of an
+impossible migration.
+
+The cost is that `content_hash` is an identity, not an integrity check: it does
+not describe the stored bytes and MUST NOT be used to verify a retrieved envelope
+was returned unmodified (4.2.3). That is the correct trade, because integrity of
+storage is the store's internal concern while dedup is part of the wire contract.
+
+A second consequence: producers do not compute the authoritative hash. Section
+4.2.3 fully specifies the input, so a producer *could* compute the same digest,
+but the store's value is authoritative and idempotency is resolved store-side.
 
 ---
 
@@ -262,9 +281,13 @@ leaving it to be discovered as a dedup bug.
 ### 4.1 Structure
 
 A session envelope is a JSON object. The header fields (4.2) and `raw` (4.3) are
-REQUIRED. `parent_session_id` and `metadata` are OPTIONAL. The machine-checkable
-form is [`schemas/session-envelope.schema.json`](../schemas/session-envelope.schema.json);
-only the header fields and `raw` are `required` there.
+REQUIRED, with one exception: `content_hash` is populated by the store rather
+than the producer, so it is absent in an envelope in flight and present once
+stored (4.2.3). `parent_session_id` and `metadata` are OPTIONAL.
+
+The machine-checkable form is
+[`schemas/session-envelope.schema.json`](../schemas/session-envelope.schema.json).
+It validates both envelope states, so it does not mark `content_hash` `required`.
 
 ```jsonc
 {
@@ -298,7 +321,7 @@ only the header fields and `raw` are `required` there.
 | `parent_session_id` | string or null | NO | For a subagent session, the parent session's id. Reserved in v1; derivation is a later phase (section 9). |
 | `started_at` | string (RFC3339) | YES | Real session start time, derived from the transcript. See 4.2.2. |
 | `last_activity_at` | string (RFC3339) | YES | Real time of the last activity in the session. See 4.2.2. |
-| `content_hash` | string (`algo:hexdigest`) | YES | Hash over the **stored (sanitized) form**, not the captured bytes. Computed by the store, never trusted from a producer. The other half of the idempotency key. See 4.2.3. |
+| `content_hash` | string (`algo:hexdigest`) | STORE | Hash over the **captured content**, computed by the store at ingest. Absent in flight, present once stored. Never trusted from a producer. The other half of the idempotency key. See 4.2.3. |
 | `metadata` | object | NO | Freeform, non-load-bearing, first-class for search (section 7). See 4.4. |
 | `raw` | object, array, or string | YES | The provider-native transcript, preserved verbatim. See 4.3. |
 
@@ -335,30 +358,76 @@ The shipped JSON Schema validates both, so it does not mark `content_hash`
 required. A store MUST reject a *stored* envelope lacking it, and MUST populate it
 during ingest. Consumers reading from a store may rely on its presence.
 
-`content_hash` identifies the **stored form** (2.9): the envelope as it exists
-after the store's mandatory sanitization (5.4). It does NOT identify the bytes the
-producer captured, and the two legitimately differ whenever sanitization changed
-anything.
+##### The hash input
 
-- The store MUST compute `content_hash` over the stored form, AFTER sanitization.
+`content_hash` identifies the **captured content**: the session as received,
+before sanitization. It is computed by the store, at ingest, over exactly this
+object:
+
+```json
+{
+  "raw":           "<the raw value as received>",
+  "session_format": "<source_format>",
+  "session_id":    "<session_id>"
+}
+```
+
+Precisely:
+
+- The hash input MUST contain exactly the three members `raw`, `session_format`,
+  and `session_id`, taking `session_format` from the envelope's `source_format`.
+- The hash input MUST NOT contain `content_hash`. Hashing a structure that
+  contains its own digest is not computable, so the field is excluded by
+  construction rather than nulled.
+- The hash input MUST NOT contain timestamps, `origin`, `agent`, or `metadata`.
+  Those describe the capture event rather than the session content, and can differ
+  between two captures of the same session. Including them would defeat dedup
+  (5.3).
+- The hash input MUST be serialized using JSON Canonicalization Scheme
+  ([RFC 8785](https://www.rfc-editor.org/rfc/rfc8785)) before hashing, so that
+  independent stores agree byte for byte. Without a canonical serialization,
+  member ordering and number and string escaping vary by implementation and two
+  conformant stores would disagree on the digest for identical content.
+- The digest MUST be prefixed by its algorithm (`algo:hexdigest`, for example
+  `sha256:...`) so the algorithm can evolve without ambiguity. `sha256` is the
+  RECOMMENDED algorithm.
+
+##### Why before sanitization
+
+This is the load-bearing choice, and it is the opposite of what it might seem the
+security rules imply. Sanitization is still absolute: the store MUST NOT persist
+the pre-sanitization bytes (5.4). They are hashed in memory during ingest and then
+discarded.
+
+Hashing *after* sanitization would make the sanitizer ruleset part of session
+identity. Every sanitizer update would change the digest of sessions whose content
+never changed, so re-uploading an untouched session would read as new rather than
+duplicate, and no migration could repair it: reconstructing what a fresh ingest
+under the new ruleset would have produced requires the original bytes, which
+§5.4 has already required be discarded. Hashing the captured content instead makes
+the digest permanently stable, and dedup survives every future sanitizer change
+(5.5).
+
+##### Store obligations
+
+- The store MUST compute `content_hash` itself, at ingest, before sanitizing.
 - The store MUST NOT accept a producer-supplied `content_hash` as authoritative.
-  A store that prefers a producer-supplied value over its own silently desyncs the
-  hash from the bytes it holds, breaking dedup (5.3) and reconstitution
-  verification (6.4.4). If a producer supplies the field, the store MUST recompute
-  and overwrite it.
-- Producers SHOULD omit `content_hash` or send a null placeholder. A producer MAY
-  compute a local hash for its own bookkeeping, but MUST NOT rely on it matching
-  the stored value.
-- The hash MUST be content-stable: identical stored content MUST yield an
-  identical digest, so re-capture converges (5.3).
-- `content_hash` MUST be prefixed by its algorithm (`algo:hexdigest`, for example
-  `sha256:...`) so the algorithm can evolve without ambiguity.
+  A store that prefers a producer-supplied value cannot know how that value was
+  derived, so dedup (5.3) silently degrades. If a producer supplies the field, the
+  store MUST recompute and overwrite it.
+- Producers SHOULD omit `content_hash`. A producer MAY compute the same digest
+  locally for its own bookkeeping, since the input is fully specified above, but
+  the store's value is authoritative.
 
-Because producers cannot compute the authoritative hash, idempotency is resolved
-at the store rather than before upload. Producers therefore cannot deduplicate
-locally and MAY re-upload content the store already holds. This is expected: the
-batch endpoint reports `duplicate` per item (5.3), and capture is designed to be
-at-least-once (3.6).
+`content_hash` is an identity for deduplication, NOT an integrity check over
+stored bytes. It deliberately does not describe the stored form, because the
+stored form is sanitized and may be re-sanitized later (5.5). A consumer MUST NOT
+use `content_hash` to verify that a retrieved envelope was returned unmodified.
+
+Because producers cannot rely on the store's hash before upload, idempotency is
+resolved at the store. Producers MAY re-upload content the store already holds;
+the batch endpoint reports `duplicate` per item (5.3), and capture is designed to
+be at-least-once (3.6).
 
 ### 4.3 The Raw Payload
 
@@ -372,7 +441,33 @@ at-least-once (3.6).
 - The standard assigns no meaning to the contents of `raw`. Any parsing of it is
   a server-side concern (section 7).
 
-#### 4.3.1 The Only Permitted Transformations
+#### 4.3.1 String `raw` and Reconstitutability
+
+`raw` MAY be a JSON string, object, or array, but the choice has a consequence
+that producers MUST understand.
+
+A **string** `raw` carries the transcript's exact bytes. This is the only shape
+that supports byte-exact reconstitution (6.4.4), and it is REQUIRED for any
+`source_format` that appears in the reconstitution registry (6.4.2).
+
+An **object** or **array** `raw` carries a parsed structure. Parsing is
+irreversible with respect to bytes: whitespace, member ordering, and number and
+string formatting are not recoverable, so re-serializing does not reproduce the
+original file. An envelope with an object or array `raw` is valid, and remains
+fully usable for backup, search, and attribution, but it is NOT reconstitutable
+and MUST NOT be claimed as conformant to the Reconstitutor profile.
+
+Accordingly:
+
+- A Source for a harness that writes a text transcript (JSON Lines, plain text)
+  MUST capture `raw` as a string containing the file's exact bytes.
+- A producer MUST NOT parse a line-delimited transcript into an array of objects
+  and present that as verbatim `raw`. Doing so silently forfeits resume while
+  appearing conformant, which is why 6.4.4 exists as an executable check.
+- Object or array `raw` is appropriate only where the provider's native session
+  record genuinely is a structured object rather than a file.
+
+#### 4.3.2 The Only Permitted Transformations
 
 "Verbatim" binds producers absolutely: a producer MUST NOT alter `raw` at all.
 A store, which MUST sanitize before persisting (5.4), is permitted exactly two
@@ -449,8 +544,8 @@ once rather than by one application.
 ### 5.3 Idempotency
 
 - The endpoint MUST deduplicate on the pair `(session_id, content_hash)`.
-- The `content_hash` used for dedup MUST be the store's own, computed over the
-  stored form after sanitization (4.2.3). A store MUST NOT dedup on a
+- The `content_hash` used for dedup MUST be the store's own, computed at ingest
+  over the captured content (4.2.3). A store MUST NOT dedup on a
   producer-supplied hash.
 - Re-submitting an envelope with a `(session_id, content_hash)` already present
   MUST NOT create a duplicate.
@@ -465,7 +560,7 @@ once rather than by one application.
 - The store MUST NOT persist the pre-sanitization bytes. Sanitization is a
   security floor, not a view: once blobs replicate to object storage and offsite
   backup, a retained unsanitized copy is an unbounded secret-exposure surface.
-- Sanitization MUST be confined to the two transformations of 4.3.1.
+- Sanitization MUST be confined to the two transformations of 4.3.2.
 
 A future minor version MAY define an opt-in raw-retention profile for stores with
 a stronger security posture. Until such a profile exists, retaining unsanitized
@@ -473,25 +568,33 @@ bytes is non-conformant.
 
 ### 5.5 Sanitizer Evolution
 
-Because `content_hash` is defined over the stored form (4.2.3), changing the
-sanitization ruleset changes the hash of sessions whose content never changed.
-Left unaddressed, adding a single secret pattern would make previously-stored
-sessions re-ingest as new rather than as duplicates, silently corrupting dedup.
+A store's sanitization ruleset will change over time, because secret-detection
+patterns improve. This section defines what that costs.
 
-A conforming store MUST therefore:
+Because `content_hash` is computed over the captured content before sanitization
+(4.2.3), a sanitizer change does NOT change any session's digest. Dedup is
+therefore unaffected by sanitizer evolution, and re-uploading an unchanged session
+still resolves as `duplicate` no matter how many times the ruleset has moved.
 
-1. Record which sanitizer version produced each stored form.
-2. Treat a sanitizer change as an explicit, versioned migration: re-sanitize the
-   affected stored forms and backfill their `content_hash` values.
-3. Keep the dedup key at `(session_id, content_hash)`. The sanitizer version MUST
-   NOT be added to the dedup key, which would let the same session persist once
-   per ruleset revision.
+A conforming store MUST:
 
-Rationale: the alternatives are worse. Widening the dedup key admits legitimate
-duplicates forever. Freezing the sanitizer within a major version would make
-shipping a secret-detection fix require a breaking change, which is untenable for
-a security control. Treating it as a migration keeps the contract narrow and the
-sanitizer patchable, at the cost of one deliberate operational step.
+1. Record which sanitizer version produced each stored form, so the set needing
+   re-sanitization is identifiable.
+2. Re-sanitize stored forms when the ruleset changes, so secrets the previous
+   ruleset failed to detect are redacted in already-stored sessions.
+3. Keep `content_hash` unchanged when re-sanitizing. The digest describes captured
+   content, which re-sanitization does not alter.
+
+Re-sanitization is strictly additive in effect: it can redact spans the old
+ruleset missed, but it cannot restore spans the old ruleset already redacted,
+because the original bytes were discarded at ingest (5.4). This is the intended
+trade. A store therefore MUST NOT treat re-sanitization as reproducing what a
+fresh ingest under the new ruleset would have produced; those two results
+legitimately differ, and nothing in this standard depends on them being equal.
+
+The dedup key stays `(session_id, content_hash)`. The sanitizer version MUST NOT
+be added to it, which would let the same session persist once per ruleset
+revision.
 
 ---
 
@@ -510,7 +613,7 @@ A conforming Source MUST:
 3. Derive real `started_at` and `last_activity_at` from the transcript (4.2.2).
 4. Omit `content_hash`, or send it as null. A Source MUST NOT send a hash
    computed over its pre-sanitization bytes and expect it to be honoured; the
-   store computes the authoritative hash over the stored form (4.2.3).
+   store computes the authoritative hash over the captured content (4.2.3).
 5. Hand envelopes to an uploader targeting the batch endpoint (section 5).
 
 A conforming Source SHOULD populate the well-known `metadata` fields (4.4) when
@@ -613,7 +716,7 @@ location of the repository rather than reusing the captured path.
   produce a session the harness cannot find.
 - Absolute paths *inside* the transcript MUST be left alone (6.4.1.3). They may be
   wrong on the new machine; that is the harness's business, and rewriting them
-  would break byte-fidelity and invalidate `content_hash`.
+  would break byte-fidelity of the stored transcript.
 
 #### 6.4.4 Round-Trip Fitness Function
 
@@ -637,7 +740,7 @@ reconstitute on machine B at a different local path, and the harness's native
 resume MUST succeed with session context intact.
 
 Equality here is against the **stored form**, not the original bytes: redacted
-spans and stripped NULs (4.3.1) are expected and MUST NOT be treated as failures.
+spans and stripped NULs (4.3.2) are expected and MUST NOT be treated as failures.
 A resumed session carrying inert redaction placeholders is a conformant resume; a
 resumed agent re-acquires live credentials from its own environment. "Lossless
 resume" in this standard means lossless relative to the stored form (2.9).
@@ -690,7 +793,7 @@ for each profile it claims.
 - [ ] `raw` is preserved verbatim, never flattened or normalized (4.3).
 - [ ] `started_at` and `last_activity_at` are real session times (4.2.2).
 - [ ] `origin` is correct and complete (4.2.1).
-- [ ] No pre-sanitize `content_hash` is relied upon (4.2.3).
+- [ ] No self-computed `content_hash` is relied upon (4.2.3).
 - [ ] Batches use the `{ "envelopes": [...] }` wrapper (5.1).
 - [ ] For a Source paired with a Reconstitutor: the byte-exact producer round trip
       passes (6.4.4).
@@ -701,10 +804,13 @@ for each profile it claims.
       dedups on its own hash (section 5).
 - [ ] The store sanitizes before persisting, unconditionally, and persists no
       pre-sanitization bytes (5.4).
-- [ ] Sanitization is confined to redaction and NUL stripping (4.3.1).
-- [ ] `content_hash` is computed over the stored form and producer-supplied
-      hashes are overwritten (4.2.3).
-- [ ] A sanitizer change is handled as a versioned re-hash migration (5.5).
+- [ ] Sanitization is confined to redaction and NUL stripping (4.3.2).
+- [ ] `content_hash` is computed at ingest over the captured content, using the
+      canonical hash input, and producer-supplied hashes are overwritten (4.2.3).
+- [ ] Sanitizer version is recorded per stored form, and a ruleset change
+      triggers re-sanitization without changing `content_hash` (5.5).
+- [ ] `raw` type and reconstitutability are consistent: a `source_format` in the
+      reconstitution registry carries a string `raw` (4.3.1).
 - [ ] `raw` remains retrievable in its stored form (6.3.5).
 - [ ] The store supports the metadata and lexical search baseline (section 7).
 

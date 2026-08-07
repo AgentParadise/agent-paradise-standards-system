@@ -94,12 +94,16 @@ pub struct SessionEnvelope {
     pub started_at: String,
     /// Real time of the last activity (RFC3339).
     pub last_activity_at: String,
-    /// Content hash (`algo:hexdigest`) over the stored form, computed by the
-    /// store (section 4.2.3).
+    /// Content hash (`algo:hexdigest`) over the captured content, computed by
+    /// the store at ingest before sanitizing (section 4.2.3).
     ///
-    /// `None` while in flight from a producer, which cannot know what the
-    /// store's sanitizer will do. `Some` once stored. Use
-    /// [`SessionEnvelope::validate_stored`] to require it.
+    /// `None` while in flight: the store's value is authoritative, so producers
+    /// omit it. `Some` once stored. Use [`SessionEnvelope::validate_stored`] to
+    /// require it.
+    ///
+    /// This is a dedup identity, NOT an integrity check over the stored bytes:
+    /// the stored form is sanitized and may be re-sanitized later, while this
+    /// digest deliberately does not move.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<String>,
     /// Freeform, non-load-bearing metadata; first-class for search.
@@ -144,8 +148,12 @@ pub struct Metadata {
     pub workflow_id: Option<String>,
     /// Original transcript path on the capturing machine, relative to the
     /// harness session root (section 4.4). Preferred by a Reconstitutor over a
-    /// derived path. UNTRUSTED: validate with
-    /// [`reconstitution::is_safe_source_path`] before using it to write.
+    /// derived path.
+    ///
+    /// UNTRUSTED producer input used to choose a filesystem write location.
+    /// Resolve it with [`reconstitution::resolve_within_root`], which performs
+    /// both the lexical and the filesystem-aware containment checks;
+    /// [`reconstitution::is_safe_source_path`] alone cannot see symlinks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
     /// Unknown metadata keys, tolerated per section 8.3.
@@ -165,6 +173,17 @@ pub enum ValidationError {
     /// Legal in flight, non-conformant once persisted: the store must compute
     /// it during ingest.
     MissingStoredContentHash,
+    /// `raw` was a scalar (number, boolean, or null) rather than an object,
+    /// array, or string (section 4.3).
+    ///
+    /// A scalar cannot be a transcript. The schema restricts the same three
+    /// types; this keeps the Rust type domain from being wider than the schema's.
+    InvalidRawType,
+    /// A timestamp was not RFC3339 (section 4.2.2).
+    ///
+    /// Carries the field name, since both `started_at` and `last_activity_at`
+    /// are checked.
+    MalformedTimestamp(&'static str),
     /// `scs_version` was not `MAJOR.MINOR` (section 4.2).
     ///
     /// This exists to catch a specific real drift: a producer emitting a
@@ -182,6 +201,18 @@ impl std::fmt::Display for ValidationError {
             }
             ValidationError::MalformedContentHash => {
                 write!(f, "content_hash must be of the form `algo:hexdigest`")
+            }
+            ValidationError::InvalidRawType => {
+                write!(
+                    f,
+                    "raw must be an object, array, or string; a scalar is not a transcript"
+                )
+            }
+            ValidationError::MalformedTimestamp(name) => {
+                write!(
+                    f,
+                    "`{name}` must be an RFC3339 date-time, for example 2026-05-02T14:03:11Z"
+                )
             }
             ValidationError::MissingStoredContentHash => {
                 write!(
@@ -226,6 +257,22 @@ impl SessionEnvelope {
         if !is_valid_scs_version(&self.scs_version) {
             return Err(ValidationError::MalformedScsVersion);
         }
+        for (name, value) in [
+            ("started_at", &self.started_at),
+            ("last_activity_at", &self.last_activity_at),
+        ] {
+            if !is_rfc3339(value) {
+                return Err(ValidationError::MalformedTimestamp(name));
+            }
+        }
+        if !matches!(
+            self.raw,
+            serde_json::Value::Object(_)
+                | serde_json::Value::Array(_)
+                | serde_json::Value::String(_)
+        ) {
+            return Err(ValidationError::InvalidRawType);
+        }
         if let Some(hash) = &self.content_hash
             && !is_valid_content_hash(hash)
         {
@@ -256,6 +303,68 @@ impl SessionEnvelope {
             .as_deref()
             .map(|hash| (self.session_id.as_str(), hash))
     }
+}
+
+/// Check that a timestamp is RFC3339 (section 4.2.2).
+///
+/// Validates shape and calendar-plausible ranges, not exact month lengths or
+/// leap years: the point is to reject capture-time placeholders and obviously
+/// malformed values, which is what the schema's `format: date-time` also aims
+/// at. Full date arithmetic would require a date dependency this definitional
+/// crate deliberately avoids.
+fn is_rfc3339(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    // Minimum: 1970-01-01T00:00:00Z
+    if bytes.len() < 20 {
+        return false;
+    }
+    let digits = |range: std::ops::Range<usize>| bytes[range].iter().all(u8::is_ascii_digit);
+    if !(digits(0..4) && bytes[4] == b'-' && digits(5..7) && bytes[7] == b'-' && digits(8..10)) {
+        return false;
+    }
+    if bytes[10] != b'T' && bytes[10] != b't' {
+        return false;
+    }
+    if !(digits(11..13)
+        && bytes[13] == b':'
+        && digits(14..16)
+        && bytes[16] == b':'
+        && digits(17..19))
+    {
+        return false;
+    }
+    let num = |range: std::ops::Range<usize>| value[range].parse::<u32>().unwrap_or(u32::MAX);
+    if !(1..=12).contains(&num(5..7)) || !(1..=31).contains(&num(8..10)) {
+        return false;
+    }
+    // 24:00:00 is not permitted by RFC3339; leap second 60 is.
+    if num(11..13) > 23 || num(14..16) > 59 || num(17..19) > 60 {
+        return false;
+    }
+
+    let mut rest = &value[19..];
+    // Optional fractional seconds.
+    if let Some(stripped) = rest.strip_prefix('.') {
+        let frac_len = stripped.chars().take_while(char::is_ascii_digit).count();
+        if frac_len == 0 {
+            return false;
+        }
+        rest = &stripped[frac_len..];
+    }
+    // Offset is REQUIRED: `Z`, or +/-HH:MM.
+    if rest == "Z" || rest == "z" {
+        return true;
+    }
+    let offset = rest.as_bytes();
+    if offset.len() != 6 || (offset[0] != b'+' && offset[0] != b'-') || offset[3] != b':' {
+        return false;
+    }
+    if !offset[1..3].iter().all(u8::is_ascii_digit) || !offset[4..6].iter().all(u8::is_ascii_digit)
+    {
+        return false;
+    }
+    rest[1..3].parse::<u32>().unwrap_or(u32::MAX) <= 23
+        && rest[4..6].parse::<u32>().unwrap_or(u32::MAX) <= 59
 }
 
 /// Check that `scs_version` is `MAJOR.MINOR`, matching the schema's pattern
