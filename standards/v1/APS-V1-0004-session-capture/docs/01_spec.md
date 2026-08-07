@@ -351,7 +351,7 @@ field:
 
 | State | When | `content_hash` |
 |-------|------|----------------|
-| **In flight** | Produced by a Source or Exporter, being uploaded | Absent or null. The producer cannot compute it. |
+| **In flight** | Produced by a Source or Exporter, being uploaded | Absent or null. The input is fully specified below, so a producer *may* compute the same digest for its own bookkeeping, but the store's value is authoritative and a producer-supplied one is discarded. |
 | **Stored** | Persisted by a store, and what a query or reconstitution returns | REQUIRED and populated by the store. |
 
 The shipped JSON Schema validates both, so it does not mark `content_hash`

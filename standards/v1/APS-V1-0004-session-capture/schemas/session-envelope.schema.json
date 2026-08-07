@@ -55,8 +55,8 @@
     },
     "content_hash": {
       "type": ["string", "null"],
-      "description": "Hash over the stored (sanitized) form, computed by the store (section 4.2.3). ABSENT OR NULL in an envelope in flight from a producer, which cannot know what sanitization will do; PRESENT in a stored envelope. Prefixed by algorithm, for example sha256:...",
-      "pattern": "^[a-z0-9]+:[0-9a-fA-F]+$"
+      "description": "Hash over the CAPTURED CONTENT, computed by the store at ingest before sanitizing (section 4.2.3). ABSENT OR NULL in an envelope in flight from a producer; PRESENT in a stored envelope. Within scs_version 1.x the algorithm MUST be SHA-256 and the digest MUST be lowercase hexadecimal, because dedup compares these as strings and equal digest bytes in different cases would not match.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "metadata": {
       "description": "Freeform, non-load-bearing metadata. Explicit null is accepted and equivalent to omission, so a producer that always emits the key does not become non-conformant.",

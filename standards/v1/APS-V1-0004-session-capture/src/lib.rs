@@ -405,9 +405,12 @@ fn is_rfc3339(value: &str) -> bool {
     if hour > 23 || minute > 59 || second > 60 {
         return false;
     }
-    if second == 60 && !(hour == 23 && minute == 59) {
-        return false;
-    }
+    // A leap second occurs at 23:59:60 UTC, which in a non-zero offset is written
+    // as the offset-equivalent local time. RFC3339 section 5.8 gives
+    // `1990-12-31T15:59:60-08:00` as a valid example, so requiring local 23:59
+    // would reject conformant timestamps. Defer the check until the offset is
+    // known, below.
+    let is_leap_second = second == 60;
 
     let mut rest = &value[19..];
     // Optional fractional seconds.
@@ -419,19 +422,37 @@ fn is_rfc3339(value: &str) -> bool {
         rest = &stripped[frac_len..];
     }
     // Offset is REQUIRED: `Z`, or +/-HH:MM.
-    if rest == "Z" || rest == "z" {
-        return true;
+    let (offset_hours, offset_minutes, offset_sign) = if rest == "Z" || rest == "z" {
+        (0i32, 0i32, 1i32)
+    } else {
+        let offset = rest.as_bytes();
+        if offset.len() != 6 || (offset[0] != b'+' && offset[0] != b'-') || offset[3] != b':' {
+            return false;
+        }
+        if !offset[1..3].iter().all(u8::is_ascii_digit)
+            || !offset[4..6].iter().all(u8::is_ascii_digit)
+        {
+            return false;
+        }
+        let hours = rest[1..3].parse::<i32>().unwrap_or(i32::MAX);
+        let minutes = rest[4..6].parse::<i32>().unwrap_or(i32::MAX);
+        if hours > 23 || minutes > 59 {
+            return false;
+        }
+        (hours, minutes, if offset[0] == b'-' { -1 } else { 1 })
+    };
+
+    if is_leap_second {
+        // Convert the stated local time to UTC minutes-of-day; a leap second is
+        // only valid at 23:59:60 UTC.
+        let local_minutes = (hour as i32) * 60 + minute as i32;
+        let offset_total = offset_sign * (offset_hours * 60 + offset_minutes);
+        let utc_minutes = (local_minutes - offset_total).rem_euclid(24 * 60);
+        if utc_minutes != 23 * 60 + 59 {
+            return false;
+        }
     }
-    let offset = rest.as_bytes();
-    if offset.len() != 6 || (offset[0] != b'+' && offset[0] != b'-') || offset[3] != b':' {
-        return false;
-    }
-    if !offset[1..3].iter().all(u8::is_ascii_digit) || !offset[4..6].iter().all(u8::is_ascii_digit)
-    {
-        return false;
-    }
-    rest[1..3].parse::<u32>().unwrap_or(u32::MAX) <= 23
-        && rest[4..6].parse::<u32>().unwrap_or(u32::MAX) <= 59
+    true
 }
 
 /// Check that `scs_version` is `MAJOR.MINOR`, matching the schema's pattern
@@ -450,17 +471,17 @@ fn is_valid_scs_version(version: &str) -> bool {
 
 /// Check that a content hash is of the form `algo:hexdigest`.
 fn is_valid_content_hash(hash: &str) -> bool {
-    match hash.split_once(':') {
-        Some((algo, digest)) => {
-            !algo.is_empty()
-                && algo
-                    .chars()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-                && !digest.is_empty()
-                && digest.chars().all(|c| c.is_ascii_hexdigit())
-        }
-        None => false,
-    }
+    // Exactly `sha256:` plus 64 lowercase hex digits. Within scs_version 1.x the
+    // algorithm is fixed (section 4.2.3): allowing others would let two stores
+    // produce different identities for identical content. Casing is fixed for
+    // the same reason, since dedup compares these as strings.
+    let Some(digest) = hash.strip_prefix("sha256:") else {
+        return false;
+    };
+    digest.len() == 64
+        && digest
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
 }
 
 #[cfg(test)]
@@ -477,7 +498,7 @@ mod tests {
           "parent_session_id": null,
           "started_at": "2026-05-02T14:03:11Z",
           "last_activity_at": "2026-05-02T15:20:44Z",
-          "content_hash": "sha256:deadbeef01",
+          "content_hash": "sha256:deadbeef01000000000000000000000000000000000000000000000000000000",
           "metadata": { "repo": "owner/name", "tags": ["a", "b"], "message_count": 42 },
           "raw": { "messages": [] }
         }"#
@@ -489,7 +510,10 @@ mod tests {
         assert!(env.validate().is_ok());
         assert_eq!(
             env.idempotency_key(),
-            Some(("abc-123", "sha256:deadbeef01"))
+            Some((
+                "abc-123",
+                "sha256:deadbeef01000000000000000000000000000000000000000000000000000000"
+            ))
         );
         let md = env.metadata.unwrap();
         assert_eq!(md.repo.as_deref(), Some("owner/name"));
@@ -507,7 +531,7 @@ mod tests {
           "session_id": "s1",
           "started_at": "2026-05-02T14:03:11Z",
           "last_activity_at": "2026-05-02T15:20:44Z",
-          "content_hash": "sha256:00ff",
+          "content_hash": "sha256:00ff000000000000000000000000000000000000000000000000000000000000",
           "raw": "opaque string transcript"
         }"#;
         let env: SessionEnvelope = serde_json::from_str(json).unwrap();
@@ -533,7 +557,7 @@ mod tests {
           "session_id": "s2",
           "started_at": "2026-05-02T14:03:11Z",
           "last_activity_at": "2026-05-02T15:20:44Z",
-          "content_hash": "sha256:abcd",
+          "content_hash": "sha256:abcd000000000000000000000000000000000000000000000000000000000000",
           "metadata": { "repo": "o/n", "future_field": 123 },
           "raw": {}
         }"#;
@@ -590,7 +614,7 @@ mod tests {
           "session_id": "s1",
           "started_at": "2026-05-02T14:03:11Z",
           "last_activity_at": "2026-05-02T15:20:44Z",
-          "content_hash": "sha256:00ff",
+          "content_hash": "sha256:00ff000000000000000000000000000000000000000000000000000000000000",
           "metadata": { "source_path": "2026/06/04/rollout-x.jsonl" },
           "raw": {}
         }"#;
@@ -612,24 +636,30 @@ mod tests {
             "2026-05-02T14:03:11.123Z",  // fractional seconds
             "2026-05-02T14:03:11+02:00", // offset
             "2026-05-02T14:03:11-08:00",
-            "2016-12-31T23:59:60Z", // leap second at end of day
+            "2016-12-31T23:59:60Z", // leap second at end of UTC day
+            // RFC3339 section 5.8's own example: the same leap-second instant
+            // expressed in a non-zero offset. Requiring local 23:59 would
+            // wrongly reject this.
+            "1990-12-31T15:59:60-08:00",
+            "1990-12-31T23:59:60+00:00",
         ] {
             env.started_at = good.to_string();
             assert!(env.validate().is_ok(), "must accept RFC3339 {good}");
         }
         for bad in [
-            "2026-02-31T12:00:00Z",  // February has no 31st
-            "2025-02-29T12:00:00Z",  // 2025 is not a leap year
-            "1900-02-29T12:00:00Z",  // century non-leap year
-            "2026-04-31T12:00:00Z",  // April has 30 days
-            "2026-01-01T12:00:60Z",  // leap second not at end of day
-            "2026-01-01T24:00:00Z",  // hour 24 is not RFC3339
-            "2026-13-01T12:00:00Z",  // month 13
-            "2026-00-01T12:00:00Z",  // month 0
-            "2026-01-00T12:00:00Z",  // day 0
-            "2026-05-02 14:03:11Z",  // space instead of T
-            "2026-05-02T14:03:11",   // offset is required
-            "2026-05-02T14:03:11.Z", // empty fraction
+            "2026-02-31T12:00:00Z",      // February has no 31st
+            "2025-02-29T12:00:00Z",      // 2025 is not a leap year
+            "1900-02-29T12:00:00Z",      // century non-leap year
+            "2026-04-31T12:00:00Z",      // April has 30 days
+            "2026-01-01T12:00:60Z",      // leap second not at end of UTC day
+            "1990-12-31T15:59:60-07:00", // offset does not land on 23:59 UTC
+            "2026-01-01T24:00:00Z",      // hour 24 is not RFC3339
+            "2026-13-01T12:00:00Z",      // month 13
+            "2026-00-01T12:00:00Z",      // month 0
+            "2026-01-00T12:00:00Z",      // day 0
+            "2026-05-02 14:03:11Z",      // space instead of T
+            "2026-05-02T14:03:11",       // offset is required
+            "2026-05-02T14:03:11.Z",     // empty fraction
             "2026-05-02T14:03:11+2:00",
             "2026-05-02T14:03:11+02:60",
             "not-a-timestamp",
@@ -698,7 +728,9 @@ mod tests {
         );
 
         // Stored: the store has computed it over the captured content.
-        env.content_hash = Some("sha256:deadbeef01".to_string());
+        env.content_hash = Some(
+            "sha256:deadbeef01000000000000000000000000000000000000000000000000000000".to_string(),
+        );
         env.validate_stored()
             .expect("a stored envelope with a hash is conformant");
     }

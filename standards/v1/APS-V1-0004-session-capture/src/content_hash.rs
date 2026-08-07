@@ -32,34 +32,202 @@
 //! memory and never persisted (section 5.4).
 
 use serde::Serialize;
+use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use sha2::{Digest, Sha256};
 
 use crate::SessionEnvelope;
 
+/// The largest integer exactly representable as an IEEE-754 double.
+///
+/// JCS renders every number as a double (RFC 8785 section 3.2.2.3). An integer
+/// beyond this magnitude therefore loses precision during canonicalization, and
+/// two distinct values collapse to the same canonical form and the same digest.
+const MAX_EXACT_INTEGER: i128 = 9_007_199_254_740_992; // 2^53
+
 /// Errors from computing a content hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContentHashError {
-    /// `raw` was not I-JSON compatible, so RFC 8785 cannot canonicalize it.
+    /// An object contained a duplicate member name.
     ///
-    /// JCS requires input serializable per I-JSON: numbers must be
-    /// representable as IEEE-754 doubles, and object member names must be
-    /// unique. A `raw` carrying an arbitrary-precision literal such as `1e400`
-    /// has no conforming canonical form, so it has no conforming digest.
+    /// I-JSON requires unique names, and JCS has no defined ordering for
+    /// duplicates. Note that most JSON parsers silently keep the last value, so
+    /// `{"a":1,"a":2}` and `{"a":2}` would otherwise produce the same digest
+    /// despite being different documents.
+    DuplicateMemberName(String),
+    /// A number was too large to survive canonicalization exactly.
+    ///
+    /// Beyond 2^53 the double conversion JCS mandates is lossy, so
+    /// `9007199254740993` and `9007199254740992` would canonicalize identically
+    /// and receive the same digest.
+    NumberNotExactlyRepresentable(String),
+    /// The value could not be canonicalized per RFC 8785 for any other reason.
     NotCanonicalizable,
 }
 
 impl std::fmt::Display for ContentHashError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ContentHashError::DuplicateMemberName(name) => write!(
+                f,
+                "duplicate object member name `{name}`: I-JSON requires unique names, so this has no RFC 8785 canonical form"
+            ),
+            ContentHashError::NumberNotExactlyRepresentable(value) => write!(
+                f,
+                "number {value} exceeds 2^53 and cannot survive the IEEE-754 conversion RFC 8785 requires, so its digest would collide with a different value"
+            ),
             ContentHashError::NotCanonicalizable => write!(
                 f,
-                "raw is not I-JSON compatible, so it has no RFC 8785 canonical form and therefore no conforming content_hash"
+                "value is not I-JSON compatible, so it has no RFC 8785 canonical form and therefore no conforming content_hash"
             ),
         }
     }
 }
 
 impl std::error::Error for ContentHashError {}
+
+// ─── I-JSON parsing ─────────────────────────────────────────────────────────
+
+/// A `serde_json::Value` parsed under I-JSON rules.
+struct IJson(serde_json::Value);
+
+struct IJsonVisitor;
+
+impl<'de> Visitor<'de> for IJsonVisitor {
+    type Value = IJson;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("an I-JSON value")
+    }
+
+    fn visit_bool<E: de::Error>(self, v: bool) -> Result<IJson, E> {
+        Ok(IJson(serde_json::Value::Bool(v)))
+    }
+
+    fn visit_i64<E: de::Error>(self, v: i64) -> Result<IJson, E> {
+        if (v as i128).abs() > MAX_EXACT_INTEGER {
+            return Err(E::custom(format!("number-not-exact:{v}")));
+        }
+        Ok(IJson(serde_json::Value::from(v)))
+    }
+
+    fn visit_u64<E: de::Error>(self, v: u64) -> Result<IJson, E> {
+        if v as i128 > MAX_EXACT_INTEGER {
+            return Err(E::custom(format!("number-not-exact:{v}")));
+        }
+        Ok(IJson(serde_json::Value::from(v)))
+    }
+
+    fn visit_f64<E: de::Error>(self, v: f64) -> Result<IJson, E> {
+        // Already a double, so canonicalization is lossless. Non-finite values
+        // cannot appear in parsed JSON.
+        Ok(IJson(serde_json::Value::from(v)))
+    }
+
+    fn visit_str<E: de::Error>(self, v: &str) -> Result<IJson, E> {
+        Ok(IJson(serde_json::Value::String(v.to_owned())))
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<IJson, E> {
+        Ok(IJson(serde_json::Value::Null))
+    }
+
+    fn visit_none<E: de::Error>(self) -> Result<IJson, E> {
+        Ok(IJson(serde_json::Value::Null))
+    }
+
+    fn visit_some<D: Deserializer<'de>>(self, d: D) -> Result<IJson, D::Error> {
+        d.deserialize_any(IJsonVisitor)
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut access: A) -> Result<IJson, A::Error> {
+        let mut items = Vec::new();
+        while let Some(IJson(value)) = access.next_element()? {
+            items.push(value);
+        }
+        Ok(IJson(serde_json::Value::Array(items)))
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> Result<IJson, A::Error> {
+        let mut map = serde_json::Map::new();
+        while let Some(key) = access.next_key::<String>()? {
+            let IJson(value) = access.next_value()?;
+            // The whole reason this visitor exists: serde_json's own Value
+            // deserializer overwrites here instead of complaining.
+            if map.contains_key(&key) {
+                return Err(de::Error::custom(format!("duplicate-member:{key}")));
+            }
+            map.insert(key, value);
+        }
+        Ok(IJson(serde_json::Value::Object(map)))
+    }
+}
+
+impl<'de> Deserialize<'de> for IJson {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        d.deserialize_any(IJsonVisitor)
+    }
+}
+
+/// Map a visitor error string back to a typed error.
+fn classify(message: &str) -> ContentHashError {
+    if let Some(name) = message
+        .split_once("duplicate-member:")
+        .map(|(_, rest)| rest.split(" at line").next().unwrap_or(rest).trim())
+    {
+        return ContentHashError::DuplicateMemberName(name.to_string());
+    }
+    if let Some(value) = message
+        .split_once("number-not-exact:")
+        .map(|(_, rest)| rest.split(" at line").next().unwrap_or(rest).trim())
+    {
+        return ContentHashError::NumberNotExactlyRepresentable(value.to_string());
+    }
+    ContentHashError::NotCanonicalizable
+}
+
+/// Parse JSON text under I-JSON rules, rejecting what RFC 8785 cannot
+/// canonicalize (section 4.2.3).
+///
+/// A store MUST use this, or an equivalent check, on the ORIGINAL request bytes.
+/// Parsing first and validating afterwards does not work: duplicate member names
+/// are gone by the time a `serde_json::Value` exists, because the parser keeps
+/// the last one silently.
+pub fn parse_ijson(text: &str) -> Result<serde_json::Value, ContentHashError> {
+    match serde_json::from_str::<IJson>(text) {
+        Ok(IJson(value)) => Ok(value),
+        Err(error) => Err(classify(&error.to_string())),
+    }
+}
+
+/// Check an already-parsed value for the I-JSON violations still detectable.
+///
+/// Numbers can be checked here; duplicate member names CANNOT, because parsing
+/// has already discarded them. Use [`parse_ijson`] on the original text when the
+/// text is available.
+pub fn check_ijson_value(value: &serde_json::Value) -> Result<(), ContentHashError> {
+    match value {
+        serde_json::Value::Number(number) => {
+            let exceeds = number
+                .as_u64()
+                .map(|v| v as i128 > MAX_EXACT_INTEGER)
+                .or_else(|| {
+                    number
+                        .as_i64()
+                        .map(|v| (v as i128).abs() > MAX_EXACT_INTEGER)
+                })
+                .unwrap_or(false);
+            if exceeds {
+                return Err(ContentHashError::NumberNotExactlyRepresentable(
+                    number.to_string(),
+                ));
+            }
+            Ok(())
+        }
+        serde_json::Value::Array(items) => items.iter().try_for_each(check_ijson_value),
+        serde_json::Value::Object(map) => map.values().try_for_each(check_ijson_value),
+        _ => Ok(()),
+    }
+}
 
 /// The hash input (section 4.2.3).
 ///
@@ -81,6 +249,11 @@ pub fn content_hash(
     source_format: &str,
     raw: &serde_json::Value,
 ) -> Result<String, ContentHashError> {
+    // Reject what canonicalization would silently coerce. Without this, two
+    // different `raw` values receive the same digest and dedup merges two
+    // distinct sessions into one.
+    check_ijson_value(raw)?;
+
     let input = HashInput {
         raw,
         session_format: source_format,
@@ -135,6 +308,94 @@ mod tests {
             "the canonical digest is a wire-visible constant; changing it breaks \
              dedup interoperability with every already-stored session"
         );
+    }
+
+    /// Regression: these two documents differ, but JCS renders every number as a
+    /// double, so beyond 2^53 they canonicalize identically. Before the I-JSON
+    /// check both hashed to the same digest, which would have merged two
+    /// distinct sessions into one during dedup.
+    #[test]
+    fn integers_beyond_2_53_are_rejected_rather_than_colliding() {
+        let at_limit: serde_json::Value =
+            serde_json::from_str(r#"{"n":9007199254740992}"#).unwrap();
+        let past_limit: serde_json::Value =
+            serde_json::from_str(r#"{"n":9007199254740993}"#).unwrap();
+
+        // 2^53 is exactly representable, so it remains hashable.
+        content_hash("s", "f", &at_limit).expect("2^53 is exact");
+
+        // 2^53 + 1 is not, and must be refused rather than silently coerced.
+        assert_eq!(
+            content_hash("s", "f", &past_limit).unwrap_err(),
+            ContentHashError::NumberNotExactlyRepresentable("9007199254740993".to_string())
+        );
+    }
+
+    #[test]
+    fn negative_integers_beyond_2_53_are_also_rejected() {
+        let value: serde_json::Value = serde_json::from_str(r#"{"n":-9007199254740993}"#).unwrap();
+        assert!(matches!(
+            content_hash("s", "f", &value).unwrap_err(),
+            ContentHashError::NumberNotExactlyRepresentable(_)
+        ));
+    }
+
+    #[test]
+    fn nested_out_of_range_numbers_are_found() {
+        let value: serde_json::Value =
+            serde_json::from_str(r#"{"a":[{"deep":9007199254740993}]}"#).unwrap();
+        assert!(matches!(
+            content_hash("s", "f", &value).unwrap_err(),
+            ContentHashError::NumberNotExactlyRepresentable(_)
+        ));
+    }
+
+    /// Regression: `{"a":1,"a":2}` and `{"a":2}` are different documents, but
+    /// serde_json keeps only the last member, so both previously produced the
+    /// same digest. Duplicates must be caught at PARSE time; by the time a
+    /// `Value` exists the evidence is gone.
+    #[test]
+    fn duplicate_member_names_are_rejected_at_parse_time() {
+        assert_eq!(
+            parse_ijson(r#"{"a":1,"a":2}"#).unwrap_err(),
+            ContentHashError::DuplicateMemberName("a".to_string())
+        );
+        // The distinct document that it would have collided with still parses.
+        assert!(parse_ijson(r#"{"a":2}"#).is_ok());
+    }
+
+    #[test]
+    fn duplicate_member_names_are_found_when_nested() {
+        assert!(matches!(
+            parse_ijson(r#"{"outer":{"a":1,"a":2}}"#).unwrap_err(),
+            ContentHashError::DuplicateMemberName(_)
+        ));
+        assert!(matches!(
+            parse_ijson(r#"[{"a":1,"a":2}]"#).unwrap_err(),
+            ContentHashError::DuplicateMemberName(_)
+        ));
+    }
+
+    #[test]
+    fn parse_ijson_rejects_out_of_range_numbers_too() {
+        assert!(matches!(
+            parse_ijson(r#"{"n":9007199254740993}"#).unwrap_err(),
+            ContentHashError::NumberNotExactlyRepresentable(_)
+        ));
+    }
+
+    #[test]
+    fn parse_ijson_accepts_ordinary_documents_unchanged() {
+        for text in [
+            r#"{"a":1,"b":[1,2,3],"c":{"d":null},"e":true,"f":1.5,"g":"x"}"#,
+            r#"[]"#,
+            r#""just a string""#,
+            r#"{"n":9007199254740992}"#,
+        ] {
+            let parsed = parse_ijson(text).unwrap_or_else(|e| panic!("{text} should parse: {e}"));
+            let expected: serde_json::Value = serde_json::from_str(text).unwrap();
+            assert_eq!(parsed, expected, "parsing must not alter the value");
+        }
     }
 
     #[test]
@@ -210,7 +471,8 @@ mod tests {
         second.started_at = "2026-06-01T00:00:00Z".into();
         second.last_activity_at = "2026-06-01T01:00:00Z".into();
         second.agent = "SomethingElse".into();
-        second.content_hash = Some("sha256:deadbeef".into());
+        second.content_hash =
+            Some("sha256:deadbeef00000000000000000000000000000000000000000000000000000000".into());
         second.metadata = Some(crate::Metadata {
             repo: Some("owner/name".into()),
             ..Default::default()

@@ -4,17 +4,27 @@
 //! They expose the two operations a consumer most often needs to perform against
 //! the standard itself:
 //!
-//! - `validate` answers "is this envelope conformant?" against both the JSON
-//!   Schema's structural rules and the crate's validation, so a producer can
-//!   check its output without writing a test harness.
+//! - `validate` answers "is this envelope conformant?" It runs the I-JSON check
+//!   on the original text (which is the only point duplicate member names are
+//!   still visible), then the crate's structural validation. It deliberately
+//!   does NOT run the JSON Schema: `SessionEnvelope` deserialization already
+//!   enforces the schema's required fields and types, and a test asserts the two
+//!   layers agree, so running both here would report the same failure twice.
 //! - `hash` computes the canonical `content_hash` (section 4.2.3), so a store
 //!   implementer can compare their computation against the reference one. The
 //!   hash is the most interoperability-sensitive rule in the standard, and a
 //!   store that derives it differently silently fails to deduplicate.
+//!
+//! Both commands validate before acting. `hash` in particular must not print a
+//! digest for a non-conformant envelope: that digest would look authoritative
+//! while describing something the standard rejects.
 
 use apss_core::registry::{CommandHandler, CommandInfo};
 
-use crate::{SessionEnvelope, content_hash::content_hash_for};
+use crate::{
+    SessionEnvelope,
+    content_hash::{content_hash_for, parse_ijson},
+};
 
 /// Commands this standard registers.
 pub const COMMAND_NAMES: [&str; 2] = ["validate", "hash"];
@@ -41,20 +51,32 @@ impl SessionCaptureCommandHandler {
 /// body (`{ "envelopes": [...] }`, section 5.1).
 fn envelopes_in(path: &str) -> Result<Vec<serde_json::Value>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
-    let value: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("{path} is not valid JSON: {e}"))?;
 
-    if let Some(envelopes) = value.get("envelopes") {
-        let array = envelopes
-            .as_array()
-            .ok_or_else(|| format!("{path}: `envelopes` must be an array (section 5.1)"))?;
-        return Ok(array.clone());
-    }
+    // I-JSON first, on the original text. Duplicate member names are invisible
+    // after parsing, so this cannot be deferred (section 4.2.3).
+    let value = parse_ijson(&text).map_err(|e| format!("{path}: {e}"))?;
+
     if value.is_array() {
         return Err(format!(
             "{path}: a batch body must be wrapped as {{ \"envelopes\": [...] }}, \
              not a bare array (section 5.1)"
         ));
+    }
+
+    // Distinguish a batch from a single envelope by shape, not by key presence:
+    // the schema permits unknown top-level fields, so a lone envelope carrying an
+    // extension field named `envelopes` would otherwise be misread as a batch.
+    let looks_like_batch = value.get("envelopes").is_some() && value.get("raw").is_none();
+    if looks_like_batch {
+        let array = value["envelopes"]
+            .as_array()
+            .ok_or_else(|| format!("{path}: `envelopes` must be an array (section 5.1)"))?;
+        if array.is_empty() {
+            return Err(format!(
+                "{path}: a batch must carry one or more envelopes (section 5.1)"
+            ));
+        }
+        return Ok(array.clone());
     }
     Ok(vec![value])
 }
@@ -127,6 +149,11 @@ fn run_hash(args: &[String]) -> i32 {
     let mut failures = 0usize;
     for (index, value) in envelopes.iter().enumerate() {
         match parse_envelope(value, index).and_then(|envelope| {
+            // Never print a digest for a non-conformant envelope: it would look
+            // authoritative while describing something the standard rejects.
+            envelope
+                .validate()
+                .map_err(|e| format!("envelope[{index}] invalid, refusing to hash: {e}"))?;
             content_hash_for(&envelope)
                 .map(|hash| (envelope.session_id, hash))
                 .map_err(|e| format!("envelope[{index}]: {e}"))
@@ -235,6 +262,80 @@ mod tests {
             "section 5.1 forbids a bare top-level array"
         );
         let _ = std::fs::remove_file(&path);
+    }
+
+    fn with_temp_file(name: &str, contents: &str, run: impl Fn(String) -> i32) -> i32 {
+        let path = std::env::temp_dir().join(name);
+        std::fs::write(&path, contents).unwrap();
+        let code = run(path.to_string_lossy().into_owned());
+        let _ = std::fs::remove_file(&path);
+        code
+    }
+
+    /// Duplicate member names are invisible after parsing, so the CLI must run
+    /// the I-JSON check on the original text (spec 4.2.3).
+    #[test]
+    fn duplicate_member_names_are_rejected() {
+        let code = with_temp_file("apss-scs-cli-dupe.json", r#"{"a":1,"a":2}"#, |arg| {
+            handler().execute("validate", &[arg], &empty_config())
+        });
+        assert_eq!(code, exit::ERROR);
+    }
+
+    /// `hash` must refuse a non-conformant envelope rather than print a digest
+    /// that looks authoritative for something the standard rejects.
+    #[test]
+    fn hash_refuses_a_non_conformant_envelope() {
+        // Valid JSON and a parseable envelope, but `raw` is a scalar.
+        let bad = r#"{
+          "scs_version": "1.0",
+          "origin": { "host": "h", "environment": "local" },
+          "agent": "ClaudeCode",
+          "source_format": "claude-jsonl-v1",
+          "session_id": "abc-123",
+          "started_at": "2026-05-02T14:03:11Z",
+          "last_activity_at": "2026-05-02T15:20:44Z",
+          "raw": 42
+        }"#;
+        let code = with_temp_file("apss-scs-cli-badraw.json", bad, |arg| {
+            handler().execute("hash", &[arg], &empty_config())
+        });
+        assert_eq!(code, exit::ERROR);
+    }
+
+    #[test]
+    fn an_empty_batch_is_rejected() {
+        let code = with_temp_file(
+            "apss-scs-cli-empty-batch.json",
+            r#"{"envelopes":[]}"#,
+            |arg| handler().execute("validate", &[arg], &empty_config()),
+        );
+        assert_eq!(
+            code,
+            exit::ERROR,
+            "section 5.1 requires one or more envelopes"
+        );
+    }
+
+    /// The schema permits unknown top-level fields, so a single envelope that
+    /// happens to carry one named `envelopes` must not be misread as a batch.
+    #[test]
+    fn a_lone_envelope_with_an_envelopes_extension_field_is_not_a_batch() {
+        let envelope = r#"{
+          "scs_version": "1.0",
+          "origin": { "host": "h", "environment": "local" },
+          "agent": "ClaudeCode",
+          "source_format": "claude-jsonl-v1",
+          "session_id": "abc-123",
+          "started_at": "2026-05-02T14:03:11Z",
+          "last_activity_at": "2026-05-02T15:20:44Z",
+          "raw": "transcript",
+          "envelopes": "an extension field from some later minor"
+        }"#;
+        let code = with_temp_file("apss-scs-cli-ambiguous.json", envelope, |arg| {
+            handler().execute("validate", &[arg], &empty_config())
+        });
+        assert_eq!(code, exit::SUCCESS);
     }
 
     #[test]
