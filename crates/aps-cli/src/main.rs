@@ -244,6 +244,7 @@ fn main() -> ExitCode {
                 architecture_fitness::register(&mut collector);
                 documentation::register(&mut collector);
                 agent_recipe::register(&mut collector);
+                session_capture::register(&mut collector);
                 for (info, _handler) in collector.entries() {
                     println!("  {} ({}) v{}", info.slug, info.id, info.version);
                     println!("    {}", info.description);
@@ -379,6 +380,7 @@ fn main() -> ExitCode {
                         architecture_fitness::register(&mut collector);
                         documentation::register(&mut collector);
                         agent_recipe::register(&mut collector);
+                        session_capture::register(&mut collector);
 
                         let package_dirs: Vec<std::path::PathBuf> =
                             packages.iter().map(|p| p.path.clone()).collect();
@@ -1020,6 +1022,12 @@ fn resolve_standard(slug: &str) -> Option<StandardCliInfo> {
             name: agent_recipe::NAME,
             version: agent_recipe::VERSION,
         }),
+        "session-capture" | "sessions" | "aps-v1-0004" => Some(StandardCliInfo {
+            id: session_capture::ID,
+            slug: "session-capture",
+            name: session_capture::NAME,
+            version: session_capture::VERSION,
+        }),
         _ => None,
     }
 }
@@ -1034,6 +1042,7 @@ fn dispatch_standard_cli(info: &StandardCliInfo, args: &[String], verbose: bool)
         "architecture-fitness" => dispatch_architecture_fitness(command, cmd_args, verbose),
         "documentation" => dispatch_documentation(command, cmd_args, verbose),
         "agent-recipe" => dispatch_agent_recipe(command, cmd_args),
+        "session-capture" => dispatch_session_capture(command, cmd_args),
         _ => {
             eprintln!("Error: Standard '{}' CLI not implemented", info.slug);
             ExitCode::FAILURE
@@ -1125,6 +1134,19 @@ fn dispatch_agent_recipe(command: &str, args: &[String]) -> ExitCode {
     use apss_core::registry::CommandHandler;
 
     let handler = agent_recipe::cli::AgentRecipeCommandHandler::new();
+    let code = handler.execute(command, args, &toml::Value::Table(Default::default()));
+    ExitCode::from(code as u8)
+}
+
+/// Dispatch session-capture commands through the standard's own command handler.
+///
+/// APS-V1-0004 is definitional, so these commands operate on envelope files
+/// rather than on a project: `validate` checks conformance, `hash` computes the
+/// canonical `content_hash` a store must derive (spec section 4.2.3).
+fn dispatch_session_capture(command: &str, args: &[String]) -> ExitCode {
+    use apss_core::registry::CommandHandler;
+
+    let handler = session_capture::cli::SessionCaptureCommandHandler::new();
     let code = handler.execute(command, args, &toml::Value::Table(Default::default()));
     ExitCode::from(code as u8)
 }

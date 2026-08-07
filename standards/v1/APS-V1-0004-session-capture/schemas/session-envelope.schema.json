@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:apss:schema:aps-v1-0004:session-envelope:1.0.0",
+  "title": "Session Envelope",
+  "description": "Schema for a single Session Capture Standard (SCS) envelope per APS-V1-0004 section 4. A thin, universal header wrapped around a provider-native transcript preserved verbatim in `raw`. Only the header fields and `raw` are required; `metadata` is freeform and non-load-bearing. `content_hash` is computed by the store at ingest over the captured content, never by the producer (section 4.2.3); it is absent in an envelope in flight and present once stored, so this schema validates both states and does not mark it required.",
+  "type": "object",
+  "required": [
+    "scs_version",
+    "origin",
+    "agent",
+    "source_format",
+    "session_id",
+    "started_at",
+    "last_activity_at",
+    "raw"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "scs_version": {
+      "type": "string",
+      "description": "SemVer of the envelope schema. Additive-only within a major.",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "origin": {
+      "$ref": "#/$defs/Origin"
+    },
+    "agent": {
+      "type": "string",
+      "description": "The producing runtime. Known values include ClaudeCode, Codex, Cursor, Gemini; any provider-specific string is permitted.",
+      "minLength": 1
+    },
+    "source_format": {
+      "type": "string",
+      "description": "Provenance tag for `raw`: identifies how a server-side parser should read it (for example claude-jsonl-v1). New providers add a value here with zero schema change.",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Identifier for the session, stable per source. Half of the idempotency key.",
+      "minLength": 1
+    },
+    "parent_session_id": {
+      "type": ["string", "null"],
+      "description": "For a subagent session, the id of its parent session. Reserved in v1; filled in a later phase."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Real session start time (RFC3339), derived from the transcript, not the capture time."
+    },
+    "last_activity_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Real time of the last activity in the session (RFC3339)."
+    },
+    "content_hash": {
+      "type": ["string", "null"],
+      "description": "Hash over the CAPTURED CONTENT, computed by the store at ingest before sanitizing (section 4.2.3). ABSENT OR NULL in an envelope in flight from a producer; PRESENT in a stored envelope. Within scs_version 1.x the algorithm MUST be SHA-256 and the digest MUST be lowercase hexadecimal, because dedup compares these as strings and equal digest bytes in different cases would not match.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "metadata": {
+      "description": "Freeform, non-load-bearing metadata. Explicit null is accepted and equivalent to omission, so a producer that always emits the key does not become non-conformant.",
+      "oneOf": [{ "$ref": "#/$defs/Metadata" }, { "type": "null" }]
+    },
+    "raw": {
+      "description": "The provider-native transcript, preserved verbatim. Opaque to the standard. A string carries the transcript's exact bytes and is the ONLY shape that supports byte-exact reconstitution, so it is required for any source_format in the reconstitution registry (section 4.3.1). Object and array shapes are valid but not reconstitutable. Scalars (number, boolean, null) are not a transcript and are rejected.",
+      "type": ["object", "array", "string"]
+    }
+  },
+  "$defs": {
+    "Origin": {
+      "type": "object",
+      "description": "Where the envelope came from, so a multi-source corpus stays attributable.",
+      "required": ["host", "environment"],
+      "additionalProperties": true,
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Human-meaningful host identity, for example macbook-neural or the VPS hostname.",
+          "minLength": 1
+        },
+        "environment": {
+          "type": "string",
+          "description": "Class of environment the session ran in. Known values are local, vps, container, and workflow. NOT a closed enum: section 8.3 requires consumers to tolerate values added in a later minor version, so validating against a fixed list here would reject envelopes the standard declares conformant.",
+          "minLength": 1,
+          "examples": ["local", "vps", "container", "workflow"]
+        }
+      }
+    },
+    "Metadata": {
+      "type": "object",
+      "description": "Freeform, non-load-bearing metadata. First-class for search: conformant stores SHOULD support filtering and querying by these fields. No field here is required by the schema.",
+      "additionalProperties": true,
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "Repository slug the session worked in, for example owner/name."
+        },
+        "git_remote": {
+          "type": "string",
+          "description": "Git remote URL for the working tree."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory of the session."
+        },
+        "project": {
+          "type": "string",
+          "description": "Project name the session belongs to."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier used, for example claude-opus-4-8."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Free-form operator tags."
+        },
+        "message_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Hint for the number of messages in the session."
+        },
+        "source_path": {
+          "type": "string",
+          "description": "The transcript's original path on the capturing machine, relative to the harness session root. Used preferentially by a Reconstitutor (section 6.4). Untrusted input: a Reconstitutor MUST reject absolute values or values escaping the harness root (section 6.4.5)."
+        },
+        "workflow_id": {
+          "type": ["string", "null"],
+          "description": "For Exporter sessions produced as part of a multi-agent run, the shared id that groups the run's per-agent envelopes."
+        }
+      }
+    }
+  }
+}

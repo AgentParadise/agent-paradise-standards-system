@@ -1,0 +1,26 @@
+[package]
+name = "apss-v1-0004-session-capture"
+version = "1.0.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Session Capture Standard: definitional session-envelope types, validation, and the reconstitution registry"
+readme = "README.md"
+keywords = ["sessions", "transcripts", "agents", "standards", "capture"]
+categories = ["development-tools"]
+
+[lib]
+name = "session_capture"
+
+[dependencies]
+apss-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+regex = "1"
+sha2 = "0.10"
+serde_json_canonicalizer = "0.3"
+
+[dev-dependencies]
+jsonschema = { workspace = true }

@@ -1,0 +1,81 @@
+# Reconstitution registry (APS-V1-0004 section 6.4.2)
+#
+# Maps `source_format` to the knowledge a Reconstitutor needs to write a stored
+# transcript back to disk and hand off to the harness's native resume.
+#
+# THIS FILE IS INFORMATIVE AND SEPARATELY VERSIONED.
+#
+# It is not normative specification text. Harnesses change their on-disk layout
+# on their own schedule; an entry going stale is a registry correction, never a
+# change to the envelope contract. Adding, correcting, or removing an entry is
+# NOT a version bump of `scs_version` (section 8.2).
+#
+# Entries describe WHERE a harness keeps its session file, never what is inside
+# it. The standard still never parses `raw` (section 1.2).
+#
+# SECURITY (section 6.4.5): `resume.program` and `resume.args` are a structured
+# descriptor, never a shell string. A Reconstitutor MUST invoke them without a
+# shell, and MUST validate interpolated values (notably `session_id`, which comes
+# from an untrusted producer) against `session_id_pattern` before use. Resume
+# descriptors MUST come from this registry and never from an envelope field.
+
+registry_version = "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Claude Code
+# ---------------------------------------------------------------------------
+[claude-jsonl-v1]
+harness = "ClaudeCode"
+description = "Claude Code writes one JSONL transcript per session, in a directory derived from the working directory."
+path_template = "~/.claude/projects/{slug}/{session_id}.jsonl"
+serialization = "jsonl"
+session_id_pattern = "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+
+[claude-jsonl-v1.slug_rule]
+# Claude Code derives its project directory from the absolute cwd by replacing
+# path separators and dots with hyphens, for example:
+#   /Users/me/Code/my.app  ->  -Users-me-Code-my-app
+source = "cwd_absolute"
+replace = [["/", "-"], [".", "-"]]
+
+[claude-jsonl-v1.resume]
+program = "claude"
+args = ["--resume", "{session_id}"]
+cwd = "{repo_root}"
+
+# ---------------------------------------------------------------------------
+# Codex CLI
+# ---------------------------------------------------------------------------
+[codex-turns-v1]
+harness = "Codex"
+description = "Codex CLI writes one rollout file per session into a year/month/day partitioned tree, with the session start timestamp embedded in the filename."
+# Verified against a live ~/.codex/sessions tree, for example:
+#   ~/.codex/sessions/2026/06/04/rollout-2026-06-04T17-01-33-019e9515-c90c-74b1-9dd9-d5961364264a.jsonl
+# Date components and the filename timestamp both derive from `started_at`.
+path_template = "~/.codex/sessions/{started_at:%Y}/{started_at:%m}/{started_at:%d}/rollout-{started_at:%Y-%m-%dT%H-%M-%S}-{session_id}.jsonl"
+serialization = "jsonl"
+session_id_pattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+# The timezone Codex uses for the filename timestamp is not documented and is not
+# safely inferable from the filename alone. A Reconstitutor SHOULD therefore
+# prefer `metadata.source_path` (spec 4.4) when the producer recorded it, and fall
+# back to this template only when it is absent.
+prefer_source_path = true
+
+[codex-turns-v1.slug_rule]
+# Codex partitions by date rather than by working directory, so no cwd-derived
+# slug exists. The relocation rule (6.4.3) still applies to `resume.cwd`.
+source = "none"
+
+[codex-turns-v1.resume]
+program = "codex"
+args = ["resume", "{session_id}"]
+cwd = "{repo_root}"
+
+# ---------------------------------------------------------------------------
+# Cursor
+# ---------------------------------------------------------------------------
+# Cursor stores sessions in a SQLite database rather than as discrete per-session
+# files, so a stored transcript cannot be written back as a standalone file and
+# resumed. Cursor sessions are captured and searchable, but NOT reconstitutable.
+# Absence from this registry is how a Reconstitutor learns that: it MUST fail
+# loudly on an unknown `source_format` (6.4.3) rather than guess a path.
