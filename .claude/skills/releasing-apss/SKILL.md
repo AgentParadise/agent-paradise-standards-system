@@ -95,8 +95,22 @@ feature branch --PR--> main  (ci.yml: fmt, clippy, check, test, aps-validation)
    changed unit, pushes tags, creates the GitHub Release from the changelog, and
    runs the publish job.
 
-6. **Verify the publish.** The publish job is idempotent (it skips crates whose
-   version is already on crates.io), so a re-run is safe.
+6. **Verify the publish against crates.io, not against the job's exit status.**
+   The publish job tolerates an already-published version, so a re-run after a
+   partial publish resumes rather than dying. That was NOT true before
+   2026-08-07: the job pre-checked with `cargo search`, whose eventually
+   consistent search endpoint kept reporting a just-published crate as missing,
+   making every re-run fail on the first crate that had already gone out. If you
+   are working on a release whose workflow predates that fix, expect re-runs to
+   fail and publish the remainder by hand (see the new-crate section below).
+
+   Check the actual registry rather than trusting a green job:
+
+   ```bash
+   for c in apss-core apss <changed-standard-crates>; do
+     curl -s "https://crates.io/api/v1/crates/$c" | jq -r '"\(.crate.name) \(.crate.max_version)"'
+   done
+   ```
 
 ## What publishes and what does not
 
@@ -159,9 +173,22 @@ nothing.
    compiles it from the packaged tarball, which catches the real risk: files
    pulled in by `include_str!` from outside `src/` are only present if they sit
    inside the crate directory.
-3. Re-run the failed publish job. The idempotency check skips everything already
-   published and continues from where it died, so tier 3 (`apss`) still goes out
-   automatically. No need to re-tag or re-release.
+3. Finish the remaining tiers. The publish job now tolerates already-published
+   versions, so re-running it resumes from where it died and tier 3 (`apss`)
+   goes out automatically. No need to re-tag or re-release.
+
+   **If the re-run still fails on a crate that is already published**, the run
+   is using a workflow from before the 2026-08-07 fix (a re-run executes the
+   workflow file from the commit that triggered it, so fixing it on `main` does
+   not help an in-flight run). Do not fight it. Publish the remaining crates by
+   hand from their tags, exactly as in step 2:
+
+   ```bash
+   git checkout v<system-version>     # e.g. v1.5.0
+   cargo publish -p apss
+   ```
+
+   The red job is then cosmetic. What matters is the registry.
 4. Every subsequent release of that crate is fully automated: `publish-update`
    covers it from then on. `publish-new` is needed once per crate name, not once
    per release.
@@ -183,6 +210,18 @@ publishable crates to crates.io successfully. Treat the workflow-level
 description above as trustworthy; this section now tracks known gotchas
 instead of "not wired yet" caveats.
 
+- **What v1.5.0 actually cost (2026-08-07), as a worked example.** The release
+  that first published `apss-v1-0004-session-capture` needed three manual
+  interventions, and every one of them is now covered above. The publish job
+  403'd on the new crate (CI token is `publish-update` only, by design). The
+  operator's local token turned out to be dead, a *different* 403 reading
+  `authentication failed` rather than `does not have the required permissions`
+  (read that message carefully; the two mean different things). And both re-runs
+  then died on `apss-core@1.5.0 already exists`, because the old `cargo search`
+  pre-check never saw it. Final state was reached by publishing two of the three
+  crates by hand from their tags. The git tags and GitHub Release were correct
+  throughout; only the publish job was red. **Verify against crates.io, not
+  against the job.**
 - **Never push directly to `release`.** It is a real branch with a real
   `push` trigger: any push, including a one-off debugging fix, fires
   `release-create.yml` for real (tags + a GitHub Release get created
