@@ -347,17 +347,61 @@ jobs:
 
             echo "Publishing ${name}@${version} from ${dir}..."
 
-            # Check if already published (idempotency)
-            if cargo search "$name" 2>/dev/null | grep -q "^${name} = \"${version}\""; then
-              echo "  Already published - skipping"
-              return
+            # Idempotency: attempt the publish and classify a duplicate, rather
+            # than pre-checking whether the version already exists.
+            #
+            # An earlier version pre-checked with `cargo search`, which queries
+            # crates.io's SEARCH endpoint. That endpoint is eventually consistent
+            # and, in CI, repeatedly reported a version published nearly an hour
+            # earlier as absent, so the publish ran and died on "already exists".
+            # That made recovery from a PARTIAL publish impossible: every re-run
+            # failed again on the first crate that had already gone out.
+            #
+            # A duplicate surfaces in one of TWO ways and both must be tolerated:
+            #   1. cargo's own pre-upload index query
+            #        -> "crate <name>@<version> already exists on crates.io index"
+            #   2. the crates.io upload API, when the sparse index has not yet
+            #      exposed a version that was in fact uploaded
+            #        -> "crate version `<version>` is already uploaded"
+            # Handling only (1) would leave the same race intact one layer down.
+            #
+            # Output is streamed through `tee` rather than captured, so a long
+            # packaging step is not a silent gap in the log of a release job.
+            local log="${RUNNER_TEMP:-/tmp}/publish-${name}.log"
+            local status=0
+
+            set +e
+            cargo publish --manifest-path "$dir/Cargo.toml" 2>&1 | tee "$log"
+            status="${PIPESTATUS[0]}"
+            set -e
+
+            if [ "$status" -eq 0 ]; then
+              echo "  Published ${name}@${version}"
+              # Let the sparse index expose it before a dependent tier resolves.
+              sleep 30
+              return 0
             fi
 
-            cargo publish --manifest-path "$dir/Cargo.toml"
-            echo "  Published ${name}@${version}"
+            # Match the crate AND version, not a bare substring: an unrelated
+            # failure whose output merely mentions a duplicate must never be
+            # read as success on a job that publishes.
+            if grep -qF "crate ${name}@${version} already exists on crates.io index" "$log"; then
+              echo "  Already published (found in index) - skipping"
+              # No wait needed: the index already resolves this version.
+              return 0
+            fi
 
-            # Wait for the crates.io index to update before any dependent crate
-            sleep 30
+            if grep -qF "crate version \`${version}\` is already uploaded" "$log"; then
+              echo "  Already published (upload rejected as duplicate) - skipping"
+              # The upload API knows it, but the index may still lag, so wait as
+              # though we had just published it or a dependent tier may not
+              # resolve.
+              sleep 30
+              return 0
+            fi
+
+            echo "::error::Failed to publish ${name}@${version}"
+            return 1
           }
 
           # Tier 1: apss-core (only when the tooling system changed)

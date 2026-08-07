@@ -6,10 +6,15 @@ description: >-
   "release APSS", "publish to crates.io", "create a release PR", "main to
   release", "promote main to release", "bump versions for the release", "tag a
   release", "run the release gate", "how do releases work here", "what gets
-  published", "ship a new version". Covers the trunk-based main -> release
-  branch flow, the Release Gate checks (source-branch, version-bump, changelog,
-  QA, APS validation, security), and release-create.yml tagging plus tiered
-  crates.io publishing. Do NOT use for routine feature PRs into main (those need
+  published", "ship a new version", "publish a new crate for the first time",
+  "403 Forbidden publishing to crates.io", "this token does not have the
+  required permissions", "CARGO_REGISTRY_TOKEN", "publish-new scope", "the
+  publish job failed", "half the crates published". Covers the trunk-based
+  main -> release branch flow, the Release Gate checks (source-branch,
+  version-bump, changelog, QA, APS validation, security), release-create.yml
+  tagging plus tiered crates.io publishing, and the one-time manual first
+  publish a NEW crate name requires because the CI token is deliberately scoped
+  publish-update only. Do NOT use for routine feature PRs into main (those need
   no release and no version bump), mid-feature version bumps, authoring
   standards, or consumer-side `apss install` (see the adopt/visualize runbooks).
 ---
@@ -90,8 +95,22 @@ feature branch --PR--> main  (ci.yml: fmt, clippy, check, test, aps-validation)
    changed unit, pushes tags, creates the GitHub Release from the changelog, and
    runs the publish job.
 
-6. **Verify the publish.** The publish job is idempotent (it skips crates whose
-   version is already on crates.io), so a re-run is safe.
+6. **Verify the publish against crates.io, not against the job's exit status.**
+   The publish job tolerates an already-published version, so a re-run after a
+   partial publish resumes rather than dying. That was NOT true before
+   2026-08-07: the job pre-checked with `cargo search`, whose eventually
+   consistent search endpoint kept reporting a just-published crate as missing,
+   making every re-run fail on the first crate that had already gone out. If you
+   are working on a release whose workflow predates that fix, expect re-runs to
+   fail and publish the remainder by hand (see the new-crate section below).
+
+   Check the actual registry rather than trusting a green job:
+
+   ```bash
+   for c in apss-core apss <changed-standard-crates>; do
+     curl -s "https://crates.io/api/v1/crates/$c" | jq -r '"\(.crate.name) \(.crate.max_version)"'
+   done
+   ```
 
 ## What publishes and what does not
 
@@ -107,6 +126,80 @@ substandards, and everything under `standards-experimental/`. These still get
 git tags and release notes, but no `cargo publish`. Treat that exclusion as
 load-bearing: the publish job filters them out by directory prefix.
 
+## Releasing a crate that has NEVER been published
+
+**The first release of any new crate name needs a one-time manual `cargo
+publish`. CI cannot do it, by design.**
+
+`CARGO_REGISTRY_TOKEN` is deliberately scoped `publish-update` on crates `apss`
+and `apss-*`. It can push new *versions* of crates the project already owns, and
+nothing else. It cannot create a new crate name, because a CI token that could
+would let anyone who leaked it squat or publish arbitrary `apss-*` packages. The
+narrower scope is the security posture, not an oversight: do not "fix" this by
+adding `publish-new` to the CI token.
+
+The symptom, if you forget: the publish job runs, tier 1 succeeds, and the new
+crate fails with
+
+```
+error: failed to publish <crate> to registry at https://crates.io
+Caused by:
+  the remote server responded with an error (status 403 Forbidden):
+  this token does not have the required permissions to perform this action
+```
+
+That message names the token, not the crate, so it is easy to misread as a
+workflow bug. It is not. The workflow handles new packages correctly: detection
+is a `git diff` against the last release tag (a directory that did not exist
+reads as changed), the crate name is derived from the directory name rather than
+from history, and the publish attempt is made unconditionally, so a crate that
+has never been published is never skipped.
+
+### The flow
+
+1. Let the release merge as normal. Tags and the GitHub Release are created, and
+   the publish job fails at the new crate. **This is expected and recoverable.**
+   Anything published before the failure (typically `apss-core`) stays published.
+2. Publish the new crate by hand, **from the release tag**, using a personal
+   credential that has `publish-new`. Publishing from a working tree instead of
+   the tag would put bytes on crates.io that do not match what the tag claims:
+
+   ```bash
+   git checkout <TAG>              # e.g. APS-V1-0004-v1.0.0
+   cargo publish -p <crate-name>
+   ```
+
+   Run `cargo publish --dry-run -p <crate-name>` first. It packages the crate and
+   compiles it from the packaged tarball, which catches the real risk: files
+   pulled in by `include_str!` from outside `src/` are only present if they sit
+   inside the crate directory.
+3. Finish the remaining tiers. The publish job now tolerates already-published
+   versions, so re-running it resumes from where it died and tier 3 (`apss`)
+   goes out automatically. No need to re-tag or re-release.
+
+   **If the re-run still fails on a crate that is already published**, the run
+   is using a workflow from before the 2026-08-07 fix (a re-run executes the
+   workflow file from the commit that triggered it, so fixing it on `main` does
+   not help an in-flight run). Do not fight it. Publish the remaining crates by
+   hand from their tags, exactly as in step 2:
+
+   ```bash
+   git checkout v<system-version>     # e.g. v1.5.0
+   cargo publish -p apss
+   ```
+
+   The red job is then cosmetic. What matters is the registry.
+4. Every subsequent release of that crate is fully automated: `publish-update`
+   covers it from then on. `publish-new` is needed once per crate name, not once
+   per release.
+
+### Consider Trusted Publishing afterward
+
+crates.io supports GitHub Actions OIDC, which removes the long-lived token from
+CI entirely. It has the same chicken-and-egg (trust cannot be configured for a
+crate that does not exist yet), so it is a follow-up to step 2 rather than a
+replacement for it. Worth doing if the shared token's blast radius matters.
+
 ## Operational state (as of 2026-07-10)
 
 The pipeline is now **live and proven end to end**: the `release` branch
@@ -117,6 +210,18 @@ publishable crates to crates.io successfully. Treat the workflow-level
 description above as trustworthy; this section now tracks known gotchas
 instead of "not wired yet" caveats.
 
+- **What v1.5.0 actually cost (2026-08-07), as a worked example.** The release
+  that first published `apss-v1-0004-session-capture` needed three manual
+  interventions, and every one of them is now covered above. The publish job
+  403'd on the new crate (CI token is `publish-update` only, by design). The
+  operator's local token turned out to be dead, a *different* 403 reading
+  `authentication failed` rather than `does not have the required permissions`
+  (read that message carefully; the two mean different things). And both re-runs
+  then died on `apss-core@1.5.0 already exists`, because the old `cargo search`
+  pre-check never saw it. Final state was reached by publishing two of the three
+  crates by hand from their tags. The git tags and GitHub Release were correct
+  throughout; only the publish job was red. **Verify against crates.io, not
+  against the job.**
 - **Never push directly to `release`.** It is a real branch with a real
   `push` trigger: any push, including a one-off debugging fix, fires
   `release-create.yml` for real (tags + a GitHub Release get created
