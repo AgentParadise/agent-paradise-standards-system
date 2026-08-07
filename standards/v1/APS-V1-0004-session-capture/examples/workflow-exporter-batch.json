@@ -1,0 +1,51 @@
+{
+  "note": "Exporter (push) profile: the body of POST /v1/sessions/batch for one syntropic137 multi-agent run. One envelope PER AGENT; the run is grouped by a shared metadata.workflow_id. Sent with Authorization: Bearer <sessions:write token>. These envelopes are IN FLIGHT, so none carries content_hash: the store computes it at ingest (spec 4.2.3).",
+  "envelopes": [
+    {
+      "scs_version": "1.0",
+      "origin": {
+        "host": "syn137-runner-7",
+        "environment": "workflow"
+      },
+      "agent": "Codex",
+      "source_format": "codex-turns-v1",
+      "session_id": "019e9515-c90c-74b1-9dd9-d5961364264a",
+      "parent_session_id": null,
+      "started_at": "2026-05-02T09:00:02Z",
+      "last_activity_at": "2026-05-02T09:04:51Z",
+      "metadata": {
+        "repo": "owner/service",
+        "project": "service",
+        "model": "gpt-5.5",
+        "tags": ["ci", "planner"],
+        "message_count": 12,
+        "workflow_id": "run-4820",
+        "source_path": "2026/05/02/rollout-2026-05-02T09-00-02-019e9515-c90c-74b1-9dd9-d5961364264a.jsonl"
+      },
+      "raw": "{\"type\":\"turn\",\"role\":\"user\",\"content\":\"plan the change\"}\n{\"type\":\"turn\",\"role\":\"assistant\",\"content\":\"...\"}\n"
+    },
+    {
+      "scs_version": "1.0",
+      "origin": {
+        "host": "syn137-runner-7",
+        "environment": "workflow"
+      },
+      "agent": "ClaudeCode",
+      "source_format": "claude-jsonl-v1",
+      "session_id": "019e9520-4b7a-7c31-8ef0-1a2b3c4d5e6f",
+      "parent_session_id": null,
+      "started_at": "2026-05-02T09:05:10Z",
+      "last_activity_at": "2026-05-02T09:19:37Z",
+      "metadata": {
+        "repo": "owner/service",
+        "project": "service",
+        "model": "claude-opus-4-8",
+        "tags": ["ci", "implementer"],
+        "message_count": 48,
+        "workflow_id": "run-4820",
+        "source_path": "-workspace-service/019e9520-4b7a-7c31-8ef0-1a2b3c4d5e6f.jsonl"
+      },
+      "raw": "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"implement the plan\"}]}}\n{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"...\"}]}}\n"
+    }
+  ]
+}
