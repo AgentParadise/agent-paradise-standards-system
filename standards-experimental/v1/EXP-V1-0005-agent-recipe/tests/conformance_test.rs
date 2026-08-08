@@ -5,9 +5,23 @@
 //! they are the canonical fixtures downstream consumers (Plan B / `itmux`)
 //! vendor (plan revision R9).
 
-use agent_recipe::validate_recipe_dir;
+use agent_recipe::{load_recipe_dir, validate_recipe_dir};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// Write a minimal but loadable recipe directory: `recipe.yaml` with
+/// `default_agent: main` plus a single `agents/<rel_path>` file with the
+/// given contents.
+fn write_minimal_recipe(root: &Path, rel_path: &str, agent_yaml: &str) {
+    fs::write(
+        root.join("recipe.yaml"),
+        "name: harness-test\nversion: 0.1.0\ndefault_agent: main\n",
+    )
+    .expect("write recipe.yaml");
+    let agent_path = root.join(rel_path);
+    fs::create_dir_all(agent_path.parent().expect("agents dir")).expect("create agents dir");
+    fs::write(&agent_path, agent_yaml).expect("write agent yaml");
+}
 
 fn examples_dir(sub: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -87,4 +101,29 @@ fn all_invalid_examples_emit_their_declared_codes() {
             );
         }
     }
+}
+
+#[test]
+fn harness_is_optional_and_absent_means_agnostic() {
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\nmodel:\n  name: anthropic/claude-opus-4-8\n  effort: high\n",
+    );
+    let recipe = load_recipe_dir(dir.path()).expect("must load without harness");
+    let agent = recipe.agents.get("main").expect("main agent should load");
+    assert_eq!(agent.harness, None);
+}
+
+#[test]
+fn unrecognized_harness_fails_to_parse() {
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\nharness: nonesuch\nmodel:\n  name: anthropic/claude-opus-4-8\n  effort: high\n",
+    );
+    let err = load_recipe_dir(dir.path()).unwrap_err();
+    assert!(format!("{err}").contains("harness"), "got: {err}");
 }

@@ -9,10 +9,10 @@
 //! its own - unresolved `subagents` references, empty names, and malformed
 //! skill/tool references - each reported with its own per-rule error code.
 //!
-//! Field-shape rules (unknown fields, non-string keys, unrecognized `agent`
+//! Field-shape rules (unknown fields, non-string keys, unrecognized `harness`
 //! or `effort` enum values) are enforced by `#[serde(deny_unknown_fields)]`
 //! and the typed enums during load, so they surface here as
-//! `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_AGENT_YAML` on the offending
+//! `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_HARNESS_YAML` on the offending
 //! file rather than as separate codes.
 
 use apss_core::{Diagnostic, Diagnostics};
@@ -240,7 +240,7 @@ mod tests {
         let diagnostics = validate_recipe_dir(&fixtures_dir().join("malformed-agent"));
         assert!(
             codes(&diagnostics)
-                .contains(&schema::error_codes::RECIPE_MALFORMED_AGENT_YAML.to_string())
+                .contains(&schema::error_codes::RECIPE_MALFORMED_HARNESS_YAML.to_string())
         );
     }
 
@@ -259,7 +259,7 @@ mod tests {
         std::fs::write(
             root.join("agents").join("main.yml"),
             // Empty model.name triggers a validator-only diagnostic.
-            "name: main\nagent: claude\nmodel:\n  name: ''\n  effort: low\n",
+            "name: main\nharness: claude\nmodel:\n  name: ''\n  effort: low\n",
         )
         .unwrap();
 

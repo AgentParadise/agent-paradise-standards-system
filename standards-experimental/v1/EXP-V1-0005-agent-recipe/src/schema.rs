@@ -68,7 +68,7 @@ pub struct RecipeManifest {
 /// (via serde) rather than silently accepting an unrecognized harness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum AgentKind {
+pub enum HarnessKind {
     /// Claude Code.
     Claude,
     /// OpenAI Codex CLI.
@@ -126,15 +126,18 @@ pub struct SystemInstructions {
 /// determined by `RecipeManifest::default_agent`, not by any field here.
 ///
 /// Field names/enums intentionally match the prior single-YAML EXP-V1-0005
-/// schema (`name`, `agent`, `model`, `skills`, `system_instructions`) for
+/// schema (`name`, `harness`, `model`, `skills`, `system_instructions`) for
 /// pi-compatibility; `tools` and `subagents` are new in the directory shape.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgentManifest {
     /// Agent name. SHOULD match the file stem (`agents/<name>.yaml`).
     pub name: String,
-    /// Which harness runs this agent.
-    pub agent: AgentKind,
+    /// Which harness this agent REQUIRES. Absent means harness-agnostic:
+    /// the agent must run correctly under any conforming harness, which
+    /// section 4.3 enforces by forbidding harness-builtin tool references.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<HarnessKind>,
     /// Model selection.
     pub model: ModelSpec,
     /// Harness-agnostic skill references to inject, in listed order.
@@ -206,7 +209,7 @@ pub mod error_codes {
     /// `recipe.yaml` exists but failed to parse as a [`super::RecipeManifest`].
     pub const RECIPE_MALFORMED_MANIFEST: &str = "RECIPE_MALFORMED_MANIFEST";
     /// An `agents/*.yaml` file failed to parse as an [`super::AgentManifest`].
-    pub const RECIPE_MALFORMED_AGENT_YAML: &str = "RECIPE_MALFORMED_AGENT_YAML";
+    pub const RECIPE_MALFORMED_HARNESS_YAML: &str = "RECIPE_MALFORMED_HARNESS_YAML";
     /// Two agent files share the same stem (e.g. `main.yaml` and `main.yml`).
     pub const RECIPE_DUPLICATE_AGENT: &str = "RECIPE_DUPLICATE_AGENT";
     /// `default_agent` does not resolve to any parsed entry in `agents/`.
@@ -285,7 +288,7 @@ impl RecipeLoadError {
         match self {
             Self::MissingMarker { .. } => error_codes::RECIPE_MISSING_MARKER,
             Self::MalformedManifest { .. } => error_codes::RECIPE_MALFORMED_MANIFEST,
-            Self::MalformedAgent { .. } => error_codes::RECIPE_MALFORMED_AGENT_YAML,
+            Self::MalformedAgent { .. } => error_codes::RECIPE_MALFORMED_HARNESS_YAML,
             Self::DuplicateAgent { .. } => error_codes::RECIPE_DUPLICATE_AGENT,
             Self::DefaultAgentUnresolved { .. } => error_codes::RECIPE_DEFAULT_AGENT_UNRESOLVED,
             Self::Io { .. } => error_codes::RECIPE_IO_ERROR,
@@ -532,7 +535,7 @@ mod tests {
     fn parses_valid_agent_manifest() {
         let yaml = "\
 name: main
-agent: claude
+harness: claude
 model:
   name: anthropic/claude-opus-4-8
   effort: high
@@ -548,7 +551,7 @@ subagents:
 ";
         let agent: AgentManifest = serde_yaml::from_str(yaml).expect("should parse");
         assert_eq!(agent.name, "main");
-        assert_eq!(agent.agent, AgentKind::Claude);
+        assert_eq!(agent.harness, Some(HarnessKind::Claude));
         assert_eq!(agent.model.effort, EffortLevel::High);
         assert_eq!(agent.skills, vec!["code-review".to_string()]);
         assert_eq!(agent.tools, vec!["shell".to_string()]);
@@ -559,12 +562,19 @@ subagents:
     #[test]
     fn agent_manifest_defaults_optional_collections() {
         let yaml =
-            "name: minimal\nagent: codex\nmodel:\n  name: openai/gpt-5-codex\n  effort: low\n";
+            "name: minimal\nharness: codex\nmodel:\n  name: openai/gpt-5-codex\n  effort: low\n";
         let agent: AgentManifest = serde_yaml::from_str(yaml).expect("should parse");
         assert!(agent.skills.is_empty());
         assert!(agent.tools.is_empty());
         assert!(agent.subagents.is_empty());
         assert!(agent.system_instructions.is_none());
+    }
+
+    #[test]
+    fn agent_manifest_defaults_harness_to_none() {
+        let yaml = "name: minimal\nmodel:\n  name: openai/gpt-5-codex\n  effort: low\n";
+        let agent: AgentManifest = serde_yaml::from_str(yaml).expect("should parse");
+        assert_eq!(agent.harness, None);
     }
 
     // ─── unknown field / non-string key rejection ─────────────────────────
@@ -578,21 +588,21 @@ subagents:
 
     #[test]
     fn agent_manifest_rejects_unknown_field() {
-        let yaml = "name: x\nagent: claude\nmodel:\n  name: foo\n  effort: low\nnotarealfield: 1\n";
+        let yaml = "name: x\nharness: claude\nmodel:\n  name: foo\n  effort: low\nnotarealfield: 1\n";
         let result: Result<AgentManifest, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err(), "expected unknown field to be rejected");
     }
 
     #[test]
     fn agent_manifest_rejects_non_string_key() {
-        let yaml = "name: x\nagent: claude\nmodel:\n  name: foo\n  effort: low\n1: stray\n";
+        let yaml = "name: x\nharness: claude\nmodel:\n  name: foo\n  effort: low\n1: stray\n";
         let result: Result<AgentManifest, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err(), "expected non-string key to be rejected");
     }
 
     #[test]
     fn agent_manifest_rejects_unrecognized_harness() {
-        let yaml = "name: x\nagent: gemini\nmodel:\n  name: foo\n  effort: low\n";
+        let yaml = "name: x\nharness: gemini\nmodel:\n  name: foo\n  effort: low\n";
         let result: Result<AgentManifest, _> = serde_yaml::from_str(yaml);
         assert!(
             result.is_err(),
@@ -654,7 +664,7 @@ subagents:
         let error = load_recipe_dir(&fixtures_dir().join("malformed-agent"))
             .expect_err("malformed agent yaml should fail to load");
         assert!(matches!(error, RecipeLoadError::MalformedAgent { .. }));
-        assert_eq!(error.code(), error_codes::RECIPE_MALFORMED_AGENT_YAML);
+        assert_eq!(error.code(), error_codes::RECIPE_MALFORMED_HARNESS_YAML);
     }
 
     #[test]
@@ -679,7 +689,7 @@ subagents:
         fs::create_dir_all(root.join(AGENTS_DIR)).unwrap();
         fs::write(
             root.join(AGENTS_DIR).join("main.yml"),
-            "name: main\nagent: claude\nmodel:\n  name: anthropic/claude-opus-4-8\n  effort: high\n",
+            "name: main\nharness: claude\nmodel:\n  name: anthropic/claude-opus-4-8\n  effort: high\n",
         )
         .unwrap();
 
@@ -704,7 +714,7 @@ subagents:
         fs::create_dir_all(root.join(AGENTS_DIR)).unwrap();
         fs::write(
             root.join(AGENTS_DIR).join("main.yaml"),
-            "name: main\nagent: claude\nmodel:\n  name: m\n  effort: low\n",
+            "name: main\nharness: claude\nmodel:\n  name: m\n  effort: low\n",
         )
         .unwrap();
         fs::create_dir_all(root.join(SKILLS_DIR)).unwrap();
@@ -730,7 +740,7 @@ subagents:
     fn agent_with_instructions(mode: InstructionMode, content: &str) -> AgentManifest {
         AgentManifest {
             name: "main".to_string(),
-            agent: AgentKind::Claude,
+            harness: Some(HarnessKind::Claude),
             model: ModelSpec {
                 name: "anthropic/claude-opus-4-8".to_string(),
                 effort: EffortLevel::High,
@@ -748,7 +758,7 @@ subagents:
     fn agent_without_instructions() -> AgentManifest {
         AgentManifest {
             name: "main".to_string(),
-            agent: AgentKind::Claude,
+            harness: Some(HarnessKind::Claude),
             model: ModelSpec {
                 name: "anthropic/claude-opus-4-8".to_string(),
                 effort: EffortLevel::High,

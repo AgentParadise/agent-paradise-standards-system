@@ -160,7 +160,7 @@ No other fields are permitted at any nesting level - `AgentManifest`, `ModelSpec
 
 ### 4.3 The `harness` Field
 
-`harness` names the agent harness an agent requires. It is a closed enumeration in this version of the standard, with values `claude` and `codex`. The standard is explicitly designed for this set to grow (for example `opencode`, `gemini`) in future MINOR versions, without requiring existing recipes to change. An unrecognized `harness` value MUST fail to parse (reported as `RECIPE_MALFORMED_AGENT_YAML`, section 8) rather than being silently ignored or coerced.
+`harness` names the agent harness an agent requires. It is a closed enumeration in this version of the standard, with values `claude` and `codex`. The standard is explicitly designed for this set to grow (for example `opencode`, `gemini`) in future MINOR versions, without requiring existing recipes to change. An unrecognized `harness` value MUST fail to parse (reported as `RECIPE_MALFORMED_HARNESS_YAML`, section 8) rather than being silently ignored or coerced.
 
 `harness` is OPTIONAL, and its absence is meaningful rather than merely permissive:
 
@@ -230,7 +230,7 @@ This is implemented by `schema::resolved_system(agent, system_md)`.
 `schema::load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError>` is the single source of truth for parsing a recipe directory into typed Rust values:
 
 1. Read `recipe.yaml` (`RECIPE_MISSING_MARKER` if absent; `RECIPE_MALFORMED_MANIFEST` if present but unparsable).
-2. Parse every `agents/*.yaml` file (`RECIPE_MALFORMED_AGENT_YAML` on the first file that fails to parse), keyed by file stem.
+2. Parse every `agents/*.yaml` file (`RECIPE_MALFORMED_HARNESS_YAML` on the first file that fails to parse), keyed by file stem.
 3. Resolve `default_agent` against the parsed agents (`RECIPE_DEFAULT_AGENT_UNRESOLVED` if it does not name a parsed agent).
 4. Read the optional `SYSTEM.md`.
 5. Gather the optional `skills/` directory's direct entries, sorted.
@@ -253,7 +253,7 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 |------|---------|
 | `RECIPE_MISSING_MARKER` | `recipe.yaml` is absent from the candidate directory. |
 | `RECIPE_MALFORMED_MANIFEST` | `recipe.yaml` exists but failed to parse as a `RecipeManifest` (missing/extra/invalid fields). |
-| `RECIPE_MALFORMED_AGENT_YAML` | An `agents/*.yaml` file failed to parse as an `AgentManifest` (missing/extra/invalid fields, unrecognized `harness`/`effort`/`mode` value, or a non-string key). |
+| `RECIPE_MALFORMED_HARNESS_YAML` | An `agents/*.yaml` file failed to parse as an `AgentManifest` (missing/extra/invalid fields, unrecognized `harness`/`effort`/`mode` value, or a non-string key). |
 | `RECIPE_DUPLICATE_AGENT` | Two agent files resolve to the same stem (e.g. `main.yaml` and `main.yml`), which would collide in the recipe. |
 | `RECIPE_DEFAULT_AGENT_UNRESOLVED` | `default_agent` does not name any file actually present under `agents/`. |
 | `RECIPE_IO_ERROR` | An I/O error occurred while reading the recipe directory (unreadable file, permission error, etc.). |
@@ -272,7 +272,7 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_INVALID_TOOL_REF` | A `tools` entry is an empty string. |
 | `RECIPE_EMPTY_INSTRUCTIONS_CONTENT` | An agent's `system_instructions.content` is present but empty/whitespace. |
 
-Field-shape rules (unknown fields, non-string keys, unrecognized `harness`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_AGENT_YAML` on the offending file rather than as separate validator codes.
+Field-shape rules (unknown fields, non-string keys, unrecognized `harness`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_HARNESS_YAML` on the offending file rather than as separate validator codes.
 
 ### 8.3 CLI
 
