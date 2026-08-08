@@ -126,7 +126,7 @@ No other top-level fields are permitted; `RecipeManifest` uses `#[serde(deny_unk
 
 ```yaml
 name: main
-agent: claude
+harness: claude
 model:
   name: anthropic/claude-opus-4-8
   effort: high
@@ -194,7 +194,7 @@ The two fields differ in how freely they may be overridden, because they differ 
 - **`model` overrides are unconstrained.** A model is interchangeable by design; substituting one is the ordinary case, which is precisely what makes a fixed recipe evaluable across many models.
 - **`harness` overrides MUST satisfy the agent's references.** A harness is a capability dependency, closer to an ABI than a preference. A consumer MUST NOT substitute a harness that does not provide every harness-builtin tool the agent references.
 
-The intended consequence is that a single recipe carries one definition of good — its `evals/` and `judges/` — while the model under test varies per run. Holding the bar fixed and varying the subject is only sound if the bar lives with the agent and the subject does not.
+The intended consequence is that a single recipe carries one definition of good (its `evals/` and `judges/`) while the model under test varies per run. Holding the bar fixed and varying the subject is only sound if the bar lives with the agent and the subject does not.
 
 ---
 
@@ -253,7 +253,7 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 |------|---------|
 | `RECIPE_MISSING_MARKER` | `recipe.yaml` is absent from the candidate directory. |
 | `RECIPE_MALFORMED_MANIFEST` | `recipe.yaml` exists but failed to parse as a `RecipeManifest` (missing/extra/invalid fields). |
-| `RECIPE_MALFORMED_AGENT_YAML` | An `agents/*.yaml` file failed to parse as an `AgentManifest` (missing/extra/invalid fields, unrecognized `agent`/`effort`/`mode` value, or a non-string key). |
+| `RECIPE_MALFORMED_AGENT_YAML` | An `agents/*.yaml` file failed to parse as an `AgentManifest` (missing/extra/invalid fields, unrecognized `harness`/`effort`/`mode` value, or a non-string key). |
 | `RECIPE_DUPLICATE_AGENT` | Two agent files resolve to the same stem (e.g. `main.yaml` and `main.yml`), which would collide in the recipe. |
 | `RECIPE_DEFAULT_AGENT_UNRESOLVED` | `default_agent` does not name any file actually present under `agents/`. |
 | `RECIPE_IO_ERROR` | An I/O error occurred while reading the recipe directory (unreadable file, permission error, etc.). |
@@ -272,7 +272,7 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_INVALID_TOOL_REF` | A `tools` entry is an empty string. |
 | `RECIPE_EMPTY_INSTRUCTIONS_CONTENT` | An agent's `system_instructions.content` is present but empty/whitespace. |
 
-Field-shape rules (unknown fields, non-string keys, unrecognized `agent`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_AGENT_YAML` on the offending file rather than as separate validator codes.
+Field-shape rules (unknown fields, non-string keys, unrecognized `harness`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_AGENT_YAML` on the offending file rather than as separate validator codes.
 
 ### 8.3 CLI
 
@@ -372,7 +372,7 @@ default_agent: main
 
 ```yaml
 name: main
-agent: claude
+harness: claude
 model:
   name: anthropic/claude-opus-4-8
   effort: high
@@ -392,7 +392,7 @@ subagents:
 
 ```yaml
 name: reviewer
-agent: codex
+harness: codex
 model:
   name: openai/gpt-5-codex
   effort: medium
@@ -421,7 +421,7 @@ default_agent: main
 
 ```yaml
 name: main
-agent: codex
+harness: codex
 model:
   name: openai/gpt-5-codex
   effort: low

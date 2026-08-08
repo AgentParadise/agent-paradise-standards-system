@@ -2,7 +2,7 @@
 
 This document is **normative**: it defines the closed-per-version set of
 harness-builtin tool identifiers referenced by [01_spec.md section
-4.3](./01_spec.md#43-the-agent-field-and-harness-extensibility) and the
+4.3](./01_spec.md#43-the-harness-field) and the
 portability rule it supports. It exists to make one specific claim checkable:
 an agent manifest that omits `harness` (or, in a future revision, an agent
 explicitly declared harness-agnostic) is asserting that it runs unmodified
@@ -29,16 +29,16 @@ matched against the tables below.
 
 Concretely, for the validator this document backs (`is_harness_builtin`):
 
-- If `agent: claude` and `tools` contains an identifier from the Claude Code
+- If `harness: claude` and `tools` contains an identifier from the Claude Code
   table below, that entry references a harness-builtin tool.
-- If `agent: codex` and `tools` contains an identifier from the Codex CLI
+- If `harness: codex` and `tools` contains an identifier from the Codex CLI
   table below, that entry references a harness-builtin tool.
 - Any other string is a recipe-provided (non-builtin) tool reference.
 
 ## Growth and Compatibility
 
 This table grows in MINOR versions of this standard as harnesses add
-first-party tools or as additional harnesses are added to the `agent`
+first-party tools or as additional harnesses are added to the `harness`
 enumeration (section 4.3). Additions are backwards compatible: a recipe
 written against an older version of this table remains valid, because adding
 a new builtin identifier can only narrow which `tools` entries are
@@ -123,8 +123,8 @@ table revision if any of them stabilize into an always-present builtin.
 
 ## See Also
 
-- [01_spec.md section 4.3](./01_spec.md) - the `agent` field and harness
-  extensibility rule this table exists to support.
+- [01_spec.md section 4.3](./01_spec.md#43-the-harness-field) - the `harness`
+  field and harness extensibility rule this table exists to support.
 - [02-pi-compatibility.md](./02-pi-compatibility.md) - why this standard is
   inspired by, but not compatible with, pi.recipes.
 - [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md) - why
