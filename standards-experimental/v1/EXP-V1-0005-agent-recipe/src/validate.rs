@@ -19,7 +19,8 @@ use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 use crate::schema::{
-    self, AGENTS_DIR, AgentManifest, RECIPE_MARKER_FILE, Recipe, RecipeLoadError, load_recipe_dir,
+    self, AGENTS_DIR, AgentManifest, HarnessKind, RECIPE_MARKER_FILE, Recipe, RecipeLoadError,
+    load_recipe_dir,
 };
 
 /// Directory-level validation error codes, layered on top of the loader codes
@@ -39,6 +40,81 @@ pub mod error_codes {
     pub const RECIPE_INVALID_TOOL_REF: &str = "RECIPE_INVALID_TOOL_REF";
     /// `system_instructions.content` is present (serde) but empty.
     pub const RECIPE_EMPTY_INSTRUCTIONS_CONTENT: &str = "RECIPE_EMPTY_INSTRUCTIONS_CONTENT";
+    /// An agent with no declared `harness` (harness-agnostic) lists a `tools`
+    /// entry that is harness-builtin under some harness and does not resolve
+    /// as a recipe-provided tool.
+    pub const RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL: &str =
+        "RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL";
+}
+
+/// Harness-builtin tool identifiers for Claude Code, transcribed verbatim
+/// from `docs/05-harness-tool-vocabulary.md` (Claude Code table). That
+/// document is the normative source; do not add or remove a name here
+/// without updating it first.
+const CLAUDE_BUILTINS: &[&str] = &[
+    "Bash",
+    "BashOutput",
+    "KillShell",
+    "Read",
+    "Edit",
+    "MultiEdit",
+    "Write",
+    "Glob",
+    "Grep",
+    "NotebookEdit",
+    "WebFetch",
+    "WebSearch",
+    "Task",
+    "TodoWrite",
+    "ExitPlanMode",
+    "AskUserQuestion",
+];
+
+/// Harness-builtin tool identifiers for Codex CLI, transcribed verbatim from
+/// `docs/05-harness-tool-vocabulary.md` (Codex CLI table). That document is
+/// the normative source; do not add or remove a name here without updating
+/// it first. Codex has no single shell tool name: `shell`, `shell_command`,
+/// and the unified-exec pair `exec_command` / `write_stdin` are all
+/// shell-family builtins and all four MUST be present.
+const CODEX_BUILTINS: &[&str] = &[
+    "shell",
+    "shell_command",
+    "exec_command",
+    "write_stdin",
+    "apply_patch",
+    "update_plan",
+    "view_image",
+    "web_search",
+];
+
+/// A tool reference is harness-builtin when the named harness provides it
+/// natively. See `docs/05-harness-tool-vocabulary.md`, which is the source of
+/// truth for these identifiers; do not add a name that is not in that table.
+pub fn is_harness_builtin(harness: HarnessKind, tool: &str) -> bool {
+    match harness {
+        HarnessKind::Claude => CLAUDE_BUILTINS.contains(&tool),
+        HarnessKind::Codex => CODEX_BUILTINS.contains(&tool),
+    }
+}
+
+/// Whether `tool` is harness-builtin under any harness this standard knows
+/// about. An agent that omits `harness` has no single vocabulary to check
+/// against, so a name that is builtin under any harness signals a harness
+/// dependency the agent is not declaring (section 4.3/4.6).
+fn is_builtin_under_any_harness(tool: &str) -> bool {
+    is_harness_builtin(HarnessKind::Claude, tool) || is_harness_builtin(HarnessKind::Codex, tool)
+}
+
+/// Whether `tool` resolves as a recipe-provided tool.
+///
+/// `tools/` directory resolution does not exist yet (a later task adds it,
+/// analogous to `skills/` resolution in section 5). Until then every entry
+/// is treated as unresolvable as recipe-provided, so this always returns
+/// `false`. When `tools/` resolution lands, this becomes the single place
+/// to check `tools/<ref>/` under the recipe root, mirroring how `skills`
+/// resolution works today.
+fn resolves_as_recipe_provided(_root: &Path, _tool: &str) -> bool {
+    false
 }
 
 /// Validate a recipe directory, collecting all violations into
@@ -143,7 +219,9 @@ fn validate_agent(
         }
     }
 
-    for (index, tool) in agent.tools.iter().enumerate() {
+    let tools: &[String] = agent.tools.as_deref().unwrap_or(&[]);
+
+    for (index, tool) in tools.iter().enumerate() {
         if tool.trim().is_empty() {
             diagnostics.push(
                 Diagnostic::error(
@@ -152,6 +230,29 @@ fn validate_agent(
                 )
                 .with_path(agent_path.clone()),
             );
+        }
+    }
+
+    // An agent that omits `harness` is claiming harness-agnosticism: it must
+    // run under any conforming harness, so it must not reference a name that
+    // is builtin under any harness unless that name also resolves as a
+    // recipe-provided tool (see `resolves_as_recipe_provided`).
+    if agent.harness.is_none() {
+        for (index, tool) in tools.iter().enumerate() {
+            if is_builtin_under_any_harness(tool) && !resolves_as_recipe_provided(root, tool) {
+                diagnostics.push(
+                    Diagnostic::error(
+                        error_codes::RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL,
+                        format!(
+                            "agent '{stem}' declares no harness but tools[{index}] ('{tool}') is a harness-builtin tool name"
+                        ),
+                    )
+                    .with_path(agent_path.clone())
+                    .with_hint(format!(
+                        "declare a harness for '{stem}', or remove '{tool}' from tools, or provide it under tools/ once bundled tool resolution exists"
+                    )),
+                );
+            }
         }
     }
 

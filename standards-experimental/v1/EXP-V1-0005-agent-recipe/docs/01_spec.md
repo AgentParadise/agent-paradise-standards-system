@@ -40,7 +40,7 @@ This standard does NOT cover:
 - **Task input, input artifacts, credentials, observability, or execution limits.** These are sibling concerns that combine with a recipe to form a larger execution request (a `RunSpec`, informative only, see 1.5).
 - **Skill content or system instruction authoring guidance.** This standard defines how skill references and system instructions are *represented*, not how skills or instructions should be authored.
 - **Per-harness configuration details** (for example, provider-specific API parameters). Those live in harness adapters that consume the recipe, not in the recipe itself.
-- **Tool execution.** `tools` entries are references only (names/identifiers); this standard defines no execution semantics for them.
+- **Tool execution.** `tools` entries are references only (names/identifiers); this standard defines an allowlist contract for them (section 4.6) but no execution semantics - how a named tool actually runs is a consumer/harness concern.
 
 ### 1.4 Relationship to Other Standards
 
@@ -153,7 +153,7 @@ subagents:
 | `system_instructions` | object | NO | Per-agent system instruction override. See section 6. |
 | `system_instructions.mode` | enum string | REQUIRED if `system_instructions` present | `append` or `replace`. |
 | `system_instructions.content` | string | REQUIRED if `system_instructions` present | The instruction text. MUST be non-empty. |
-| `tools` | array[string] | NO | Tool reference strings (names/identifiers only). Defaults to an empty array. No execution semantics are defined by this standard. |
+| `tools` | array[string] | NO | Tool reference strings the agent is permitted to use. Absent means no restriction; present but empty means no tools are permitted. See 4.6 for the enforcement rule. |
 | `subagents` | array[string] | NO | Names of other agents (files under `agents/`, without the `.yaml` extension) this agent may delegate to. Defaults to an empty array. |
 
 No other fields are permitted at any nesting level - `AgentManifest`, `ModelSpec`, and `SystemInstructions` all use `#[serde(deny_unknown_fields)]`. A non-string mapping key is likewise rejected, since it can never match a known field name.
@@ -195,6 +195,14 @@ The two fields differ in how freely they may be overridden, because they differ 
 - **`harness` overrides MUST satisfy the agent's references.** A harness is a capability dependency, closer to an ABI than a preference. A consumer MUST NOT substitute a harness that does not provide every harness-builtin tool the agent references.
 
 The intended consequence is that a single recipe carries one definition of good (its `evals/` and `judges/`) while the model under test varies per run. Holding the bar fixed and varying the subject is only sound if the bar lives with the agent and the subject does not.
+
+### 4.6 Tool References and Enforcement
+
+`tools` is an allowlist, not a set of hints. A conforming consumer MUST NOT grant an agent a tool its `tools` list does not permit. An absent `tools` field places no restriction; a present but empty list permits no tools. These are distinct states and a consumer MUST NOT treat them alike.
+
+A tool reference is either **harness-builtin** (provided natively by the harness named in `harness`, per `05-harness-tool-vocabulary.md`) or **recipe-provided** (resolving under `tools/`, section 5). Recipe-provided tools are portable by construction because the recipe carries them.
+
+An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT reference a name that is harness-builtin under *any* harness this standard knows about, because an agnostic agent declares no single vocabulary to check its `tools` entries against. A validator MUST report such a reference as `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 8).
 
 ---
 
@@ -271,6 +279,7 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_INVALID_SKILL_REF` | A `skills` entry is an empty string. |
 | `RECIPE_INVALID_TOOL_REF` | A `tools` entry is an empty string. |
 | `RECIPE_EMPTY_INSTRUCTIONS_CONTENT` | An agent's `system_instructions.content` is present but empty/whitespace. |
+| `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` | An agent that omits `harness` lists a `tools` entry that is harness-builtin under some harness and does not resolve as recipe-provided. See section 4.6. |
 
 Field-shape rules (unknown fields, non-string keys, unrecognized `harness`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_HARNESS_YAML` on the offending file rather than as separate validator codes.
 

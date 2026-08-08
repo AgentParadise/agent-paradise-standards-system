@@ -117,6 +117,20 @@ fn harness_is_optional_and_absent_means_agnostic() {
 }
 
 #[test]
+fn agnostic_agent_referencing_builtin_tool_is_rejected() {
+    // Belt-and-suspenders alongside the example-driven check above: this
+    // pins the exact fixture path and code so a rename of either silently
+    // dropping coverage is caught here too.
+    let diagnostics =
+        validate_recipe_dir(&examples_dir("invalid").join("agnostic-agent-uses-builtin"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL"),
+        "got: {codes:?}"
+    );
+}
+
+#[test]
 fn unrecognized_harness_fails_to_parse() {
     let dir = tempfile::tempdir().unwrap();
     write_minimal_recipe(

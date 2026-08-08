@@ -1,0 +1,6 @@
+name: main
+model:
+  name: anthropic/claude-opus-4-8
+  effort: high
+tools:
+  - Bash

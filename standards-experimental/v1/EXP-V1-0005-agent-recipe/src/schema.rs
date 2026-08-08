@@ -153,10 +153,16 @@ pub struct AgentManifest {
     /// exact merge semantics with the recipe's shared `SYSTEM.md`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_instructions: Option<SystemInstructions>,
-    /// Tool references (no code, no execution) - just names/identifiers the
-    /// agent is allowed to use. Resolution/enforcement is a consumer concern.
-    #[serde(default)]
-    pub tools: Vec<String>,
+    /// Tool references this agent is permitted to use.
+    ///
+    /// `None` (absent) places no restriction. `Some(vec![])` permits no
+    /// tools at all. The two are deliberately distinct: a recipe that omits
+    /// the field is not asserting that its agent may do nothing. See
+    /// `docs/01_spec.md` section 4.6 for the enforcement rule and
+    /// `validate::is_harness_builtin` for the harness-agnostic check that
+    /// consumes these entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
     /// Names of other agents (files in `agents/`, without the `.yaml`
     /// extension) this agent may delegate to as subagents.
     #[serde(default)]
@@ -554,7 +560,7 @@ subagents:
         assert_eq!(agent.harness, Some(HarnessKind::Claude));
         assert_eq!(agent.model.effort, EffortLevel::High);
         assert_eq!(agent.skills, vec!["code-review".to_string()]);
-        assert_eq!(agent.tools, vec!["shell".to_string()]);
+        assert_eq!(agent.tools, Some(vec!["shell".to_string()]));
         assert_eq!(agent.subagents, vec!["reviewer".to_string()]);
         assert!(agent.system_instructions.is_some());
     }
@@ -565,9 +571,23 @@ subagents:
             "name: minimal\nharness: codex\nmodel:\n  name: openai/gpt-5-codex\n  effort: low\n";
         let agent: AgentManifest = serde_yaml::from_str(yaml).expect("should parse");
         assert!(agent.skills.is_empty());
-        assert!(agent.tools.is_empty());
+        assert!(agent.tools.is_none());
         assert!(agent.subagents.is_empty());
         assert!(agent.system_instructions.is_none());
+    }
+
+    #[test]
+    fn absent_tools_means_unrestricted_empty_means_none() {
+        // `tools` absent and `tools: []` are deliberately distinct states:
+        // absent places no restriction, empty permits no tools at all.
+        let absent: AgentManifest =
+            serde_yaml::from_str("name: a\nmodel:\n  name: m\n  effort: low\n").unwrap();
+        assert_eq!(absent.tools, None, "absent must not collapse to empty");
+
+        let empty: AgentManifest =
+            serde_yaml::from_str("name: a\nmodel:\n  name: m\n  effort: low\ntools: []\n")
+                .unwrap();
+        assert_eq!(empty.tools, Some(vec![]), "empty means no tools permitted");
     }
 
     #[test]
@@ -750,7 +770,7 @@ subagents:
                 mode,
                 content: content.to_string(),
             }),
-            tools: Vec::new(),
+            tools: None,
             subagents: Vec::new(),
         }
     }
@@ -765,7 +785,7 @@ subagents:
             },
             skills: Vec::new(),
             system_instructions: None,
-            tools: Vec::new(),
+            tools: None,
             subagents: Vec::new(),
         }
     }
