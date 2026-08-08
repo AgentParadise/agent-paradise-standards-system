@@ -145,10 +145,10 @@ subagents:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | YES | Agent name. MUST be non-empty. SHOULD match the file stem. |
-| `agent` | enum string | YES | Which harness runs this agent. v1 values: `claude`, `codex`. See 4.3 for extensibility. |
-| `model` | object | YES | Model selection. See 4.4. |
-| `model.name` | string | YES | Provider-qualified model identifier (e.g. `anthropic/claude-opus-4-8`). MUST be non-empty. This standard does NOT validate that the named model exists; that is a harness/provider concern. |
-| `model.effort` | enum string | YES | Reasoning/thinking effort level: `low`, `medium`, or `high`. Maps to harness-specific concepts such as `thinking_level` (Claude) or reasoning effort (Codex). |
+| `harness` | enum string | NO | Which harness this agent REQUIRES. v1 values: `claude`, `codex`. Absent means harness-agnostic and constrains which tools may be referenced. See 4.3. |
+| `model` | object | NO | Intended model selection; overridable per run. See 4.4 and 4.5. |
+| `model.name` | string | NO | Provider-qualified model identifier (e.g. `anthropic/claude-opus-4-8`). MUST be non-empty when present. This standard does NOT validate that the named model exists; that is a harness/provider concern. |
+| `model.effort` | enum string | NO | Reasoning effort: `low`, `medium`, or `high`. Defaults to `medium`. Maps to harness-specific concepts such as `thinking_level` (Gemini) or `reasoning_effort` (OpenAI). |
 | `skills` | array[string] | NO | Harness-agnostic skill references to inject, in listed order. Defaults to an empty array when omitted. See section 5 for resolution. |
 | `system_instructions` | object | NO | Per-agent system instruction override. See section 6. |
 | `system_instructions.mode` | enum string | REQUIRED if `system_instructions` present | `append` or `replace`. |
@@ -158,15 +158,43 @@ subagents:
 
 No other fields are permitted at any nesting level - `AgentManifest`, `ModelSpec`, and `SystemInstructions` all use `#[serde(deny_unknown_fields)]`. A non-string mapping key is likewise rejected, since it can never match a known field name.
 
-### 4.3 The `agent` Field and Harness Extensibility
+### 4.3 The `harness` Field
 
-`agent` is a closed enumeration in this version of the standard, with values `claude` and `codex`. The standard is explicitly designed for this set to grow (for example `opencode`, `gemini`) in future MINOR versions, without requiring existing recipes to change. An unrecognized `agent` value MUST fail to parse (reported as `RECIPE_MALFORMED_AGENT_YAML`, section 8) rather than being silently ignored or coerced.
+`harness` names the agent harness an agent requires. It is a closed enumeration in this version of the standard, with values `claude` and `codex`. The standard is explicitly designed for this set to grow (for example `opencode`, `gemini`) in future MINOR versions, without requiring existing recipes to change. An unrecognized `harness` value MUST fail to parse (reported as `RECIPE_MALFORMED_AGENT_YAML`, section 8) rather than being silently ignored or coerced.
+
+`harness` is OPTIONAL, and its absence is meaningful rather than merely permissive:
+
+- **Absent** asserts that the agent is **harness-agnostic**: it MUST run correctly under any conforming harness.
+- **Present** asserts a **dependency**: the agent references capabilities that only the named harness provides.
+
+An agent's harness dependence is therefore not a stylistic choice but a consequence of what it actually references. An agent that omits `harness` MUST NOT reference harness-builtin tool names; it may reference only recipe-provided tools, which the recipe itself carries and which are portable by construction. A validator MUST report an agent that omits `harness` while referencing a harness-builtin tool.
+
+This makes portability checkable rather than aspirational: an agent claiming to be harness-agnostic is mechanically held to that claim.
 
 ### 4.4 The `model` Object
 
-`model.name` is an opaque, provider-qualified string. This standard RECOMMENDS the `<provider>/<model>` shape (e.g. `anthropic/claude-opus-4-8`, `openai/gpt-5-codex`) but does not enforce a specific provider list, since new models and providers are added independently of this standard's release cycle.
+`model` and each of its fields are OPTIONAL. An absent `model.name` asserts no opinion about which model to use, and the consumer supplies its own default; it does not assert that the choice is unimportant. A recipe intended for production SHOULD declare the model it is meant to run, because the model is part of what the recipe asserts about the agent's quality (see section 4.5).
 
-`model.effort` MUST be one of `low`, `medium`, or `high`. These three levels are intentionally coarse so they map cleanly across harnesses that expose different granularities of reasoning effort; a harness adapter is responsible for translating the coarse level into its own native parameter.
+`model.name` is an opaque, provider-qualified string. This standard RECOMMENDS the `<provider>/<model...>` shape (e.g. `anthropic/claude-opus-4-8`, `openai/gpt-5-codex`) but does not enforce a specific provider list, since new models and providers are added independently of this standard's release cycle. Where the value contains a `/`, the first segment is the provider and **the remainder is opaque and MAY itself contain further separators**, so gateway-qualified identifiers such as `openrouter/anthropic/claude-opus-4-8` are well-formed.
+
+`model.effort` MUST be one of `low`, `medium`, or `high`, and defaults to `medium` when omitted. These three levels are intentionally coarse so they map cleanly across harnesses that expose different granularities of reasoning effort; a harness adapter is responsible for translating the coarse level into its own native parameter. The name and value space align with the cross-provider `reasoning_effort` convention rather than any single vendor's spelling.
+
+### 4.5 Declared Intent and Run-Time Override
+
+A recipe states an agent's **intended** setup. It does not state an immutable binding. This distinction is what allows one recipe to be both a production definition and an experimental subject.
+
+A consumer (see the run specification in [03-syntropic137-mapping.md](./03-syntropic137-mapping.md)) MAY override a declared `harness` or `model` for a given run. When it does:
+
+1. The consumer MUST record the **effective** values actually used, distinctly from the values the recipe declared.
+2. Any evaluation result, judgement, or experiment record produced by that run MUST be attributed to the effective values, never to the declared ones.
+3. The recipe itself MUST NOT be rewritten to reflect an override. Overrides belong to the run, not to the artifact.
+
+The two fields differ in how freely they may be overridden, because they differ in kind:
+
+- **`model` overrides are unconstrained.** A model is interchangeable by design; substituting one is the ordinary case, which is precisely what makes a fixed recipe evaluable across many models.
+- **`harness` overrides MUST satisfy the agent's references.** A harness is a capability dependency, closer to an ABI than a preference. A consumer MUST NOT substitute a harness that does not provide every harness-builtin tool the agent references.
+
+The intended consequence is that a single recipe carries one definition of good — its `evals/` and `judges/` — while the model under test varies per run. Holding the bar fixed and varying the subject is only sound if the bar lives with the agent and the subject does not.
 
 ---
 
