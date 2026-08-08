@@ -30,7 +30,7 @@ This standard covers:
 
 - **The recipe directory shape** - the marker file, the `agents/` directory, and the optional `skills/`/`SYSTEM.md` assets.
 - **The root manifest schema** (`recipe.yaml`) and **per-agent manifest schema** (`agents/<name>.yaml`).
-- **Harness-neutrality rules** - how the `agent` field is extended to support additional harnesses over time without breaking existing recipes.
+- **Harness-neutrality rules** - how the `harness` field is extended to support additional harnesses over time without breaking existing recipes.
 - **Skill reference resolution** and **system-instruction merge semantics**.
 - **The canonical loader contract** (`load_recipe_dir`) and its error codes.
 
@@ -57,7 +57,7 @@ A recipe is designed to be the core of a larger execution request, informally:
 RunSpec = recipe (a directory path) + task + input_artifacts + credentials + observability + limits
 ```
 
-A workspace (an executor living outside this repository) consumes a `RunSpec`, provisions an isolated environment, runs the harness named by the resolved default agent's `agent` field configured per its manifest, and produces a `RunResult`. None of `task`, `input_artifacts`, `credentials`, `observability`, or `limits` are defined by this standard; they are noted here only so implementors understand where the recipe schema fits. This standard defines `recipe` alone.
+A workspace (an executor living outside this repository) consumes a `RunSpec`, provisions an isolated environment, runs the harness named by the resolved default agent's `harness` field configured per its manifest, and produces a `RunResult`. None of `task`, `input_artifacts`, `credentials`, `observability`, or `limits` are defined by this standard; they are noted here only so implementors understand where the recipe schema fits. This standard defines `recipe` alone.
 
 ---
 
@@ -69,7 +69,7 @@ An **agent recipe** (or **recipe**) is a directory that identifies one or more a
 
 ### 2.2 Harness
 
-A **harness** is the underlying agent CLI or SDK that executes an agent (for example, Claude Code or OpenAI Codex CLI). The schema is harness-neutral: the `agent` field is a closed enumeration within any single version of this standard, but is version-extensible, so additional harnesses (e.g. `opencode`, `gemini`) MAY be added in future minor versions without breaking existing recipes.
+A **harness** is the underlying agent CLI or SDK that executes an agent (for example, Claude Code or OpenAI Codex CLI). The schema is harness-neutral: the `harness` field is a closed enumeration within any single version of this standard, but is version-extensible, so additional harnesses (e.g. `opencode`, `gemini`) MAY be added in future minor versions without breaking existing recipes.
 
 ### 2.3 Skill Reference
 
@@ -292,7 +292,7 @@ A recipe directory is **compliant** with this standard if:
 
 - [ ] `recipe.yaml` exists at the directory root and parses as a `RecipeManifest` with no unrecognized fields.
 - [ ] `default_agent` resolves to a file under `agents/`.
-- [ ] Every `agents/*.yaml` file parses as an `AgentManifest` with `name`, a recognized `agent`, and a valid `model` (`model.name` non-empty, `model.effort` one of `low`/`medium`/`high`).
+- [ ] Every `agents/*.yaml` file parses as an `AgentManifest` with `name`, a recognized `harness`, and a valid `model` (`model.name` non-empty, `model.effort` one of `low`/`medium`/`high`).
 - [ ] `skills`, `tools`, and `subagents`, if present, are arrays of strings.
 - [ ] `system_instructions`, if present, has a valid `mode` and non-empty `content`.
 - [ ] No unrecognized fields are present at any nesting level.
@@ -319,7 +319,7 @@ The library entry point is `generate::scaffold_recipe(name, dest)`. The template
 
 Potential future additions, to be pursued only after this experiment gathers feedback:
 
-- Additional `agent` values (`opencode`, `gemini`, others) as those harnesses gain first-class support.
+- Additional `harness` values (`opencode`, `gemini`, others) as those harnesses gain first-class support.
 - A substandard defining the full `RunSpec` envelope (`recipe` + `task` + `input_artifacts` + `credentials` + `observability` + `limits`) referenced informatively in 1.5.
 - Recipe inheritance / composition (`extends: <recipe-name>`).
 - Per-skill or per-tool configuration parameters, if injected skills/tools need arguments beyond a bare reference.
