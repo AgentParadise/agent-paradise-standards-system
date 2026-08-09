@@ -20,7 +20,7 @@ use std::path::Path;
 
 use crate::schema::{
     self, AGENTS_DIR, AgentManifest, HarnessKind, McpPolicy, RECIPE_MARKER_FILE, Recipe,
-    RecipeLoadError, load_recipe_dir, mcp_policy_widenings, resolve_inherited,
+    RecipeLoadError, SkillRef, load_recipe_dir, mcp_policy_widenings, resolve_inherited,
 };
 
 /// Directory-level validation error codes, layered on top of the loader codes
@@ -34,8 +34,15 @@ pub mod error_codes {
     pub const RECIPE_EMPTY_AGENT_NAME: &str = "RECIPE_EMPTY_AGENT_NAME";
     /// An agent manifest's `model.name` is present (serde) but empty.
     pub const RECIPE_EMPTY_MODEL_NAME: &str = "RECIPE_EMPTY_MODEL_NAME";
-    /// A `skills` entry is an empty string.
+    /// A `skills` entry is an empty string (bare form) or has an empty
+    /// `ref` (pinned form).
     pub const RECIPE_INVALID_SKILL_REF: &str = "RECIPE_INVALID_SKILL_REF";
+    /// A pinned `skills` entry's `version` names `latest`/`@latest`
+    /// (case-insensitively) or is empty/whitespace. A recipe's `evals/`
+    /// and `judges/` (section 9) are only a meaningful, attributable
+    /// definition of good if the recipe's inputs are reproducible; an
+    /// unpinned skill breaks that guarantee.
+    pub const RECIPE_SKILL_UNPINNED: &str = "RECIPE_SKILL_UNPINNED";
     /// A `tools` entry is an empty string.
     pub const RECIPE_INVALID_TOOL_REF: &str = "RECIPE_INVALID_TOOL_REF";
     /// `system_instructions.content` is present (serde) but empty.
@@ -392,7 +399,7 @@ fn validate_agent(
     }
 
     for (index, skill) in agent.skills.iter().enumerate() {
-        if skill.trim().is_empty() {
+        if skill.name().trim().is_empty() {
             diagnostics.push(
                 Diagnostic::error(
                     error_codes::RECIPE_INVALID_SKILL_REF,
@@ -400,6 +407,29 @@ fn validate_agent(
                 )
                 .with_path(agent_path.clone()),
             );
+        }
+
+        // A pinned entry's `version`, when present, MUST identify a
+        // specific release. `resolved_sha` is not required here (a recipe
+        // author may pin by version before a resolver exists), but a
+        // version of `latest`/`@latest` (case-insensitively) or empty
+        // makes reproducibility impossible, defeating the point of pinning.
+        if let SkillRef::Pinned(pinned) = skill {
+            if let Some(version) = &pinned.version {
+                let normalized = version.trim().to_ascii_lowercase();
+                if normalized.is_empty() || normalized == "latest" || normalized == "@latest" {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            error_codes::RECIPE_SKILL_UNPINNED,
+                            format!(
+                                "agent '{stem}' skills[{index}] ('{}') must pin a specific version, not '{version}'",
+                                pinned.r#ref
+                            ),
+                        )
+                        .with_path(agent_path.clone()),
+                    );
+                }
+            }
         }
     }
 

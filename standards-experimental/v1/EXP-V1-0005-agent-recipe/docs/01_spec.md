@@ -76,7 +76,7 @@ A **harness** is the underlying agent CLI or SDK that executes an agent (for exa
 
 ### 2.3 Skill Reference
 
-A **skill reference** is a harness-agnostic string identifier for a reusable capability to inject into an agent's context. This standard treats skill references as strings that resolve to a plugin-dir path per section 5; resolving that path to actual content is the consumer's responsibility.
+A **skill reference** is a harness-agnostic identifier for a reusable capability to inject into an agent's context, written either as a bare string or a pinned object (`ref` plus optional `source_url`/`version`/`resolved_sha`). This standard treats a skill reference as resolving to a plugin-dir path per section 5.1; resolving that path to actual content is the consumer's responsibility.
 
 ### 2.4 System Instructions
 
@@ -164,7 +164,7 @@ subagents:
 | `model` | object | NO | Intended model selection; overridable per run. See 4.4 and 4.5. |
 | `model.name` | string | NO | Provider-qualified model identifier (e.g. `anthropic/claude-opus-4-8`). MUST be non-empty when present. This standard does NOT validate that the named model exists; that is a harness/provider concern. |
 | `model.effort` | enum string | NO | Reasoning effort: `low`, `medium`, or `high`. Defaults to `medium`. Maps to harness-specific concepts such as `thinking_level` (Gemini) or `reasoning_effort` (OpenAI). |
-| `skills` | array[string] | NO | Harness-agnostic skill references to inject, in listed order. Defaults to an empty array when omitted. See section 5 for resolution. |
+| `skills` | array[`SkillRef`] | NO | Harness-agnostic skill references to inject, in listed order. Each entry is either a bare string or a pinned object; both resolve identically. Defaults to an empty array when omitted. See section 5.1 for the two forms and resolution. |
 | `system_instructions` | object | NO | Per-agent system instruction override. See section 6. |
 | `system_instructions.mode` | enum string | REQUIRED if `system_instructions` present | `append` or `replace`. |
 | `system_instructions.content` | string | REQUIRED if `system_instructions` present | The instruction text. MUST be non-empty. |
@@ -253,12 +253,47 @@ A `from:` chain is validated for two additional failure modes, both surfaced wit
 
 ### 5.1 Skill Reference Resolution
 
-Each entry in an agent manifest's `skills` array is a skill reference resolving to a plugin-dir **path**, in the following order:
+Each entry in an agent manifest's `skills` array is a `SkillRef`, and takes **either** of two forms:
+
+```yaml
+skills:
+  - code-review                              # bare form
+  - ref: security                            # pinned form
+    source_url: https://example.com/security.git
+    version: 1.2.0
+    resolved_sha: abc123
+```
+
+| Form | Shape | Fields |
+|---|---|---|
+| **Bare** | a plain string | the ref itself, e.g. `code-review` |
+| **Pinned** | an object | `ref` (YES), `source_url` (NO), `version` (NO), `resolved_sha` (NO) |
+
+**Both forms are accepted, deliberately.** Every recipe authored before pinning existed uses the bare form, and this standard MUST continue to accept it unchanged - accepting both is what keeps skill pinning an *additive* change rather than a breaking one. A recipe author who has no reproducibility concern for a given skill (or no pinning tooling yet) may keep writing `skills: [code-review]` exactly as before.
+
+**Both forms resolve identically.** Regardless of which form an entry uses, resolution consumes exactly one value - the ref - in the following order:
 
 1. If `skills/<ref>/` exists inside the recipe directory, that subdirectory is the resolved path (a bundled skill).
 2. Otherwise, the ref itself is used as-is (an external skill path or name).
 
-Consumers (e.g. Plan B's `itmux run`, mapping `skills` to `claude_plugin_dirs`) MUST preserve the **listed order** of `skills` when resolving - resolution order is deterministic and load-bearing.
+For the bare form, the ref is the string itself. For the pinned form, the ref is the `ref` field. A bare entry and a pinned entry naming the same `ref` therefore resolve to the same path; `source_url`, `version`, and `resolved_sha` play no part in resolution itself. This is not a subtle distinction to be inferred - the two forms are the same reference with optional provenance attached, not two different kinds of thing. Consumers (e.g. Plan B's `itmux run`, mapping `skills` to `claude_plugin_dirs`) MUST preserve the **listed order** of `skills` when resolving - resolution order is deterministic and load-bearing.
+
+**Why pin at all.** A recipe carries its own definition of good in `evals/` and `judges/` (section 9). That definition is only meaningful if the recipe's inputs are reproducible: a skill resolved as `@latest` means two runs of the same recipe are not necessarily the same agent, so a comparison between the runs proves nothing and neither run's result can be attributed back to a fixed recipe. The pinned form lets a recipe author record exactly which version (and, once a resolver exists, which exact content) a skill was built against, so a run and its eval result mean something specific and repeatable.
+
+**What the pinned fields mean.**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `ref` | string | YES | The skill reference, resolved exactly as the bare-string form is. MUST be non-empty. |
+| `source_url` | string | NO | Where the skill was fetched from (e.g. a git URL). Informative only. |
+| `version` | string | NO | The pinned version. MUST NOT be `latest` or `@latest` (case-insensitively), and MUST NOT be empty or all-whitespace, when present - see `RECIPE_SKILL_UNPINNED` below. Absent asserts no version opinion, which is not the same as an unpinned reference and is not rejected. |
+| `resolved_sha` | string | NO | A resolved content hash, if a resolver has already computed one - the strongest reproducibility guarantee this standard can express. |
+
+`resolved_sha` is deliberately NOT required. It is the strongest guarantee available, but a recipe author may reasonably pin by `version` before any resolver exists to produce a sha; requiring all four pinned fields up front would make the pinned form unusable until such tooling exists. Only the specific unpinned-`latest` case is rejected, not the absence of `source_url` or `resolved_sha`.
+
+**What this standard does not do.** This standard records what a recipe declares. It does NOT resolve a skill reference over the network, fetch its content, or compute a `resolved_sha` itself - that belongs to a consumer (e.g. a resolver tool that fills in `resolved_sha` after fetching), not to this standard's schema or validator.
+
+A validator MUST reject a pinned entry whose `version` is `latest` or `@latest` (case-insensitively) or is empty/whitespace, reported as `RECIPE_SKILL_UNPINNED` (section 10.2). An absent `version` is not rejected: it is a different assertion (no opinion) than a `version` that names a moving target.
 
 ### 5.2 Tool Reference Resolution (`tools/`)
 
@@ -501,7 +536,8 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_EMPTY_RECIPE_NAME` | `recipe.yaml`'s `name` is present but empty/whitespace. |
 | `RECIPE_EMPTY_AGENT_NAME` | An agent manifest's `name` is present but empty/whitespace. |
 | `RECIPE_EMPTY_MODEL_NAME` | An agent manifest's `model.name` is present but empty/whitespace. |
-| `RECIPE_INVALID_SKILL_REF` | A `skills` entry is an empty string. |
+| `RECIPE_INVALID_SKILL_REF` | A `skills` entry is an empty string (bare form) or has an empty `ref` (pinned form). |
+| `RECIPE_SKILL_UNPINNED` | A pinned `skills` entry's `version` is `latest`/`@latest` (case-insensitively) or is empty/whitespace. See section 5.1. |
 | `RECIPE_INVALID_TOOL_REF` | A `tools` entry is an empty string. |
 | `RECIPE_EMPTY_INSTRUCTIONS_CONTENT` | An agent's `system_instructions.content` is present but empty/whitespace. |
 | `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` | An agent that omits `harness` lists a `tools` entry that is harness-builtin under some harness and does not resolve as recipe-provided. See section 4.6. A name that resolves under `tools/` MUST NOT trigger this, even if it is also harness-builtin under some harness - recipe-provided wins (section 5.2). |

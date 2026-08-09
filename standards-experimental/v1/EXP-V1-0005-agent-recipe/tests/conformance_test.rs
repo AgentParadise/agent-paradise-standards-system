@@ -393,3 +393,64 @@ fn judge_with_neither_prompt_nor_prompt_file_is_rejected() {
         "got: {codes:?}"
     );
 }
+
+#[test]
+fn skill_ref_accepts_bare_string_or_pinned_object() {
+    use agent_recipe::SkillRef;
+
+    let bare: SkillRef = serde_yaml::from_str("research").unwrap();
+    assert_eq!(bare.name(), "research");
+
+    let pinned: SkillRef = serde_yaml::from_str(
+        "ref: research\nsource_url: https://example.com/s.git\nversion: 1.2.0\nresolved_sha: abc123\n",
+    )
+    .unwrap();
+    assert_eq!(pinned.name(), "research");
+}
+
+#[test]
+fn latest_version_is_rejected() {
+    // Belt-and-suspenders alongside the example-driven check above: this
+    // pins the exact fixture path and code so a rename of either silently
+    // dropping coverage is caught here too.
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("skill-pinned-latest"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(codes.contains(&"RECIPE_SKILL_UNPINNED"), "got: {codes:?}");
+}
+
+#[test]
+fn pinned_skill_with_specific_version_is_accepted() {
+    // Accepting both forms is the point (additive, not breaking): a pinned
+    // object with a real version must validate cleanly, same as a bare
+    // string.
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\nharness: claude\nmodel:\n  name: anthropic/claude-opus-4-8\n  effort: high\nskills:\n  - research\n  - ref: security\n    version: 1.2.0\n    resolved_sha: abc123\n",
+    );
+    let diagnostics = validate_recipe_dir(dir.path());
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        !diagnostics.has_errors(),
+        "pinned skill with a real version should validate cleanly, got: {codes:?}"
+    );
+}
+
+#[test]
+fn existing_bare_string_skill_fixtures_still_load_unchanged() {
+    // Task 9's brief: adding SkillRef must not break any recipe that uses
+    // the pre-existing bare-string `skills` form. pr-reviewer's main agent
+    // declares `skills: [code-review]`.
+    let recipe = load_recipe_dir(&examples_dir("valid").join("pr-reviewer"))
+        .expect("pr-reviewer must still load unchanged");
+    let agent = recipe.agents.get("main").expect("main agent should load");
+    assert_eq!(agent.skills.len(), 1);
+    assert_eq!(agent.skills[0].name(), "code-review");
+
+    let diagnostics = validate_recipe_dir(&examples_dir("valid").join("pr-reviewer"));
+    assert!(
+        !diagnostics.has_errors(),
+        "pr-reviewer must still validate cleanly"
+    );
+}

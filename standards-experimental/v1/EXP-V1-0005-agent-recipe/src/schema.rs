@@ -373,6 +373,81 @@ pub struct SystemInstructions {
     pub harness_prompt: HarnessPromptMode,
 }
 
+/// A single `skills` entry: either a bare reference or a pinned object.
+///
+/// This standard is designed for a recipe's `evals/` and `judges/` (section
+/// 9) to be a meaningful, attributable definition of good. That definition
+/// is only meaningful if the recipe's inputs are reproducible: a skill
+/// resolved as `@latest` means two runs of the same recipe are not
+/// necessarily the same agent, so a comparison between them proves nothing.
+/// The pinned form lets a recipe author record exactly which skill, and
+/// optionally which source, version, and content hash, an agent was built
+/// against.
+///
+/// Both forms are accepted deliberately. Every recipe authored before this
+/// field existed uses the bare-string form (e.g. `skills: [code-review]`),
+/// and accepting it unchanged keeps this addition additive rather than
+/// breaking. The two forms resolve identically: [`SkillRef::name`] returns
+/// the same value the resolution logic in section 5.1 consumes regardless
+/// of which form was used, so a bare string and a pinned object naming the
+/// same `ref` behave the same way.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SkillRef {
+    /// `skills: [research]` - an unpinned, harness-agnostic skill name or
+    /// path, resolved exactly as before this field existed (section 5.1).
+    Bare(String),
+    /// `skills: [{ ref: research, version: 1.2.0, ... }]` - a pinned skill
+    /// reference. See [`PinnedSkillRef`] for the field semantics.
+    Pinned(PinnedSkillRef),
+}
+
+impl SkillRef {
+    /// The value skill resolution (section 5.1) consumes: the bare string
+    /// itself, or a pinned object's `ref`. Both forms resolve identically.
+    pub fn name(&self) -> &str {
+        match self {
+            SkillRef::Bare(name) => name,
+            SkillRef::Pinned(pinned) => &pinned.r#ref,
+        }
+    }
+}
+
+/// A pinned skill reference: `{ ref, source_url, version, resolved_sha }`.
+///
+/// `ref` is the only required field - it is what [`SkillRef::name`] returns
+/// and what section 5.1 resolution consumes, identically to the bare-string
+/// form. `source_url`, `version`, and `resolved_sha` are all OPTIONAL: a
+/// recipe author may reasonably pin by `version` before any resolver has
+/// produced a `resolved_sha`, so requiring all four up front would make the
+/// pinned form unusable until tooling exists to populate it.
+///
+/// This standard records what a recipe declares. It does NOT resolve a
+/// skill reference over the network or compute a `resolved_sha` itself;
+/// that is a consumer's concern, not this standard's.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PinnedSkillRef {
+    /// The skill reference. MUST be non-empty. Resolved exactly as the
+    /// bare-string form is (section 5.1).
+    pub r#ref: String,
+    /// Where the skill was fetched from (e.g. a git URL). Informative only;
+    /// this standard does not fetch it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+    /// The pinned version. MUST NOT be `latest` or `@latest`
+    /// (case-insensitively), and MUST NOT be empty or all-whitespace, when
+    /// present - see `RECIPE_SKILL_UNPINNED`. Absent is not an error: it
+    /// asserts no version opinion, not an unpinned reference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// The resolved content hash, if a resolver has already computed one.
+    /// The strongest reproducibility guarantee, but NOT required in this
+    /// version of the standard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_sha: Option<String>,
+}
+
 /// One agent, loaded from `agents/<name>.yaml`. Unifies default agents and
 /// subagents: whether a given `AgentManifest` is the recipe's entry point is
 /// determined by `RecipeManifest::default_agent`, not by any field here.
@@ -395,15 +470,17 @@ pub struct AgentManifest {
     /// within a declared `model` block to inherit that one field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelSpec>,
-    /// Harness-agnostic skill references to inject, in listed order.
+    /// Harness-agnostic skill references to inject, in listed order. Each
+    /// entry is a [`SkillRef`]: either a bare string or a pinned object.
     ///
-    /// Per R3, each entry resolves to a plugin-dir path: (a) `skills/<ref>/`
-    /// inside the recipe if that subdirectory exists, else (b) the ref
-    /// as-is (an external skill path/name). Resolution order is the order
-    /// these entries are declared, and callers (e.g. Plan B's
-    /// `claude_plugin_dirs`) MUST preserve it.
+    /// Per R3, each entry resolves to a plugin-dir path via
+    /// [`SkillRef::name`]: (a) `skills/<ref>/` inside the recipe if that
+    /// subdirectory exists, else (b) the ref as-is (an external skill
+    /// path/name). Resolution order is the order these entries are
+    /// declared, and callers (e.g. Plan B's `claude_plugin_dirs`) MUST
+    /// preserve it.
     #[serde(default)]
-    pub skills: Vec<String>,
+    pub skills: Vec<SkillRef>,
     /// Optional system instruction override. See [`resolved_system`] for the
     /// exact merge semantics with the recipe's shared `SYSTEM.md`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1314,10 +1391,52 @@ subagents:
             Some("anthropic/claude-opus-4-8")
         );
         assert_eq!(agent.model.as_ref().unwrap().effort, EffortLevel::High);
-        assert_eq!(agent.skills, vec!["code-review".to_string()]);
+        assert_eq!(
+            agent.skills,
+            vec![SkillRef::Bare("code-review".to_string())]
+        );
+        assert_eq!(agent.skills[0].name(), "code-review");
         assert_eq!(agent.tools, Some(vec!["shell".to_string()]));
         assert_eq!(agent.subagents, vec!["reviewer".to_string()]);
         assert!(agent.system_instructions.is_some());
+    }
+
+    #[test]
+    fn skill_ref_accepts_bare_string_or_pinned_object() {
+        let bare: SkillRef = serde_yaml::from_str("research").expect("bare string should parse");
+        assert_eq!(bare.name(), "research");
+        assert_eq!(bare, SkillRef::Bare("research".to_string()));
+
+        let pinned: SkillRef = serde_yaml::from_str(
+            "ref: research\nsource_url: https://example.com/s.git\nversion: 1.2.0\nresolved_sha: abc123\n",
+        )
+        .expect("pinned object should parse");
+        assert_eq!(pinned.name(), "research");
+        match &pinned {
+            SkillRef::Pinned(p) => {
+                assert_eq!(p.r#ref, "research");
+                assert_eq!(p.source_url.as_deref(), Some("https://example.com/s.git"));
+                assert_eq!(p.version.as_deref(), Some("1.2.0"));
+                assert_eq!(p.resolved_sha.as_deref(), Some("abc123"));
+            }
+            SkillRef::Bare(_) => panic!("expected a pinned SkillRef"),
+        }
+    }
+
+    #[test]
+    fn pinned_skill_ref_only_requires_ref() {
+        let pinned: SkillRef =
+            serde_yaml::from_str("ref: research\n").expect("ref-only object should parse");
+        assert_eq!(pinned.name(), "research");
+    }
+
+    #[test]
+    fn pinned_skill_ref_rejects_unknown_fields() {
+        let result: Result<SkillRef, _> = serde_yaml::from_str("ref: research\nbogus: nope\n");
+        assert!(
+            result.is_err(),
+            "unknown field on pinned object must fail to parse"
+        );
     }
 
     #[test]
