@@ -14,6 +14,48 @@ revision) describes how a consumer *loads and runs* a recipe directory
 came later: given one Syntropic137 workflow *phase*, which of its fields
 belong in a recipe at all, and where.
 
+## Scope of the conformance corpus
+
+This is a final-review addition (Fix 7 of the whole-branch review): the
+corpus proves less than its earlier framing implied, and this section says
+precisely what it does and does not establish.
+
+**What the corpus proves.** `tests/corpus_test.rs`'s `render_agent_yaml`
+transcribes each of the 15 agent-shaped phases in this corpus using exactly
+six recipe fields: `name`, `harness`, `model.name`, `model.max_tokens`,
+`tools`, and `allow_delegation`. Every one of those 15 phases expresses
+cleanly with zero validation errors using only that vocabulary. That is the
+whole of what the corpus demonstrates: this plain, single-agent field
+vocabulary is sufficient to represent 15 real, independently-authored
+workflow phases without losing any of the data those phases actually carry,
+and no rule in this standard rejects an ordinary real workflow expressed
+this way.
+
+**What the corpus does NOT prove.** `render_agent_yaml` never emits `from`,
+`mcp`, `subagents`, `skills`, `system_instructions`, `model.effort`,
+`model.temperature`, or `description`, and `migrate_workflow` never creates
+a `tools/`, `evals/`, `judges/`, `prompts/`, or `skills/` directory, or a
+`SYSTEM.md`. Concretely, this corpus is silent on all of the following:
+
+- Whether `from:` inheritance (section 4.7) - field merge, narrowing checks
+  for `tools`/`mcp`/`allow_delegation`, cycle detection - works correctly
+  for any real recipe. No corpus-derived recipe declares `from:`.
+- Whether MCP server policy (section 7) is expressible or sound for a real
+  multi-server workflow. No corpus-derived recipe declares `mcp`.
+- Whether multi-agent delegation (`subagents`) is expressible for a real
+  workflow with more than one cooperating agent. No corpus-derived recipe
+  declares `subagents`.
+- Whether skill pinning, `tools/`-provided tools, `evals/`/`judges/`, or
+  `SYSTEM.md` composition hold up against real data.
+
+Those properties are exercised, where this crate exercises them at all, by
+the hand-built fixtures and examples in `tests/conformance_test.rs` (and the
+unit tests in `src/validate.rs`/`src/schema.rs`), not by this corpus. A
+reader should not treat a clean pass of
+`every_syntropic137_workflow_expresses_as_a_valid_recipe` as evidence that
+composition, narrowing, or MCP policy are sound - it is evidence only that
+the plain field vocabulary above suffices for this corpus.
+
 ## Corpus inventory
 
 18 workflows total, not the 12 + 4 = 16 the Task 11 brief anticipated:

@@ -1,8 +1,30 @@
 //! Conformance corpus: every real Syntropic137 workflow phase that carries
 //! agent-shaped content (harness/provider, model, or a tool allowlist) must
-//! express as a valid recipe. This is the acceptance test for the whole
-//! EXP-V1-0005 revision (Task 11): before this test exists, the standard has
-//! no conformant consumer drawn from real, independently-authored data.
+//! express as a valid recipe, using the field vocabulary `render_agent_yaml`
+//! emits (below).
+//!
+//! **What this test proves.** Across the 18 real, independently-authored
+//! workflows in this corpus, the six fields `render_agent_yaml` emits -
+//! `name`, `harness`, `model.name`, `model.max_tokens`, `tools`, and
+//! `allow_delegation` - suffice to transcribe every agent-shaped phase
+//! without loss of the data those workflows actually carry, and no rule in
+//! this standard rejects an ordinary, real workflow expressed that way. That
+//! is the whole of what this test establishes.
+//!
+//! **What this test does NOT prove.** `render_agent_yaml` never emits
+//! `from`, `mcp`, `subagents`, `skills`, `system_instructions`,
+//! `model.effort`, `model.temperature`, or `description`, and
+//! `migrate_workflow` never creates a `tools/`, `evals/`, `judges/`,
+//! `prompts/`, or `skills/` directory, or a `SYSTEM.md`. Consequently this
+//! test proves nothing about whether any composition rule is sound
+//! (`from:` inheritance, `tools`/`mcp`/`allow_delegation` narrowing), about
+//! MCP policy expressiveness, or about multi-agent delegation
+//! (`subagents`) - none of that machinery is exercised here at all. Those
+//! properties are covered, where they are covered, by the fixture- and
+//! example-driven tests in `tests/conformance_test.rs`, not by this file.
+//! Do not read a pass here as evidence that inheritance, narrowing, or MCP
+//! policy work; it is evidence only that the plain single-agent field
+//! vocabulary is sufficient for this corpus.
 //!
 //! The corpus and every field mapping applied here is documented in
 //! `docs/06-migration-from-syntropic137.md`, which is the authoritative
@@ -11,7 +33,8 @@
 //! `agent.provider`/`agent_id`: see that document's "Harness inference"
 //! section, which cites Syntropic137's own source as the justification, an
 //! absent `provider` defaults to `claude` in Syntropic137's own domain
-//! model).
+//! model), and states this same field-vocabulary-only scope in its own
+//! "Scope of the conformance corpus" section.
 //!
 //! A failure in `every_syntropic137_workflow_expresses_as_a_valid_recipe` is
 //! a gap in this standard, not a defect in the workflow: see the migration
