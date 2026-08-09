@@ -1059,4 +1059,110 @@ subagents:
         let result = resolved_system(&agent, None);
         assert_eq!(result, None);
     }
+
+    // ─── resolve_inherited: system_instructions merge ─────────────────────
+    //
+    // These are deliberately kept separate from `resolved_system`, which
+    // composes with `SYSTEM.md` (a different axis, section 6). Everything
+    // here is about the agent-tier `from:` merge alone (section 4.7).
+
+    fn agent_with_from(name: &str, from: Option<&str>) -> AgentManifest {
+        AgentManifest {
+            name: name.to_string(),
+            harness: Some(HarnessKind::Claude),
+            model: None,
+            skills: Vec::new(),
+            system_instructions: None,
+            tools: None,
+            subagents: Vec::new(),
+            from: from.map(str::to_string),
+        }
+    }
+
+    fn recipe_of(agents: Vec<AgentManifest>) -> Recipe {
+        let mut map = BTreeMap::new();
+        for agent in agents {
+            map.insert(agent.name.clone(), agent);
+        }
+        Recipe {
+            manifest: RecipeManifest {
+                name: "test".to_string(),
+                version: "0.1.0".to_string(),
+                default_agent: "child".to_string(),
+            },
+            agents: map,
+            agent_sources: BTreeMap::new(),
+            skills: Vec::new(),
+            system_md: None,
+        }
+    }
+
+    #[test]
+    fn from_inherited_system_instructions_append_composes_resolved_parent_across_chain() {
+        // grandparent -> parent -> child, each `mode: append`. If a
+        // regression swapped the parent's *resolved* content for its raw,
+        // un-inherited content, `parent`'s own text ("P") would appear
+        // without the grandparent's ("G") ever showing up in `child`'s
+        // resolved content, and this exact-match assertion would catch it.
+        let mut grandparent = agent_with_from("grandparent", None);
+        grandparent.system_instructions = Some(SystemInstructions {
+            mode: InstructionMode::Append,
+            content: "G".to_string(),
+            harness_prompt: HarnessPromptMode::default(),
+        });
+
+        let mut parent = agent_with_from("parent", Some("grandparent"));
+        parent.system_instructions = Some(SystemInstructions {
+            mode: InstructionMode::Append,
+            content: "P".to_string(),
+            harness_prompt: HarnessPromptMode::default(),
+        });
+
+        let mut child = agent_with_from("child", Some("parent"));
+        child.system_instructions = Some(SystemInstructions {
+            mode: InstructionMode::Append,
+            content: "C".to_string(),
+            harness_prompt: HarnessPromptMode::default(),
+        });
+
+        let recipe = recipe_of(vec![grandparent, parent, child]);
+        let resolved = resolve_inherited(&recipe, "child").expect("chain should resolve");
+        let content = resolved
+            .system_instructions
+            .expect("system_instructions should be present")
+            .content;
+
+        assert_eq!(content, "G\n\nP\n\nC");
+    }
+
+    #[test]
+    fn from_inherited_system_instructions_replace_discards_parent_content() {
+        let mut parent = agent_with_from("parent", None);
+        parent.system_instructions = Some(SystemInstructions {
+            mode: InstructionMode::Append,
+            content: "PARENT".to_string(),
+            harness_prompt: HarnessPromptMode::default(),
+        });
+
+        let mut child = agent_with_from("child", Some("parent"));
+        child.system_instructions = Some(SystemInstructions {
+            mode: InstructionMode::Replace,
+            content: "CHILD".to_string(),
+            harness_prompt: HarnessPromptMode::default(),
+        });
+
+        let recipe = recipe_of(vec![parent, child]);
+        let resolved = resolve_inherited(&recipe, "child").expect("chain should resolve");
+        let content = resolved
+            .system_instructions
+            .expect("system_instructions should be present")
+            .content;
+
+        // `mode: replace` must discard the parent's content outright, not
+        // just place the child's content first. If both modes produced the
+        // same composed string, this assertion (and the append test above
+        // producing a strictly longer, prefixed string) would diverge.
+        assert_eq!(content, "CHILD");
+        assert!(!content.contains("PARENT"));
+    }
 }
