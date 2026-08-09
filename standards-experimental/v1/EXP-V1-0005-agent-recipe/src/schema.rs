@@ -290,6 +290,14 @@ pub struct JudgeManifest {
     /// one of `prompt` / `prompt_file` MUST be present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt_file: Option<String>,
+    /// Loader-populated provenance: the `judges/*.yaml` file this manifest
+    /// was parsed from. Not part of the on-disk schema - `#[serde(skip)]`
+    /// keeps it out of both serialized output and accepted input - so a
+    /// diagnostic anchored to a specific judge (e.g. an empty `name`, which
+    /// has no other identifying field) can still point an author at the
+    /// right file. Mirrors [`EvalCase::input_path`]/[`EvalCase::expected_path`].
+    #[serde(skip)]
+    pub source_path: PathBuf,
 }
 
 /// Coarse reasoning/thinking effort level.
@@ -1216,11 +1224,12 @@ fn list_judge_manifests(dir: &Path) -> Result<Vec<JudgeManifest>, RecipeLoadErro
     let mut manifests = Vec::new();
     for entry_path in list_yaml_files(dir)? {
         let content = read_to_string(&entry_path)?;
-        let judge: JudgeManifest =
+        let mut judge: JudgeManifest =
             serde_yaml::from_str(&content).map_err(|source| RecipeLoadError::MalformedJudge {
                 path: entry_path.clone(),
                 source,
             })?;
+        judge.source_path = entry_path;
         manifests.push(judge);
     }
     Ok(manifests)

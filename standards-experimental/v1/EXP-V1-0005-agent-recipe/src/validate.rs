@@ -226,10 +226,11 @@ fn validate_loaded_recipe(root: &Path, recipe: &Recipe, diagnostics: &mut Diagno
 
     // Every gathered `judges/*.yaml` MUST have a non-empty `name` and at
     // least one of `prompt`/`prompt_file` (section 9). `Recipe::judges` is a
-    // flat `Vec`, not keyed by source path the way `Recipe::tools` is, so
-    // diagnostics here anchor to the `judges/` directory itself rather than
-    // a specific file.
-    let judges_path = root.join(schema::JUDGES_DIR);
+    // flat `Vec`, so each `JudgeManifest` carries its own `source_path`
+    // (loader-populated provenance, not part of the on-disk schema) to
+    // anchor these diagnostics at the offending file - the empty-name case
+    // has no other identifying field, so without this an author with
+    // several judges would have no way to know which file to open.
     for judge in &recipe.judges {
         if judge.name.trim().is_empty() {
             diagnostics.push(
@@ -237,7 +238,7 @@ fn validate_loaded_recipe(root: &Path, recipe: &Recipe, diagnostics: &mut Diagno
                     error_codes::RECIPE_INVALID_JUDGE_MANIFEST,
                     "judge has an empty name",
                 )
-                .with_path(judges_path.clone()),
+                .with_path(judge.source_path.clone()),
             );
         }
         if judge.prompt.is_none() && judge.prompt_file.is_none() {
@@ -249,7 +250,7 @@ fn validate_loaded_recipe(root: &Path, recipe: &Recipe, diagnostics: &mut Diagno
                         judge.name
                     ),
                 )
-                .with_path(judges_path.clone())
+                .with_path(judge.source_path.clone())
                 .with_hint(format!(
                     "add prompt or prompt_file to judge '{}'",
                     judge.name
@@ -557,6 +558,62 @@ mod tests {
         assert!(
             anchored.ends_with("agents/main.yml"),
             "diagnostic should anchor to the real .yml source, got {anchored:?}"
+        );
+    }
+
+    #[test]
+    fn empty_judge_name_diagnostic_anchors_to_the_offending_judge_file() {
+        // Two judges: one valid, one with an empty `name`. The empty-name
+        // case has no other identifying field, so the diagnostic's path is
+        // the only way an author can tell which of the two files is broken.
+        // A test that only checked "an error fired" would also have passed
+        // against the pre-fix bug (which anchored every judge diagnostic to
+        // the `judges/` directory itself), so this asserts on the path.
+        let temp = tempfile::tempdir().expect("temp dir");
+        let root = temp.path();
+        std::fs::write(
+            root.join("recipe.yaml"),
+            "name: r\nversion: 0.1.0\ndefault_agent: main\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("agents")).unwrap();
+        std::fs::write(
+            root.join("agents").join("main.yaml"),
+            "name: main\nmodel:\n  name: m\n  effort: low\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("judges")).unwrap();
+        std::fs::write(
+            root.join("judges").join("valid.yaml"),
+            "name: valid\nprompt: judge this\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("judges").join("broken.yaml"),
+            "name: ''\nprompt: judge this\n",
+        )
+        .unwrap();
+
+        let diagnostics = validate_recipe_dir(root);
+        let empty_name_diagnostics: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.code == error_codes::RECIPE_INVALID_JUDGE_MANIFEST)
+            .filter(|d| d.message.contains("empty name"))
+            .collect();
+        assert_eq!(
+            empty_name_diagnostics.len(),
+            1,
+            "expected exactly one empty-name diagnostic, got: {diagnostics:?}"
+        );
+        let anchored = empty_name_diagnostics[0]
+            .location
+            .path
+            .as_ref()
+            .expect("diagnostic should carry a path");
+        assert!(
+            anchored.ends_with("judges/broken.yaml"),
+            "diagnostic should anchor to the specific offending judge file (broken.yaml), \
+             not the judges/ directory or the unrelated valid.yaml, got {anchored:?}"
         );
     }
 
