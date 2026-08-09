@@ -32,6 +32,7 @@ This standard covers:
 - **The root manifest schema** (`recipe.yaml`) and **per-agent manifest schema** (`agents/<name>.yaml`).
 - **Harness-neutrality rules** - how the `harness` field is extended to support additional harnesses over time without breaking existing recipes.
 - **Skill reference resolution** and **system-instruction merge semantics**.
+- **MCP server policy** - the package-tier and agent-tier `mcp` allowlists and the narrowing rule between them (section 7).
 - **The canonical loader contract** (`load_recipe_dir`) and its error codes.
 
 This standard does NOT cover:
@@ -98,7 +99,7 @@ A recipe MUST be represented as a directory:
   SYSTEM.md               # optional: shared base instructions
 ```
 
-- The presence of `recipe.yaml` at the directory root MUST be treated as the marker denoting "this directory is a recipe". Its absence MUST be reported as `RECIPE_MISSING_MARKER` (section 8).
+- The presence of `recipe.yaml` at the directory root MUST be treated as the marker denoting "this directory is a recipe". Its absence MUST be reported as `RECIPE_MISSING_MARKER` (section 9).
 - `agents/` holds one YAML file per agent. Each file's stem (file name without the `.yaml`/`.yml` extension) is that agent's name for the purposes of `default_agent` and `subagents` resolution.
 - `skills/` and `SYSTEM.md` are both OPTIONAL.
 
@@ -119,6 +120,7 @@ default_agent: main
 | `name` | string | YES | Identifier for the recipe. MUST be non-empty. RECOMMENDED to be kebab-case. |
 | `version` | string | YES | SemVer-ish recipe version. |
 | `default_agent` | string | YES | Name of the entry-point agent. MUST resolve to `agents/<default_agent>.yaml`. |
+| `mcp` | object | NO | Package-tier MCP server policy: the ceiling every agent's own `mcp` is checked against. Absent means no MCP server is permitted for any agent. See section 7. |
 
 No other top-level fields are permitted; `RecipeManifest` uses `#[serde(deny_unknown_fields)]`.
 
@@ -154,6 +156,7 @@ subagents:
 | `system_instructions.mode` | enum string | REQUIRED if `system_instructions` present | `append` or `replace`. |
 | `system_instructions.content` | string | REQUIRED if `system_instructions` present | The instruction text. MUST be non-empty. |
 | `tools` | array[string] | NO | Tool reference strings the agent is permitted to use. Absent means no restriction; present but empty means no tools are permitted. See 4.6 for the enforcement rule. |
+| `mcp` | object | NO | Agent-tier MCP server policy, narrowing the package's `mcp`. Absent means no restriction of its own (the agent's effective policy is exactly the package's). See section 7. |
 | `subagents` | array[string] | NO | Names of other agents (files under `agents/`, without the `.yaml` extension) this agent may delegate to. Defaults to an empty array. |
 | `from` | string | NO | Name of a sibling agent (another file under `agents/`) this agent inherits from. See section 4.7. |
 
@@ -161,7 +164,7 @@ No other fields are permitted at any nesting level - `AgentManifest`, `ModelSpec
 
 ### 4.3 The `harness` Field
 
-`harness` names the agent harness an agent requires. It is a closed enumeration in this version of the standard, with values `claude` and `codex`. The standard is explicitly designed for this set to grow (for example `opencode`, `gemini`) in future MINOR versions, without requiring existing recipes to change. An unrecognized `harness` value MUST fail to parse (reported as `RECIPE_MALFORMED_HARNESS_YAML`, section 8) rather than being silently ignored or coerced.
+`harness` names the agent harness an agent requires. It is a closed enumeration in this version of the standard, with values `claude` and `codex`. The standard is explicitly designed for this set to grow (for example `opencode`, `gemini`) in future MINOR versions, without requiring existing recipes to change. An unrecognized `harness` value MUST fail to parse (reported as `RECIPE_MALFORMED_HARNESS_YAML`, section 9) rather than being silently ignored or coerced.
 
 `harness` is OPTIONAL, and its absence is meaningful rather than merely permissive:
 
@@ -203,7 +206,7 @@ The intended consequence is that a single recipe carries one definition of good 
 
 A tool reference is either **harness-builtin** (provided natively by the harness named in `harness`, per `05-harness-tool-vocabulary.md`) or **recipe-provided** (resolving under `tools/`, section 5). Recipe-provided tools are portable by construction because the recipe carries them.
 
-An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT reference a name that is harness-builtin under *any* harness this standard knows about, because an agnostic agent declares no single vocabulary to check its `tools` entries against. A validator MUST report such a reference as `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 8).
+An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT reference a name that is harness-builtin under *any* harness this standard knows about, because an agnostic agent declares no single vocabulary to check its `tools` entries against. A validator MUST report such a reference as `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 9).
 
 ### 4.7 Agent Inheritance (`from:`)
 
@@ -218,6 +221,7 @@ The merge is not uniform across fields; each field's own semantics decide how it
 | `harness` | Scalar: the child's value wins when present; the parent's is inherited when the child omits it. |
 | `model` (and `model.name` within it) | Scalar, applied at the `model` level and then at `model.name` within it: the child's `model` block, when present, wins field-by-field over the parent's - a child that declares only `model.effort` still inherits `model.name` from the parent. A child that omits `model` entirely inherits the parent's whole `model`. |
 | `tools` | Narrowing only. When both the child's and the resolved parent's `tools` are present, the child's list MUST be a subset of the parent's, else `RECIPE_FROM_WIDENS_TOOLS`. When the child omits `tools`, it inherits the parent's value unchanged (whatever that is) rather than defaulting to unrestricted - an omission MUST NOT be read as a widening back to `None`. A parent of `None` (unrestricted) with a child that declares its own `Some([...])` is a narrowing and is always allowed. |
+| `mcp` | The child's own `mcp`, when present, replaces the parent's in full; when the child omits it, the parent's resolved value is inherited unchanged. Unlike `tools`, this merge step itself does not check the child against the parent - the narrowing check runs once, in `validate_recipe_dir`, against the package's `mcp` (section 7), using this fully resolved value. That single check is sufficient to prevent a widening from being laundered through the chain, however many links it has. |
 | `subagents` | The child's own value always stands, in full; it is never merged with the parent's. `subagents: []` on the child therefore deliberately clears an inherited list rather than being treated as "not specified". |
 | `system_instructions` | When the child omits it, the parent's (already-resolved) value is inherited unchanged. When the child declares its own with `mode: append`, its `content` is appended to the parent's *resolved* content (not the parent's raw, un-inherited YAML) with a blank line between them; `mode: replace` discards the parent's `system_instructions` entirely. This governs only the agent-tier `content` field and is independent of `SYSTEM.md` composition, which `resolved_system` (section 6) handles separately. |
 | `skills` | Not merged: the child's own `skills` (possibly empty) is used as declared, with no inheritance from the parent. |
@@ -228,7 +232,7 @@ A `from:` chain is validated for two additional failure modes, both surfaced wit
 - **`RECIPE_FROM_CYCLE`**: resolving an agent's `from:` chain revisits an agent already seen in that resolution, including an agent that names itself. Detected by tracking visited agent names in a set as the chain is walked, rather than recursing until the call stack overflows.
 - **`RECIPE_FROM_UNRESOLVED`**: a `from:` value does not name any parsed entry under `agents/` (no `agents/<name>.yaml` or `.yml`).
 
-`validate_recipe_dir` runs `resolve_inherited` for every agent that declares `from:` and reports any of the three codes above (`RECIPE_FROM_CYCLE`, `RECIPE_FROM_UNRESOLVED`, `RECIPE_FROM_WIDENS_TOOLS`) as a diagnostic, alongside the structural checks in section 8.2. `load_recipe_dir` itself does not perform `from:` resolution: it parses each agent manifest as authored, so a caller can inspect both the as-authored form (`Recipe::agents`) and, on demand, the resolved form (`resolve_inherited`). Resolving unconditionally inside the loader would make the authored form unobservable, which would harm diagnostics more than it would simplify callers.
+`validate_recipe_dir` runs `resolve_inherited` for every agent that declares `from:` and reports any of the three codes above (`RECIPE_FROM_CYCLE`, `RECIPE_FROM_UNRESOLVED`, `RECIPE_FROM_WIDENS_TOOLS`) as a diagnostic, alongside the structural checks in section 9.2. `load_recipe_dir` itself does not perform `from:` resolution: it parses each agent manifest as authored, so a caller can inspect both the as-authored form (`Recipe::agents`) and, on demand, the resolved form (`resolve_inherited`). Resolving unconditionally inside the loader would make the authored form unobservable, which would harm diagnostics more than it would simplify callers.
 
 ---
 
@@ -276,7 +280,64 @@ A consumer whose target harness cannot suppress its built-in system prompt (no e
 
 ---
 
-## 7. Canonical Loader
+## 7. MCP Server Policy (`mcp`)
+
+`mcp` declares which MCP (Model Context Protocol) servers, and which methods on each, may be used. It is declared at two tiers: once per package (`recipe.yaml`), and optionally narrowed per agent (`agents/<name>.yaml`). Both use the same shape:
+
+```yaml
+mcp:
+  servers:
+    warehouse:
+      include:
+        - run_query
+      exclude: []
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mcp.servers` | map[string, object] | NO | Per-server method policy, keyed by server id. Defaults to an empty map when `mcp` is omitted entirely. |
+| `mcp.servers.<id>.include` | array[string] | NO | Method names permitted for this server. Defaults to an empty array. |
+| `mcp.servers.<id>.exclude` | array[string] | NO | Method names withdrawn from `include`. Defaults to an empty array. |
+
+`RecipeManifest.mcp` and `AgentManifest.mcp` both use `#[serde(deny_unknown_fields)]`, as do `McpPolicy` and `McpServerPolicy`.
+
+### 7.1 The Effective Method Set
+
+For a single server's policy, the **effective method set** is `include` minus `exclude`, both compared as literal strings:
+
+```text
+effective(server_policy) = server_policy.include \ server_policy.exclude
+```
+
+An empty `include` permits **no** methods for that server - it is not equivalent to omitting the server entirely, and it mirrors `tools: Some(vec![])` (section 4.6): present-but-empty is a deliberate assertion of zero permission, not an oversight. `McpServerPolicy::effective_methods` is the single implementation of this computation; nothing else in this crate re-derives it.
+
+This version of the standard does **not** support a wildcard `include` value (for example `"*"`). An `include`/`exclude` entry is always a literal method name. This is a deliberate simplification: a wildcard that must remain narrowable by a child tier without ever becoming widenable by one is materially harder to reason about correctly than an explicit list, and a smaller correct rule beats a larger ambiguous one. A future minor version MAY add wildcard support if a concrete need arises.
+
+A server that a tier's `mcp.servers` map does not mention at all has **no** implicit permission - there is no "everything not listed is allowed" fallback. This is why `RecipeManifest.mcp` and `AgentManifest.mcp` are restrictive by default (absent means no MCP access at all), deliberately unlike `tools`' `None`, which means unrestricted (section 4.6). The two fields answer different questions: `tools`' `None` says "this agent asserts no opinion, so nothing is restricted here"; `mcp`'s absence says "nothing has been granted here." An MCP server is a live, potentially stateful, potentially destructive external dependency in a way a harness-builtin tool reference is not, so this standard does not extend the same permissive default to it.
+
+### 7.2 Two Tiers, One Ceiling
+
+**`mcp` is declared once per package and narrowed per agent. Permission narrows monotonically as you descend: package policy, agent, inheriting agent (`from:`), and run. Each tier may restrict what the tier above it permitted. None may widen it.** This is the same governing principle section 4.7 states for `tools` via `from:`, applied here across an additional tier that sits above the agent altogether.
+
+- The **package tier** (`RecipeManifest.mcp`) is the ceiling: the maximum `mcp` policy any agent in the recipe may have, for any server.
+- The **agent tier** (`AgentManifest.mcp`) is `Option<McpPolicy>`. `None` (the field omitted) declares no restriction of its own: the agent's effective policy is exactly the package's, which is by construction never a widening of itself. `Some(policy)` narrows to the named servers and their effective method sets, checked against the package tier as described below.
+- The **inheriting agent** (`from:`) tier resolves through `schema::resolve_inherited` exactly as `tools` does (section 4.7): the child's own `mcp`, when declared, replaces the parent's in full; when the child omits `mcp`, it inherits the parent's resolved value unchanged. This resolution happens first, before any narrowing check runs, per 7.3.
+- The **run** tier (a consumer's runtime restriction of a resolved agent) is out of scope for this standard's schema, exactly as run-time `tools` restriction is (section 4.5); it is noted here only to complete the ladder.
+
+### 7.3 The Narrowing Rule
+
+**An agent's `mcp` policy MUST NOT permit a server or method the package policy does not permit. A validator MUST report a violation as `RECIPE_MCP_AGENT_WIDENS_POLICY`.**
+
+The check is computed by `schema::mcp_policy_widenings(package, agent) -> Vec<String>`, the single shared implementation both the validator and any future consumer of this rule MUST use rather than re-deriving the include/exclude comparison independently. For each server the agent's policy names:
+
+1. **If the package's policy does not mention that server at all**, the agent's reference to it is a widening, regardless of what the agent's own policy for that server says - even an agent policy with an empty `include` still names a server the package never authorized for anyone. This is deliberate: the naive check "compare only servers present in both policies" silently passes this case, because it never looks at servers the agent introduces unilaterally.
+2. **If the package's policy also mentions that server**, the agent's effective method set (7.1) MUST be a subset of the package's effective method set for that server. `include` and `exclude` interact through the effective-set computation alone: an agent may always add its own `exclude` entries (narrowing further is always legal), but an agent that removes an `exclude` the package declared - even while keeping the same `include` - widens the effective set back open and is rejected on that basis, without needing a rule specific to `exclude` removal.
+
+`validate::validate_recipe_dir` applies this check to every agent in the recipe, using each agent's **fully `from:`-resolved** `mcp` policy (not its as-authored value) when the agent declares `from:`. Resolution happens first, exactly as the package check for `tools` narrowing composes with `from:` resolution: an agent cannot launder a widening through a parent, because whatever the final resolved policy turns out to be - however many `from:` links it passed through - is what gets checked against the package ceiling. A widening that only exists transiently mid-chain, and is narrowed back down again in a later child, is not reported; only the resolved leaf value that is actually checked is what matters, matching how `tools` is enforced end-to-end today.
+
+---
+
+## 8. Canonical Loader
 
 `schema::load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError>` is the single source of truth for parsing a recipe directory into typed Rust values:
 
@@ -294,9 +355,9 @@ A conforming implementation MUST be able to deserialize a valid recipe directory
 
 ---
 
-## 8. Error Codes
+## 9. Error Codes
 
-### 8.1 Loader Codes
+### 9.1 Loader Codes
 
 These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validate::validate_recipe_dir`. They correspond one-to-one with `schema::RecipeLoadError` variants (`RecipeLoadError::code()` returns the matching constant from `schema::error_codes`).
 
@@ -312,9 +373,9 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_FROM_UNRESOLVED` | A `from:` value does not name any parsed entry under `agents/`. Emitted by `schema::resolve_inherited`. |
 | `RECIPE_FROM_WIDENS_TOOLS` | A child agent's `tools` is not a subset of its resolved parent's `tools` (section 4.7). Emitted by `schema::resolve_inherited`. |
 
-### 8.2 Validator Codes
+### 9.2 Validator Codes
 
-`validate::validate_recipe_dir` is built on top of the loader (plan revision R1: loading and validation share one code path). On a failed load it surfaces exactly one loader code from §8.1. On a recipe that loads cleanly it runs the additional structural rules below, reporting *all* violations via `apss_core::Diagnostics` rather than failing on the first one. These codes live in `validate::error_codes`.
+`validate::validate_recipe_dir` is built on top of the loader (plan revision R1: loading and validation share one code path). On a failed load it surfaces exactly one loader code from §9.1. On a recipe that loads cleanly it runs the additional structural rules below, reporting *all* violations via `apss_core::Diagnostics` rather than failing on the first one. These codes live in `validate::error_codes`.
 
 | Code | Meaning |
 |------|---------|
@@ -326,10 +387,11 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_INVALID_TOOL_REF` | A `tools` entry is an empty string. |
 | `RECIPE_EMPTY_INSTRUCTIONS_CONTENT` | An agent's `system_instructions.content` is present but empty/whitespace. |
 | `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` | An agent that omits `harness` lists a `tools` entry that is harness-builtin under some harness and does not resolve as recipe-provided. See section 4.6. |
+| `RECIPE_MCP_AGENT_WIDENS_POLICY` | An agent's fully `from:`-resolved `mcp` policy names a server the package's `mcp` does not permit, or permits a method for a shared server the package does not. See section 7. |
 
 Field-shape rules (unknown fields, non-string keys, unrecognized `harness`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_HARNESS_YAML` on the offending file rather than as separate validator codes.
 
-### 8.3 CLI
+### 9.3 CLI
 
 `validate_recipe_dir` is wired into the composed development CLI as a registered standard command:
 
@@ -341,7 +403,7 @@ apss-dev run agent-recipe validate <recipe-dir>
 
 ---
 
-## 9. Compliance Checklist
+## 10. Compliance Checklist
 
 A recipe directory is **compliant** with this standard if:
 
@@ -350,11 +412,12 @@ A recipe directory is **compliant** with this standard if:
 - [ ] Every `agents/*.yaml` file parses as an `AgentManifest` with `name`, a recognized `harness`, and a valid `model` (`model.name` non-empty, `model.effort` one of `low`/`medium`/`high`).
 - [ ] `skills`, `tools`, and `subagents`, if present, are arrays of strings.
 - [ ] `system_instructions`, if present, has a valid `mode` and non-empty `content`.
+- [ ] Every agent's fully `from:`-resolved `mcp` policy, if present, is a subset of the package's `mcp` policy (section 7).
 - [ ] No unrecognized fields are present at any nesting level.
 
 ---
 
-## 10. Generator
+## 11. Generator
 
 A conformant recipe directory can be scaffolded from the canonical template in `templates/recipe/skeleton/`:
 
@@ -370,7 +433,7 @@ The library entry point is `generate::scaffold_recipe(name, dest)`. The template
 
 ---
 
-## 11. Future Extensions
+## 12. Future Extensions
 
 Potential future additions, to be pursued only after this experiment gathers feedback:
 
@@ -382,19 +445,19 @@ Potential future additions, to be pursued only after this experiment gathers fee
 
 ---
 
-## 12. Security Considerations
+## 13. Security Considerations
 
-### 12.1 No Credentials in Recipes
+### 13.1 No Credentials in Recipes
 
 Recipe directories MUST NOT contain credentials, tokens, or other secrets. Recipes are expected to be committed to version control; secret material belongs in the `credentials` component of a `RunSpec` (informative, see 1.5), not in the recipe.
 
-### 12.2 System Instruction Content
+### 13.2 System Instruction Content
 
 `system_instructions.content` (and `SYSTEM.md`) is free-form text that becomes part of an agent's effective system prompt. Consumers SHOULD treat recipe sources with the same trust level as other executable configuration (for example, CI workflow files): a recipe from an untrusted source can materially change agent behavior via `mode: replace` or injected `skills`/`tools`.
 
 ---
 
-## 13. References
+## 14. References
 
 - [RFC 2119: Key words for use in RFCs](https://datatracker.ietf.org/doc/html/rfc2119)
 - [Semantic Versioning](https://semver.org/)

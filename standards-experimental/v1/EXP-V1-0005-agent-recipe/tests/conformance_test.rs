@@ -204,3 +204,33 @@ fn from_unresolved_is_rejected() {
     let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
     assert!(codes.contains(&"RECIPE_FROM_UNRESOLVED"), "got: {codes:?}");
 }
+
+// ─── mcp policy (section 7) ────────────────────────────────────────────────
+
+#[test]
+fn agent_mcp_policy_may_not_widen_package_policy() {
+    // Belt-and-suspenders alongside the example-driven check above: this
+    // pins the exact fixture path and code so a rename of either silently
+    // dropping coverage is caught here too.
+    let diagnostics =
+        validate_recipe_dir(&examples_dir("invalid").join("mcp-agent-widens-policy"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_MCP_AGENT_WIDENS_POLICY"),
+        "got: {codes:?}"
+    );
+}
+
+#[test]
+fn agent_naming_a_server_the_package_never_mentioned_widens() {
+    // The subtle case: a naive check that only compares servers present in
+    // both policies would miss this, since `reporting` never appears in the
+    // package's policy at all.
+    let diagnostics =
+        validate_recipe_dir(&examples_dir("invalid").join("mcp-agent-unmentioned-server"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_MCP_AGENT_WIDENS_POLICY"),
+        "got: {codes:?}"
+    );
+}

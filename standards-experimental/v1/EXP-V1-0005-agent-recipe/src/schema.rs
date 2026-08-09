@@ -26,7 +26,7 @@
 //! diagnostic carrying the loader's stable error code.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -58,6 +58,93 @@ pub struct RecipeManifest {
     pub version: String,
     /// Name of the entry-point agent. Resolves to `agents/<default_agent>.yaml`.
     pub default_agent: String,
+    /// Package-tier MCP server policy: the ceiling every agent's own `mcp`
+    /// (section 7) is checked against. Absent, or present with no `servers`
+    /// entries, permits no MCP server at all - a restrictive default,
+    /// deliberately unlike `tools`' permissive `None` (section 4.6). See
+    /// [`McpPolicy`] and [`mcp_policy_widenings`].
+    #[serde(default, skip_serializing_if = "McpPolicy::is_empty")]
+    pub mcp: McpPolicy,
+}
+
+/// Per-server MCP method policy. `include` names the permitted methods;
+/// `exclude` removes from that set. An empty `include` permits no methods,
+/// mirroring `tools: Some(vec![])` (section 4.6). This standard does not
+/// support a wildcard `include` value in this version: every `include`/
+/// `exclude` entry is compared as a literal method name, never expanded. See
+/// [`McpServerPolicy::effective_methods`].
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct McpServerPolicy {
+    /// Permitted method names for this server.
+    #[serde(default)]
+    pub include: Vec<String>,
+    /// Method names removed from `include`. Narrows further; never widens.
+    #[serde(default)]
+    pub exclude: Vec<String>,
+}
+
+impl McpServerPolicy {
+    /// The effective (permitted) method set for this server policy:
+    /// `include` minus `exclude`, both compared as literal strings. This is
+    /// the single definition of "effective set" every tier and consumer of
+    /// this rule MUST use (section 7).
+    pub fn effective_methods(&self) -> BTreeSet<&str> {
+        let mut methods: BTreeSet<&str> = self.include.iter().map(String::as_str).collect();
+        for excluded in &self.exclude {
+            methods.remove(excluded.as_str());
+        }
+        methods
+    }
+}
+
+/// MCP server policy for one tier (package or agent): which servers are
+/// named, and the [`McpServerPolicy`] (method allowlist) for each. A server
+/// this policy does not mention at all is not permitted - there is no
+/// implicit "everything else is allowed" fallback. See section 7.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct McpPolicy {
+    /// Per-server method policy, keyed by server id.
+    #[serde(default)]
+    pub servers: BTreeMap<String, McpServerPolicy>,
+}
+
+impl McpPolicy {
+    /// Whether this policy names no servers at all (the default, restrictive
+    /// state: no MCP access).
+    pub fn is_empty(&self) -> bool {
+        self.servers.is_empty()
+    }
+}
+
+/// The servers `agent` permits that `package` does not permit for it,
+/// naming each offending server id. Two ways a server can be offending:
+///
+/// 1. `agent` names a server `package` does not mention at all. This is
+///    always a widening - inventing access `package` never granted - even
+///    if `agent`'s policy for that server is otherwise empty.
+/// 2. `agent` and `package` both name the server, but `agent`'s
+///    [`McpServerPolicy::effective_methods`] is not a subset of `package`'s.
+///
+/// This is the single shared computation the package-tier validator check
+/// (and any future consumer of this rule) MUST use, rather than
+/// re-implementing the include/exclude comparison in more than one place.
+pub fn mcp_policy_widenings(package: &McpPolicy, agent: &McpPolicy) -> Vec<String> {
+    let mut offending = Vec::new();
+    for (server_id, agent_policy) in &agent.servers {
+        match package.servers.get(server_id) {
+            None => offending.push(server_id.clone()),
+            Some(package_policy) => {
+                let agent_methods = agent_policy.effective_methods();
+                let package_methods = package_policy.effective_methods();
+                if !agent_methods.is_subset(&package_methods) {
+                    offending.push(server_id.clone());
+                }
+            }
+        }
+    }
+    offending
 }
 
 /// Which harness executes an agent.
@@ -193,6 +280,16 @@ pub struct AgentManifest {
     /// consumes these entries.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<String>>,
+    /// Agent-tier MCP server policy, checked against the package's `mcp`
+    /// (section 7). `None` (absent) declares no restriction of its own: the
+    /// agent's effective policy is exactly the package's, which is always a
+    /// subset of itself and so never flagged as a widening. `Some(policy)`
+    /// narrows to the named servers/methods; a server that policy names but
+    /// the package does not, or a method set wider than the package permits
+    /// for a shared server, is `RECIPE_MCP_AGENT_WIDENS_POLICY`. See
+    /// [`mcp_policy_widenings`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<McpPolicy>,
     /// Names of other agents (files in `agents/`, without the `.yaml`
     /// extension) this agent may delegate to as subagents.
     #[serde(default)]
@@ -639,6 +736,18 @@ fn merge_inherited(
         },
     };
 
+    // `mcp`: the child's own declared policy, when present, wins in full -
+    // it fully replaces the parent's, exactly like `tools`' own-value-wins
+    // behavior. This does not by itself enforce narrowing against the
+    // parent: the single narrowing check lives in `validate::validate_recipe_dir`,
+    // applied to this fully resolved value against the package's `mcp`, so a
+    // widening cannot be laundered through a `from:` chain no matter how
+    // many links it has (section 7).
+    let mcp = match (parent.mcp.clone(), child.mcp) {
+        (parent_mcp, None) => parent_mcp,
+        (_, Some(child_mcp)) => Some(child_mcp),
+    };
+
     Ok(AgentManifest {
         name: child.name,
         harness,
@@ -646,6 +755,7 @@ fn merge_inherited(
         skills: child.skills,
         system_instructions,
         tools,
+        mcp,
         subagents: child.subagents,
         from: child.from,
     })
@@ -1001,6 +1111,7 @@ subagents:
                 harness_prompt: HarnessPromptMode::default(),
             }),
             tools: None,
+            mcp: None,
             subagents: Vec::new(),
             from: None,
         }
@@ -1017,6 +1128,7 @@ subagents:
             skills: Vec::new(),
             system_instructions: None,
             tools: None,
+            mcp: None,
             subagents: Vec::new(),
             from: None,
         }
@@ -1074,6 +1186,7 @@ subagents:
             skills: Vec::new(),
             system_instructions: None,
             tools: None,
+            mcp: None,
             subagents: Vec::new(),
             from: from.map(str::to_string),
         }
@@ -1089,6 +1202,7 @@ subagents:
                 name: "test".to_string(),
                 version: "0.1.0".to_string(),
                 default_agent: "child".to_string(),
+                mcp: McpPolicy::default(),
             },
             agents: map,
             agent_sources: BTreeMap::new(),
@@ -1164,5 +1278,124 @@ subagents:
         // producing a strictly longer, prefixed string) would diverge.
         assert_eq!(content, "CHILD");
         assert!(!content.contains("PARENT"));
+    }
+
+    // ─── mcp policy (section 7) ─────────────────────────────────────────────
+
+    fn server_policy(include: &[&str], exclude: &[&str]) -> McpServerPolicy {
+        McpServerPolicy {
+            include: include.iter().map(|s| s.to_string()).collect(),
+            exclude: exclude.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    fn policy_of(servers: &[(&str, McpServerPolicy)]) -> McpPolicy {
+        McpPolicy {
+            servers: servers
+                .iter()
+                .map(|(id, policy)| (id.to_string(), policy.clone()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn empty_include_permits_no_methods() {
+        let policy = server_policy(&[], &["run_query"]);
+        assert!(policy.effective_methods().is_empty());
+    }
+
+    #[test]
+    fn exclude_removes_from_include() {
+        let policy = server_policy(&["run_query", "drop_table"], &["drop_table"]);
+        let methods = policy.effective_methods();
+        assert!(methods.contains("run_query"));
+        assert!(!methods.contains("drop_table"));
+    }
+
+    #[test]
+    fn agent_naming_server_absent_from_package_is_a_widening() {
+        // Subtle case 1: the naive "compare only servers present in both"
+        // check would miss this, since `reporting` never appears in
+        // `package` at all.
+        let package = policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]);
+        let agent = policy_of(&[("reporting", server_policy(&["list_reports"], &[]))]);
+        assert_eq!(mcp_policy_widenings(&package, &agent), vec!["reporting"]);
+    }
+
+    #[test]
+    fn agent_widening_methods_on_a_shared_server_is_flagged() {
+        let package = policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]);
+        let agent = policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &[]),
+        )]);
+        assert_eq!(mcp_policy_widenings(&package, &agent), vec!["warehouse"]);
+    }
+
+    #[test]
+    fn agent_narrowing_methods_on_a_shared_server_is_legal() {
+        let package = policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &[]),
+        )]);
+        let agent = policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]);
+        assert!(mcp_policy_widenings(&package, &agent).is_empty());
+    }
+
+    #[test]
+    fn agent_removing_a_package_exclusion_is_a_widening() {
+        // Subtle case 3: the package excludes `drop_table` even though it is
+        // in `include`; an agent that repeats the same `include` but drops
+        // the `exclude` restores access the package explicitly withheld.
+        let package = policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &["drop_table"]),
+        )]);
+        let agent = policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &[]),
+        )]);
+        assert_eq!(mcp_policy_widenings(&package, &agent), vec!["warehouse"]);
+    }
+
+    #[test]
+    fn agent_adding_its_own_exclusion_is_always_legal() {
+        let package = policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &[]),
+        )]);
+        let agent = policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &["drop_table"]),
+        )]);
+        assert!(mcp_policy_widenings(&package, &agent).is_empty());
+    }
+
+    #[test]
+    fn merge_inherited_lets_child_mcp_override_parent_in_full() {
+        let mut parent = agent_with_from("parent", None);
+        parent.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+
+        let mut child = agent_with_from("child", Some("parent"));
+        child.mcp = Some(policy_of(&[("reporting", server_policy(&["list_reports"], &[]))]));
+
+        let recipe = recipe_of(vec![parent, child]);
+        let resolved = resolve_inherited(&recipe, "child").expect("chain should resolve");
+        let resolved_mcp = resolved.mcp.expect("child declared its own mcp");
+        assert!(resolved_mcp.servers.contains_key("reporting"));
+        assert!(!resolved_mcp.servers.contains_key("warehouse"));
+    }
+
+    #[test]
+    fn merge_inherited_lets_child_inherit_parent_mcp_when_omitted() {
+        let mut parent = agent_with_from("parent", None);
+        parent.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+
+        let child = agent_with_from("child", Some("parent"));
+
+        let recipe = recipe_of(vec![parent, child]);
+        let resolved = resolve_inherited(&recipe, "child").expect("chain should resolve");
+        let resolved_mcp = resolved.mcp.expect("child should inherit parent's mcp");
+        assert!(resolved_mcp.servers.contains_key("warehouse"));
     }
 }

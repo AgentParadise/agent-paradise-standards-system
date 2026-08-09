@@ -19,8 +19,8 @@ use apss_core::{Diagnostic, Diagnostics};
 use std::path::Path;
 
 use crate::schema::{
-    self, AGENTS_DIR, AgentManifest, HarnessKind, RECIPE_MARKER_FILE, Recipe, RecipeLoadError,
-    load_recipe_dir, resolve_inherited,
+    self, AGENTS_DIR, AgentManifest, HarnessKind, McpPolicy, RECIPE_MARKER_FILE, Recipe,
+    RecipeLoadError, load_recipe_dir, mcp_policy_widenings, resolve_inherited,
 };
 
 /// Directory-level validation error codes, layered on top of the loader codes
@@ -45,6 +45,11 @@ pub mod error_codes {
     /// as a recipe-provided tool.
     pub const RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL: &str =
         "RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL";
+    /// An agent's (fully `from:`-resolved) `mcp` policy is not a subset of
+    /// the package's `mcp` policy: it names a server the package does not
+    /// mention, or permits a method for a shared server the package does
+    /// not. See `schema::mcp_policy_widenings` and section 7.
+    pub const RECIPE_MCP_AGENT_WIDENS_POLICY: &str = "RECIPE_MCP_AGENT_WIDENS_POLICY";
 }
 
 /// Harness-builtin tool identifiers for Claude Code, transcribed verbatim
@@ -180,12 +185,82 @@ fn validate_loaded_recipe(root: &Path, recipe: &Recipe, diagnostics: &mut Diagno
     // links, so an agent with no `from` cannot be the site of one, and
     // resolving it would be a no-op. `resolve_inherited` walks the whole
     // chain, so this also exercises chains longer than two.
+    //
+    // The package-vs-agent `mcp` check (`RECIPE_MCP_AGENT_WIDENS_POLICY`,
+    // section 7) is folded into this same loop: for an agent that declares
+    // `from:`, it MUST run against the fully resolved `mcp` (post-`from:`
+    // merge), never the as-authored value, so a widening cannot be
+    // laundered through an intermediate parent. For an agent with no
+    // `from:`, the as-authored value already IS the fully resolved value.
     for (stem, agent) in &recipe.agents {
+        let agent_path = agent_source_path(root, recipe, stem);
         if agent.from.is_some() {
-            if let Err(error) = resolve_inherited(recipe, stem) {
-                diagnostics.push(diagnostic_from_load_error(&error));
+            match resolve_inherited(recipe, stem) {
+                Ok(resolved) => {
+                    check_mcp_policy_widening(
+                        &recipe.manifest.mcp,
+                        resolved.mcp.as_ref(),
+                        stem,
+                        &agent_path,
+                        diagnostics,
+                    );
+                }
+                Err(error) => diagnostics.push(diagnostic_from_load_error(&error)),
             }
+        } else {
+            check_mcp_policy_widening(
+                &recipe.manifest.mcp,
+                agent.mcp.as_ref(),
+                stem,
+                &agent_path,
+                diagnostics,
+            );
         }
+    }
+}
+
+/// Best-effort source path for `stem`, for anchoring a diagnostic. Falls
+/// back to the reconstructed `.yaml` path when the source was not retained
+/// (should not happen for a `Recipe` produced by `load_recipe_dir`).
+fn agent_source_path(root: &Path, recipe: &Recipe, stem: &str) -> std::path::PathBuf {
+    recipe
+        .agent_sources
+        .get(stem)
+        .cloned()
+        .unwrap_or_else(|| root.join(AGENTS_DIR).join(format!("{stem}.yaml")))
+}
+
+/// Check `agent_mcp` (an agent's fully resolved `mcp` policy, if any)
+/// against `package` (the recipe's package-tier `mcp` policy), reporting
+/// `RECIPE_MCP_AGENT_WIDENS_POLICY` for every server the agent widens.
+///
+/// `agent_mcp: None` means the agent declares no `mcp` restriction of its
+/// own; its effective policy is exactly the package's, which trivially
+/// cannot widen it, so this is a no-op in that case.
+fn check_mcp_policy_widening(
+    package: &McpPolicy,
+    agent_mcp: Option<&McpPolicy>,
+    stem: &str,
+    agent_path: &Path,
+    diagnostics: &mut Diagnostics,
+) {
+    let Some(agent_policy) = agent_mcp else {
+        return;
+    };
+    let offending = mcp_policy_widenings(package, agent_policy);
+    if !offending.is_empty() {
+        diagnostics.push(
+            Diagnostic::error(
+                error_codes::RECIPE_MCP_AGENT_WIDENS_POLICY,
+                format!(
+                    "agent '{stem}' mcp policy widens the package mcp policy for server(s) {offending:?}"
+                ),
+            )
+            .with_path(agent_path.to_path_buf())
+            .with_hint(format!(
+                "narrow agent '{stem}' mcp.servers {offending:?} to a subset of the package's mcp.servers, or grant the missing server(s)/methods in the package's mcp policy"
+            )),
+        );
     }
 }
 
