@@ -56,6 +56,12 @@ pub mod error_codes {
     /// 5.2): a recipe is a portable artifact that may be validated on a
     /// machine that will never run it.
     pub const RECIPE_INVALID_TOOL_MANIFEST: &str = "RECIPE_INVALID_TOOL_MANIFEST";
+    /// A `judges/*.yaml` parsed successfully (well-formed YAML) but has an
+    /// empty `name`, or declares neither `prompt` nor `prompt_file`. This
+    /// standard does NOT validate that a `prompt_file` reference resolves
+    /// under `prompts/` (section 9): the declaration is what this standard
+    /// governs, not the runtime that reads it.
+    pub const RECIPE_INVALID_JUDGE_MANIFEST: &str = "RECIPE_INVALID_JUDGE_MANIFEST";
 }
 
 /// Harness-builtin tool identifiers for Claude Code, transcribed verbatim
@@ -214,6 +220,40 @@ fn validate_loaded_recipe(root: &Path, recipe: &Recipe, diagnostics: &mut Diagno
                     format!("tool '{tool_ref}' has an empty command"),
                 )
                 .with_path(tool_path),
+            );
+        }
+    }
+
+    // Every gathered `judges/*.yaml` MUST have a non-empty `name` and at
+    // least one of `prompt`/`prompt_file` (section 9). `Recipe::judges` is a
+    // flat `Vec`, not keyed by source path the way `Recipe::tools` is, so
+    // diagnostics here anchor to the `judges/` directory itself rather than
+    // a specific file.
+    let judges_path = root.join(schema::JUDGES_DIR);
+    for judge in &recipe.judges {
+        if judge.name.trim().is_empty() {
+            diagnostics.push(
+                Diagnostic::error(
+                    error_codes::RECIPE_INVALID_JUDGE_MANIFEST,
+                    "judge has an empty name",
+                )
+                .with_path(judges_path.clone()),
+            );
+        }
+        if judge.prompt.is_none() && judge.prompt_file.is_none() {
+            diagnostics.push(
+                Diagnostic::error(
+                    error_codes::RECIPE_INVALID_JUDGE_MANIFEST,
+                    format!(
+                        "judge '{}' declares neither prompt nor prompt_file",
+                        judge.name
+                    ),
+                )
+                .with_path(judges_path.clone())
+                .with_hint(format!(
+                    "add prompt or prompt_file to judge '{}'",
+                    judge.name
+                )),
             );
         }
     }

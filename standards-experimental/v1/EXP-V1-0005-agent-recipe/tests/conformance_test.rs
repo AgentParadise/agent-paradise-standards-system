@@ -9,6 +9,7 @@ use agent_recipe::{
     EffortLevel, HarnessPromptMode, InstructionMode, SystemInstructions, ToolProtocol,
     load_recipe_dir, resolve_inherited, validate_recipe_dir,
 };
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -310,6 +311,85 @@ fn tool_manifest_with_empty_name_and_command_is_rejected() {
     let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
     assert!(
         codes.contains(&"RECIPE_INVALID_TOOL_MANIFEST"),
+        "got: {codes:?}"
+    );
+}
+
+// ─── evals/, judges/, and prompts/ directories (section 9) ────────────────
+//
+// The definition of good (evals/ + judges/) travels with the recipe;
+// evaluation results do not (section 4.5). These tests cover discovery of
+// the three directories and the one normative failure mode each of
+// evals/ and judges/ has in this minimal-shape version of the standard.
+
+#[test]
+fn evals_and_judges_load_from_their_directories() {
+    let recipe = load_recipe_dir(&examples_dir("valid").join("pr-reviewer")).unwrap();
+    assert!(!recipe.evals.is_empty(), "evals/ must be discovered");
+    assert!(!recipe.judges.is_empty(), "judges/ must be discovered");
+}
+
+#[test]
+fn eval_case_carries_its_input_and_expected_paths() {
+    let recipe = load_recipe_dir(&examples_dir("valid").join("pr-reviewer")).unwrap();
+    let case = recipe
+        .evals
+        .iter()
+        .find(|c| c.name == "flags-sql-injection")
+        .expect("fixture eval case should be discovered");
+    assert!(case.input_path.ends_with("input.json"));
+    assert!(case.expected_path.ends_with("expected.md"));
+}
+
+#[test]
+fn judges_may_use_either_inline_prompt_or_prompt_file() {
+    let recipe = load_recipe_dir(&examples_dir("valid").join("pr-reviewer")).unwrap();
+    let inline = recipe
+        .judges
+        .iter()
+        .find(|j| j.name == "correctness")
+        .expect("inline-prompt judge should be discovered");
+    assert!(inline.prompt.is_some());
+    assert!(inline.prompt_file.is_none());
+
+    let by_file = recipe
+        .judges
+        .iter()
+        .find(|j| j.name == "security")
+        .expect("prompt_file judge should be discovered");
+    assert!(by_file.prompt.is_none());
+    assert_eq!(by_file.prompt_file.as_deref(), Some("security-bar.md"));
+}
+
+#[test]
+fn prompts_directory_is_discovered() {
+    let recipe = load_recipe_dir(&examples_dir("valid").join("pr-reviewer")).unwrap();
+    assert!(
+        recipe
+            .prompts
+            .iter()
+            .any(|p| p.ends_with("security-bar.md")),
+        "prompts/ must be discovered, got: {:?}",
+        recipe.prompts
+    );
+}
+
+#[test]
+fn eval_case_missing_expected_md_is_rejected() {
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("malformed-eval-case"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_MALFORMED_EVAL_CASE"),
+        "got: {codes:?}"
+    );
+}
+
+#[test]
+fn judge_with_neither_prompt_nor_prompt_file_is_rejected() {
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("invalid-judge-manifest"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_INVALID_JUDGE_MANIFEST"),
         "got: {codes:?}"
     );
 }

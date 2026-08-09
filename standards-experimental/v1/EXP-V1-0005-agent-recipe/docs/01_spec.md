@@ -28,11 +28,12 @@ Version 0.1.0 of this experiment defined a recipe as a single YAML file. Version
 
 This standard covers:
 
-- **The recipe directory shape** - the marker file, the `agents/` directory, and the optional `skills/`/`SYSTEM.md` assets.
+- **The recipe directory shape** - the marker file, the `agents/` directory, and the optional `skills/`/`tools/`/`evals/`/`judges/`/`prompts/`/`SYSTEM.md` assets.
 - **The root manifest schema** (`recipe.yaml`) and **per-agent manifest schema** (`agents/<name>.yaml`).
 - **Harness-neutrality rules** - how the `harness` field is extended to support additional harnesses over time without breaking existing recipes.
 - **Skill reference resolution** and **system-instruction merge semantics**.
 - **MCP server policy** - the package-tier and agent-tier `mcp` allowlists and the narrowing rule between them (section 7).
+- **The declaration of eval cases and judges** (`evals/`, `judges/`, `prompts/`) - the recipe's bar for "good", kept separate from any run's evaluation results (section 9).
 - **The canonical loader contract** (`load_recipe_dir`) and its error codes.
 
 This standard does NOT cover:
@@ -42,6 +43,7 @@ This standard does NOT cover:
 - **Skill content or system instruction authoring guidance.** This standard defines how skill references and system instructions are *represented*, not how skills or instructions should be authored.
 - **Per-harness configuration details** (for example, provider-specific API parameters). Those live in harness adapters that consume the recipe, not in the recipe itself.
 - **Tool execution.** `tools` entries are references only (names/identifiers); this standard defines an allowlist contract for them (section 4.6) but no execution semantics - how a named tool actually runs is a consumer/harness concern.
+- **Eval execution and scoring.** `evals/` and `judges/` (section 9) declare eval cases and judges; this standard defines no scoring model, passing threshold, or execution semantics for how a judge is run or a result recorded - those are consumer concerns. Evaluation *results* are out of scope entirely: a result belongs to a run, not to the recipe (section 4.5).
 
 ### 1.4 Relationship to Other Standards
 
@@ -99,12 +101,20 @@ A recipe MUST be represented as a directory:
   tools/                  # optional: recipe-provided tools (section 5.2)
     <ref>/
       tool.yaml
+  evals/                  # optional: eval cases (section 9.1)
+    <name>/
+      input.json
+      expected.md
+  judges/                 # optional: judge manifests (section 9.2)
+    <name>.yaml
+  prompts/                # optional: prompt text referenced by judges (section 9.3)
+    <name>.md
   SYSTEM.md               # optional: shared base instructions
 ```
 
-- The presence of `recipe.yaml` at the directory root MUST be treated as the marker denoting "this directory is a recipe". Its absence MUST be reported as `RECIPE_MISSING_MARKER` (section 9).
+- The presence of `recipe.yaml` at the directory root MUST be treated as the marker denoting "this directory is a recipe". Its absence MUST be reported as `RECIPE_MISSING_MARKER` (section 10).
 - `agents/` holds one YAML file per agent. Each file's stem (file name without the `.yaml`/`.yml` extension) is that agent's name for the purposes of `default_agent` and `subagents` resolution.
-- `skills/`, `tools/`, and `SYSTEM.md` are all OPTIONAL.
+- `skills/`, `tools/`, `evals/`, `judges/`, `prompts/`, and `SYSTEM.md` are all OPTIONAL.
 
 ---
 
@@ -167,7 +177,7 @@ No other fields are permitted at any nesting level - `AgentManifest`, `ModelSpec
 
 ### 4.3 The `harness` Field
 
-`harness` names the agent harness an agent requires. It is a closed enumeration in this version of the standard, with values `claude` and `codex`. The standard is explicitly designed for this set to grow (for example `opencode`, `gemini`) in future MINOR versions, without requiring existing recipes to change. An unrecognized `harness` value MUST fail to parse (reported as `RECIPE_MALFORMED_HARNESS_YAML`, section 9) rather than being silently ignored or coerced.
+`harness` names the agent harness an agent requires. It is a closed enumeration in this version of the standard, with values `claude` and `codex`. The standard is explicitly designed for this set to grow (for example `opencode`, `gemini`) in future MINOR versions, without requiring existing recipes to change. An unrecognized `harness` value MUST fail to parse (reported as `RECIPE_MALFORMED_HARNESS_YAML`, section 10) rather than being silently ignored or coerced.
 
 `harness` is OPTIONAL, and its absence is meaningful rather than merely permissive:
 
@@ -209,7 +219,7 @@ The intended consequence is that a single recipe carries one definition of good 
 
 A tool reference is either **harness-builtin** (provided natively by the harness named in `harness`, per `05-harness-tool-vocabulary.md`) or **recipe-provided** (resolving under `tools/`, section 5.2). Recipe-provided tools are portable by construction because the recipe carries them. When a name matches both, recipe-provided wins (section 5.2).
 
-An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT reference a name that is harness-builtin under *any* harness this standard knows about, because an agnostic agent declares no single vocabulary to check its `tools` entries against. A validator MUST report such a reference as `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 9).
+An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT reference a name that is harness-builtin under *any* harness this standard knows about, because an agnostic agent declares no single vocabulary to check its `tools` entries against. A validator MUST report such a reference as `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 10).
 
 ### 4.7 Agent Inheritance (`from:`)
 
@@ -235,7 +245,7 @@ A `from:` chain is validated for two additional failure modes, both surfaced wit
 - **`RECIPE_FROM_CYCLE`**: resolving an agent's `from:` chain revisits an agent already seen in that resolution, including an agent that names itself. Detected by tracking visited agent names in a set as the chain is walked, rather than recursing until the call stack overflows.
 - **`RECIPE_FROM_UNRESOLVED`**: a `from:` value does not name any parsed entry under `agents/` (no `agents/<name>.yaml` or `.yml`).
 
-`validate_recipe_dir` runs `resolve_inherited` for every agent that declares `from:` and reports any of the codes above (`RECIPE_FROM_CYCLE`, `RECIPE_FROM_UNRESOLVED`, `RECIPE_FROM_WIDENS_TOOLS`, `RECIPE_MCP_FROM_WIDENS_POLICY`) as a diagnostic, alongside the structural checks in section 9.2. `load_recipe_dir` itself does not perform `from:` resolution: it parses each agent manifest as authored, so a caller can inspect both the as-authored form (`Recipe::agents`) and, on demand, the resolved form (`resolve_inherited`). Resolving unconditionally inside the loader would make the authored form unobservable, which would harm diagnostics more than it would simplify callers.
+`validate_recipe_dir` runs `resolve_inherited` for every agent that declares `from:` and reports any of the codes above (`RECIPE_FROM_CYCLE`, `RECIPE_FROM_UNRESOLVED`, `RECIPE_FROM_WIDENS_TOOLS`, `RECIPE_MCP_FROM_WIDENS_POLICY`) as a diagnostic, alongside the structural checks in section 10.2. `load_recipe_dir` itself does not perform `from:` resolution: it parses each agent manifest as authored, so a caller can inspect both the as-authored form (`Recipe::agents`) and, on demand, the resolved form (`resolve_inherited`). Resolving unconditionally inside the loader would make the authored form unobservable, which would harm diagnostics more than it would simplify callers.
 
 ---
 
@@ -284,7 +294,7 @@ No other fields are permitted; `ToolManifest` uses `#[serde(deny_unknown_fields)
 
 **Precedence when a name is ambiguous.** A `tools` entry MAY simultaneously match a harness-builtin name (section 4.6, `05-harness-tool-vocabulary.md`) and a `tools/<ref>/` directory in the same recipe. This is resolved in favor of the recipe: **recipe-provided wins**, because the recipe ships the implementation and therefore knows what the name means. Concretely, this means the harness-agnostic-agent-uses-builtin-tool check (section 4.6, `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL`) MUST treat a `tools` entry that resolves under `tools/` as recipe-provided even if the same name is also harness-builtin, and MUST NOT report it as an error on that basis. A validator that checked builtin-ness first and never consulted `tools/` would over-reject; the check MUST consult `tools/` resolution before concluding a name is builtin-only.
 
-**What this standard does not do.** This standard defines a tool's declaration and invocation contract. It does NOT execute tools, and this crate carries no process-spawning dependency as a consequence. Validation of a `tools/<ref>/tool.yaml` is limited to it being readable and parsing with a non-empty `name` and `command` (`RECIPE_INVALID_TOOL_MANIFEST`, section 9); this standard does NOT validate that `command` exists on disk or is executable, because a recipe is a portable artifact that MAY be validated on a machine that will never run it.
+**What this standard does not do.** This standard defines a tool's declaration and invocation contract. It does NOT execute tools, and this crate carries no process-spawning dependency as a consequence. Validation of a `tools/<ref>/tool.yaml` is limited to it being readable and parsing with a non-empty `name` and `command` (`RECIPE_INVALID_TOOL_MANIFEST`, section 10); this standard does NOT validate that `command` exists on disk or is executable, because a recipe is a portable artifact that MAY be validated on a machine that will never run it.
 
 ---
 
@@ -401,9 +411,67 @@ A conforming implementation MUST be able to deserialize a valid recipe directory
 
 ---
 
-## 9. Error Codes
+## 9. Evals, Judges, and Prompts (`evals/`, `judges/`, `prompts/`)
 
-### 9.1 Loader Codes
+A recipe holds one definition of good. `evals/` and `judges/` are that definition, and they belong IN the recipe because they MUST travel with the agent they judge: an eval case and the judge that scores it are meaningless detached from the agent they were written against.
+
+**Evaluation *results* do not belong in the recipe.** A result belongs to a run, and MUST be attributed to that run's effective model and harness per section 4.5, never to the values the recipe declared. This is the split that makes a model sweep sound: hold the recipe fixed, vary the model per run via the override mechanism in 4.5, and run the same `evals/` and `judges/` against each. Same bar, many subjects, comparable results. If the bar lived outside the recipe, nothing would guarantee every model was measured against the *same* bar; if results lived inside the recipe, the recipe would stop being a statement of intent and become a record of the last experiment - precisely what section 4.5 forbids by requiring overrides to be recorded on the run, not written back into the artifact.
+
+```text
+<recipe>/
+  evals/
+    <name>/
+      input.json          # the eval case's input
+      expected.md          # the bar this case's output is judged against
+  judges/
+    <name>.yaml            # JudgeManifest: name, prompt (or prompt_file)
+  prompts/
+    <name>.md               # prompt text referenced by judges via prompt_file
+```
+
+`evals/`, `judges/`, and `prompts/` are all OPTIONAL. A recipe with no evals is valid; most recipes will start that way and grow an eval as the agent matures. Their absence MUST NOT be treated as an error.
+
+**This standard defines the declaration of an eval case and a judge. It does NOT define execution semantics: how a judge scores an eval case's output, what a passing threshold is, how the judge's own model is chosen, or how a result is recorded.** Those are consumer concerns, belonging to whatever runs the eval, not to this standard. Standardizing the declaration keeps these artifacts discoverable and portable across harnesses and consumers without this standard taking on a scoring model it would then have to keep stable forever.
+
+### 9.1 Eval Cases (`evals/<name>/`)
+
+Each subdirectory directly under `evals/` is an eval case, named by `<name>` - the eval case's own identity, with no other manifest naming it. A case directory MUST contain both:
+
+| File | Required | Description |
+|---|---|---|
+| `input.json` | YES | The case's input, in whatever shape the consumer that runs the eval expects. This standard does not define or validate its contents. |
+| `expected.md` | YES | The bar this case's output is judged against, in prose. This standard does not define or validate its contents. |
+
+An `evals/<name>/` directory missing either file is malformed and MUST be reported as `RECIPE_MALFORMED_EVAL_CASE` (section 10), never silently skipped. Silently skipping a broken eval case is the worst failure mode available here: the bar quietly shrinks by one case while the suite continues to report green, and nothing signals that it happened.
+
+This is discovered by `schema::load_recipe_dir` into `Recipe::evals: Vec<EvalCase>`, each carrying `name`, `input_path`, and `expected_path`, sorted by case name.
+
+### 9.2 Judges (`judges/<name>.yaml`)
+
+Each `judges/*.yaml` file conforms to `JudgeManifest`:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | YES | Judge name. MUST be non-empty. |
+| `description` | string | NO | Human-readable description. |
+| `prompt` | string | NO* | The judge's prompt, given inline. |
+| `prompt_file` | string | NO* | Reference to a prompt file, conventionally resolving to `prompts/<prompt_file>`, used instead of an inline `prompt`. |
+
+\* At least one of `prompt` / `prompt_file` MUST be present. A judge declaring neither is malformed and MUST be reported as `RECIPE_INVALID_JUDGE_MANIFEST` (section 10), alongside an empty `name`. This standard does NOT require `prompt_file` to resolve to an existing file under `prompts/`: doing so would mean validating a runtime lookup this standard otherwise declines to specify, and a recipe is a portable artifact that MAY be validated on a machine that never runs its judges.
+
+No other fields are permitted; `JudgeManifest` uses `#[serde(deny_unknown_fields)]`, kept deliberately small so the shape can grow additively in a future MINOR version once a real consumer's needs are known, rather than this standard guessing at a scoring model in advance.
+
+This is discovered by `schema::load_recipe_dir` into `Recipe::judges: Vec<JudgeManifest>`, sorted by source file path.
+
+### 9.3 Prompts (`prompts/<name>.md`)
+
+`prompts/` holds prompt text as plain Markdown files, one per file, referenced by a judge's `prompt_file` (or by any other future consumer of prompt text this standard does not yet name). It exists so a judge's prompt can be authored and reviewed as its own file rather than folded into YAML string literals, and so multiple judges can share one prompt by reference. `schema::load_recipe_dir` gathers every `prompts/*.md` file into `Recipe::prompts: Vec<PathBuf>`, sorted; this standard does not otherwise interpret their contents.
+
+---
+
+## 10. Error Codes
+
+### 10.1 Loader Codes
 
 These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validate::validate_recipe_dir`. They correspond one-to-one with `schema::RecipeLoadError` variants (`RecipeLoadError::code()` returns the matching constant from `schema::error_codes`).
 
@@ -418,12 +486,14 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_FROM_CYCLE` | Resolving an agent's `from:` chain (section 4.7) revisits an agent already seen, including an agent naming itself. Emitted by `schema::resolve_inherited`, not `load_recipe_dir`. |
 | `RECIPE_FROM_UNRESOLVED` | A `from:` value does not name any parsed entry under `agents/`. Emitted by `schema::resolve_inherited`. |
 | `RECIPE_FROM_WIDENS_TOOLS` | A child agent's `tools` is not a subset of its resolved parent's `tools` (section 4.7). Emitted by `schema::resolve_inherited`. |
-| `RECIPE_MCP_FROM_WIDENS_POLICY` | A child agent's `mcp` is not a subset of its resolved parent's `mcp`, checked at this one `from:` link (section 7.3). Emitted by `schema::resolve_inherited`. Distinct from `RECIPE_MCP_AGENT_WIDENS_POLICY` (section 9.2), which checks the fully resolved agent against the package tier. |
+| `RECIPE_MCP_FROM_WIDENS_POLICY` | A child agent's `mcp` is not a subset of its resolved parent's `mcp`, checked at this one `from:` link (section 7.3). Emitted by `schema::resolve_inherited`. Distinct from `RECIPE_MCP_AGENT_WIDENS_POLICY` (section 10.2), which checks the fully resolved agent against the package tier. |
 | `RECIPE_MALFORMED_TOOL_MANIFEST` | A `tools/*/tool.yaml` file failed to parse as a `ToolManifest` (missing/extra/invalid fields, or a non-string key). See section 5.2. |
+| `RECIPE_MALFORMED_EVAL_CASE` | An `evals/<name>/` directory is missing `input.json` or `expected.md`. Reported rather than silently skipped, so an incomplete eval case cannot quietly shrink the bar while the suite still reports green. See section 9.1. |
+| `RECIPE_MALFORMED_JUDGE_MANIFEST` | A `judges/*.yaml` file failed to parse as a `JudgeManifest` (missing/extra/invalid fields, or a non-string key). See section 9.2. |
 
-### 9.2 Validator Codes
+### 10.2 Validator Codes
 
-`validate::validate_recipe_dir` is built on top of the loader (plan revision R1: loading and validation share one code path). On a failed load it surfaces exactly one loader code from §9.1. On a recipe that loads cleanly it runs the additional structural rules below, reporting *all* violations via `apss_core::Diagnostics` rather than failing on the first one. These codes live in `validate::error_codes`.
+`validate::validate_recipe_dir` is built on top of the loader (plan revision R1: loading and validation share one code path). On a failed load it surfaces exactly one loader code from §10.1. On a recipe that loads cleanly it runs the additional structural rules below, reporting *all* violations via `apss_core::Diagnostics` rather than failing on the first one. These codes live in `validate::error_codes`.
 
 | Code | Meaning |
 |------|---------|
@@ -437,10 +507,11 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` | An agent that omits `harness` lists a `tools` entry that is harness-builtin under some harness and does not resolve as recipe-provided. See section 4.6. A name that resolves under `tools/` MUST NOT trigger this, even if it is also harness-builtin under some harness - recipe-provided wins (section 5.2). |
 | `RECIPE_MCP_AGENT_WIDENS_POLICY` | An agent's fully `from:`-resolved `mcp` policy names a server the package's `mcp` does not permit, or permits a method for a shared server the package does not. See section 7. |
 | `RECIPE_INVALID_TOOL_MANIFEST` | A `tools/<ref>/tool.yaml` parsed successfully but has an empty `name` or an empty `command`. See section 5.2. |
+| `RECIPE_INVALID_JUDGE_MANIFEST` | A `judges/*.yaml` parsed successfully but has an empty `name`, or declares neither `prompt` nor `prompt_file`. See section 9.2. |
 
 Field-shape rules (unknown fields, non-string keys, unrecognized `harness`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_HARNESS_YAML` on the offending file rather than as separate validator codes.
 
-### 9.3 CLI
+### 10.3 CLI
 
 `validate_recipe_dir` is wired into the composed development CLI as a registered standard command:
 
@@ -452,7 +523,7 @@ apss-dev run agent-recipe validate <recipe-dir>
 
 ---
 
-## 10. Compliance Checklist
+## 11. Compliance Checklist
 
 A recipe directory is **compliant** with this standard if:
 
@@ -462,11 +533,13 @@ A recipe directory is **compliant** with this standard if:
 - [ ] `skills`, `tools`, and `subagents`, if present, are arrays of strings.
 - [ ] `system_instructions`, if present, has a valid `mode` and non-empty `content`.
 - [ ] Every agent's fully `from:`-resolved `mcp` policy, if present, is a subset of the package's `mcp` policy (section 7).
+- [ ] Every `evals/<name>/` directory, if `evals/` is present, contains both `input.json` and `expected.md` (section 9.1).
+- [ ] Every `judges/*.yaml` file, if `judges/` is present, has a non-empty `name` and at least one of `prompt`/`prompt_file` (section 9.2).
 - [ ] No unrecognized fields are present at any nesting level.
 
 ---
 
-## 11. Generator
+## 12. Generator
 
 A conformant recipe directory can be scaffolded from the canonical template in `templates/recipe/skeleton/`:
 
@@ -482,7 +555,7 @@ The library entry point is `generate::scaffold_recipe(name, dest)`. The template
 
 ---
 
-## 12. Future Extensions
+## 13. Future Extensions
 
 Potential future additions, to be pursued only after this experiment gathers feedback:
 
@@ -494,19 +567,19 @@ Potential future additions, to be pursued only after this experiment gathers fee
 
 ---
 
-## 13. Security Considerations
+## 14. Security Considerations
 
-### 13.1 No Credentials in Recipes
+### 14.1 No Credentials in Recipes
 
 Recipe directories MUST NOT contain credentials, tokens, or other secrets. Recipes are expected to be committed to version control; secret material belongs in the `credentials` component of a `RunSpec` (informative, see 1.5), not in the recipe.
 
-### 13.2 System Instruction Content
+### 14.2 System Instruction Content
 
 `system_instructions.content` (and `SYSTEM.md`) is free-form text that becomes part of an agent's effective system prompt. Consumers SHOULD treat recipe sources with the same trust level as other executable configuration (for example, CI workflow files): a recipe from an untrusted source can materially change agent behavior via `mode: replace` or injected `skills`/`tools`.
 
 ---
 
-## 14. References
+## 15. References
 
 - [RFC 2119: Key words for use in RFCs](https://datatracker.ietf.org/doc/html/rfc2119)
 - [Semantic Versioning](https://semver.org/)

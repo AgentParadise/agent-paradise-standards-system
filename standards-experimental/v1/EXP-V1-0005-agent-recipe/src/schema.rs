@@ -7,6 +7,10 @@
 //!   recipe.yaml            # RecipeManifest: name, version, default_agent
 //!   agents/<name>.yaml     # AgentManifest (per-agent, unified agents+subagents)
 //!   skills/                # optional: bundled skill packages
+//!   tools/<ref>/tool.yaml  # optional: recipe-provided tools
+//!   evals/<name>/          # optional: eval cases (input.json + expected.md)
+//!   judges/<name>.yaml     # optional: judge manifests
+//!   prompts/<name>.md      # optional: prompt text referenced by judges
 //!   SYSTEM.md               # optional: shared base instructions
 //! ```
 //!
@@ -49,6 +53,27 @@ pub const TOOLS_DIR: &str = "tools";
 
 /// Per-tool manifest file name, resolved as `tools/<ref>/tool.yaml`.
 pub const TOOL_MANIFEST_FILE: &str = "tool.yaml";
+
+/// Optional directory (relative to the recipe root) holding eval cases: one
+/// subdirectory per case, each with `input.json` and `expected.md`. See
+/// section 9.
+pub const EVALS_DIR: &str = "evals";
+
+/// Per-eval-case input file name, resolved as `evals/<name>/input.json`.
+pub const EVAL_INPUT_FILE: &str = "input.json";
+
+/// Per-eval-case expected-output file name, resolved as
+/// `evals/<name>/expected.md`.
+pub const EVAL_EXPECTED_FILE: &str = "expected.md";
+
+/// Optional directory (relative to the recipe root) holding judge manifests:
+/// one YAML file per judge. See section 9.
+pub const JUDGES_DIR: &str = "judges";
+
+/// Optional directory (relative to the recipe root) holding prompt text
+/// referenced by judges (or anything else) via `prompts/<file>.md`. See
+/// section 9.
+pub const PROMPTS_DIR: &str = "prompts";
 
 /// Root manifest: `recipe.yaml`. Its presence is the recipe marker.
 ///
@@ -223,6 +248,50 @@ pub struct ToolManifest {
     pub protocol: ToolProtocol,
 }
 
+/// One eval case discovered from `evals/<name>/`. A case is a directory
+/// containing exactly `input.json` (the case input) and `expected.md` (the
+/// bar the eval's output is judged against). This standard defines the
+/// declaration only: it does not parse `input.json`, does not define a
+/// scoring model, and does not define how `expected.md` is compared against
+/// an actual run. Those are consumer concerns (section 9).
+///
+/// `evals/<name>/` missing either file is malformed and MUST be reported
+/// (`RECIPE_MALFORMED_EVAL_CASE`), never silently skipped: a quietly
+/// incomplete eval case is a bar that has silently shrunk while still
+/// reporting green.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvalCase {
+    /// The eval case name: the `evals/<name>` directory name.
+    pub name: String,
+    /// Path to `evals/<name>/input.json`.
+    pub input_path: PathBuf,
+    /// Path to `evals/<name>/expected.md`.
+    pub expected_path: PathBuf,
+}
+
+/// A judge's manifest: `judges/<name>.yaml`. Declares the judge only; this
+/// standard defines no scoring model, passing threshold, or execution
+/// semantics for how a judge is actually run against an eval case - that is
+/// a consumer concern (section 9).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JudgeManifest {
+    /// Judge name. MUST be non-empty.
+    pub name: String,
+    /// Human-readable description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// The judge's prompt, given inline. At least one of `prompt` /
+    /// `prompt_file` MUST be present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    /// Reference to a prompt file, conventionally resolving to
+    /// `prompts/<prompt_file>`. Used instead of an inline `prompt`. At least
+    /// one of `prompt` / `prompt_file` MUST be present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_file: Option<String>,
+}
+
 /// Coarse reasoning/thinking effort level.
 ///
 /// Maps to harness-specific concepts such as `thinking_level` (Claude) or
@@ -389,6 +458,15 @@ pub struct Recipe {
     /// reference it. Empty if `tools/` does not exist. See section 5.2 and
     /// [`Recipe::resolve_tool`].
     pub tools: BTreeMap<String, ToolManifest>,
+    /// Eval cases found under `evals/`, sorted by case name. Empty if
+    /// `evals/` does not exist. See section 9.
+    pub evals: Vec<EvalCase>,
+    /// Judge manifests found under `judges/`, sorted by source file path.
+    /// Empty if `judges/` does not exist. See section 9.
+    pub judges: Vec<JudgeManifest>,
+    /// `prompts/*.md` files found under `prompts/`, sorted. Empty if
+    /// `prompts/` does not exist. See section 9.
+    pub prompts: Vec<PathBuf>,
     /// Contents of `SYSTEM.md`, if present.
     pub system_md: Option<String>,
 }
@@ -446,6 +524,11 @@ pub mod error_codes {
     pub const RECIPE_MCP_FROM_WIDENS_POLICY: &str = "RECIPE_MCP_FROM_WIDENS_POLICY";
     /// A `tools/*/tool.yaml` file failed to parse as a [`super::ToolManifest`].
     pub const RECIPE_MALFORMED_TOOL_MANIFEST: &str = "RECIPE_MALFORMED_TOOL_MANIFEST";
+    /// An `evals/<name>/` directory is missing `input.json` or
+    /// `expected.md`.
+    pub const RECIPE_MALFORMED_EVAL_CASE: &str = "RECIPE_MALFORMED_EVAL_CASE";
+    /// A `judges/*.yaml` file failed to parse as a [`super::JudgeManifest`].
+    pub const RECIPE_MALFORMED_JUDGE_MANIFEST: &str = "RECIPE_MALFORMED_JUDGE_MANIFEST";
 }
 
 /// Failure modes of [`load_recipe_dir`].
@@ -566,6 +649,26 @@ pub enum RecipeLoadError {
         #[source]
         source: serde_yaml::Error,
     },
+    /// An `evals/<name>/` directory is missing `input.json` or
+    /// `expected.md`.
+    #[error("malformed eval case '{name}': missing {missing} at {path}")]
+    MalformedEvalCase {
+        /// The eval case (directory) name.
+        name: String,
+        /// Which required file is missing: `input.json` or `expected.md`.
+        missing: &'static str,
+        /// Path to the offending `evals/<name>/` directory.
+        path: PathBuf,
+    },
+    /// A `judges/*.yaml` file is not a valid [`JudgeManifest`].
+    #[error("malformed judge manifest at {path}: {source}")]
+    MalformedJudge {
+        /// Path to the offending judge YAML file.
+        path: PathBuf,
+        /// Underlying parse error.
+        #[source]
+        source: serde_yaml::Error,
+    },
 }
 
 impl RecipeLoadError {
@@ -584,6 +687,8 @@ impl RecipeLoadError {
             Self::FromWidensTools { .. } => error_codes::RECIPE_FROM_WIDENS_TOOLS,
             Self::FromWidensMcp { .. } => error_codes::RECIPE_MCP_FROM_WIDENS_POLICY,
             Self::MalformedTool { .. } => error_codes::RECIPE_MALFORMED_TOOL_MANIFEST,
+            Self::MalformedEvalCase { .. } => error_codes::RECIPE_MALFORMED_EVAL_CASE,
+            Self::MalformedJudge { .. } => error_codes::RECIPE_MALFORMED_JUDGE_MANIFEST,
         }
     }
 
@@ -603,6 +708,8 @@ impl RecipeLoadError {
             Self::FromWidensTools { path, .. } => path,
             Self::FromWidensMcp { path, .. } => path,
             Self::MalformedTool { path, .. } => path,
+            Self::MalformedEvalCase { path, .. } => path,
+            Self::MalformedJudge { path, .. } => path,
         }
     }
 }
@@ -692,12 +799,36 @@ pub fn load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError> {
         BTreeMap::new()
     };
 
+    let evals_dir = path.join(EVALS_DIR);
+    let evals = if dir_exists(&evals_dir)? {
+        list_eval_cases(&evals_dir)?
+    } else {
+        Vec::new()
+    };
+
+    let judges_dir = path.join(JUDGES_DIR);
+    let judges = if dir_exists(&judges_dir)? {
+        list_judge_manifests(&judges_dir)?
+    } else {
+        Vec::new()
+    };
+
+    let prompts_dir = path.join(PROMPTS_DIR);
+    let prompts = if dir_exists(&prompts_dir)? {
+        list_prompt_files(&prompts_dir)?
+    } else {
+        Vec::new()
+    };
+
     Ok(Recipe {
         manifest,
         agents,
         agent_sources,
         skills,
         tools,
+        evals,
+        judges,
+        prompts,
         system_md,
     })
 }
@@ -1020,6 +1151,107 @@ fn list_tool_manifests(dir: &Path) -> Result<BTreeMap<String, ToolManifest>, Rec
     Ok(manifests)
 }
 
+/// List the eval cases directly under `dir` (`evals/`), sorted by case name.
+///
+/// Every subdirectory under `evals/` is treated as an eval case, unlike
+/// `tools/` (where a subdirectory with no `tool.yaml` is simply ignored):
+/// section 9's "MUST be reported, not silently skipped" ruling means a case
+/// directory missing `input.json` or `expected.md` fails the whole load as
+/// [`RecipeLoadError::MalformedEvalCase`] rather than being dropped from the
+/// gathered set.
+fn list_eval_cases(dir: &Path) -> Result<Vec<EvalCase>, RecipeLoadError> {
+    let mut case_dirs = Vec::new();
+    for entry in read_dir(dir)? {
+        let entry = entry.map_err(|source| RecipeLoadError::Io {
+            path: dir.to_path_buf(),
+            source,
+        })?;
+        let file_type = entry.file_type().map_err(|source| RecipeLoadError::Io {
+            path: entry.path(),
+            source,
+        })?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let name = entry
+            .file_name()
+            .to_str()
+            .map(str::to_string)
+            .unwrap_or_default();
+        case_dirs.push((name, entry.path()));
+    }
+    case_dirs.sort();
+
+    let mut cases = Vec::with_capacity(case_dirs.len());
+    for (name, case_dir) in case_dirs {
+        let input_path = case_dir.join(EVAL_INPUT_FILE);
+        let expected_path = case_dir.join(EVAL_EXPECTED_FILE);
+        if !path_exists(&input_path)? {
+            return Err(RecipeLoadError::MalformedEvalCase {
+                name,
+                missing: EVAL_INPUT_FILE,
+                path: case_dir,
+            });
+        }
+        if !path_exists(&expected_path)? {
+            return Err(RecipeLoadError::MalformedEvalCase {
+                name,
+                missing: EVAL_EXPECTED_FILE,
+                path: case_dir,
+            });
+        }
+        cases.push(EvalCase {
+            name,
+            input_path,
+            expected_path,
+        });
+    }
+    Ok(cases)
+}
+
+/// Parse every `judges/*.yaml` directly under `dir`, sorted by source file
+/// path for deterministic order (mirroring [`list_yaml_files`], which this
+/// reuses).
+fn list_judge_manifests(dir: &Path) -> Result<Vec<JudgeManifest>, RecipeLoadError> {
+    let mut manifests = Vec::new();
+    for entry_path in list_yaml_files(dir)? {
+        let content = read_to_string(&entry_path)?;
+        let judge: JudgeManifest =
+            serde_yaml::from_str(&content).map_err(|source| RecipeLoadError::MalformedJudge {
+                path: entry_path.clone(),
+                source,
+            })?;
+        manifests.push(judge);
+    }
+    Ok(manifests)
+}
+
+/// List `*.md` files directly under `dir` (`prompts/`), sorted by path for
+/// deterministic order.
+fn list_prompt_files(dir: &Path) -> Result<Vec<PathBuf>, RecipeLoadError> {
+    let mut entries = Vec::new();
+    for entry in read_dir(dir)? {
+        let entry = entry.map_err(|source| RecipeLoadError::Io {
+            path: dir.to_path_buf(),
+            source,
+        })?;
+        let path = entry.path();
+        let is_md = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext == "md");
+        let file_type = entry.file_type().map_err(|source| RecipeLoadError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        if file_type.is_file() && is_md {
+            entries.push(path);
+        }
+    }
+    entries.sort();
+    Ok(entries)
+}
+
 /// Open `dir` for reading, mapping the failure to [`RecipeLoadError::Io`].
 fn read_dir(dir: &Path) -> Result<fs::ReadDir, RecipeLoadError> {
     fs::read_dir(dir).map_err(|source| RecipeLoadError::Io {
@@ -1124,6 +1356,30 @@ subagents:
         let yaml =
             "name: x\nharness: claude\nmodel:\n  name: foo\n  effort: low\nnotarealfield: 1\n";
         let result: Result<AgentManifest, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err(), "expected unknown field to be rejected");
+    }
+
+    #[test]
+    fn judge_manifest_parses_with_inline_prompt() {
+        let yaml = "name: correctness\nprompt: Judge correctness.\n";
+        let judge: JudgeManifest = serde_yaml::from_str(yaml).expect("should parse");
+        assert_eq!(judge.name, "correctness");
+        assert_eq!(judge.prompt.as_deref(), Some("Judge correctness."));
+        assert!(judge.prompt_file.is_none());
+    }
+
+    #[test]
+    fn judge_manifest_parses_with_prompt_file() {
+        let yaml = "name: security\nprompt_file: security-bar.md\n";
+        let judge: JudgeManifest = serde_yaml::from_str(yaml).expect("should parse");
+        assert!(judge.prompt.is_none());
+        assert_eq!(judge.prompt_file.as_deref(), Some("security-bar.md"));
+    }
+
+    #[test]
+    fn judge_manifest_rejects_unknown_field() {
+        let yaml = "name: x\nprompt: y\nnotarealfield: 1\n";
+        let result: Result<JudgeManifest, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err(), "expected unknown field to be rejected");
     }
 
@@ -1383,6 +1639,9 @@ subagents:
             agent_sources: BTreeMap::new(),
             skills: Vec::new(),
             tools: BTreeMap::new(),
+            evals: Vec::new(),
+            judges: Vec::new(),
+            prompts: Vec::new(),
             system_md: None,
         }
     }
