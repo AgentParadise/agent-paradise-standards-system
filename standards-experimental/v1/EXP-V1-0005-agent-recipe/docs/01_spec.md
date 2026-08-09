@@ -96,12 +96,15 @@ A recipe MUST be represented as a directory:
   agents/
     <name>.yaml           # AgentManifest (per-agent, unified agents + subagents)
   skills/                 # optional: bundled skill packages
+  tools/                  # optional: recipe-provided tools (section 5.2)
+    <ref>/
+      tool.yaml
   SYSTEM.md               # optional: shared base instructions
 ```
 
 - The presence of `recipe.yaml` at the directory root MUST be treated as the marker denoting "this directory is a recipe". Its absence MUST be reported as `RECIPE_MISSING_MARKER` (section 9).
 - `agents/` holds one YAML file per agent. Each file's stem (file name without the `.yaml`/`.yml` extension) is that agent's name for the purposes of `default_agent` and `subagents` resolution.
-- `skills/` and `SYSTEM.md` are both OPTIONAL.
+- `skills/`, `tools/`, and `SYSTEM.md` are all OPTIONAL.
 
 ---
 
@@ -204,7 +207,7 @@ The intended consequence is that a single recipe carries one definition of good 
 
 `tools` is an allowlist, not a set of hints. A conforming consumer MUST NOT grant an agent a tool its `tools` list does not permit. An absent `tools` field places no restriction; a present but empty list permits no tools. These are distinct states and a consumer MUST NOT treat them alike.
 
-A tool reference is either **harness-builtin** (provided natively by the harness named in `harness`, per `05-harness-tool-vocabulary.md`) or **recipe-provided** (resolving under `tools/`, section 5). Recipe-provided tools are portable by construction because the recipe carries them.
+A tool reference is either **harness-builtin** (provided natively by the harness named in `harness`, per `05-harness-tool-vocabulary.md`) or **recipe-provided** (resolving under `tools/`, section 5.2). Recipe-provided tools are portable by construction because the recipe carries them. When a name matches both, recipe-provided wins (section 5.2).
 
 An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT reference a name that is harness-builtin under *any* harness this standard knows about, because an agnostic agent declares no single vocabulary to check its `tools` entries against. A validator MUST report such a reference as `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 9).
 
@@ -236,7 +239,9 @@ A `from:` chain is validated for two additional failure modes, both surfaced wit
 
 ---
 
-## 5. Skill Reference Resolution
+## 5. Skill and Tool Reference Resolution
+
+### 5.1 Skill Reference Resolution
 
 Each entry in an agent manifest's `skills` array is a skill reference resolving to a plugin-dir **path**, in the following order:
 
@@ -244,6 +249,42 @@ Each entry in an agent manifest's `skills` array is a skill reference resolving 
 2. Otherwise, the ref itself is used as-is (an external skill path or name).
 
 Consumers (e.g. Plan B's `itmux run`, mapping `skills` to `claude_plugin_dirs`) MUST preserve the **listed order** of `skills` when resolving - resolution order is deterministic and load-bearing.
+
+### 5.2 Tool Reference Resolution (`tools/`)
+
+Section 4.3 lets an agent omit `harness` and assert harness-agnosticism, and section 4.6 forbids such an agent from referencing a harness-builtin tool name. Taken together those two rules would make an agnostic agent's `tools` list vacuous - it could reference nothing at all - unless a recipe has a way to carry its own tool implementations. `tools/` is that way.
+
+```text
+<recipe>/
+  tools/
+    <ref>/
+      tool.yaml           # ToolManifest: name, description, command, args, protocol
+```
+
+`tools/` is OPTIONAL. Each subdirectory directly under it is a **tool package**, named by `<ref>` - the same string an agent's `tools` entry uses to reference it - and MUST contain a `tool.yaml` conforming to `ToolManifest`:
+
+| Field | Type | Required | Description |
+|-------|------|----------|--------------|
+| `name` | string | YES | Tool name. MUST be non-empty. Conventionally matches `<ref>`, though resolution keys off the directory name, not this field. |
+| `description` | string | NO | Human-readable description. |
+| `command` | string | YES | The executable to invoke. MUST be non-empty. |
+| `args` | array[string] | NO | Fixed leading arguments passed to `command` on every invocation. Defaults to an empty array. |
+| `protocol` | enum string | NO | `mcp-stdio` or `subprocess`. Defaults to `mcp-stdio`. |
+
+No other fields are permitted; `ToolManifest` uses `#[serde(deny_unknown_fields)]`.
+
+**Resolution.** A `tools` entry `<ref>` is **recipe-provided** when `tools/<ref>/tool.yaml` exists inside the recipe directory and parses as a `ToolManifest`; `Recipe::resolve_tool(ref)` is the single function every consumer of this standard MUST use to answer that question. An entry that does not resolve this way is either harness-builtin (checked against `05-harness-tool-vocabulary.md`, per harness) or simply unresolvable, neither of which this section governs.
+
+**The portability rule.** A recipe-provided tool MUST NOT link a harness API. It MUST be invocable as a subprocess by any conforming consumer. This is precisely what distinguishes `tools/` from an `extensions/`-style directory that imports the harness's own runtime API: an extension of that kind cannot cross harnesses, because its implementation is written against one harness's process. A self-contained script, a compiled binary, or an MCP stdio server can all satisfy this rule, because none of them require the invoking process to *be* a particular harness - they only require a process to invoke them, which every harness has.
+
+**Protocol semantics.**
+
+- **`mcp-stdio`** (the default): the tool is an MCP server spoken to over stdio. This supplies schema and invocation semantics for free, and is already cross-harness by design, so it needs no further contract from this standard beyond "launch `command` (with `args`) as an MCP stdio server".
+- **`subprocess`**: the escape hatch for a one-file script where a full MCP server is overkill. The contract is argv in, JSON on stdout, and a non-zero exit code means failure. This standard does not further specify the JSON shape; that is a concern for the tool's own `description` and its caller's expectations, not for this standard.
+
+**Precedence when a name is ambiguous.** A `tools` entry MAY simultaneously match a harness-builtin name (section 4.6, `05-harness-tool-vocabulary.md`) and a `tools/<ref>/` directory in the same recipe. This is resolved in favor of the recipe: **recipe-provided wins**, because the recipe ships the implementation and therefore knows what the name means. Concretely, this means the harness-agnostic-agent-uses-builtin-tool check (section 4.6, `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL`) MUST treat a `tools` entry that resolves under `tools/` as recipe-provided even if the same name is also harness-builtin, and MUST NOT report it as an error on that basis. A validator that checked builtin-ness first and never consulted `tools/` would over-reject; the check MUST consult `tools/` resolution before concluding a name is builtin-only.
+
+**What this standard does not do.** This standard defines a tool's declaration and invocation contract. It does NOT execute tools, and this crate carries no process-spawning dependency as a consequence. Validation of a `tools/<ref>/tool.yaml` is limited to it being readable and parsing with a non-empty `name` and `command` (`RECIPE_INVALID_TOOL_MANIFEST`, section 9); this standard does NOT validate that `command` exists on disk or is executable, because a recipe is a portable artifact that MAY be validated on a machine that will never run it.
 
 ---
 
@@ -378,6 +419,7 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_FROM_UNRESOLVED` | A `from:` value does not name any parsed entry under `agents/`. Emitted by `schema::resolve_inherited`. |
 | `RECIPE_FROM_WIDENS_TOOLS` | A child agent's `tools` is not a subset of its resolved parent's `tools` (section 4.7). Emitted by `schema::resolve_inherited`. |
 | `RECIPE_MCP_FROM_WIDENS_POLICY` | A child agent's `mcp` is not a subset of its resolved parent's `mcp`, checked at this one `from:` link (section 7.3). Emitted by `schema::resolve_inherited`. Distinct from `RECIPE_MCP_AGENT_WIDENS_POLICY` (section 9.2), which checks the fully resolved agent against the package tier. |
+| `RECIPE_MALFORMED_TOOL_MANIFEST` | A `tools/*/tool.yaml` file failed to parse as a `ToolManifest` (missing/extra/invalid fields, or a non-string key). See section 5.2. |
 
 ### 9.2 Validator Codes
 
@@ -392,8 +434,9 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_INVALID_SKILL_REF` | A `skills` entry is an empty string. |
 | `RECIPE_INVALID_TOOL_REF` | A `tools` entry is an empty string. |
 | `RECIPE_EMPTY_INSTRUCTIONS_CONTENT` | An agent's `system_instructions.content` is present but empty/whitespace. |
-| `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` | An agent that omits `harness` lists a `tools` entry that is harness-builtin under some harness and does not resolve as recipe-provided. See section 4.6. |
+| `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` | An agent that omits `harness` lists a `tools` entry that is harness-builtin under some harness and does not resolve as recipe-provided. See section 4.6. A name that resolves under `tools/` MUST NOT trigger this, even if it is also harness-builtin under some harness - recipe-provided wins (section 5.2). |
 | `RECIPE_MCP_AGENT_WIDENS_POLICY` | An agent's fully `from:`-resolved `mcp` policy names a server the package's `mcp` does not permit, or permits a method for a shared server the package does not. See section 7. |
+| `RECIPE_INVALID_TOOL_MANIFEST` | A `tools/<ref>/tool.yaml` parsed successfully but has an empty `name` or an empty `command`. See section 5.2. |
 
 Field-shape rules (unknown fields, non-string keys, unrecognized `harness`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_HARNESS_YAML` on the offending file rather than as separate validator codes.
 

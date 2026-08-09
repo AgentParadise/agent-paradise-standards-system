@@ -1,0 +1,4 @@
+name: extract_citations
+description: Extract cited URLs from a brief.
+protocol: mcp-stdio
+command: ./server

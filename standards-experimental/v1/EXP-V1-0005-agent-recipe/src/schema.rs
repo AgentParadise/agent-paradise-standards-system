@@ -42,6 +42,14 @@ pub const SKILLS_DIR: &str = "skills";
 /// Optional shared base system instructions file (relative to the recipe root).
 pub const SYSTEM_MD_FILE: &str = "SYSTEM.md";
 
+/// Optional directory (relative to the recipe root) holding recipe-provided
+/// tools: one subdirectory per tool, each with its own `tool.yaml`. See
+/// section 5.2.
+pub const TOOLS_DIR: &str = "tools";
+
+/// Per-tool manifest file name, resolved as `tools/<ref>/tool.yaml`.
+pub const TOOL_MANIFEST_FILE: &str = "tool.yaml";
+
 /// Root manifest: `recipe.yaml`. Its presence is the recipe marker.
 ///
 /// ```yaml
@@ -164,6 +172,55 @@ pub enum HarnessKind {
     Claude,
     /// OpenAI Codex CLI.
     Codex,
+}
+
+/// How a recipe-provided tool (section 5.2) is invoked.
+///
+/// Both protocols share the same portability guarantee: neither one links a
+/// harness API. `McpStdio` (the default) means the tool is spoken to as an
+/// MCP server over stdio, which supplies schema and invocation semantics for
+/// free and is already cross-harness. `Subprocess` is the escape hatch for a
+/// one-file script where a full MCP server is overkill: argv in, JSON on
+/// stdout, a non-zero exit code means failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ToolProtocol {
+    /// The tool is an MCP server spoken to over stdio.
+    #[default]
+    McpStdio,
+    /// The tool is a plain subprocess: argv in, JSON on stdout, non-zero
+    /// exit means failure.
+    Subprocess,
+}
+
+/// A recipe-provided tool's manifest: `tools/<ref>/tool.yaml`.
+///
+/// This standard defines the tool's declaration and invocation contract; it
+/// does NOT execute tools itself, so this crate carries no process-spawning
+/// dependency. See section 5.2 for the portability rule this manifest
+/// exists to support: a recipe-provided tool MUST NOT link a harness API and
+/// MUST be invocable as a subprocess by any conforming consumer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolManifest {
+    /// Tool name. MUST be non-empty. Conventionally matches the `tools/<ref>`
+    /// directory name, though resolution keys off the directory, not this
+    /// field.
+    pub name: String,
+    /// Human-readable description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// The executable to invoke. MUST be non-empty. This standard does NOT
+    /// validate that the command exists on disk or is executable: a recipe
+    /// is a portable artifact that may be validated on a machine that will
+    /// never run it.
+    pub command: String,
+    /// Fixed leading arguments passed to `command` on every invocation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    /// Invocation protocol. Defaults to `mcp-stdio`.
+    #[serde(default)]
+    pub protocol: ToolProtocol,
 }
 
 /// Coarse reasoning/thinking effort level.
@@ -327,6 +384,11 @@ pub struct Recipe {
     /// bundled skill inventory, not a resolved per-agent reference list (see
     /// [`AgentManifest::skills`] for that).
     pub skills: Vec<PathBuf>,
+    /// Recipe-provided tools found under `tools/`, keyed by the `tools/<ref>`
+    /// directory name - the same string an agent's `tools` entry uses to
+    /// reference it. Empty if `tools/` does not exist. See section 5.2 and
+    /// [`Recipe::resolve_tool`].
+    pub tools: BTreeMap<String, ToolManifest>,
     /// Contents of `SYSTEM.md`, if present.
     pub system_md: Option<String>,
 }
@@ -339,6 +401,14 @@ impl Recipe {
     /// values may also be constructed directly (e.g. in tests).
     pub fn default_agent(&self) -> Option<&AgentManifest> {
         self.agents.get(&self.manifest.default_agent)
+    }
+
+    /// Resolve a `tools` entry against this recipe's `tools/` directory
+    /// (section 5.2). Returns `None` when `name` does not match a
+    /// `tools/<name>/tool.yaml` gathered at load time - this is not an
+    /// error; the ref may be a harness-builtin name instead.
+    pub fn resolve_tool(&self, name: &str) -> Option<ToolManifest> {
+        self.tools.get(name).cloned()
     }
 }
 
@@ -374,6 +444,8 @@ pub mod error_codes {
     /// checks the fully resolved agent against the package tier: this code
     /// is the per-`from:`-link check, mirroring `RECIPE_FROM_WIDENS_TOOLS`.
     pub const RECIPE_MCP_FROM_WIDENS_POLICY: &str = "RECIPE_MCP_FROM_WIDENS_POLICY";
+    /// A `tools/*/tool.yaml` file failed to parse as a [`super::ToolManifest`].
+    pub const RECIPE_MALFORMED_TOOL_MANIFEST: &str = "RECIPE_MALFORMED_TOOL_MANIFEST";
 }
 
 /// Failure modes of [`load_recipe_dir`].
@@ -485,6 +557,15 @@ pub enum RecipeLoadError {
         /// Source file of the offending child agent, if known.
         path: PathBuf,
     },
+    /// A `tools/*/tool.yaml` file is not a valid [`ToolManifest`].
+    #[error("malformed tool manifest at {path}: {source}")]
+    MalformedTool {
+        /// Path to the offending `tool.yaml`.
+        path: PathBuf,
+        /// Underlying parse error.
+        #[source]
+        source: serde_yaml::Error,
+    },
 }
 
 impl RecipeLoadError {
@@ -502,6 +583,7 @@ impl RecipeLoadError {
             Self::FromUnresolved { .. } => error_codes::RECIPE_FROM_UNRESOLVED,
             Self::FromWidensTools { .. } => error_codes::RECIPE_FROM_WIDENS_TOOLS,
             Self::FromWidensMcp { .. } => error_codes::RECIPE_MCP_FROM_WIDENS_POLICY,
+            Self::MalformedTool { .. } => error_codes::RECIPE_MALFORMED_TOOL_MANIFEST,
         }
     }
 
@@ -520,6 +602,7 @@ impl RecipeLoadError {
             Self::FromUnresolved { path, .. } => path,
             Self::FromWidensTools { path, .. } => path,
             Self::FromWidensMcp { path, .. } => path,
+            Self::MalformedTool { path, .. } => path,
         }
     }
 }
@@ -602,11 +685,19 @@ pub fn load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError> {
         Vec::new()
     };
 
+    let tools_dir = path.join(TOOLS_DIR);
+    let tools = if dir_exists(&tools_dir)? {
+        list_tool_manifests(&tools_dir)?
+    } else {
+        BTreeMap::new()
+    };
+
     Ok(Recipe {
         manifest,
         agents,
         agent_sources,
         skills,
+        tools,
         system_md,
     })
 }
@@ -889,6 +980,44 @@ fn list_skill_dirs(dir: &Path) -> Result<Vec<PathBuf>, RecipeLoadError> {
     }
     entries.sort();
     Ok(entries)
+}
+
+/// Parse every `tools/<ref>/tool.yaml` directly under `dir`, keyed by the
+/// `<ref>` directory name. A subdirectory with no `tool.yaml` is ignored
+/// (not every directory under `tools/` need be a tool package); one that
+/// has one but fails to parse is [`RecipeLoadError::MalformedTool`].
+fn list_tool_manifests(dir: &Path) -> Result<BTreeMap<String, ToolManifest>, RecipeLoadError> {
+    let mut manifests = BTreeMap::new();
+    for entry in read_dir(dir)? {
+        let entry = entry.map_err(|source| RecipeLoadError::Io {
+            path: dir.to_path_buf(),
+            source,
+        })?;
+        let file_type = entry.file_type().map_err(|source| RecipeLoadError::Io {
+            path: entry.path(),
+            source,
+        })?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let tool_ref = entry
+            .file_name()
+            .to_str()
+            .map(str::to_string)
+            .unwrap_or_default();
+        let manifest_path = entry.path().join(TOOL_MANIFEST_FILE);
+        if !path_exists(&manifest_path)? {
+            continue;
+        }
+        let content = read_to_string(&manifest_path)?;
+        let manifest: ToolManifest =
+            serde_yaml::from_str(&content).map_err(|source| RecipeLoadError::MalformedTool {
+                path: manifest_path.clone(),
+                source,
+            })?;
+        manifests.insert(tool_ref, manifest);
+    }
+    Ok(manifests)
 }
 
 /// Open `dir` for reading, mapping the failure to [`RecipeLoadError::Io`].
@@ -1253,6 +1382,7 @@ subagents:
             agents: map,
             agent_sources: BTreeMap::new(),
             skills: Vec::new(),
+            tools: BTreeMap::new(),
             system_md: None,
         }
     }

@@ -6,8 +6,8 @@
 //! vendor (plan revision R9).
 
 use agent_recipe::{
-    EffortLevel, HarnessPromptMode, InstructionMode, SystemInstructions, load_recipe_dir,
-    resolve_inherited, validate_recipe_dir,
+    EffortLevel, HarnessPromptMode, InstructionMode, SystemInstructions, ToolProtocol,
+    load_recipe_dir, resolve_inherited, validate_recipe_dir,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -251,6 +251,66 @@ fn agent_naming_a_server_the_package_never_mentioned_widens() {
     let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
     assert!(
         codes.contains(&"RECIPE_MCP_AGENT_WIDENS_POLICY"),
+        "got: {codes:?}"
+    );
+}
+
+// ─── tools/ directory (section 5.2) ────────────────────────────────────────
+
+#[test]
+fn recipe_provided_tool_resolves_under_tools_dir() {
+    let recipe = load_recipe_dir(&examples_dir("valid").join("pr-reviewer")).unwrap();
+    let resolved = recipe
+        .resolve_tool("extract_citations")
+        .expect("must resolve");
+    assert_eq!(resolved.protocol, ToolProtocol::McpStdio);
+}
+
+#[test]
+fn unknown_tool_ref_does_not_resolve() {
+    let recipe = load_recipe_dir(&examples_dir("valid").join("pr-reviewer")).unwrap();
+    assert!(recipe.resolve_tool("no-such-tool").is_none());
+}
+
+#[test]
+fn agnostic_agent_referencing_builtin_tool_is_still_rejected_without_tools_dir() {
+    // The transition this task makes possible must not have broken the
+    // rejection it was carved out for: a harness-agnostic agent naming a
+    // builtin with no matching `tools/` entry is still an error.
+    let diagnostics =
+        validate_recipe_dir(&examples_dir("invalid").join("agnostic-agent-uses-builtin"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL"),
+        "got: {codes:?}"
+    );
+}
+
+#[test]
+fn agnostic_agent_referencing_recipe_provided_tool_now_passes() {
+    // Same shape of name collision as the still-rejected fixture above
+    // (`Bash`, a Claude-Code builtin), but this recipe also ships
+    // `tools/Bash/tool.yaml`. Recipe-provided wins the ambiguity, so the
+    // harness-agnostic agent referencing it is not an error.
+    let diagnostics =
+        validate_recipe_dir(&examples_dir("valid").join("agnostic-agent-recipe-provided-tool"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        !diagnostics.has_errors(),
+        "expected recipe-provided precedence to clear the builtin-name ambiguity, got: {codes:?}"
+    );
+    assert!(
+        !codes.contains(&"RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL"),
+        "got: {codes:?}"
+    );
+}
+
+#[test]
+fn tool_manifest_with_empty_name_and_command_is_rejected() {
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("invalid-tool-manifest"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_INVALID_TOOL_MANIFEST"),
         "got: {codes:?}"
     );
 }

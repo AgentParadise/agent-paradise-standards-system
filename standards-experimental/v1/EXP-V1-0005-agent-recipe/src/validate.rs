@@ -50,6 +50,12 @@ pub mod error_codes {
     /// mention, or permits a method for a shared server the package does
     /// not. See `schema::mcp_policy_widenings` and section 7.
     pub const RECIPE_MCP_AGENT_WIDENS_POLICY: &str = "RECIPE_MCP_AGENT_WIDENS_POLICY";
+    /// A `tools/<ref>/tool.yaml` parsed successfully (well-formed YAML) but
+    /// has an empty `name` or an empty `command`. This standard does NOT
+    /// validate that `command` exists on disk or is executable (section
+    /// 5.2): a recipe is a portable artifact that may be validated on a
+    /// machine that will never run it.
+    pub const RECIPE_INVALID_TOOL_MANIFEST: &str = "RECIPE_INVALID_TOOL_MANIFEST";
 }
 
 /// Harness-builtin tool identifiers for Claude Code, transcribed verbatim
@@ -110,16 +116,14 @@ fn is_builtin_under_any_harness(tool: &str) -> bool {
     is_harness_builtin(HarnessKind::Claude, tool) || is_harness_builtin(HarnessKind::Codex, tool)
 }
 
-/// Whether `tool` resolves as a recipe-provided tool.
+/// Whether `tool` resolves as a recipe-provided tool: `tools/<tool>/tool.yaml`
+/// was found and parsed at load time (section 5.2).
 ///
-/// `tools/` directory resolution does not exist yet (a later task adds it,
-/// analogous to `skills/` resolution in section 5). Until then every entry
-/// is treated as unresolvable as recipe-provided, so this always returns
-/// `false`. When `tools/` resolution lands, this becomes the single place
-/// to check `tools/<ref>/` under the recipe root, mirroring how `skills`
-/// resolution works today.
-fn resolves_as_recipe_provided(_root: &Path, _tool: &str) -> bool {
-    false
+/// This is the precedence rule for a name that is ambiguous between a
+/// harness builtin and a `tools/` entry: recipe-provided wins, because the
+/// recipe ships the implementation and therefore knows what the name means.
+fn resolves_as_recipe_provided(recipe: &Recipe, tool: &str) -> bool {
+    recipe.tools.contains_key(tool)
 }
 
 /// Validate a recipe directory, collecting all violations into
@@ -181,6 +185,37 @@ fn validate_loaded_recipe(root: &Path, recipe: &Recipe, diagnostics: &mut Diagno
 
     for (stem, agent) in &recipe.agents {
         validate_agent(root, stem, agent, recipe, diagnostics);
+    }
+
+    // Every gathered `tools/<ref>/tool.yaml` MUST have a non-empty `name`
+    // and `command`, regardless of whether any agent currently references
+    // it (mirrors `RECIPE_EMPTY_AGENT_NAME` validating every agent, not
+    // only the default one). This standard does NOT check that `command`
+    // exists on disk or is executable: see
+    // `error_codes::RECIPE_INVALID_TOOL_MANIFEST`.
+    for (tool_ref, tool) in &recipe.tools {
+        let tool_path = root
+            .join(schema::TOOLS_DIR)
+            .join(tool_ref)
+            .join(schema::TOOL_MANIFEST_FILE);
+        if tool.name.trim().is_empty() {
+            diagnostics.push(
+                Diagnostic::error(
+                    error_codes::RECIPE_INVALID_TOOL_MANIFEST,
+                    format!("tool '{tool_ref}' has an empty name"),
+                )
+                .with_path(tool_path.clone()),
+            );
+        }
+        if tool.command.trim().is_empty() {
+            diagnostics.push(
+                Diagnostic::error(
+                    error_codes::RECIPE_INVALID_TOOL_MANIFEST,
+                    format!("tool '{tool_ref}' has an empty command"),
+                )
+                .with_path(tool_path),
+            );
+        }
     }
 
     // `from:` resolution is checked separately, over the agents that
@@ -347,7 +382,7 @@ fn validate_agent(
     // recipe-provided tool (see `resolves_as_recipe_provided`).
     if agent.harness.is_none() {
         for (index, tool) in tools.iter().enumerate() {
-            if is_builtin_under_any_harness(tool) && !resolves_as_recipe_provided(root, tool) {
+            if is_builtin_under_any_harness(tool) && !resolves_as_recipe_provided(recipe, tool) {
                 diagnostics.push(
                     Diagnostic::error(
                         error_codes::RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL,
@@ -357,7 +392,7 @@ fn validate_agent(
                     )
                     .with_path(agent_path.clone())
                     .with_hint(format!(
-                        "declare a harness for '{stem}', or remove '{tool}' from tools, or provide it under tools/ once bundled tool resolution exists"
+                        "declare a harness for '{stem}', or remove '{tool}' from tools, or ship it at tools/{tool}/tool.yaml"
                     )),
                 );
             }
