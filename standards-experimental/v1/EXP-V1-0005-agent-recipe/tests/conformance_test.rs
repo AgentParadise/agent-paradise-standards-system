@@ -305,6 +305,88 @@ fn agnostic_agent_referencing_recipe_provided_tool_now_passes() {
     );
 }
 
+// ─── Final review Fix 1: the agnostic-builtin rule must run against the
+// RESOLVED manifest (post-`from:`), not the as-authored one. Before this
+// fix, `{harness: claude, tools: [Bash]}` parent + `{from: main, tools:
+// [Bash]}` child spuriously fired RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL:
+// the child is not harness-agnostic, it resolves to `harness: claude`.
+// Both directions are tested: the previously-broken legal case must now
+// pass, and a genuinely agnostic agent (no harness anywhere in its `from:`
+// chain) must still be rejected. ───────────────────────────────────────────
+
+#[test]
+fn from_child_inheriting_harness_may_narrow_a_builtin_toolset() {
+    // Parent declares `harness: claude` and both builtins; child narrows to
+    // a subset (`Bash` only) and declares no `harness` of its own. The
+    // child is not harness-agnostic - it resolves `harness: claude` through
+    // `from:` - so referencing `Bash` must not trip the agnostic-builtin
+    // rule. Before Fix 1 this recipe was rejected.
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\nharness: claude\nmodel:\n  name: anthropic/claude-opus-4-8\n  effort: high\ntools:\n  - Bash\n  - Read\n",
+    );
+    fs::write(
+        dir.path().join("agents/child.yaml"),
+        "name: child\nfrom: main\ntools:\n  - Bash\n",
+    )
+    .unwrap();
+
+    let recipe = load_recipe_dir(dir.path()).expect("recipe should load");
+    let resolved = resolve_inherited(&recipe, "child").expect("child should resolve from main");
+    assert_eq!(
+        resolved.harness,
+        Some(agent_recipe::HarnessKind::Claude),
+        "child must resolve harness from its from: parent"
+    );
+
+    let diagnostics = validate_recipe_dir(dir.path());
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        !codes.contains(&"RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL"),
+        "a from:-child that resolves harness: claude and narrows to a subset \
+         of the parent's builtins must not be rejected as agnostic, got: {codes:?}"
+    );
+    assert!(!diagnostics.has_errors(), "got: {codes:?}");
+}
+
+#[test]
+fn from_child_still_agnostic_after_resolution_is_still_rejected_for_builtin() {
+    // Same shape (`from:` child narrowing to `Bash`), but neither the
+    // parent nor the child declares a `harness` anywhere in the chain. The
+    // child's resolved `harness` is still `None`, so it genuinely is
+    // harness-agnostic and referencing a name that is builtin under some
+    // harness must still be rejected. This is the case Fix 1 must not
+    // silently break while fixing the false positive above.
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\nmodel:\n  name: anthropic/claude-opus-4-8\n  effort: high\n",
+    );
+    fs::write(
+        dir.path().join("agents/child.yaml"),
+        "name: child\nfrom: main\ntools:\n  - Bash\n",
+    )
+    .unwrap();
+
+    let recipe = load_recipe_dir(dir.path()).expect("recipe should load");
+    let resolved = resolve_inherited(&recipe, "child").expect("child should resolve from main");
+    assert_eq!(
+        resolved.harness, None,
+        "neither parent nor child declares a harness, so the resolved chain stays agnostic"
+    );
+
+    let diagnostics = validate_recipe_dir(dir.path());
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL"),
+        "a genuinely harness-agnostic from:-child naming a builtin tool must \
+         still be rejected, got: {codes:?}"
+    );
+}
+
 #[test]
 fn tool_manifest_with_empty_name_and_command_is_rejected() {
     let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("invalid-tool-manifest"));

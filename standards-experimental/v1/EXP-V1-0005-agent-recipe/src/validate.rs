@@ -451,25 +451,48 @@ fn validate_agent(
         }
     }
 
-    // An agent that omits `harness` is claiming harness-agnosticism: it must
-    // run under any conforming harness, so it must not reference a name that
-    // is builtin under any harness unless that name also resolves as a
-    // recipe-provided tool (see `resolves_as_recipe_provided`).
-    if agent.harness.is_none() {
-        for (index, tool) in tools.iter().enumerate() {
-            if is_builtin_under_any_harness(tool) && !resolves_as_recipe_provided(recipe, tool) {
-                diagnostics.push(
-                    Diagnostic::error(
-                        error_codes::RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL,
-                        format!(
-                            "agent '{stem}' declares no harness but tools[{index}] ('{tool}') is a harness-builtin tool name"
-                        ),
-                    )
-                    .with_path(agent_path.clone())
-                    .with_hint(format!(
-                        "declare a harness for '{stem}', or remove '{tool}' from tools, or ship it at tools/{tool}/tool.yaml"
-                    )),
-                );
+    // An agent that resolves (post-`from:`) to no harness is claiming
+    // harness-agnosticism: it must run under any conforming harness, so it
+    // must not reference a name that is builtin under any harness unless
+    // that name also resolves as a recipe-provided tool (see
+    // `resolves_as_recipe_provided`).
+    //
+    // This check runs against the RESOLVED manifest (post-`from:` merge),
+    // not the as-authored one - consistent with the `mcp` package check
+    // (`RECIPE_MCP_AGENT_WIDENS_POLICY`, section 7.3). An as-authored
+    // `agent.harness.is_none()` is not proof of agnosticism: a `from:`
+    // child that narrows a builtin toolset it received from a parent (e.g.
+    // `{from: main, tools: [Bash]}` where `main` declares `harness: claude`)
+    // resolves to `harness: claude` and is therefore not agnostic at all.
+    // Checking the authored form would make narrowing a builtin toolset
+    // impossible without redeclaring `harness` on every child, since
+    // narrowing requires naming a subset of the parent's builtins and the
+    // as-authored check would forbid naming them. A genuinely agnostic
+    // agent (no harness anywhere in its `from:` chain) is still rejected,
+    // because `resolved.harness` stays `None` in that case.
+    //
+    // Resolution failure (cycle / unresolved `from`) is already reported by
+    // the `from:` resolution loop in `validate_loaded_recipe`, so this
+    // simply skips the check rather than double-reporting.
+    if let Ok(resolved) = resolve_inherited(recipe, stem) {
+        if resolved.harness.is_none() {
+            let resolved_tools: &[String] = resolved.tools.as_deref().unwrap_or(&[]);
+            for (index, tool) in resolved_tools.iter().enumerate() {
+                if is_builtin_under_any_harness(tool) && !resolves_as_recipe_provided(recipe, tool)
+                {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            error_codes::RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL,
+                            format!(
+                                "agent '{stem}' declares no harness but (resolved) tools[{index}] ('{tool}') is a harness-builtin tool name"
+                            ),
+                        )
+                        .with_path(agent_path.clone())
+                        .with_hint(format!(
+                            "declare a harness for '{stem}', or remove '{tool}' from tools, or ship it at tools/{tool}/tool.yaml"
+                        )),
+                    );
+                }
             }
         }
     }
