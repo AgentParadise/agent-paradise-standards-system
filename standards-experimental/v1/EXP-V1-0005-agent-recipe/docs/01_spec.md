@@ -175,6 +175,7 @@ allow_delegation: false
 | `system_instructions` | object | NO | Per-agent system instruction override. See section 6. |
 | `system_instructions.mode` | enum string | REQUIRED if `system_instructions` present | `append` or `replace`. |
 | `system_instructions.content` | string | REQUIRED if `system_instructions` present | The instruction text. MUST be non-empty. |
+| `system_instructions.harness_prompt` | enum string | NO | `append` or `replace`. Defaults to `append`. Governs whether the resolved system prompt (6.1) is added alongside, or replaces, the harness's own built-in system prompt. Independent of `mode`. See section 6.2. |
 | `tools` | array[string] | NO | Tool reference strings the agent is permitted to use. Absent means no restriction; present but empty means no tools are permitted. See 4.6 for the enforcement rule. |
 | `mcp` | object | NO | Agent-tier MCP server policy, narrowing the package's `mcp`. Absent means no restriction of its own (the agent's effective policy is exactly the package's). See section 7. |
 | `subagents` | array[string] | NO | Names of other agents (files under `agents/`, without the `.yaml` extension) this agent may delegate to. Defaults to an empty array. Not the same concept as `allow_delegation` - see 4.4a. |
@@ -213,9 +214,11 @@ This makes portability checkable rather than aspirational: an agent claiming to 
 - **`subagents`** names sibling agents WITHIN this recipe that an agent may delegate to. Each entry is checked to resolve to a real `agents/<name>.yaml` (`RECIPE_SUBAGENT_UNRESOLVED`, section 10.2).
 - **`allow_delegation`** is permission to hand work to the OTHER harness as a peer. It names no sibling at all, resolves nothing, and is not validated against `agents/`.
 
-An agent MAY declare either, both, or neither; the two fields vary independently, and one's presence or value has no bearing on the other's meaning or validity. `allow_delegation` defaults to `false` because a capability that lets an agent reach outside the recipe boundary SHOULD be opt-in, unlike `subagents`, which stays entirely inside a boundary this standard already validates.
+An agent MAY declare either, both, or neither; the two fields vary independently, and one's presence or value has no bearing on the other's meaning or validity. `allow_delegation` defaults to `false` because a capability that lets an agent reach outside the recipe boundary SHOULD be opt-in.
 
-`allow_delegation` is nonetheless a **permission**, not merely a capability flag, because it is the same boundary-crossing shape `tools` and `mcp` narrowing exists to police: it grants an agent the ability to reach outside the recipe. Section 4.7 states that permission narrows monotonically at every tier of this standard with no carve-out for scalar-typed fields, and `allow_delegation` is bound by that principle exactly like `tools` and `mcp` are - see the `from:` merge rule in section 4.7.
+`allow_delegation` is nonetheless a **permission**, not merely a capability flag, because it is the same boundary-crossing shape `tools` and `mcp` narrowing exists to police: it grants an agent the ability to reach outside the recipe. Section 4.7 states that permission narrows monotonically for the fields it governs (`tools`, `mcp`, `allow_delegation`), and `allow_delegation` is bound by that principle exactly like `tools` and `mcp` are - see the `from:` merge rule in section 4.7.
+
+**`subagents` is validated for resolution only, in this version of the standard.** A `subagents` entry is checked to *name a real agent* (`agents/<name>.yaml` exists, `RECIPE_SUBAGENT_UNRESOLVED`, section 10.2) - nothing more. This standard does NOT check that the named sibling's `tools` or `mcp` are within the delegating agent's own. A parent agent with `tools: []` MAY name a sibling in `subagents` whose own manifest declares `tools: [Bash, Write]`, and that recipe validates cleanly: the delegating agent's restriction is not propagated to, or enforced against, the agent it delegates to. This is a known gap, not a property this standard currently guarantees. A recipe author relying on `subagents` as a permission boundary is relying on something this version of the standard does not check; closing that gap (bounding a named subagent's permissions by the delegating agent's) is a candidate for a future revision, not a behavior implemented here.
 
 ### 4.5 Declared Intent and Run-Time Override
 
@@ -247,7 +250,7 @@ An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT ref
 
 An agent manifest MAY declare `from: <name>`, naming another agent (a sibling file under `agents/`) it inherits from. Resolution is a field-wise merge, computed by `schema::resolve_inherited(recipe, name) -> Result<AgentManifest, RecipeLoadError>`: the parent is resolved first (its own `from`, if any, resolved transitively), then the child's declared fields are merged on top of it. A chain longer than two agents is legal; the nearest declaration wins for any field the child does not itself declare.
 
-**Inheritance narrows. A child agent MUST NOT grant itself a tool its parent does not permit. Permission narrows monotonically at every tier of this standard: package policy, agent, inheriting agent, and run.**
+**Inheritance narrows. A child agent MUST NOT grant itself a tool its parent does not permit. For the fields this principle currently governs - `tools`, `mcp`, and `allow_delegation` - permission narrows monotonically at every tier of this standard: package policy, agent, inheriting agent, and run.** `subagents` is an explicit exception: it is not a permission field this principle narrows, and this standard does not bound a named subagent's own permissions by the delegating agent's at all (section 4.4a). Closing that gap is left to a future revision.
 
 The merge is not uniform across fields; each field's own semantics decide how it composes:
 
@@ -352,7 +355,7 @@ No other fields are permitted; `ToolManifest` uses `#[serde(deny_unknown_fields)
 
 **Precedence when a name is ambiguous.** A `tools` entry MAY simultaneously match a harness-builtin name (section 4.6, `05-harness-tool-vocabulary.md`) and a `tools/<ref>/` directory in the same recipe. This is resolved in favor of the recipe: **recipe-provided wins**, because the recipe ships the implementation and therefore knows what the name means. Concretely, this means the harness-agnostic-agent-uses-builtin-tool check (section 4.6, `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL`) MUST treat a `tools` entry that resolves under `tools/` as recipe-provided even if the same name is also harness-builtin, and MUST NOT report it as an error on that basis. A validator that checked builtin-ness first and never consulted `tools/` would over-reject; the check MUST consult `tools/` resolution before concluding a name is builtin-only.
 
-**What this standard does not do.** This standard defines a tool's declaration and invocation contract. It does NOT execute tools, and this crate carries no process-spawning dependency as a consequence. Validation of a `tools/<ref>/tool.yaml` is limited to it being readable and parsing with a non-empty `name` and `command` (`RECIPE_INVALID_TOOL_MANIFEST`, section 10); this standard does NOT validate that `command` exists on disk or is executable, because a recipe is a portable artifact that MAY be validated on a machine that will never run it.
+**What this standard does not do.** This standard defines a tool's declaration and invocation contract. It does NOT execute tools, and this crate carries no process-spawning dependency as a consequence. A `tools/<ref>/tool.yaml` that fails to parse at all (not readable YAML, or missing/extra/invalid fields) is reported as `RECIPE_MALFORMED_TOOL_MANIFEST` (section 10.1); a `tools/<ref>/tool.yaml` that parses successfully but has an empty `name` or `command` is reported as `RECIPE_INVALID_TOOL_MANIFEST` (section 10.2). This standard does NOT validate that `command` exists on disk or is executable, because a recipe is a portable artifact that MAY be validated on a machine that will never run it.
 
 ---
 
@@ -571,7 +574,23 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 
 Field-shape rules (unknown fields, non-string keys, unrecognized `harness`/`effort`/`mode` enum values) are enforced by `#[serde(deny_unknown_fields)]` and the typed enums during load, so they surface as `RECIPE_MALFORMED_MANIFEST` / `RECIPE_MALFORMED_HARNESS_YAML` on the offending file rather than as separate validator codes.
 
-### 10.3 CLI
+### 10.3 Evaluation Point: As-Authored vs. Resolved
+
+Every validator rule runs against exactly one of two forms of an agent manifest: the **as-authored** form (`Recipe::agents`, exactly what `agents/<name>.yaml` declares, before any `from:` merge) or the **resolved** form (`schema::resolve_inherited(recipe, name)`, the as-authored value merged field-wise with its `from:` chain per section 4.7). Section 7.3 states this explicitly for the `mcp` package check; this subsection states it for every other rule, since a rule's evaluation point is not otherwise obvious from its error code alone and gets it wrong silently otherwise (Fix 1 of the final review wave moved `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` from as-authored to resolved for exactly this reason - see below).
+
+| Rule / code | Evaluated against | Why |
+|---|---|---|
+| `RECIPE_MCP_AGENT_WIDENS_POLICY` (package tier, section 7.3) | Resolved | The package ceiling must bind the agent's actual effective policy, not a value a `from:` parent might override; checking the authored form would let a widening be laundered through inheritance. |
+| `RECIPE_MCP_FROM_WIDENS_POLICY`, `RECIPE_FROM_WIDENS_TOOLS`, `RECIPE_FROM_WIDENS_DELEGATION`, `RECIPE_FROM_CYCLE`, `RECIPE_FROM_UNRESOLVED` | Both, by construction | These are per-link checks computed *during* resolution itself (inside `resolve_inherited`); "as-authored" and "resolved" are the two ends of the one link being checked at each step, not a choice between two independent views of the whole chain. |
+| `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 4.3/4.6) | Resolved | An as-authored `harness: None` is not proof of harness-agnosticism: a `from:` child that omits `harness` while inheriting one from its parent is not agnostic, and rejecting it for narrowing a builtin toolset it received from that parent would make narrowing impossible without redeclaring `harness` on every child. Checked against `resolve_inherited(recipe, name).harness` and `.tools`, consistent with the `mcp` package check above. |
+| `RECIPE_INVALID_TOOL_REF` (empty `tools` entry) | As-authored | This is a syntax check (is the string non-empty), not a permission check; there is nothing for `from:` resolution to change about whether a literal string is empty. |
+| `RECIPE_SKILL_UNPINNED`, `RECIPE_INVALID_SKILL_REF` | As-authored | `skills` is explicitly NOT merged through `from:` (section 4.7's merge table): the child's own `skills` is used as declared, so there is no resolved form distinct from the authored one to check against. |
+| `RECIPE_SUBAGENT_UNRESOLVED` | As-authored | `subagents` is likewise not merged through `from:` - the child's own value always stands (section 4.7) - so the authored value already is the value being checked. |
+| `RECIPE_EMPTY_MODEL_NAME`, `RECIPE_EMPTY_AGENT_NAME`, `RECIPE_EMPTY_RECIPE_NAME`, `RECIPE_EMPTY_INSTRUCTIONS_CONTENT` | As-authored | These reject an explicitly-declared-but-empty string; the loader's `Option` typing already ensures "declared" and "empty" are distinguishable per field. |
+
+**Known latent inconsistency (not fixed by this table):** `RECIPE_EMPTY_MODEL_NAME` runs against the as-authored `model.name`, which means an agent that authors `model: {name: ""}` is rejected even in a case where a `from:` parent would have supplied a non-empty `model.name` had the child simply omitted `model.name` instead of authoring it empty. This is inconsistent with treating `model.name` as inheritable (section 4.7's `model` merge rule), but is a narrow, low-impact edge case - an author who wants to inherit `model.name` already has the correct spelling for it (omit the field, not set it to `""`) - and is left as a follow-up rather than fixed in this pass.
+
+### 10.4 CLI
 
 `validate_recipe_dir` is wired into the composed development CLI as a registered standard command:
 
@@ -589,10 +608,15 @@ A recipe directory is **compliant** with this standard if:
 
 - [ ] `recipe.yaml` exists at the directory root and parses as a `RecipeManifest` with no unrecognized fields.
 - [ ] `default_agent` resolves to a file under `agents/`.
-- [ ] Every `agents/*.yaml` file parses as an `AgentManifest` with `name`, a recognized `harness`, and a valid `model` (`model.name` non-empty, `model.effort` one of `low`/`medium`/`high`).
-- [ ] `skills`, `tools`, and `subagents`, if present, are arrays of strings.
+- [ ] Every `agents/*.yaml` file parses as an `AgentManifest` with a non-empty `name`. `harness` and `model` are both OPTIONAL (section 4.3, 4.4); when `model` is present, `model.name`, when present, is non-empty, and `model.effort`, when present, is one of `low`/`medium`/`high`.
+- [ ] `skills`, if present, is an array of `SkillRef` entries - either a bare string or a pinned object (`ref`, plus optional `source_url`/`version`/`resolved_sha`) - not a plain array of strings (section 5.1). A pinned entry's `version`, when present, MUST NOT be `latest`/`@latest` (case-insensitively) or empty/whitespace (`RECIPE_SKILL_UNPINNED`).
+- [ ] `tools` and `subagents`, if present, are arrays of strings.
 - [ ] `system_instructions`, if present, has a valid `mode` and non-empty `content`.
-- [ ] Every agent's fully `from:`-resolved `mcp` policy, if present, is a subset of the package's `mcp` policy (section 7).
+- [ ] An agent that omits `harness` (harness-agnostic, after `from:` resolution) does not reference a `tools` entry that is harness-builtin under any harness this standard knows about, unless that entry also resolves as recipe-provided under `tools/` (`RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL`, section 4.3/4.6, checked against the resolved manifest per section 10.3).
+- [ ] A `from:`-child's `tools`, when both it and its resolved parent's `tools` are present, is a subset of the resolved parent's `tools` (`RECIPE_FROM_WIDENS_TOOLS`, section 4.7).
+- [ ] A `from:`-child does not resolve `allow_delegation: true` when its resolved parent's is `false` (`RECIPE_FROM_WIDENS_DELEGATION`, section 4.4a, 4.7).
+- [ ] Every agent's fully `from:`-resolved `mcp` policy, if present, is a subset of the package's `mcp` policy (section 7), and a `from:`-child's `mcp` is a subset of its resolved parent's `mcp` at each link (`RECIPE_MCP_FROM_WIDENS_POLICY`, section 7.3).
+- [ ] Every `subagents` entry names a real `agents/<name>.yaml` (`RECIPE_SUBAGENT_UNRESOLVED`, section 4.4a). This is a resolution check only - the named agent's own `tools`/`mcp` are NOT checked against the delegating agent's (section 4.4a).
 - [ ] Every `evals/<name>/` directory, if `evals/` is present, contains both `input.json` and `expected.md` (section 9.1).
 - [ ] Every `judges/*.yaml` file, if `judges/` is present, has a non-empty `name` and at least one of `prompt`/`prompt_file` (section 9.2).
 - [ ] No unrecognized fields are present at any nesting level.
