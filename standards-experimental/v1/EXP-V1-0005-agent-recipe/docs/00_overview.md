@@ -21,14 +21,14 @@ The presence of `recipe.yaml` is the marker that says "this directory is a recip
 
 ## Credits / Prior Art
 
-This standard is **derived from [pi.recipes](https://introspection.dev)**, the recipe format from the **introspection.dev** project (reference implementation: [introspection-recipes/pi-codex](https://github.com/introspection-recipes/pi-codex)). pi.recipes contributed the core idea: capture an agent run as a reusable, declarative artifact (agent, model, skills, instructions) instead of reconstructing it from CLI flags each time. EXP-V1-0005 generalizes that into a harness-neutral, language-neutral *directory* standard. See [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md) for the full "how we got here" story and [02-pi-compatibility.md](./02-pi-compatibility.md) for the deliberate deltas.
+This standard is **inspired by [pi.recipes](https://introspection.dev)**, the recipe format from the **introspection.dev** project (reference implementation: [introspection-recipes/pi-codex](https://github.com/introspection-recipes/pi-codex)), and is **not compatible with it**. pi.recipes contributed the core idea: capture an agent run as a reusable, declarative artifact (agent, model, skills, instructions) instead of reconstructing it from CLI flags each time. EXP-V1-0005 generalizes that into a harness-neutral, language-neutral *directory* standard, and along the way changed semantics a pi recipe depends on (`tools` is now an enforced allowlist, not a hint; `harness` is a field pi has no equivalent for). A pi recipe does not load here; it migrates under a documented mapping. See [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md) for the full "how we got here" story and the deliberate deltas.
 
 ## Why does it matter?
 
 As agent orchestration spreads across multiple harnesses (Claude Code, Codex, and others to come), tooling needs a stable, harness-neutral way to say "run this agent, configured this way" that does not hard-code any one harness's flags or SDK shape. This standard provides:
 
 1. **A directory contract** - the same recipe directory works whether the consumer targets Claude Code or Codex, and a single recipe can mix harnesses per agent.
-2. **Forward compatibility** - the `agent` enum is designed to grow (`opencode`, `gemini`, ...) without breaking existing recipes.
+2. **Forward compatibility** - the `harness` enum is designed to grow (`opencode`, `gemini`, ...) without breaking existing recipes.
 3. **Separation of concerns** - a recipe never contains task input, credentials, or infrastructure details, so it is safe to commit and diff.
 4. **One loader, one validator** - downstream consumers depend on the same `load_recipe_dir` the validator is built on, so there is a single source of truth for the shape.
 
@@ -70,7 +70,7 @@ default_agent: main
 
 ```yaml
 name: main
-agent: claude
+harness: claude
 model:
   name: anthropic/claude-opus-4-8
   effort: high
@@ -90,12 +90,12 @@ subagents:
 |-------|---------|
 | `recipe.yaml: name` | Identifier for the recipe |
 | `recipe.yaml: default_agent` | The entry-point agent; must resolve to `agents/<name>.yaml` |
-| `agents/*.yaml: agent` | Which harness runs this agent (`claude` \| `codex` in v1) - per agent |
+| `agents/*.yaml: harness` | Which harness this agent REQUIRES (`claude` \| `codex` in v1). OPTIONAL; absent means harness-agnostic, and the agent MUST NOT reference a harness-builtin tool |
 | `agents/*.yaml: model.name` | Provider-qualified model id |
 | `agents/*.yaml: model.effort` | Coarse reasoning effort: `low` \| `medium` \| `high` |
 | `agents/*.yaml: skills` | Harness-agnostic skill references, resolved in listed order |
-| `agents/*.yaml: system_instructions` | Optional append/replace system prompt text, merged with `SYSTEM.md` |
-| `agents/*.yaml: tools` | Tool references (names only, no execution defined here) |
+| `agents/*.yaml: system_instructions` | Optional `mode` (append/replace with `SYSTEM.md`) and `harness_prompt` (append/replace the harness's own built-in prompt) - two independent axes |
+| `agents/*.yaml: tools` | An enforced allowlist: a consumer MUST NOT grant a tool this list does not permit. Absent means unrestricted; `[]` means none |
 | `agents/*.yaml: subagents` | Names of other agents this agent may delegate to (validated-only in v1) |
 
 ## Where a Recipe Fits
@@ -131,7 +131,6 @@ A workspace or executor (living in another repository, for example Plan B's `itm
 ## Learn More
 
 - Read the [full specification](./01_spec.md)
-- See the [pi.recipes compatibility notes](./02-pi-compatibility.md)
 - See the [Syntropic137 mapping](./03-syntropic137-mapping.md)
 - Read the [rationale and prior art](./04-rationale-and-prior-art.md)
 - Check out [examples](../examples/)

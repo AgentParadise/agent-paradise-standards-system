@@ -533,8 +533,10 @@ pub struct PinnedSkillRef {
 /// determined by `RecipeManifest::default_agent`, not by any field here.
 ///
 /// Field names/enums intentionally match the prior single-YAML EXP-V1-0005
-/// schema (`name`, `harness`, `model`, `skills`, `system_instructions`) for
-/// pi-compatibility; `tools` and `subagents` are new in the directory shape.
+/// schema (`name`, `harness`, `model`, `skills`, `system_instructions`),
+/// which itself kept pi.recipes-inspired naming; `tools` and `subagents` are
+/// new in the directory shape. See `docs/04-rationale-and-prior-art.md` for
+/// why this standard is inspired by pi.recipes but not compatible with it.
 ///
 /// `PartialEq` only (not `Eq`): `model` carries a `ModelSpec`, which cannot
 /// derive `Eq` (see [`ModelSpec`]).

@@ -22,7 +22,7 @@ This standard defines a **declarative, harness-neutral directory shape for an ag
 
 ### 1.2 Relationship to the Prior (0.1.0) Single-File Shape
 
-Version 0.1.0 of this experiment defined a recipe as a single YAML file. Version 0.2.0 (this document) supersedes that with a **directory** shape: a recipe is a directory containing a root manifest, one YAML file per agent, and optional shared assets. This is a breaking change within the experimental lifecycle (permitted per the meta-standard's rules for experiments); field names and enum values are preserved where they carry over (see section 4) for pi-compatibility.
+Version 0.1.0 of this experiment defined a recipe as a single YAML file. Version 0.2.0 (this document) supersedes that with a **directory** shape: a recipe is a directory containing a root manifest, one YAML file per agent, and optional shared assets. This is a breaking change within the experimental lifecycle (permitted per the meta-standard's rules for experiments); field names and enum values are preserved where they carry over from the pi.recipes-inspired single-agent shape (see section 4 and [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md)), even though this standard is not compatible with pi.recipes itself.
 
 ### 1.3 Scope
 

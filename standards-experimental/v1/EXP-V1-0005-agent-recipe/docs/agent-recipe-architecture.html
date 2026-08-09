@@ -216,11 +216,15 @@ li .d{color:var(--mute)}
   </div>
 
   <div class="banner r" style="animation-delay:.12s">
-    <b>Proposed direction — not yet normative.</b>
-    The layer split and the one-way edge are real today. Items marked <em>+dashed</em> in the Recipe layer
-    are the proposal (APSS #125). The standard is <em>inspired by</em> pi.recipes, not compatible with it:
-    semantics differ (enforced tools, harness selection), so a pi recipe migrates under a documented
-    mapping rather than loading as-is. EXP-V1-0005 does not contain these yet.
+    <b>What the standard is today.</b>
+    The layer split and the one-way edge are real. The Recipe layer below now includes harness,
+    enforced tools, mcp policy, skill pins, evals/, judges/, prompts/, and a tools/ directory, all
+    normative as of this revision. The standard is <em>inspired by</em> pi.recipes, not compatible with it:
+    semantics differ (enforced tools, harness selection, split system-prompt axes), so a pi recipe
+    migrates under a documented mapping rather than loading as-is. One item still marked
+    <em>+dashed</em> remains genuinely proposed: executing <code>subagents</code>, not just validating
+    that they resolve (APSS #125). The full <code>RunSpec</code> envelope (the middle layer) is a
+    separate, not-yet-built follow-on standard.
     <div class="legend">
       <span><i class="sw"></i> in the standard today</span>
       <span><i class="sw p"></i> proposed addition / semantics change</span>
@@ -240,12 +244,12 @@ li .d{color:var(--mute)}
     <div class="m r" style="animation-delay:.18s"><div class="n o">3</div><div class="l">Layers</div></div>
     <div class="m r" style="animation-delay:.22s"><div class="n g">1</div><div class="l">Dependency edge</div></div>
     <div class="m r" style="animation-delay:.26s"><div class="n a">4</div><div class="l">Binding seams</div></div>
-    <div class="m r" style="animation-delay:.30s"><div class="n r">17/17</div><div class="l">Workflows that can't conform</div></div>
-    <div class="m r" style="animation-delay:.34s"><div class="n r">3/9</div><div class="l">pi dirs encoded</div></div>
+    <div class="m r" style="animation-delay:.30s"><div class="n g">15/15</div><div class="l">Agent-shaped corpus workflows that conform</div></div>
+    <div class="m r" style="animation-delay:.34s"><div class="n g">8/8</div><div class="l">Directory-shape entries implemented</div></div>
     <div class="m r" style="animation-delay:.38s"><div class="n r">0</div><div class="l">RunSpec files on main</div></div>
   </div>
 
-  <div class="stamp">Not&nbsp;Conforming<small>17 of 17 workflows · fixture pending</small></div>
+  <div class="stamp" style="border-color:var(--green);color:var(--green)">Conforming<small>15/15 agent-shaped · 18 corpus total</small></div>
 
   <div class="grid">
     <div class="rail">
@@ -296,11 +300,12 @@ li .d{color:var(--mute)}
           <span class="chip">agents/*.yaml</span><span class="chip">model.name</span>
           <span class="chip">skills</span><span class="chip">subagents</span>
           <span class="chip">SYSTEM.md</span><span class="chip">system_instructions</span>
-          <span class="chip prop">harness</span><span class="chip prop">tools enforced</span>
-          <span class="chip prop">mcp policy</span><span class="chip prop">skill pins</span>
-          <span class="chip prop">evals/</span><span class="chip prop">judges/</span>
-          <span class="chip prop">prompts/</span><span class="chip prop">tools/ dir</span>
-          <span class="chip prop">temperature</span><span class="chip prop">description</span>
+          <span class="chip">harness</span><span class="chip">tools enforced</span>
+          <span class="chip">mcp policy</span><span class="chip">skill pins</span>
+          <span class="chip">evals/</span><span class="chip">judges/</span>
+          <span class="chip">prompts/</span><span class="chip">tools/ dir</span>
+          <span class="chip">temperature</span><span class="chip">description</span>
+          <span class="chip prop">subagent execution</span>
         </div>
         <div class="chips" style="margin-top:8px">
           <span class="chip no">✕ task input</span><span class="chip no">✕ credentials</span><span class="chip no">✕ infra config</span>
@@ -338,8 +343,8 @@ li .d{color:var(--mute)}
       <div class="r" style="animation-delay:.78s">
         <h2>Open Calls</h2>
         <ul>
-          <li><b>Tool vocabulary</b> <span class="d">— yours [bash, git, read] vs pi [read, write, bash]. Not portable yet.</span></li>
-          <li><b>pi branding</b> <span class="d">— "pi" key and .pi/ dir: alias or rename</span></li>
+          <li><b>Subagent execution</b> <span class="d">- subagents resolve and validate today; delegating work to them at runtime is proposed (APSS #125)</span></li>
+          <li><b>pi migration mapping</b> <span class="d">- documented field-by-field, but no automated migrator exists yet</span></li>
           <li><b>Model override</b> <span class="d">— allowed, but evals must record the effective model</span></li>
         </ul>
       </div>

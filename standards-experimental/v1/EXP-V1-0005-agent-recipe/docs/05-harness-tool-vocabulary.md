@@ -11,9 +11,9 @@ harness-builtin tool name in its `tools` array. That claim can only be
 verified against a concrete, versioned list of names - this is that list.
 
 This standard is inspired by pi.recipes; it is not compatible with it (see
-[02-pi-compatibility.md](./02-pi-compatibility.md)). The tool identifiers
-below are specific to each harness's own CLI/SDK and carry no relationship to
-pi.recipes' vocabulary.
+[04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md)). The tool
+identifiers below are specific to each harness's own CLI/SDK and carry no
+relationship to pi.recipes' vocabulary.
 
 ## Normative Statement
 
@@ -125,7 +125,6 @@ table revision if any of them stabilize into an always-present builtin.
 
 - [01_spec.md section 4.3](./01_spec.md#43-the-harness-field) - the `harness`
   field and harness extensibility rule this table exists to support.
-- [02-pi-compatibility.md](./02-pi-compatibility.md) - why this standard is
-  inspired by, but not compatible with, pi.recipes.
-- [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md) - why
+- [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md) - why this
+  standard is inspired by, but not compatible with, pi.recipes, and why
   `tools` are references only, with no execution semantics defined here.

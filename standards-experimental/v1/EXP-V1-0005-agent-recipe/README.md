@@ -19,9 +19,11 @@ recipe format from the **introspection.dev** project (reference implementation:
 [introspection-recipes/pi-codex](https://github.com/introspection-recipes/pi-codex)). pi.recipes
 established the core idea this standard builds on - an agent run captured as a reusable, declarative
 artifact (agent, model, skills, instructions) rather than reconstructed from CLI flags each time.
-EXP-V1-0005 generalizes that idea into a harness-neutral, language-neutral directory standard. See
+EXP-V1-0005 generalizes that idea into a harness-neutral, language-neutral directory standard, and
+is **inspired by pi.recipes, not compatible with it** - semantics changed (enforced `tools`, the
+`harness` field) that make a pi recipe fail to load here. See
 [docs/04-rationale-and-prior-art.md](docs/04-rationale-and-prior-art.md) for the full derivation
-story and [docs/02-pi-compatibility.md](docs/02-pi-compatibility.md) for the deliberate deltas.
+story and the deliberate deltas.
 
 A recipe is a directory (the presence of `recipe.yaml` is the marker):
 
@@ -62,7 +64,6 @@ cargo run -p aps-cli --bin apss-dev -- run agent-recipe validate ./my-recipe
 - [experiment.toml](experiment.toml)
 - [Overview](docs/00_overview.md)
 - [Specification](docs/01_spec.md)
-- [pi.recipes Compatibility](docs/02-pi-compatibility.md)
 - [Syntropic137 Mapping](docs/03-syntropic137-mapping.md)
 - [Rationale and Prior Art](docs/04-rationale-and-prior-art.md)
 - [Examples](examples/)
