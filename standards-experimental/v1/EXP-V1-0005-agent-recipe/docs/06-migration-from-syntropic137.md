@@ -19,11 +19,22 @@ belong in a recipe at all, and where.
 18 workflows total, not the 12 + 4 = 16 the Task 11 brief anticipated:
 
 - **14 local**, read from `Syntropic137/syntropic137/workflows/examples/**/*.yaml`
-  in a checkout that was **2 commits behind `origin/main`** at the time of
-  reading (the brief warned it would be around 7 behind as of 2026-08-08; it
-  had partially caught up since). Per the brief's explicit instruction, this
-  checkout was read as-is: no `pull`, `fetch`, `reset`, or `clean` was run
-  against it, and nothing in it was modified. The 14 files:
+  in a checkout verified to be **2 commits behind `origin/main`** at the time
+  of reading, via `git status --short --branch` (which reported
+  `main...origin/main [behind 2]`) and confirmed with
+  `git rev-list --count HEAD..origin/main` (`2`) / `origin/main..HEAD` (`0`,
+  so no local commits are ahead). Both commands read the existing local
+  `origin/main` tracking ref only; neither fetches, pulls, resets, or cleans
+  the checkout, so this figure reflects the last time that ref was updated,
+  not necessarily the true HEAD of the remote at the moment of reading - a
+  later reader re-running the same two commands can tell whether the corpus
+  is still current or has drifted further. The brief warned it would be
+  around 7 behind as of 2026-08-08; it had partially caught up since (the
+  remote-tracking ref itself may simply be more current now than when the
+  brief was written, not necessarily because the checkout was updated in the
+  interim). Per the brief's explicit instruction, this checkout was read
+  as-is: no `pull`, `fetch`, `reset`, or `clean` was run against it, and
+  nothing in it was modified. The 14 files:
   `codex-demo.yaml`, `multi-agent-write-then-read.yaml`, `subagent-demo.yaml`,
   `github-pr.yaml`, `codex-delegates-to-claude.yaml`, `implementation.yaml`,
   `research.yaml`, `multi-agent-programmatic.yaml`, `research-with-prompts.yaml`,
@@ -91,11 +102,17 @@ not by guessing from the YAML alone:
    `prompt_file` carry it in frontmatter; the flat non-`prompt_file` demo
    workflows have none at all."
 4. **All 4 marketplace plugins declare `allowed_tools` inline in
-   `workflow.yaml` *and* (confirmed by sampling
-   `plugins/code-review/workflows/review/phases/analyze.md`) in their
-   phases' frontmatter too** - the inline copy and the frontmatter copy
-   agree (`bash, git, read` both places for that phase). These are
-   production plugins (PR review, CI self-healing, release prep) rather
+   `workflow.yaml` *and* in their phases' frontmatter too** - all 11
+   marketplace phase `.md` files were fetched and read directly (not
+   sampled), confirming the inline copy and the frontmatter copy agree for
+   every phase (e.g. `bash, git, read` both places for
+   `code-review`'s `analyze`). The frontmatter also shows `model` varies by
+   phase within a workflow: most phases declare `model: sonnet`, but
+   `sdlc-ci-fix`'s `verify`, `sdlc-pr-review`'s `context`, and
+   `sdlc-release-prep`'s `publish` declare `model: haiku` instead - the
+   lighter-weight confirm/gate step in each pipeline runs a cheaper model.
+   No marketplace phase declares `max_tokens`/`max-tokens` anywhere. These
+   are production plugins (PR review, CI self-healing, release prep) rather
    than bring-up demos, and unlike the local flat examples, restricting the
    tool surface is a real security concern for them (they run against real
    repos with real credentials), which plausibly explains why their authors
@@ -134,7 +151,7 @@ demo-to-production spectrum.
 | `allowed_tools` / `allowed-tools` | **recipe**: `agent.tools` | See the allowed_tools finding above. |
 | `tools` (github-pr.yaml only) | **recipe**: `agent.tools` | Dead field in Syntropic137's own schema (see above); still migrated as the only available signal. |
 | `agent.allow_delegation` | **recipe**: `agent.allow_delegation` | Direct mapping; only `codex-delegates-to-claude` uses it. |
-| `max_tokens` / frontmatter `max-tokens` | **recipe**: `model.max_tokens` | Direct mapping. |
+| `max_tokens` / frontmatter `max-tokens` | **recipe**: `model.max_tokens` | Direct mapping, carried through with its **real per-phase value** for every corpus phase that declares one: `codex-implement` 4096, `write`/`read` 1024 each, `create-pr` 8192, `verify-pr` 2048, `build-and-delegate` 4096, `plan` 2048, `implement` 4096, `claude_first`/`codex_second` 1024 each, `reply` 1024, plus the local `prompt_file`-frontmatter phases (`discovery`/`synthesis`/`investigate`/`review`/`summarize`, 4096-8192). No marketplace phase declares `max_tokens` anywhere - genuinely absent source data (see the allowed_tools finding above), not dropped by this migration. |
 | `prompt_template` / `prompt_file` | **out of scope** (run spec `task`, not recipe `prompts/`) | See "Prompt content" below - this document deliberately departs from the brief's draft mapping here. |
 | `timeout_seconds` | **workflow layer** | Per-invocation ceiling; not agent identity. |
 | `order`, `execution_type` | **workflow layer** | Sequencing, not agent identity. |

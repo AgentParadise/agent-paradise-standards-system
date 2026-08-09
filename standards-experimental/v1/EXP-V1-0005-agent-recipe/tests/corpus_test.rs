@@ -8,8 +8,8 @@
 //! `docs/06-migration-from-syntropic137.md`, which is the authoritative
 //! explanation for *why* each phase migrates the way it does (in particular
 //! the harness-inference rule applied when a phase carries no explicit
-//! `agent.provider`/`agent_id` — see that document's "Harness inference"
-//! section, which cites Syntropic137's own source as the justification: an
+//! `agent.provider`/`agent_id`: see that document's "Harness inference"
+//! section, which cites Syntropic137's own source as the justification, an
 //! absent `provider` defaults to `claude` in Syntropic137's own domain
 //! model).
 //!
@@ -103,6 +103,7 @@ fn corpus_cases() -> Vec<WorkflowCase> {
             agent_phases: vec![AgentPhase {
                 phase_id: "codex-implement",
                 harness: Some("codex"),
+                max_tokens: Some(4096),
                 ..AgentPhase::minimal("codex-implement")
             }],
             workflow_layer_only: vec![],
@@ -117,6 +118,7 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 AgentPhase {
                     phase_id: "write",
                     harness: Some("claude"),
+                    max_tokens: Some(1024),
                     ..AgentPhase::minimal("write")
                 },
                 // agent_id: codex under provider: claude-interactive - the
@@ -126,6 +128,7 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 AgentPhase {
                     phase_id: "read",
                     harness: Some("codex"),
+                    max_tokens: Some(1024),
                     ..AgentPhase::minimal("read")
                 },
             ],
@@ -149,11 +152,13 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 // model/provider is present anywhere in the phase.
                 AgentPhase {
                     phase_id: "create-pr",
+                    max_tokens: Some(8192),
                     tools: Some(&["bash", "computer"]),
                     ..AgentPhase::minimal("create-pr")
                 },
                 AgentPhase {
                     phase_id: "verify-pr",
+                    max_tokens: Some(2048),
                     tools: Some(&["bash"]),
                     ..AgentPhase::minimal("verify-pr")
                 },
@@ -166,6 +171,7 @@ fn corpus_cases() -> Vec<WorkflowCase> {
             agent_phases: vec![AgentPhase {
                 phase_id: "build-and-delegate",
                 harness: Some("codex"),
+                max_tokens: Some(4096),
                 allow_delegation: true,
                 ..AgentPhase::minimal("build-and-delegate")
             }],
@@ -190,11 +196,13 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 AgentPhase {
                     phase_id: "plan",
                     harness: Some("claude"),
+                    max_tokens: Some(2048),
                     ..AgentPhase::minimal("plan")
                 },
                 AgentPhase {
                     phase_id: "implement",
                     harness: Some("codex"),
+                    max_tokens: Some(4096),
                     ..AgentPhase::minimal("implement")
                 },
             ],
@@ -229,11 +237,13 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 AgentPhase {
                     phase_id: "claude_first",
                     harness: Some("claude"),
+                    max_tokens: Some(1024),
                     ..AgentPhase::minimal("claude_first")
                 },
                 AgentPhase {
                     phase_id: "codex_second",
                     harness: Some("codex"),
+                    max_tokens: Some(1024),
                     ..AgentPhase::minimal("codex_second")
                 },
             ],
@@ -248,6 +258,7 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 // `agent.model: sonnet` - bare, not provider-qualified. See
                 // Gap 1 in the migration doc.
                 model: Some("sonnet"),
+                max_tokens: Some(1024),
                 ..AgentPhase::minimal("reply")
             }],
             workflow_layer_only: vec![],
@@ -329,13 +340,14 @@ fn corpus_cases() -> Vec<WorkflowCase> {
         // ---- Marketplace: syntropic137/syntropic137-marketplace plugins ----
         // Every phase in all 4 marketplace workflows is `prompt_file`-based
         // with an inline `allowed_tools:` list AND a same-shaped frontmatter
-        // `model:`/`allowed-tools:` pair in the referenced .md (confirmed by
-        // sampling `plugins/code-review/workflows/review/phases/analyze.md`,
-        // which declares `model: sonnet`; see the migration doc's allowed_tools
-        // finding). harness=claude is therefore inferred the same way as the
-        // local frontmatter-driven cases above, generalized from that one
-        // sampled file rather than fetching all ten - a stated limitation,
-        // not a silent assumption.
+        // `model:`/`allowed-tools:` pair in the referenced .md - all 11
+        // phase frontmatter files were fetched and read directly (not
+        // generalized from a sample); most declare `model: sonnet`, but
+        // `sdlc-ci-fix`'s `verify`, `sdlc-pr-review`'s `context`, and
+        // `sdlc-release-prep`'s `publish` declare `model: haiku` - the
+        // lighter-weight confirm/gate phases in each pipeline. None declares
+        // `max_tokens`/`max-tokens` anywhere. harness=claude is inferred the
+        // same way as the local frontmatter-driven cases above.
         WorkflowCase {
             workflow_id: "code-review",
             source: "marketplace: plugins/code-review/workflows/review/workflow.yaml",
@@ -378,7 +390,7 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 AgentPhase {
                     phase_id: "verify",
                     harness: Some("claude"),
-                    model: Some("sonnet"),
+                    model: Some("haiku"),
                     tools: Some(&["bash", "git"]),
                     ..AgentPhase::minimal("verify")
                 },
@@ -392,7 +404,7 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 AgentPhase {
                     phase_id: "context",
                     harness: Some("claude"),
-                    model: Some("sonnet"),
+                    model: Some("haiku"),
                     tools: Some(&["bash", "git", "read"]),
                     ..AgentPhase::minimal("context")
                 },
@@ -434,7 +446,7 @@ fn corpus_cases() -> Vec<WorkflowCase> {
                 AgentPhase {
                     phase_id: "publish",
                     harness: Some("claude"),
-                    model: Some("sonnet"),
+                    model: Some("haiku"),
                     tools: Some(&["bash", "git"]),
                     ..AgentPhase::minimal("publish")
                 },
