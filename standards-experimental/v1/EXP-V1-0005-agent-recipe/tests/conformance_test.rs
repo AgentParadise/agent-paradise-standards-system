@@ -5,7 +5,9 @@
 //! they are the canonical fixtures downstream consumers (Plan B / `itmux`)
 //! vendor (plan revision R9).
 
-use agent_recipe::{load_recipe_dir, validate_recipe_dir};
+use agent_recipe::{
+    HarnessPromptMode, InstructionMode, SystemInstructions, load_recipe_dir, validate_recipe_dir,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -140,4 +142,14 @@ fn unrecognized_harness_fails_to_parse() {
     );
     let err = load_recipe_dir(dir.path()).unwrap_err();
     assert!(format!("{err}").contains("harness"), "got: {err}");
+}
+
+#[test]
+fn harness_prompt_defaults_to_append_and_is_independent_of_mode() {
+    let si: SystemInstructions =
+        serde_yaml::from_str("mode: replace\ncontent: hello\n").unwrap();
+    // `mode` governs SYSTEM.md composition only.
+    assert_eq!(si.mode, InstructionMode::Replace);
+    // The harness's own prompt is untouched unless explicitly replaced.
+    assert_eq!(si.harness_prompt, HarnessPromptMode::Append);
 }

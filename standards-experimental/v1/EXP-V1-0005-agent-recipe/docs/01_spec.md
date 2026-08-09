@@ -219,6 +219,10 @@ Consumers (e.g. Plan B's `itmux run`, mapping `skills` to `claude_plugin_dirs`) 
 
 ## 6. System Instruction Merge Semantics
 
+This standard separates two independent axes that govern an agent's final system prompt: `system_instructions.mode`, which controls composition with the recipe's shared `SYSTEM.md`, and `system_instructions.harness_prompt`, which controls whether the resolved result appends to or replaces the harness's own built-in system prompt. A recipe author sets each axis independently; neither implies a value for the other.
+
+### 6.1 `mode`: composition with `SYSTEM.md`
+
 A recipe MAY declare a shared base system prompt in `SYSTEM.md` at the recipe root. Each agent MAY additionally declare `system_instructions`. The final resolved system prompt for an agent is computed deterministically:
 
 | `system_instructions` | `SYSTEM.md` present? | Resolved system prompt |
@@ -229,7 +233,20 @@ A recipe MAY declare a shared base system prompt in `SYSTEM.md` at the recipe ro
 | absent | yes | `SYSTEM.md` verbatim |
 | absent | no | no system prompt (`None`) |
 
-This is implemented by `schema::resolved_system(agent, system_md)`.
+This is implemented by `schema::resolved_system(agent, system_md)`. `mode` governs this composition step only; it has no bearing on the harness's own built-in prompt.
+
+### 6.2 `harness_prompt`: relationship to the harness's built-in prompt
+
+`system_instructions.harness_prompt` decides whether the system prompt resolved in 6.1 is appended to the harness's own default/built-in system prompt, or replaces it outright. It takes one of two values:
+
+- `append` (the default): the resolved prompt is added alongside the harness's built-in prompt. This maps to a harness invocation flag such as Claude's `--append-system-prompt`.
+- `replace`: the resolved prompt stands in for the harness's built-in prompt entirely. This maps to a harness invocation flag such as Claude's `--system-prompt`.
+
+`harness_prompt` is independent of `mode`. In particular, `mode: replace` (which discards `SYSTEM.md`) and `harness_prompt: replace` (which discards the harness's built-in prompt) address different prompts and MAY be set to different values in any combination; setting one does not set or imply the other. `harness_prompt` is consumed by a harness adapter downstream of this crate's resolution logic, not by `schema::resolved_system` itself.
+
+An agent manifest with no `system_instructions` block has no per-agent override to resolve, so `harness_prompt` does not apply: the agent simply receives the harness's default prompt unchanged, which is what `append` with no content already means.
+
+A consumer whose target harness cannot suppress its built-in system prompt (no equivalent of a "replace" flag) MUST fail loudly when it encounters `harness_prompt: replace`, rather than silently falling back to appending. Silent degradation here would leave an agent's instructions weaker than the recipe declares, with no signal to the operator; a clear failure is the correct behavior.
 
 ---
 
@@ -261,7 +278,7 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 |------|---------|
 | `RECIPE_MISSING_MARKER` | `recipe.yaml` is absent from the candidate directory. |
 | `RECIPE_MALFORMED_MANIFEST` | `recipe.yaml` exists but failed to parse as a `RecipeManifest` (missing/extra/invalid fields). |
-| `RECIPE_MALFORMED_HARNESS_YAML` | An `agents/*.yaml` file failed to parse as an `AgentManifest` (missing/extra/invalid fields, unrecognized `harness`/`effort`/`mode` value, or a non-string key). |
+| `RECIPE_MALFORMED_HARNESS_YAML` | An `agents/*.yaml` file failed to parse as an `AgentManifest` (missing/extra/invalid fields, unrecognized `harness`/`effort`/`mode`/`harness_prompt` value, or a non-string key). |
 | `RECIPE_DUPLICATE_AGENT` | Two agent files resolve to the same stem (e.g. `main.yaml` and `main.yml`), which would collide in the recipe. |
 | `RECIPE_DEFAULT_AGENT_UNRESOLVED` | `default_agent` does not name any file actually present under `agents/`. |
 | `RECIPE_IO_ERROR` | An I/O error occurred while reading the recipe directory (unreadable file, permission error, etc.). |

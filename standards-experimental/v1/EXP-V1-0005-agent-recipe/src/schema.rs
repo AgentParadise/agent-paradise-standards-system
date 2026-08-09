@@ -111,6 +111,17 @@ pub enum InstructionMode {
     Replace,
 }
 
+/// Whether the resolved system prompt is appended to the harness's own
+/// default prompt or replaces it. Independent of [`InstructionMode`],
+/// which governs composition with `SYSTEM.md` only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum HarnessPromptMode {
+    #[default]
+    Append,
+    Replace,
+}
+
 /// Optional per-agent system instruction override.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -119,6 +130,12 @@ pub struct SystemInstructions {
     pub mode: InstructionMode,
     /// The instruction text.
     pub content: String,
+    /// Whether the resolved system prompt appends to or replaces the
+    /// harness's own built-in system prompt. Independent of `mode`, which
+    /// governs composition with `SYSTEM.md` only; a harness adapter (not
+    /// `resolved_system`) consumes this field.
+    #[serde(default)]
+    pub harness_prompt: HarnessPromptMode,
 }
 
 /// One agent, loaded from `agents/<name>.yaml`. Unifies default agents and
@@ -769,6 +786,7 @@ subagents:
             system_instructions: Some(SystemInstructions {
                 mode,
                 content: content.to_string(),
+                harness_prompt: HarnessPromptMode::default(),
             }),
             tools: None,
             subagents: Vec::new(),

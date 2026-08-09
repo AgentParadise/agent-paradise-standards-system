@@ -1,0 +1,14 @@
+name: quiet
+harness: claude
+model:
+  name: anthropic/claude-haiku-4-5
+  effort: low
+system_instructions:
+  # mode: replace ignores SYSTEM.md entirely for this agent's content.
+  mode: replace
+  content: |
+    Answer tersely.
+  # harness_prompt is left absent, defaulting to `append`: this agent's
+  # resolved prompt is added after the harness's own built-in prompt,
+  # even though `mode` itself discarded SYSTEM.md. The two axes vary
+  # independently.
