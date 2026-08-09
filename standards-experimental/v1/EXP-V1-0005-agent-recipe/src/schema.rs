@@ -1556,7 +1556,10 @@ subagents:
         )]));
 
         let mut child = agent_with_from("child", Some("parent"));
-        child.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+        child.mcp = Some(policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query"], &[]),
+        )]));
 
         let recipe = recipe_of(vec![parent, child]);
         let resolved = resolve_inherited(&recipe, "child").expect("narrowing should resolve");
@@ -1569,7 +1572,10 @@ subagents:
     #[test]
     fn merge_inherited_lets_child_inherit_parent_mcp_when_omitted() {
         let mut parent = agent_with_from("parent", None);
-        parent.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+        parent.mcp = Some(policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query"], &[]),
+        )]));
 
         let child = agent_with_from("child", Some("parent"));
 
@@ -1586,7 +1592,10 @@ subagents:
         // narrowing relative to "unset", so no per-link check applies here.
         let parent = agent_with_from("parent", None);
         let mut child = agent_with_from("child", Some("parent"));
-        child.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+        child.mcp = Some(policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query"], &[]),
+        )]));
 
         let recipe = recipe_of(vec![parent, child]);
         let resolved = resolve_inherited(&recipe, "child").expect("chain should resolve");
@@ -1605,10 +1614,16 @@ subagents:
         // `parent` never mentions, which is a widening at this link
         // regardless of what the package tier would separately permit.
         let mut parent = agent_with_from("parent", None);
-        parent.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+        parent.mcp = Some(policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query"], &[]),
+        )]));
 
         let mut child = agent_with_from("child", Some("parent"));
-        child.mcp = Some(policy_of(&[("reporting", server_policy(&["list_reports"], &[]))]));
+        child.mcp = Some(policy_of(&[(
+            "reporting",
+            server_policy(&["list_reports"], &[]),
+        )]));
 
         let recipe = recipe_of(vec![parent, child]);
         let error = resolve_inherited(&recipe, "child").expect_err("should reject the widening");
@@ -1629,7 +1644,10 @@ subagents:
         )]));
 
         let mut parent = agent_with_from("parent", Some("grandparent"));
-        parent.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+        parent.mcp = Some(policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query"], &[]),
+        )]));
 
         let mut child = agent_with_from("child", Some("parent"));
         child.mcp = Some(policy_of(&[(

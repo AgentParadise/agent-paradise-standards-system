@@ -212,8 +212,7 @@ fn agent_mcp_policy_may_not_widen_package_policy() {
     // Belt-and-suspenders alongside the example-driven check above: this
     // pins the exact fixture path and code so a rename of either silently
     // dropping coverage is caught here too.
-    let diagnostics =
-        validate_recipe_dir(&examples_dir("invalid").join("mcp-agent-widens-policy"));
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("mcp-agent-widens-policy"));
     let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
     assert!(
         codes.contains(&"RECIPE_MCP_AGENT_WIDENS_POLICY"),
