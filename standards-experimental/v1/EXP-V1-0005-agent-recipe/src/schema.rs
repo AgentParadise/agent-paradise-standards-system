@@ -391,7 +391,19 @@ pub struct SystemInstructions {
 /// the same value the resolution logic in section 5.1 consumes regardless
 /// of which form was used, so a bare string and a pinned object naming the
 /// same `ref` behave the same way.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Deserialize` is implemented by hand rather than derived with
+/// `#[serde(untagged)]`. An untagged derive tries each variant in turn and,
+/// on total failure, discards every per-variant error in favor of a single
+/// generic "data did not match any variant of untagged enum SkillRef"
+/// message - which never says whether the problem was an unknown field, a
+/// missing `ref`, or something else. That is weaker than every other
+/// diagnostic in this crate, all of which name their cause. Dispatching by
+/// shape (string vs. mapping) before deserializing lets a mapping decode
+/// straight into [`PinnedSkillRef`], so `#[serde(deny_unknown_fields)]`'s
+/// own field-level error (e.g. "unknown field `versoin`, expected one of
+/// ...") surfaces unmodified instead of being swallowed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum SkillRef {
     /// `skills: [research]` - an unpinned, harness-agnostic skill name or
@@ -400,6 +412,53 @@ pub enum SkillRef {
     /// `skills: [{ ref: research, version: 1.2.0, ... }]` - a pinned skill
     /// reference. See [`PinnedSkillRef`] for the field semantics.
     Pinned(PinnedSkillRef),
+}
+
+impl<'de> Deserialize<'de> for SkillRef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct SkillRefVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SkillRefVisitor {
+            type Value = SkillRef;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a skill reference: either a bare string or a pinned object")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(SkillRef::Bare(value.to_string()))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(SkillRef::Bare(value))
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                // Deserializing directly into `PinnedSkillRef` (rather than
+                // trying it as one of several untagged candidates) is what
+                // preserves serde's own field-level error - an unknown
+                // field or missing `ref` is reported by name, not
+                // discarded in favor of a generic "no variant matched".
+                let pinned =
+                    PinnedSkillRef::deserialize(serde::de::value::MapAccessDeserializer::new(map))?;
+                Ok(SkillRef::Pinned(pinned))
+            }
+        }
+
+        deserializer.deserialize_any(SkillRefVisitor)
+    }
 }
 
 impl SkillRef {
@@ -1428,6 +1487,25 @@ subagents:
         let pinned: SkillRef =
             serde_yaml::from_str("ref: research\n").expect("ref-only object should parse");
         assert_eq!(pinned.name(), "research");
+    }
+
+    #[test]
+    fn pinned_skill_ref_typo_names_the_unknown_field_not_a_generic_variant_failure() {
+        // A manual Deserialize dispatches a mapping straight into
+        // PinnedSkillRef, so a typo like `versoin:` surfaces serde's own
+        // field-level error rather than the untagged-enum fallback's
+        // generic "data did not match any variant" message.
+        let result: Result<SkillRef, _> = serde_yaml::from_str("ref: research\nversoin: 1.2.0\n");
+        let err = result.expect_err("typo'd field must fail to parse");
+        let message = err.to_string();
+        assert!(
+            message.contains("versoin"),
+            "error should name the unknown field 'versoin', got: {message}"
+        );
+        assert!(
+            !message.contains("did not match any variant"),
+            "error should not fall back to the generic untagged-enum message, got: {message}"
+        );
     }
 
     #[test]
