@@ -179,6 +179,10 @@ fn diagnostic_from_load_error(error: &RecipeLoadError) -> Diagnostic {
         RecipeLoadError::FromWidensMcp { offending, .. } => diagnostic.with_hint(format!(
             "narrow mcp.servers {offending:?} to a subset of the parent's mcp.servers, or grant the missing server(s)/methods in the parent's mcp"
         )),
+        RecipeLoadError::FromWidensDelegation { .. } => diagnostic.with_hint(
+            "set allow_delegation: false on this agent, or set allow_delegation: true on the parent"
+                .to_string(),
+        ),
         _ => diagnostic,
     }
 }

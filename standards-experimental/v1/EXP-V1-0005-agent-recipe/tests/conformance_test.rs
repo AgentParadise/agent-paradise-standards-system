@@ -574,3 +574,89 @@ fn additive_scalars_participate_in_from_merge() {
     assert_eq!(model.max_tokens, Some(4000));
     assert_eq!(model.temperature, Some(0.5));
 }
+
+// ─── Fix round 1, Finding 1: allow_delegation must narrow via `from:`, like
+// `tools` and `mcp`. Both directions are tested: a widening child (parent
+// false, child true) MUST be rejected, and a tightening child (parent true,
+// child false) MUST remain legal. ─────────────────────────────────────────
+
+#[test]
+fn from_may_not_widen_allow_delegation() {
+    // Belt-and-suspenders alongside the example-driven check in the sweep
+    // test above: this pins the exact fixture path and code so a rename of
+    // either silently dropping coverage is caught here too.
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("from-widens-delegation"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_FROM_WIDENS_DELEGATION"),
+        "got: {codes:?}"
+    );
+}
+
+#[test]
+fn from_may_tighten_allow_delegation() {
+    // The other direction of the same rule: a parent that permits
+    // delegation and a child that declares its own `allow_delegation:
+    // false` is narrowing, not widening, and MUST be accepted. A fix that
+    // rejected this case too (e.g. by comparing for inequality rather than
+    // "child true, parent false") would be worse than the bug it fixed.
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\nallow_delegation: true\n",
+    );
+    fs::write(
+        dir.path().join("agents/child.yaml"),
+        "name: child\nfrom: main\nallow_delegation: false\n",
+    )
+    .unwrap();
+
+    let recipe = load_recipe_dir(dir.path()).expect("recipe should load");
+    let resolved =
+        resolve_inherited(&recipe, "child").expect("tightening allow_delegation must resolve");
+    assert!(!resolved.allow_delegation);
+
+    let diagnostics = validate_recipe_dir(dir.path());
+    assert!(
+        !diagnostics.has_errors(),
+        "tightening allow_delegation from true to false must validate cleanly, got: {:?}",
+        diagnostics.iter().map(|d| &d.code).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn from_may_inherit_or_repeat_allow_delegation_without_widening() {
+    // Equal-on-both-sides cases (the child omits the field entirely, or
+    // repeats the same value as the parent) must not be flagged as
+    // widenings - only a genuine false-to-true transition is rejected.
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\nallow_delegation: true\n",
+    );
+    fs::write(
+        dir.path().join("agents/omits.yaml"),
+        "name: omits\nfrom: main\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("agents/repeats.yaml"),
+        "name: repeats\nfrom: main\nallow_delegation: true\n",
+    )
+    .unwrap();
+
+    let recipe = load_recipe_dir(dir.path()).expect("recipe should load");
+    for child_name in ["omits", "repeats"] {
+        resolve_inherited(&recipe, child_name)
+            .unwrap_or_else(|e| panic!("{child_name} should resolve without widening: {e}"));
+    }
+
+    let diagnostics = validate_recipe_dir(dir.path());
+    assert!(
+        !diagnostics.has_errors(),
+        "got: {:?}",
+        diagnostics.iter().map(|d| &d.code).collect::<Vec<_>>()
+    );
+}

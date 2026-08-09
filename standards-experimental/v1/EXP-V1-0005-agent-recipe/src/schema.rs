@@ -617,6 +617,11 @@ pub struct AgentManifest {
     /// mean the agent may not delegate outside the recipe, and an
     /// `Option<bool>` would only invite a consumer to invent semantics for a
     /// third state this standard does not need.
+    ///
+    /// It is nonetheless a permission field, narrowing-only via `from:`
+    /// exactly like `tools` and `mcp`: a child MAY tighten it from `true`
+    /// to `false`, but MUST NOT widen it from `false` to `true`, rejected
+    /// as `RECIPE_FROM_WIDENS_DELEGATION`. See [`resolve_inherited`].
     #[serde(default)]
     pub allow_delegation: bool,
     /// Name of a sibling agent this agent inherits from. Resolution is a
@@ -720,6 +725,11 @@ pub mod error_codes {
     /// checks the fully resolved agent against the package tier: this code
     /// is the per-`from:`-link check, mirroring `RECIPE_FROM_WIDENS_TOOLS`.
     pub const RECIPE_MCP_FROM_WIDENS_POLICY: &str = "RECIPE_MCP_FROM_WIDENS_POLICY";
+    /// A child agent declares `allow_delegation: true` while its resolved
+    /// parent declares `allow_delegation: false`, which would widen
+    /// permission instead of narrowing it, mirroring
+    /// `RECIPE_FROM_WIDENS_TOOLS` and `RECIPE_MCP_FROM_WIDENS_POLICY`.
+    pub const RECIPE_FROM_WIDENS_DELEGATION: &str = "RECIPE_FROM_WIDENS_DELEGATION";
     /// A `tools/*/tool.yaml` file failed to parse as a [`super::ToolManifest`].
     pub const RECIPE_MALFORMED_TOOL_MANIFEST: &str = "RECIPE_MALFORMED_TOOL_MANIFEST";
     /// An `evals/<name>/` directory is missing `input.json` or
@@ -838,6 +848,20 @@ pub enum RecipeLoadError {
         /// Source file of the offending child agent, if known.
         path: PathBuf,
     },
+    /// A child agent declares `allow_delegation: true` while its resolved
+    /// parent declares `allow_delegation: false`. `allow_delegation` is a
+    /// permission (the ability to reach outside the recipe to a peer
+    /// harness), not a capability declaration, so it is narrowing-only via
+    /// `from:` exactly like `tools` and `mcp` (section 4.4a, section 4.7).
+    #[error(
+        "agent '{agent}' widens allow_delegation via 'from': resolved parent declares allow_delegation: false"
+    )]
+    FromWidensDelegation {
+        /// The child agent's name.
+        agent: String,
+        /// Source file of the offending child agent, if known.
+        path: PathBuf,
+    },
     /// A `tools/*/tool.yaml` file is not a valid [`ToolManifest`].
     #[error("malformed tool manifest at {path}: {source}")]
     MalformedTool {
@@ -884,6 +908,7 @@ impl RecipeLoadError {
             Self::FromUnresolved { .. } => error_codes::RECIPE_FROM_UNRESOLVED,
             Self::FromWidensTools { .. } => error_codes::RECIPE_FROM_WIDENS_TOOLS,
             Self::FromWidensMcp { .. } => error_codes::RECIPE_MCP_FROM_WIDENS_POLICY,
+            Self::FromWidensDelegation { .. } => error_codes::RECIPE_FROM_WIDENS_DELEGATION,
             Self::MalformedTool { .. } => error_codes::RECIPE_MALFORMED_TOOL_MANIFEST,
             Self::MalformedEvalCase { .. } => error_codes::RECIPE_MALFORMED_EVAL_CASE,
             Self::MalformedJudge { .. } => error_codes::RECIPE_MALFORMED_JUDGE_MANIFEST,
@@ -905,6 +930,7 @@ impl RecipeLoadError {
             Self::FromUnresolved { path, .. } => path,
             Self::FromWidensTools { path, .. } => path,
             Self::FromWidensMcp { path, .. } => path,
+            Self::FromWidensDelegation { path, .. } => path,
             Self::MalformedTool { path, .. } => path,
             Self::MalformedEvalCase { path, .. } => path,
             Self::MalformedJudge { path, .. } => path,
@@ -1072,10 +1098,12 @@ fn agent_path_hint(recipe: &Recipe, name: &str) -> PathBuf {
 /// - `harness`, `description`, `model` (and `model.name`, `model.max_tokens`,
 ///   `model.temperature` within it): child value wins when present, parent's
 ///   is inherited when the child omits it.
-/// - `allow_delegation`: not inherited. The child's own declared value (or
-///   serde's `false` default, if omitted) always stands, exactly like
-///   `subagents` - there is no `Option<bool>` "unset" state to distinguish
-///   from an explicit `false`.
+/// - `allow_delegation`: narrowing only, like `tools`/`mcp`. The child's own
+///   declared value (or serde's `false` default, if omitted) always stands
+///   as the resolved value - there is no `Option<bool>` "unset" state to
+///   inherit through - but a child MUST NOT set it `true` when the resolved
+///   parent's is `false`, else [`RecipeLoadError::FromWidensDelegation`]. A
+///   child tightening `true` -> `false` is always legal.
 /// - `tools`: child MUST be a subset of the resolved parent when both are
 ///   `Some`, else [`RecipeLoadError::FromWidensTools`]. A child that omits
 ///   `tools` entirely inherits the parent's value (whatever it is), which is
@@ -1234,6 +1262,25 @@ fn merge_inherited(
         }
     };
 
+    // `allow_delegation`: narrowing only, exactly like `tools` and `mcp`
+    // (section 4.4a, section 4.7). `allow_delegation` is a permission - the
+    // ability to reach outside the recipe to a peer harness - not a mere
+    // capability declaration, so it is subject to the same monotonic
+    // narrowing rule despite being a plain `bool` rather than a collection.
+    // A child MAY tighten (`parent: true` -> `child: false`); a child MUST
+    // NOT widen (`parent: false` -> `child: true`), rejected as
+    // `RECIPE_FROM_WIDENS_DELEGATION`. There is no `Option<bool>` "absent"
+    // state to inherit through - the field is always concretely `true` or
+    // `false` after parsing - so unlike `tools`/`mcp` this check does not
+    // need an `Option` match on both sides; it compares the child's own
+    // declared value directly against the resolved parent's.
+    if child.allow_delegation && !parent.allow_delegation {
+        return Err(RecipeLoadError::FromWidensDelegation {
+            agent: child.name.clone(),
+            path: agent_path_hint(recipe, &child.name),
+        });
+    }
+
     Ok(AgentManifest {
         name: child.name,
         description,
@@ -1244,12 +1291,6 @@ fn merge_inherited(
         tools,
         mcp,
         subagents: child.subagents,
-        // `allow_delegation` is a plain `bool`, not `Option<bool>` (there is
-        // no meaningful "absent" state to distinguish from `false`), so it
-        // is merged the same way `subagents` is: the child's own declared
-        // value always stands, in full, rather than being inherited from
-        // the parent. A child that omits it gets serde's own `false`
-        // default, not the parent's value.
         allow_delegation: child.allow_delegation,
         from: child.from,
     })
