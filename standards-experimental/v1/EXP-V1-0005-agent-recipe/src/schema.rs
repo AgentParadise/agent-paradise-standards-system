@@ -321,7 +321,12 @@ pub enum EffortLevel {
 /// resolve from the parent. An agent with no `from:` and no inherited `name`
 /// anywhere in its chain asserts no opinion about which model to use; see
 /// section 4.4.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `PartialEq` only (not `Eq`): `temperature` is an `Option<f32>`, and `f32`
+/// does not implement `Eq` (NaN is not equal to itself), so `ModelSpec` -
+/// and, transitively, [`AgentManifest`] and [`Recipe`] - cannot derive `Eq`
+/// once this field exists.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModelSpec {
     /// Provider-qualified model identifier, e.g. `anthropic/claude-opus-4-8`.
@@ -330,6 +335,22 @@ pub struct ModelSpec {
     /// Coarse reasoning effort level. Defaults to `Medium` when omitted.
     #[serde(default)]
     pub effort: EffortLevel,
+    /// Declared ceiling on output tokens for this model, not a fixed value.
+    /// A run (section 4.5) MAY override the declared `model` and MAY narrow
+    /// this ceiling further; it MUST NOT raise it, per the same monotonic
+    /// narrowing principle sections 4.7 and 7 establish for `tools` and
+    /// `mcp`. This standard does NOT validate `max_tokens` against any
+    /// model's actual limit - see section 4.4.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    /// Declared sampling temperature. This standard does NOT validate it
+    /// against a numeric range: providers disagree on the valid range (some
+    /// accept `0..=2`, others `0..=1`), and this standard already declines
+    /// to validate that `model.name` names a real model (section 4.4) for
+    /// the same reason - range-checking one provider's convention would
+    /// make a valid recipe invalid on another provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
 }
 
 /// How `system_instructions.content` combines with `SYSTEM.md`.
@@ -514,11 +535,18 @@ pub struct PinnedSkillRef {
 /// Field names/enums intentionally match the prior single-YAML EXP-V1-0005
 /// schema (`name`, `harness`, `model`, `skills`, `system_instructions`) for
 /// pi-compatibility; `tools` and `subagents` are new in the directory shape.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `PartialEq` only (not `Eq`): `model` carries a `ModelSpec`, which cannot
+/// derive `Eq` (see [`ModelSpec`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgentManifest {
     /// Agent name. SHOULD match the file stem (`agents/<name>.yaml`).
     pub name: String,
+    /// Human-readable description of this agent. Informative only; this
+    /// standard does not interpret its contents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Which harness this agent REQUIRES. Absent means harness-agnostic:
     /// the agent must run correctly under any conforming harness, which
     /// section 4.3 enforces by forbidding harness-builtin tool references.
@@ -566,8 +594,31 @@ pub struct AgentManifest {
     pub mcp: Option<McpPolicy>,
     /// Names of other agents (files in `agents/`, without the `.yaml`
     /// extension) this agent may delegate to as subagents.
+    ///
+    /// This is a different concept from [`AgentManifest::allow_delegation`]
+    /// and the two MUST NOT be conflated: `subagents` names siblings WITHIN
+    /// this recipe (validated to resolve, `RECIPE_SUBAGENT_UNRESOLVED`);
+    /// `allow_delegation` is permission to hand work to the OTHER harness as
+    /// a peer, naming no sibling at all. An agent may have either, both, or
+    /// neither.
     #[serde(default)]
     pub subagents: Vec<String>,
+    /// Whether this agent may delegate work to a peer harness outside this
+    /// recipe. Defaults to `false`.
+    ///
+    /// Distinct from `subagents`: `subagents` names sibling agents WITHIN
+    /// this recipe and is validated to resolve; `allow_delegation` grants no
+    /// name at all, only the bare permission to hand off to another
+    /// harness. The two are orthogonal - an agent may declare either, both,
+    /// or neither. Defaulting to `false` is deliberate: a capability that
+    /// lets an agent reach outside the recipe boundary SHOULD be opt-in, not
+    /// assumed. A plain `bool` (not `Option<bool>`) is used because there is
+    /// no meaningful difference between "absent" and "false" here - both
+    /// mean the agent may not delegate outside the recipe, and an
+    /// `Option<bool>` would only invite a consumer to invent semantics for a
+    /// third state this standard does not need.
+    #[serde(default)]
+    pub allow_delegation: bool,
     /// Name of a sibling agent this agent inherits from. Resolution is a
     /// field-wise merge: fields the child declares win, fields it omits are
     /// taken from the parent. Permission fields may only narrow. See
@@ -579,7 +630,10 @@ pub struct AgentManifest {
 /// A fully loaded recipe directory: the manifest, every parsed agent (keyed
 /// by file stem), the gathered `skills/` entries, and the optional shared
 /// `SYSTEM.md` content.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `PartialEq` only (not `Eq`): `agents` carries [`AgentManifest`] values,
+/// which cannot derive `Eq` (see [`ModelSpec`]).
+#[derive(Debug, Clone, PartialEq)]
 pub struct Recipe {
     /// Parsed `recipe.yaml`.
     pub manifest: RecipeManifest,
@@ -1015,8 +1069,13 @@ fn agent_path_hint(recipe: &Recipe, name: &str) -> PathBuf {
 /// Resolve `name` against `recipe`, walking its `from:` chain (parent first,
 /// nearest declaration wins) and merging field-wise per section 4.7:
 ///
-/// - `harness`, `model` (and `model.name` within it): child value wins when
-///   present, parent's is inherited when the child omits it.
+/// - `harness`, `description`, `model` (and `model.name`, `model.max_tokens`,
+///   `model.temperature` within it): child value wins when present, parent's
+///   is inherited when the child omits it.
+/// - `allow_delegation`: not inherited. The child's own declared value (or
+///   serde's `false` default, if omitted) always stands, exactly like
+///   `subagents` - there is no `Option<bool>` "unset" state to distinguish
+///   from an explicit `false`.
 /// - `tools`: child MUST be a subset of the resolved parent when both are
 ///   `Some`, else [`RecipeLoadError::FromWidensTools`]. A child that omits
 ///   `tools` entirely inherits the parent's value (whatever it is), which is
@@ -1082,12 +1141,27 @@ fn merge_inherited(
 ) -> Result<AgentManifest, RecipeLoadError> {
     let harness = child.harness.or(parent.harness);
 
+    // `description` is a plain scalar, merged exactly like `harness`: the
+    // child's value wins when present, the parent's is inherited when the
+    // child omits it.
+    let description = child.description.or_else(|| parent.description.clone());
+
     let model = match (parent.model.clone(), child.model) {
         (parent_model, None) => parent_model,
         (None, Some(child_model)) => Some(child_model),
         (Some(parent_model), Some(child_model)) => Some(ModelSpec {
             name: child_model.name.or(parent_model.name),
             effort: child_model.effort,
+            // `max_tokens` and `temperature` are declared-intent scalars,
+            // merged exactly like `model.name`: the child's value wins when
+            // present, the parent's is inherited when the child omits it.
+            // Neither is a permission field, so there is no narrowing check
+            // here - the narrowing this crate enforces for `max_tokens` is
+            // the run-tier ceiling described on `ModelSpec::max_tokens`,
+            // which is normative prose for consumers, not a rule this
+            // loader (which never sees a run) can check.
+            max_tokens: child_model.max_tokens.or(parent_model.max_tokens),
+            temperature: child_model.temperature.or(parent_model.temperature),
         }),
     };
 
@@ -1162,6 +1236,7 @@ fn merge_inherited(
 
     Ok(AgentManifest {
         name: child.name,
+        description,
         harness,
         model,
         skills: child.skills,
@@ -1169,6 +1244,13 @@ fn merge_inherited(
         tools,
         mcp,
         subagents: child.subagents,
+        // `allow_delegation` is a plain `bool`, not `Option<bool>` (there is
+        // no meaningful "absent" state to distinguish from `false`), so it
+        // is merged the same way `subagents` is: the child's own declared
+        // value always stands, in full, rather than being inherited from
+        // the parent. A child that omits it gets serde's own `false`
+        // default, not the parent's value.
+        allow_delegation: child.allow_delegation,
         from: child.from,
     })
 }
@@ -1736,10 +1818,13 @@ subagents:
     fn agent_with_instructions(mode: InstructionMode, content: &str) -> AgentManifest {
         AgentManifest {
             name: "main".to_string(),
+            description: None,
             harness: Some(HarnessKind::Claude),
             model: Some(ModelSpec {
                 name: Some("anthropic/claude-opus-4-8".to_string()),
                 effort: EffortLevel::High,
+                max_tokens: None,
+                temperature: None,
             }),
             skills: Vec::new(),
             system_instructions: Some(SystemInstructions {
@@ -1750,6 +1835,7 @@ subagents:
             tools: None,
             mcp: None,
             subagents: Vec::new(),
+            allow_delegation: false,
             from: None,
         }
     }
@@ -1757,16 +1843,20 @@ subagents:
     fn agent_without_instructions() -> AgentManifest {
         AgentManifest {
             name: "main".to_string(),
+            description: None,
             harness: Some(HarnessKind::Claude),
             model: Some(ModelSpec {
                 name: Some("anthropic/claude-opus-4-8".to_string()),
                 effort: EffortLevel::High,
+                max_tokens: None,
+                temperature: None,
             }),
             skills: Vec::new(),
             system_instructions: None,
             tools: None,
             mcp: None,
             subagents: Vec::new(),
+            allow_delegation: false,
             from: None,
         }
     }
@@ -1818,6 +1908,7 @@ subagents:
     fn agent_with_from(name: &str, from: Option<&str>) -> AgentManifest {
         AgentManifest {
             name: name.to_string(),
+            description: None,
             harness: Some(HarnessKind::Claude),
             model: None,
             skills: Vec::new(),
@@ -1825,6 +1916,7 @@ subagents:
             tools: None,
             mcp: None,
             subagents: Vec::new(),
+            allow_delegation: false,
             from: from.map(str::to_string),
         }
     }

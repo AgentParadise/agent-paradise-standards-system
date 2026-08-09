@@ -141,10 +141,13 @@ No other top-level fields are permitted; `RecipeManifest` uses `#[serde(deny_unk
 
 ```yaml
 name: main
+description: Reviews pull requests for correctness and security issues.
 harness: claude
 model:
   name: anthropic/claude-opus-4-8
   effort: high
+  max_tokens: 16000
+  temperature: 0.2
 skills:
   - code-review
 system_instructions:
@@ -155,22 +158,27 @@ tools:
   - shell
 subagents:
   - reviewer
+allow_delegation: false
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | YES | Agent name. MUST be non-empty. SHOULD match the file stem. |
+| `description` | string | NO | Human-readable description of this agent. Informative only; this standard does not interpret its contents. |
 | `harness` | enum string | NO | Which harness this agent REQUIRES. v1 values: `claude`, `codex`. Absent means harness-agnostic and constrains which tools may be referenced. See 4.3. |
 | `model` | object | NO | Intended model selection; overridable per run. See 4.4 and 4.5. |
 | `model.name` | string | NO | Provider-qualified model identifier (e.g. `anthropic/claude-opus-4-8`). MUST be non-empty when present. This standard does NOT validate that the named model exists; that is a harness/provider concern. |
 | `model.effort` | enum string | NO | Reasoning effort: `low`, `medium`, or `high`. Defaults to `medium`. Maps to harness-specific concepts such as `thinking_level` (Gemini) or `reasoning_effort` (OpenAI). |
+| `model.max_tokens` | integer | NO | Declared ceiling on output tokens. See 4.5 for the override rule this field follows. |
+| `model.temperature` | float | NO | Declared sampling temperature. This standard does NOT validate it against a numeric range. See 4.4. |
 | `skills` | array[`SkillRef`] | NO | Harness-agnostic skill references to inject, in listed order. Each entry is either a bare string or a pinned object; both resolve identically. Defaults to an empty array when omitted. See section 5.1 for the two forms and resolution. |
 | `system_instructions` | object | NO | Per-agent system instruction override. See section 6. |
 | `system_instructions.mode` | enum string | REQUIRED if `system_instructions` present | `append` or `replace`. |
 | `system_instructions.content` | string | REQUIRED if `system_instructions` present | The instruction text. MUST be non-empty. |
 | `tools` | array[string] | NO | Tool reference strings the agent is permitted to use. Absent means no restriction; present but empty means no tools are permitted. See 4.6 for the enforcement rule. |
 | `mcp` | object | NO | Agent-tier MCP server policy, narrowing the package's `mcp`. Absent means no restriction of its own (the agent's effective policy is exactly the package's). See section 7. |
-| `subagents` | array[string] | NO | Names of other agents (files under `agents/`, without the `.yaml` extension) this agent may delegate to. Defaults to an empty array. |
+| `subagents` | array[string] | NO | Names of other agents (files under `agents/`, without the `.yaml` extension) this agent may delegate to. Defaults to an empty array. Not the same concept as `allow_delegation` - see 4.4a. |
+| `allow_delegation` | boolean | NO | Whether this agent may delegate to a peer harness outside this recipe. Defaults to `false`. Not the same concept as `subagents` - see 4.4a. |
 | `from` | string | NO | Name of a sibling agent (another file under `agents/`) this agent inherits from. See section 4.7. |
 
 No other fields are permitted at any nesting level - `AgentManifest`, `ModelSpec`, and `SystemInstructions` all use `#[serde(deny_unknown_fields)]`. A non-string mapping key is likewise rejected, since it can never match a known field name.
@@ -196,6 +204,17 @@ This makes portability checkable rather than aspirational: an agent claiming to 
 
 `model.effort` MUST be one of `low`, `medium`, or `high`, and defaults to `medium` when omitted. These three levels are intentionally coarse so they map cleanly across harnesses that expose different granularities of reasoning effort; a harness adapter is responsible for translating the coarse level into its own native parameter. The name and value space align with the cross-provider `reasoning_effort` convention rather than any single vendor's spelling.
 
+`model.temperature` is an OPTIONAL declared sampling temperature. This standard does NOT validate it against a numeric range. Providers disagree on what range is valid (some accept `0..=2`, others `0..=1`), and this standard already declines to validate that `model.name` names a real model, for the identical reason: range-checking one provider's convention would make a recipe that is valid for one provider invalid for another. A harness adapter that requires a bounded value is responsible for its own validation against its own provider's range.
+
+### 4.4a `allow_delegation` vs. `subagents`
+
+`allow_delegation` and `subagents` answer different questions and MUST NOT be conflated.
+
+- **`subagents`** names sibling agents WITHIN this recipe that an agent may delegate to. Each entry is checked to resolve to a real `agents/<name>.yaml` (`RECIPE_SUBAGENT_UNRESOLVED`, section 10.2).
+- **`allow_delegation`** is permission to hand work to the OTHER harness as a peer. It names no sibling at all, resolves nothing, and is not validated against `agents/`.
+
+An agent MAY declare either, both, or neither; the two fields vary independently, and one's presence or value has no bearing on the other's meaning or validity. `allow_delegation` defaults to `false` because a capability that lets an agent reach outside the recipe boundary SHOULD be opt-in, unlike `subagents`, which stays entirely inside a boundary this standard already validates.
+
 ### 4.5 Declared Intent and Run-Time Override
 
 A recipe states an agent's **intended** setup. It does not state an immutable binding. This distinction is what allows one recipe to be both a production definition and an experimental subject.
@@ -210,6 +229,7 @@ The two fields differ in how freely they may be overridden, because they differ 
 
 - **`model` overrides are unconstrained.** A model is interchangeable by design; substituting one is the ordinary case, which is precisely what makes a fixed recipe evaluable across many models.
 - **`harness` overrides MUST satisfy the agent's references.** A harness is a capability dependency, closer to an ABI than a preference. A consumer MUST NOT substitute a harness that does not provide every harness-builtin tool the agent references.
+- **`model.max_tokens` overrides are constrained the same way `tools` and `mcp` are.** `model.max_tokens` is a declared ceiling, not a fixed value: a run MAY narrow it further, but MUST NOT raise it above the recipe's declared value. This is the same monotonic-narrowing principle sections 4.7 and 7 establish for `tools` and `mcp` - permission (here, the ceiling on output length) narrows as you descend from recipe to run, and never widens - applied to a fourth tier this standard did not previously cover. As with `tools` and `mcp`, this is a normative statement about consumers: this crate has no `RunSpec` type and therefore does not, and cannot, validate it as a fixture-backed rule. `model.temperature` carries no such constraint; a run MAY set it to any value regardless of what the recipe declared, exactly like an unconstrained `model` override.
 
 The intended consequence is that a single recipe carries one definition of good (its `evals/` and `judges/`) while the model under test varies per run. Holding the bar fixed and varying the subject is only sound if the bar lives with the agent and the subject does not.
 

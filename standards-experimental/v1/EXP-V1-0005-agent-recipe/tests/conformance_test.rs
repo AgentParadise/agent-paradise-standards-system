@@ -6,8 +6,8 @@
 //! vendor (plan revision R9).
 
 use agent_recipe::{
-    EffortLevel, HarnessPromptMode, InstructionMode, SystemInstructions, ToolProtocol,
-    load_recipe_dir, resolve_inherited, validate_recipe_dir,
+    AgentManifest, EffortLevel, HarnessPromptMode, InstructionMode, SystemInstructions,
+    ToolProtocol, load_recipe_dir, resolve_inherited, validate_recipe_dir,
 };
 
 use std::fs;
@@ -453,4 +453,124 @@ fn existing_bare_string_skill_fixtures_still_load_unchanged() {
         !diagnostics.has_errors(),
         "pr-reviewer must still validate cleanly"
     );
+}
+
+// ─── Task 10: additive scalars (description, allow_delegation, max_tokens,
+// temperature) ───────────────────────────────────────────────────────────
+
+#[test]
+fn additive_scalars_parse_and_default_sanely() {
+    let m: AgentManifest = serde_yaml::from_str(
+        "name: a\ndescription: does a thing\nmodel:\n  max_tokens: 16000\n  temperature: 0.2\n",
+    )
+    .unwrap();
+    assert_eq!(m.description.as_deref(), Some("does a thing"));
+    assert!(!m.allow_delegation, "delegation is off unless asked for");
+    let model = m.model.unwrap();
+    assert_eq!(model.max_tokens, Some(16000));
+    assert_eq!(model.temperature, Some(0.2));
+}
+
+#[test]
+fn additive_scalars_are_absent_by_default() {
+    // Every one of the four new fields must be optional/defaulted so a
+    // recipe authored before this task continues to parse unchanged.
+    let m: AgentManifest = serde_yaml::from_str("name: a\n").unwrap();
+    assert_eq!(m.description, None);
+    assert!(!m.allow_delegation);
+    assert_eq!(m.model, None);
+}
+
+#[test]
+fn every_existing_example_recipe_still_loads_and_validates_unchanged() {
+    // None of examples/valid/* or examples/invalid/* use the four new
+    // fields, and adding them must not change any existing recipe's parse
+    // or validation outcome. This sweeps every shipped fixture rather than
+    // asserting against one, since Task 10 is purely additive.
+    for dir in case_dirs("valid") {
+        let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+        load_recipe_dir(&dir)
+            .unwrap_or_else(|e| panic!("valid example {name} must still load: {e}"));
+        let diagnostics = validate_recipe_dir(&dir);
+        assert!(
+            !diagnostics.has_errors(),
+            "valid example {name} must still validate cleanly, got: {:?}",
+            diagnostics.iter().map(|d| &d.code).collect::<Vec<_>>()
+        );
+    }
+    for dir in case_dirs("invalid") {
+        let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+        let expected = expected_codes(&dir);
+        let diagnostics = validate_recipe_dir(&dir);
+        let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+        for code in &expected {
+            assert!(
+                codes.contains(&code.as_str()),
+                "invalid example {name} must still emit {code}, got: {codes:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn allow_delegation_and_subagents_are_orthogonal() {
+    // The brief is explicit that these must not be conflated: an agent may
+    // have either, both, or neither. This exercises "both" and "neither" in
+    // one recipe to make the independence observable, not just asserted in
+    // prose.
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\nallow_delegation: true\nsubagents:\n  - helper\n",
+    );
+    fs::write(dir.path().join("agents/helper.yaml"), "name: helper\n").unwrap();
+
+    let recipe = load_recipe_dir(dir.path()).expect("recipe should load");
+    let main = recipe.agents.get("main").unwrap();
+    assert!(main.allow_delegation);
+    assert_eq!(main.subagents, vec!["helper".to_string()]);
+
+    let helper = recipe.agents.get("helper").unwrap();
+    assert!(
+        !helper.allow_delegation,
+        "helper declares neither delegation nor subagents"
+    );
+    assert!(helper.subagents.is_empty());
+
+    let diagnostics = validate_recipe_dir(dir.path());
+    assert!(
+        !diagnostics.has_errors(),
+        "allow_delegation must not affect subagents resolution: {:?}",
+        diagnostics.iter().map(|d| &d.code).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn additive_scalars_participate_in_from_merge() {
+    // Section 4.7: a child that omits a field inherits the resolved
+    // parent's value; a child that declares its own wins.
+    let dir = tempfile::tempdir().unwrap();
+    write_minimal_recipe(
+        dir.path(),
+        "agents/main.yaml",
+        "name: main\ndescription: parent description\nmodel:\n  max_tokens: 8000\n  temperature: 0.5\n",
+    );
+    fs::write(
+        dir.path().join("agents/child.yaml"),
+        "name: child\nfrom: main\nmodel:\n  max_tokens: 4000\n",
+    )
+    .unwrap();
+
+    let recipe = load_recipe_dir(dir.path()).expect("recipe should load");
+    let resolved = resolve_inherited(&recipe, "child").expect("child should resolve from main");
+
+    // description: omitted by the child, inherited from the parent.
+    assert_eq!(resolved.description.as_deref(), Some("parent description"));
+
+    // model.max_tokens: declared by the child, so the child's value wins.
+    // model.temperature: omitted by the child, inherited from the parent.
+    let model = resolved.model.expect("model should be present");
+    assert_eq!(model.max_tokens, Some(4000));
+    assert_eq!(model.temperature, Some(0.5));
 }
