@@ -6,7 +6,8 @@
 //! vendor (plan revision R9).
 
 use agent_recipe::{
-    HarnessPromptMode, InstructionMode, SystemInstructions, load_recipe_dir, validate_recipe_dir,
+    EffortLevel, HarnessPromptMode, InstructionMode, SystemInstructions, load_recipe_dir,
+    resolve_inherited, validate_recipe_dir,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -146,10 +147,60 @@ fn unrecognized_harness_fails_to_parse() {
 
 #[test]
 fn harness_prompt_defaults_to_append_and_is_independent_of_mode() {
-    let si: SystemInstructions =
-        serde_yaml::from_str("mode: replace\ncontent: hello\n").unwrap();
+    let si: SystemInstructions = serde_yaml::from_str("mode: replace\ncontent: hello\n").unwrap();
     // `mode` governs SYSTEM.md composition only.
     assert_eq!(si.mode, InstructionMode::Replace);
     // The harness's own prompt is untouched unless explicitly replaced.
     assert_eq!(si.harness_prompt, HarnessPromptMode::Append);
+}
+
+// ─── from: inheritance (section 4.7) ──────────────────────────────────────
+//
+// The upstream test brief for this behavior asserted
+// `child.model.as_ref().unwrap().name.as_deref()` / `.effort`, which this
+// crate's `resolve_inherited` signature satisfies directly since `model` is
+// `Option<ModelSpec>` and `ModelSpec::name` is `Option<String>` (see
+// `schema::ModelSpec`); the brief's own `report.codes()` helper does not
+// exist on `apss_core::Diagnostics`, so the cycle/widens-tools assertions
+// below use the same `diagnostics.iter().map(|d| d.code.as_str())` pattern
+// already used elsewhere in this file. Both adaptations preserve exactly
+// what the brief's tests asserted.
+
+#[test]
+fn from_inherits_parent_fields_and_child_overrides_win() {
+    let recipe = load_recipe_dir(&examples_dir("valid").join("pr-reviewer")).unwrap();
+    let child = resolve_inherited(&recipe, "reviewer").unwrap();
+    // model.name inherited from the parent (`main`), effort overridden by
+    // the child (`reviewer` declares its own `model.effort: high`).
+    assert_eq!(
+        child.model.as_ref().and_then(|m| m.name.as_deref()),
+        Some("anthropic/claude-opus-4-8")
+    );
+    assert_eq!(child.model.as_ref().unwrap().effort, EffortLevel::High);
+    // harness is also inherited: `reviewer` declares no harness of its own.
+    assert_eq!(child.harness, Some(agent_recipe::HarnessKind::Claude));
+}
+
+#[test]
+fn from_cycle_is_rejected() {
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("from-cycle"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(codes.contains(&"RECIPE_FROM_CYCLE"), "got: {codes:?}");
+}
+
+#[test]
+fn from_may_not_widen_tools() {
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("from-widens-tools"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_FROM_WIDENS_TOOLS"),
+        "got: {codes:?}"
+    );
+}
+
+#[test]
+fn from_unresolved_is_rejected() {
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("from-unresolved"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(codes.contains(&"RECIPE_FROM_UNRESOLVED"), "got: {codes:?}");
 }

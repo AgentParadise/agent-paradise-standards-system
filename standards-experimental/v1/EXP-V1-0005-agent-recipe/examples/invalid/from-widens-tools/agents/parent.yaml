@@ -1,0 +1,4 @@
+name: parent
+harness: claude
+tools:
+  - Read

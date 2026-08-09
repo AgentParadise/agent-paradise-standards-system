@@ -155,6 +155,7 @@ subagents:
 | `system_instructions.content` | string | REQUIRED if `system_instructions` present | The instruction text. MUST be non-empty. |
 | `tools` | array[string] | NO | Tool reference strings the agent is permitted to use. Absent means no restriction; present but empty means no tools are permitted. See 4.6 for the enforcement rule. |
 | `subagents` | array[string] | NO | Names of other agents (files under `agents/`, without the `.yaml` extension) this agent may delegate to. Defaults to an empty array. |
+| `from` | string | NO | Name of a sibling agent (another file under `agents/`) this agent inherits from. See section 4.7. |
 
 No other fields are permitted at any nesting level - `AgentManifest`, `ModelSpec`, and `SystemInstructions` all use `#[serde(deny_unknown_fields)]`. A non-string mapping key is likewise rejected, since it can never match a known field name.
 
@@ -203,6 +204,31 @@ The intended consequence is that a single recipe carries one definition of good 
 A tool reference is either **harness-builtin** (provided natively by the harness named in `harness`, per `05-harness-tool-vocabulary.md`) or **recipe-provided** (resolving under `tools/`, section 5). Recipe-provided tools are portable by construction because the recipe carries them.
 
 An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT reference a name that is harness-builtin under *any* harness this standard knows about, because an agnostic agent declares no single vocabulary to check its `tools` entries against. A validator MUST report such a reference as `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 8).
+
+### 4.7 Agent Inheritance (`from:`)
+
+An agent manifest MAY declare `from: <name>`, naming another agent (a sibling file under `agents/`) it inherits from. Resolution is a field-wise merge, computed by `schema::resolve_inherited(recipe, name) -> Result<AgentManifest, RecipeLoadError>`: the parent is resolved first (its own `from`, if any, resolved transitively), then the child's declared fields are merged on top of it. A chain longer than two agents is legal; the nearest declaration wins for any field the child does not itself declare.
+
+**Inheritance narrows. A child agent MUST NOT grant itself a tool its parent does not permit. Permission narrows monotonically at every tier of this standard: package policy, agent, inheriting agent, and run.**
+
+The merge is not uniform across fields; each field's own semantics decide how it composes:
+
+| Field | Merge rule |
+|---|---|
+| `harness` | Scalar: the child's value wins when present; the parent's is inherited when the child omits it. |
+| `model` (and `model.name` within it) | Scalar, applied at the `model` level and then at `model.name` within it: the child's `model` block, when present, wins field-by-field over the parent's - a child that declares only `model.effort` still inherits `model.name` from the parent. A child that omits `model` entirely inherits the parent's whole `model`. |
+| `tools` | Narrowing only. When both the child's and the resolved parent's `tools` are present, the child's list MUST be a subset of the parent's, else `RECIPE_FROM_WIDENS_TOOLS`. When the child omits `tools`, it inherits the parent's value unchanged (whatever that is) rather than defaulting to unrestricted - an omission MUST NOT be read as a widening back to `None`. A parent of `None` (unrestricted) with a child that declares its own `Some([...])` is a narrowing and is always allowed. |
+| `subagents` | The child's own value always stands, in full; it is never merged with the parent's. `subagents: []` on the child therefore deliberately clears an inherited list rather than being treated as "not specified". |
+| `system_instructions` | When the child omits it, the parent's (already-resolved) value is inherited unchanged. When the child declares its own with `mode: append`, its `content` is appended to the parent's *resolved* content (not the parent's raw, un-inherited YAML) with a blank line between them; `mode: replace` discards the parent's `system_instructions` entirely. This governs only the agent-tier `content` field and is independent of `SYSTEM.md` composition, which `resolved_system` (section 6) handles separately. |
+| `skills` | Not merged: the child's own `skills` (possibly empty) is used as declared, with no inheritance from the parent. |
+| `name`, `from` | Never inherited: they are the agent's own identity and its own next link in the chain, not state to merge. |
+
+A `from:` chain is validated for two additional failure modes, both surfaced with the file the offending agent was loaded from:
+
+- **`RECIPE_FROM_CYCLE`**: resolving an agent's `from:` chain revisits an agent already seen in that resolution, including an agent that names itself. Detected by tracking visited agent names in a set as the chain is walked, rather than recursing until the call stack overflows.
+- **`RECIPE_FROM_UNRESOLVED`**: a `from:` value does not name any parsed entry under `agents/` (no `agents/<name>.yaml` or `.yml`).
+
+`validate_recipe_dir` runs `resolve_inherited` for every agent that declares `from:` and reports any of the three codes above (`RECIPE_FROM_CYCLE`, `RECIPE_FROM_UNRESOLVED`, `RECIPE_FROM_WIDENS_TOOLS`) as a diagnostic, alongside the structural checks in section 8.2. `load_recipe_dir` itself does not perform `from:` resolution: it parses each agent manifest as authored, so a caller can inspect both the as-authored form (`Recipe::agents`) and, on demand, the resolved form (`resolve_inherited`). Resolving unconditionally inside the loader would make the authored form unobservable, which would harm diagnostics more than it would simplify callers.
 
 ---
 
@@ -282,6 +308,9 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_DUPLICATE_AGENT` | Two agent files resolve to the same stem (e.g. `main.yaml` and `main.yml`), which would collide in the recipe. |
 | `RECIPE_DEFAULT_AGENT_UNRESOLVED` | `default_agent` does not name any file actually present under `agents/`. |
 | `RECIPE_IO_ERROR` | An I/O error occurred while reading the recipe directory (unreadable file, permission error, etc.). |
+| `RECIPE_FROM_CYCLE` | Resolving an agent's `from:` chain (section 4.7) revisits an agent already seen, including an agent naming itself. Emitted by `schema::resolve_inherited`, not `load_recipe_dir`. |
+| `RECIPE_FROM_UNRESOLVED` | A `from:` value does not name any parsed entry under `agents/`. Emitted by `schema::resolve_inherited`. |
+| `RECIPE_FROM_WIDENS_TOOLS` | A child agent's `tools` is not a subset of its resolved parent's `tools` (section 4.7). Emitted by `schema::resolve_inherited`. |
 
 ### 8.2 Validator Codes
 
@@ -418,11 +447,12 @@ subagents:
 
 ```yaml
 name: reviewer
-harness: codex
+from: main
 model:
-  name: openai/gpt-5-codex
-  effort: medium
+  effort: high
 ```
+
+`reviewer` inherits `harness: claude` and `model.name: anthropic/claude-opus-4-8` from `main` (section 4.7); it declares its own `model.effort` explicitly, which wins over the parent's because a child's own value always wins when present.
 
 See `examples/valid/pr-reviewer/` for this example as a real directory.
 

@@ -26,7 +26,7 @@
 //! diagnostic carrying the loader's stable error code.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -78,22 +78,32 @@ pub enum HarnessKind {
 /// Coarse reasoning/thinking effort level.
 ///
 /// Maps to harness-specific concepts such as `thinking_level` (Claude) or
-/// reasoning effort (Codex).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// reasoning effort (Codex). Defaults to `Medium` when a `model` block
+/// omits `effort`, per section 4.4.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum EffortLevel {
     Low,
+    #[default]
     Medium,
     High,
 }
 
 /// Model selection: `model.name` and `model.effort`.
+///
+/// `name` is optional: an agent that inherits via `from:` (section 4.7) may
+/// declare a `model` block that overrides `effort` alone, leaving `name` to
+/// resolve from the parent. An agent with no `from:` and no inherited `name`
+/// anywhere in its chain asserts no opinion about which model to use; see
+/// section 4.4.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModelSpec {
     /// Provider-qualified model identifier, e.g. `anthropic/claude-opus-4-8`.
-    pub name: String,
-    /// Coarse reasoning effort level.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Coarse reasoning effort level. Defaults to `Medium` when omitted.
+    #[serde(default)]
     pub effort: EffortLevel,
 }
 
@@ -155,8 +165,11 @@ pub struct AgentManifest {
     /// section 4.3 enforces by forbidding harness-builtin tool references.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub harness: Option<HarnessKind>,
-    /// Model selection.
-    pub model: ModelSpec,
+    /// Model selection. Optional: an agent may omit `model` entirely and
+    /// inherit it wholesale via `from:` (section 4.7), or omit only `name`
+    /// within a declared `model` block to inherit that one field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelSpec>,
     /// Harness-agnostic skill references to inject, in listed order.
     ///
     /// Per R3, each entry resolves to a plugin-dir path: (a) `skills/<ref>/`
@@ -184,6 +197,12 @@ pub struct AgentManifest {
     /// extension) this agent may delegate to as subagents.
     #[serde(default)]
     pub subagents: Vec<String>,
+    /// Name of a sibling agent this agent inherits from. Resolution is a
+    /// field-wise merge: fields the child declares win, fields it omits are
+    /// taken from the parent. Permission fields may only narrow. See
+    /// [`resolve_inherited`] and section 4.7.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
 }
 
 /// A fully loaded recipe directory: the manifest, every parsed agent (keyed
@@ -239,6 +258,15 @@ pub mod error_codes {
     pub const RECIPE_DEFAULT_AGENT_UNRESOLVED: &str = "RECIPE_DEFAULT_AGENT_UNRESOLVED";
     /// An I/O error occurred while reading the recipe directory.
     pub const RECIPE_IO_ERROR: &str = "RECIPE_IO_ERROR";
+    /// A `from:` chain revisits an agent it has already visited (including an
+    /// agent naming itself).
+    pub const RECIPE_FROM_CYCLE: &str = "RECIPE_FROM_CYCLE";
+    /// A `from:` (or the initially requested agent name) does not resolve to
+    /// any parsed entry in `agents/`.
+    pub const RECIPE_FROM_UNRESOLVED: &str = "RECIPE_FROM_UNRESOLVED";
+    /// A child agent's `tools` is not a subset of its resolved parent's
+    /// `tools`, which would widen permission instead of narrowing it.
+    pub const RECIPE_FROM_WIDENS_TOOLS: &str = "RECIPE_FROM_WIDENS_TOOLS";
 }
 
 /// Failure modes of [`load_recipe_dir`].
@@ -302,6 +330,40 @@ pub enum RecipeLoadError {
         #[source]
         source: std::io::Error,
     },
+    /// A `from:` chain revisited an agent already seen while resolving it
+    /// (including an agent whose `from:` names itself).
+    #[error("cycle detected resolving 'from' chain at agent '{name}'")]
+    FromCycle {
+        /// The agent name that was revisited.
+        name: String,
+        /// Best-effort anchor: the source file of the agent where the cycle
+        /// was detected, if known.
+        path: PathBuf,
+    },
+    /// A `from:` value (or the initially requested agent name) does not name
+    /// any parsed entry in `agents/`.
+    #[error("'from: {from}' does not resolve to {AGENTS_DIR}/{from}.yaml (or .yml)")]
+    FromUnresolved {
+        /// The unresolved name.
+        from: String,
+        /// Best-effort anchor: the source file of the agent that referenced
+        /// `from`, if known.
+        path: PathBuf,
+    },
+    /// A child agent's `tools` is not a subset of its resolved parent's
+    /// `tools`.
+    #[error(
+        "agent '{agent}' widens tools via 'from': {offending:?} not permitted by the resolved parent"
+    )]
+    FromWidensTools {
+        /// The child agent's name.
+        agent: String,
+        /// The `tools` entries the child grants that its resolved parent
+        /// does not permit.
+        offending: Vec<String>,
+        /// Source file of the offending child agent, if known.
+        path: PathBuf,
+    },
 }
 
 impl RecipeLoadError {
@@ -315,6 +377,9 @@ impl RecipeLoadError {
             Self::DuplicateAgent { .. } => error_codes::RECIPE_DUPLICATE_AGENT,
             Self::DefaultAgentUnresolved { .. } => error_codes::RECIPE_DEFAULT_AGENT_UNRESOLVED,
             Self::Io { .. } => error_codes::RECIPE_IO_ERROR,
+            Self::FromCycle { .. } => error_codes::RECIPE_FROM_CYCLE,
+            Self::FromUnresolved { .. } => error_codes::RECIPE_FROM_UNRESOLVED,
+            Self::FromWidensTools { .. } => error_codes::RECIPE_FROM_WIDENS_TOOLS,
         }
     }
 
@@ -329,6 +394,9 @@ impl RecipeLoadError {
             Self::DuplicateAgent { second, .. } => second,
             Self::DefaultAgentUnresolved { agents_dir, .. } => agents_dir,
             Self::Io { path, .. } => path,
+            Self::FromCycle { path, .. } => path,
+            Self::FromUnresolved { path, .. } => path,
+            Self::FromWidensTools { path, .. } => path,
         }
     }
 }
@@ -441,6 +509,146 @@ pub fn resolved_system(agent: &AgentManifest, system_md: Option<&str>) -> Option
         },
         None => system_md.map(str::to_string),
     }
+}
+
+/// Best-effort source path for `name`, for anchoring `from:`-resolution
+/// diagnostics. Falls back to the reconstructed `.yaml` path when the source
+/// was not retained (should not happen for a `Recipe` produced by
+/// [`load_recipe_dir`]).
+fn agent_path_hint(recipe: &Recipe, name: &str) -> PathBuf {
+    recipe
+        .agent_sources
+        .get(name)
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from(AGENTS_DIR).join(format!("{name}.yaml")))
+}
+
+/// Resolve `name` against `recipe`, walking its `from:` chain (parent first,
+/// nearest declaration wins) and merging field-wise per section 4.7:
+///
+/// - `harness`, `model` (and `model.name` within it): child value wins when
+///   present, parent's is inherited when the child omits it.
+/// - `tools`: child MUST be a subset of the resolved parent when both are
+///   `Some`, else [`RecipeLoadError::FromWidensTools`]. A child that omits
+///   `tools` entirely inherits the parent's value (whatever it is), which is
+///   what keeps a restrictive parent from being silently widened back to
+///   unrestricted by an omission.
+/// - `subagents`: the child's own value always stands, so `subagents: []`
+///   deliberately clears an inherited list.
+/// - `system_instructions.content`: with `mode: append`, the child's content
+///   appends to the parent's *resolved* content (post-inheritance, not the
+///   parent's own literal YAML). `mode: replace` discards the parent's
+///   instructions entirely. This is independent of `SYSTEM.md` composition,
+///   which [`resolved_system`] handles separately.
+///
+/// A `from:` chain longer than two is legal; a cycle of any length,
+/// including an agent naming itself, is rejected as
+/// [`RecipeLoadError::FromCycle`]. A `from:` (or the initially requested
+/// `name`) that does not resolve to a parsed `agents/*.yaml` entry is
+/// rejected as [`RecipeLoadError::FromUnresolved`].
+pub fn resolve_inherited(recipe: &Recipe, name: &str) -> Result<AgentManifest, RecipeLoadError> {
+    let mut visited = HashSet::new();
+    resolve_inherited_inner(recipe, name, &mut visited)
+}
+
+fn resolve_inherited_inner(
+    recipe: &Recipe,
+    name: &str,
+    visited: &mut HashSet<String>,
+) -> Result<AgentManifest, RecipeLoadError> {
+    if !visited.insert(name.to_string()) {
+        return Err(RecipeLoadError::FromCycle {
+            name: name.to_string(),
+            path: agent_path_hint(recipe, name),
+        });
+    }
+
+    let child =
+        recipe
+            .agents
+            .get(name)
+            .cloned()
+            .ok_or_else(|| RecipeLoadError::FromUnresolved {
+                from: name.to_string(),
+                path: agent_path_hint(recipe, name),
+            })?;
+
+    match &child.from {
+        None => Ok(child),
+        Some(parent_name) => {
+            let parent = resolve_inherited_inner(recipe, parent_name, visited)?;
+            merge_inherited(recipe, &parent, child)
+        }
+    }
+}
+
+/// Merge a resolved `parent` into an as-authored `child`, per the field
+/// rules documented on [`resolve_inherited`]. `child.name` and `child.from`
+/// are never overwritten: they are the child's own identity, not inherited
+/// state.
+fn merge_inherited(
+    recipe: &Recipe,
+    parent: &AgentManifest,
+    child: AgentManifest,
+) -> Result<AgentManifest, RecipeLoadError> {
+    let harness = child.harness.or(parent.harness);
+
+    let model = match (parent.model.clone(), child.model) {
+        (parent_model, None) => parent_model,
+        (None, Some(child_model)) => Some(child_model),
+        (Some(parent_model), Some(child_model)) => Some(ModelSpec {
+            name: child_model.name.or(parent_model.name),
+            effort: child_model.effort,
+        }),
+    };
+
+    let tools = match (parent.tools.clone(), child.tools) {
+        (parent_tools, None) => parent_tools,
+        (None, Some(child_tools)) => Some(child_tools),
+        (Some(parent_tools), Some(child_tools)) => {
+            let allowed: HashSet<&str> = parent_tools.iter().map(String::as_str).collect();
+            let offending: Vec<String> = child_tools
+                .iter()
+                .filter(|t| !allowed.contains(t.as_str()))
+                .cloned()
+                .collect();
+            if !offending.is_empty() {
+                return Err(RecipeLoadError::FromWidensTools {
+                    agent: child.name.clone(),
+                    offending,
+                    path: agent_path_hint(recipe, &child.name),
+                });
+            }
+            Some(child_tools)
+        }
+    };
+
+    let system_instructions = match (
+        parent.system_instructions.clone(),
+        child.system_instructions,
+    ) {
+        (parent_si, None) => parent_si,
+        (None, Some(child_si)) => Some(child_si),
+        (Some(parent_si), Some(child_si)) => match child_si.mode {
+            InstructionMode::Append => Some(SystemInstructions {
+                mode: child_si.mode,
+                content: format!("{}\n\n{}", parent_si.content, child_si.content),
+                harness_prompt: child_si.harness_prompt,
+            }),
+            InstructionMode::Replace => Some(child_si),
+        },
+    };
+
+    Ok(AgentManifest {
+        name: child.name,
+        harness,
+        model,
+        skills: child.skills,
+        system_instructions,
+        tools,
+        subagents: child.subagents,
+        from: child.from,
+    })
 }
 
 fn read_to_string(path: &Path) -> Result<String, RecipeLoadError> {
@@ -575,7 +783,11 @@ subagents:
         let agent: AgentManifest = serde_yaml::from_str(yaml).expect("should parse");
         assert_eq!(agent.name, "main");
         assert_eq!(agent.harness, Some(HarnessKind::Claude));
-        assert_eq!(agent.model.effort, EffortLevel::High);
+        assert_eq!(
+            agent.model.as_ref().and_then(|m| m.name.as_deref()),
+            Some("anthropic/claude-opus-4-8")
+        );
+        assert_eq!(agent.model.as_ref().unwrap().effort, EffortLevel::High);
         assert_eq!(agent.skills, vec!["code-review".to_string()]);
         assert_eq!(agent.tools, Some(vec!["shell".to_string()]));
         assert_eq!(agent.subagents, vec!["reviewer".to_string()]);
@@ -602,8 +814,7 @@ subagents:
         assert_eq!(absent.tools, None, "absent must not collapse to empty");
 
         let empty: AgentManifest =
-            serde_yaml::from_str("name: a\nmodel:\n  name: m\n  effort: low\ntools: []\n")
-                .unwrap();
+            serde_yaml::from_str("name: a\nmodel:\n  name: m\n  effort: low\ntools: []\n").unwrap();
         assert_eq!(empty.tools, Some(vec![]), "empty means no tools permitted");
     }
 
@@ -625,7 +836,8 @@ subagents:
 
     #[test]
     fn agent_manifest_rejects_unknown_field() {
-        let yaml = "name: x\nharness: claude\nmodel:\n  name: foo\n  effort: low\nnotarealfield: 1\n";
+        let yaml =
+            "name: x\nharness: claude\nmodel:\n  name: foo\n  effort: low\nnotarealfield: 1\n";
         let result: Result<AgentManifest, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err(), "expected unknown field to be rejected");
     }
@@ -778,10 +990,10 @@ subagents:
         AgentManifest {
             name: "main".to_string(),
             harness: Some(HarnessKind::Claude),
-            model: ModelSpec {
-                name: "anthropic/claude-opus-4-8".to_string(),
+            model: Some(ModelSpec {
+                name: Some("anthropic/claude-opus-4-8".to_string()),
                 effort: EffortLevel::High,
-            },
+            }),
             skills: Vec::new(),
             system_instructions: Some(SystemInstructions {
                 mode,
@@ -790,6 +1002,7 @@ subagents:
             }),
             tools: None,
             subagents: Vec::new(),
+            from: None,
         }
     }
 
@@ -797,14 +1010,15 @@ subagents:
         AgentManifest {
             name: "main".to_string(),
             harness: Some(HarnessKind::Claude),
-            model: ModelSpec {
-                name: "anthropic/claude-opus-4-8".to_string(),
+            model: Some(ModelSpec {
+                name: Some("anthropic/claude-opus-4-8".to_string()),
                 effort: EffortLevel::High,
-            },
+            }),
             skills: Vec::new(),
             system_instructions: None,
             tools: None,
             subagents: Vec::new(),
+            from: None,
         }
     }
 

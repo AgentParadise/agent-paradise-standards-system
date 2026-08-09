@@ -20,7 +20,7 @@ use std::path::Path;
 
 use crate::schema::{
     self, AGENTS_DIR, AgentManifest, HarnessKind, RECIPE_MARKER_FILE, Recipe, RecipeLoadError,
-    load_recipe_dir,
+    load_recipe_dir, resolve_inherited,
 };
 
 /// Directory-level validation error codes, layered on top of the loader codes
@@ -145,6 +145,15 @@ fn diagnostic_from_load_error(error: &RecipeLoadError) -> Diagnostic {
         }
         RecipeLoadError::DefaultAgentUnresolved { default_agent, .. } => diagnostic
             .with_hint(format!("add {AGENTS_DIR}/{default_agent}.yaml (or .yml) or point default_agent at an existing agent file")),
+        RecipeLoadError::FromCycle { name, .. } => diagnostic.with_hint(format!(
+            "break the 'from' cycle: '{name}' is reached twice while resolving inheritance"
+        )),
+        RecipeLoadError::FromUnresolved { from, .. } => diagnostic.with_hint(format!(
+            "add {AGENTS_DIR}/{from}.yaml (or .yml) or point 'from' at an existing agent"
+        )),
+        RecipeLoadError::FromWidensTools { offending, .. } => diagnostic.with_hint(format!(
+            "remove {offending:?} from tools, or add them to the parent's tools"
+        )),
         _ => diagnostic,
     }
 }
@@ -164,6 +173,19 @@ fn validate_loaded_recipe(root: &Path, recipe: &Recipe, diagnostics: &mut Diagno
 
     for (stem, agent) in &recipe.agents {
         validate_agent(root, stem, agent, recipe, diagnostics);
+    }
+
+    // `from:` resolution is checked separately, over the agents that
+    // actually declare it: a cycle can only occur through a chain of `from`
+    // links, so an agent with no `from` cannot be the site of one, and
+    // resolving it would be a no-op. `resolve_inherited` walks the whole
+    // chain, so this also exercises chains longer than two.
+    for (stem, agent) in &recipe.agents {
+        if agent.from.is_some() {
+            if let Err(error) = resolve_inherited(recipe, stem) {
+                diagnostics.push(diagnostic_from_load_error(&error));
+            }
+        }
     }
 }
 
@@ -197,14 +219,22 @@ fn validate_agent(
         );
     }
 
-    if agent.model.name.trim().is_empty() {
-        diagnostics.push(
-            Diagnostic::error(
-                error_codes::RECIPE_EMPTY_MODEL_NAME,
-                format!("agent '{stem}' has an empty model.name"),
-            )
-            .with_path(agent_path.clone()),
-        );
+    // `model` and `model.name` are both optional: absent means "no opinion",
+    // which is not an error (section 4.4), and a `from:`-child may leave
+    // `name` unset to inherit it. A `model.name` that IS present but empty
+    // (or all-whitespace) is the only case this rejects.
+    if let Some(model) = &agent.model {
+        if let Some(name) = &model.name {
+            if name.trim().is_empty() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        error_codes::RECIPE_EMPTY_MODEL_NAME,
+                        format!("agent '{stem}' has an empty model.name"),
+                    )
+                    .with_path(agent_path.clone()),
+                );
+            }
+        }
     }
 
     for (index, skill) in agent.skills.iter().enumerate() {

@@ -32,8 +32,9 @@ pub mod validate;
 
 pub use generate::{RecipeTemplateContext, scaffold_recipe};
 pub use schema::{
-    AgentManifest, EffortLevel, HarnessKind, HarnessPromptMode, InstructionMode, ModelSpec,
-    Recipe, RecipeLoadError, RecipeManifest, SystemInstructions, load_recipe_dir, resolved_system,
+    AgentManifest, EffortLevel, HarnessKind, HarnessPromptMode, InstructionMode, ModelSpec, Recipe,
+    RecipeLoadError, RecipeManifest, SystemInstructions, load_recipe_dir, resolve_inherited,
+    resolved_system,
 };
 pub use validate::validate_recipe_dir;
 
