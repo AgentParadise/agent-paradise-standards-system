@@ -1,0 +1,9 @@
+name: mcp-from-widens-policy
+version: 0.1.0
+default_agent: child
+mcp:
+  servers:
+    warehouse:
+      include:
+        - run_query
+        - drop_table

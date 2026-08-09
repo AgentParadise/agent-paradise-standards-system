@@ -1,0 +1,9 @@
+name: child
+harness: claude
+from: parent
+mcp:
+  servers:
+    warehouse:
+      include:
+        - run_query
+        - drop_table

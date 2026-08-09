@@ -222,6 +222,26 @@ fn agent_mcp_policy_may_not_widen_package_policy() {
 }
 
 #[test]
+fn agent_mcp_policy_may_not_widen_immediate_from_parent() {
+    // A three-level `from:` chain where the package's own policy is
+    // permissive enough that the child's resolved policy is within the
+    // package ceiling; the only violation is the widening at the
+    // parent -> child link, isolating the per-link check from the
+    // package-tier check (`RECIPE_MCP_AGENT_WIDENS_POLICY`).
+    let diagnostics = validate_recipe_dir(&examples_dir("invalid").join("mcp-from-widens-policy"));
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_MCP_FROM_WIDENS_POLICY"),
+        "got: {codes:?}"
+    );
+    assert!(
+        !codes.contains(&"RECIPE_MCP_AGENT_WIDENS_POLICY"),
+        "this fixture's package policy is permissive enough that only the \
+         from:-link code should fire, got: {codes:?}"
+    );
+}
+
+#[test]
 fn agent_naming_a_server_the_package_never_mentioned_widens() {
     // The subtle case: a naive check that only compares servers present in
     // both policies would miss this, since `reporting` never appears in the

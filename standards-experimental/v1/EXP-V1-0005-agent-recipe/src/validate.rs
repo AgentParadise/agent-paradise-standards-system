@@ -159,6 +159,9 @@ fn diagnostic_from_load_error(error: &RecipeLoadError) -> Diagnostic {
         RecipeLoadError::FromWidensTools { offending, .. } => diagnostic.with_hint(format!(
             "remove {offending:?} from tools, or add them to the parent's tools"
         )),
+        RecipeLoadError::FromWidensMcp { offending, .. } => diagnostic.with_hint(format!(
+            "narrow mcp.servers {offending:?} to a subset of the parent's mcp.servers, or grant the missing server(s)/methods in the parent's mcp"
+        )),
         _ => diagnostic,
     }
 }

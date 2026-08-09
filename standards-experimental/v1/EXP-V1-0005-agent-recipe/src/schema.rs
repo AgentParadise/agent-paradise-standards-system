@@ -118,27 +118,31 @@ impl McpPolicy {
     }
 }
 
-/// The servers `agent` permits that `package` does not permit for it,
-/// naming each offending server id. Two ways a server can be offending:
+/// The servers `candidate` permits that `ceiling` does not permit for it,
+/// naming each offending server id. `ceiling` is whatever policy `candidate`
+/// must not exceed - the package's `mcp` when checking an agent, or a
+/// resolved parent's `mcp` when checking a `from:` child against that one
+/// link. Two ways a server can be offending:
 ///
-/// 1. `agent` names a server `package` does not mention at all. This is
-///    always a widening - inventing access `package` never granted - even
-///    if `agent`'s policy for that server is otherwise empty.
-/// 2. `agent` and `package` both name the server, but `agent`'s
-///    [`McpServerPolicy::effective_methods`] is not a subset of `package`'s.
+/// 1. `candidate` names a server `ceiling` does not mention at all. This is
+///    always a widening - inventing access `ceiling` never granted - even
+///    if `candidate`'s policy for that server is otherwise empty.
+/// 2. `candidate` and `ceiling` both name the server, but `candidate`'s
+///    [`McpServerPolicy::effective_methods`] is not a subset of `ceiling`'s.
 ///
-/// This is the single shared computation the package-tier validator check
-/// (and any future consumer of this rule) MUST use, rather than
-/// re-implementing the include/exclude comparison in more than one place.
-pub fn mcp_policy_widenings(package: &McpPolicy, agent: &McpPolicy) -> Vec<String> {
+/// This is the single shared computation every narrowing check in this
+/// crate - the package-tier check and the per-`from:`-link check alike, and
+/// any future consumer of this rule - MUST use, rather than re-implementing
+/// the include/exclude comparison in more than one place.
+pub fn mcp_policy_widenings(ceiling: &McpPolicy, candidate: &McpPolicy) -> Vec<String> {
     let mut offending = Vec::new();
-    for (server_id, agent_policy) in &agent.servers {
-        match package.servers.get(server_id) {
+    for (server_id, candidate_policy) in &candidate.servers {
+        match ceiling.servers.get(server_id) {
             None => offending.push(server_id.clone()),
-            Some(package_policy) => {
-                let agent_methods = agent_policy.effective_methods();
-                let package_methods = package_policy.effective_methods();
-                if !agent_methods.is_subset(&package_methods) {
+            Some(ceiling_policy) => {
+                let candidate_methods = candidate_policy.effective_methods();
+                let ceiling_methods = ceiling_policy.effective_methods();
+                if !candidate_methods.is_subset(&ceiling_methods) {
                     offending.push(server_id.clone());
                 }
             }
@@ -364,6 +368,12 @@ pub mod error_codes {
     /// A child agent's `tools` is not a subset of its resolved parent's
     /// `tools`, which would widen permission instead of narrowing it.
     pub const RECIPE_FROM_WIDENS_TOOLS: &str = "RECIPE_FROM_WIDENS_TOOLS";
+    /// A child agent's `mcp` is not a subset of its resolved parent's `mcp`,
+    /// which would widen permission instead of narrowing it. Distinct from
+    /// `RECIPE_MCP_AGENT_WIDENS_POLICY` (validate::error_codes), which
+    /// checks the fully resolved agent against the package tier: this code
+    /// is the per-`from:`-link check, mirroring `RECIPE_FROM_WIDENS_TOOLS`.
+    pub const RECIPE_MCP_FROM_WIDENS_POLICY: &str = "RECIPE_MCP_FROM_WIDENS_POLICY";
 }
 
 /// Failure modes of [`load_recipe_dir`].
@@ -461,6 +471,20 @@ pub enum RecipeLoadError {
         /// Source file of the offending child agent, if known.
         path: PathBuf,
     },
+    /// A child agent's `mcp` is not a subset of its resolved parent's `mcp`,
+    /// checked at this one `from:` link (section 7.3).
+    #[error(
+        "agent '{agent}' widens mcp via 'from': server(s) {offending:?} not permitted by the resolved parent"
+    )]
+    FromWidensMcp {
+        /// The child agent's name.
+        agent: String,
+        /// The server ids the child grants (or grants wider methods for)
+        /// that its resolved parent does not permit.
+        offending: Vec<String>,
+        /// Source file of the offending child agent, if known.
+        path: PathBuf,
+    },
 }
 
 impl RecipeLoadError {
@@ -477,6 +501,7 @@ impl RecipeLoadError {
             Self::FromCycle { .. } => error_codes::RECIPE_FROM_CYCLE,
             Self::FromUnresolved { .. } => error_codes::RECIPE_FROM_UNRESOLVED,
             Self::FromWidensTools { .. } => error_codes::RECIPE_FROM_WIDENS_TOOLS,
+            Self::FromWidensMcp { .. } => error_codes::RECIPE_MCP_FROM_WIDENS_POLICY,
         }
     }
 
@@ -494,6 +519,7 @@ impl RecipeLoadError {
             Self::FromCycle { path, .. } => path,
             Self::FromUnresolved { path, .. } => path,
             Self::FromWidensTools { path, .. } => path,
+            Self::FromWidensMcp { path, .. } => path,
         }
     }
 }
@@ -736,16 +762,36 @@ fn merge_inherited(
         },
     };
 
-    // `mcp`: the child's own declared policy, when present, wins in full -
-    // it fully replaces the parent's, exactly like `tools`' own-value-wins
-    // behavior. This does not by itself enforce narrowing against the
-    // parent: the single narrowing check lives in `validate::validate_recipe_dir`,
-    // applied to this fully resolved value against the package's `mcp`, so a
-    // widening cannot be laundered through a `from:` chain no matter how
-    // many links it has (section 7).
+    // `mcp`: narrowing only, exactly like `tools` (section 7.3). When both
+    // the child's and the resolved parent's `mcp` are present, the child's
+    // policy MUST NOT widen the parent's at this one `from:` link, else
+    // `RECIPE_MCP_FROM_WIDENS_POLICY`. When the child omits `mcp`, it
+    // inherits the parent's resolved value unchanged. When the parent has no
+    // `mcp` of its own (nothing in its chain declared one - deferred to the
+    // package tier) and the child declares one, that is always a narrowing
+    // and needs no check here.
+    //
+    // This per-link check does not by itself prevent every widening: it
+    // catches only the immediate parent-to-child step. The package-tier
+    // ceiling is enforced separately, once, in `validate::validate_recipe_dir`,
+    // against this fully resolved value - so a widening cannot be laundered
+    // past the package no matter how many `from:` links it passes through,
+    // while a widening relative to an intermediate parent is now also
+    // caught at the link where it actually happens.
     let mcp = match (parent.mcp.clone(), child.mcp) {
         (parent_mcp, None) => parent_mcp,
-        (_, Some(child_mcp)) => Some(child_mcp),
+        (None, Some(child_mcp)) => Some(child_mcp),
+        (Some(parent_mcp), Some(child_mcp)) => {
+            let offending = mcp_policy_widenings(&parent_mcp, &child_mcp);
+            if !offending.is_empty() {
+                return Err(RecipeLoadError::FromWidensMcp {
+                    agent: child.name.clone(),
+                    offending,
+                    path: agent_path_hint(recipe, &child.name),
+                });
+            }
+            Some(child_mcp)
+        }
     };
 
     Ok(AgentManifest {
@@ -1372,18 +1418,22 @@ subagents:
     }
 
     #[test]
-    fn merge_inherited_lets_child_mcp_override_parent_in_full() {
+    fn merge_inherited_lets_child_mcp_narrow_parent() {
         let mut parent = agent_with_from("parent", None);
-        parent.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+        parent.mcp = Some(policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &[]),
+        )]));
 
         let mut child = agent_with_from("child", Some("parent"));
-        child.mcp = Some(policy_of(&[("reporting", server_policy(&["list_reports"], &[]))]));
+        child.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
 
         let recipe = recipe_of(vec![parent, child]);
-        let resolved = resolve_inherited(&recipe, "child").expect("chain should resolve");
+        let resolved = resolve_inherited(&recipe, "child").expect("narrowing should resolve");
         let resolved_mcp = resolved.mcp.expect("child declared its own mcp");
-        assert!(resolved_mcp.servers.contains_key("reporting"));
-        assert!(!resolved_mcp.servers.contains_key("warehouse"));
+        let methods = resolved_mcp.servers["warehouse"].effective_methods();
+        assert!(methods.contains("run_query"));
+        assert!(!methods.contains("drop_table"));
     }
 
     #[test]
@@ -1397,5 +1447,71 @@ subagents:
         let resolved = resolve_inherited(&recipe, "child").expect("chain should resolve");
         let resolved_mcp = resolved.mcp.expect("child should inherit parent's mcp");
         assert!(resolved_mcp.servers.contains_key("warehouse"));
+    }
+
+    #[test]
+    fn merge_inherited_lets_child_declare_mcp_when_parent_has_none() {
+        // The parent's own `mcp` is unset (deferred to the package tier, or
+        // to a further ancestor); a child declaring its own is always a
+        // narrowing relative to "unset", so no per-link check applies here.
+        let parent = agent_with_from("parent", None);
+        let mut child = agent_with_from("child", Some("parent"));
+        child.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+
+        let recipe = recipe_of(vec![parent, child]);
+        let resolved = resolve_inherited(&recipe, "child").expect("chain should resolve");
+        assert!(
+            resolved
+                .mcp
+                .expect("child's own mcp should stand")
+                .servers
+                .contains_key("warehouse")
+        );
+    }
+
+    #[test]
+    fn merge_inherited_rejects_child_mcp_that_widens_the_immediate_parent() {
+        // section 7.3: the per-`from:`-link check. `child` names a server
+        // `parent` never mentions, which is a widening at this link
+        // regardless of what the package tier would separately permit.
+        let mut parent = agent_with_from("parent", None);
+        parent.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+
+        let mut child = agent_with_from("child", Some("parent"));
+        child.mcp = Some(policy_of(&[("reporting", server_policy(&["list_reports"], &[]))]));
+
+        let recipe = recipe_of(vec![parent, child]);
+        let error = resolve_inherited(&recipe, "child").expect_err("should reject the widening");
+        assert!(matches!(error, RecipeLoadError::FromWidensMcp { .. }));
+        assert_eq!(error.code(), error_codes::RECIPE_MCP_FROM_WIDENS_POLICY);
+    }
+
+    #[test]
+    fn merge_inherited_rejects_widening_at_a_non_adjacent_link_in_a_three_level_chain() {
+        // grandparent -> parent narrows correctly; parent -> child widens
+        // back open. The failure must be attributed to the child (the link
+        // where it actually happens), not silently accepted because the
+        // grandparent's original value happens to cover it.
+        let mut grandparent = agent_with_from("grandparent", None);
+        grandparent.mcp = Some(policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &[]),
+        )]));
+
+        let mut parent = agent_with_from("parent", Some("grandparent"));
+        parent.mcp = Some(policy_of(&[("warehouse", server_policy(&["run_query"], &[]))]));
+
+        let mut child = agent_with_from("child", Some("parent"));
+        child.mcp = Some(policy_of(&[(
+            "warehouse",
+            server_policy(&["run_query", "drop_table"], &[]),
+        )]));
+
+        let recipe = recipe_of(vec![grandparent, parent, child]);
+        let error = resolve_inherited(&recipe, "child").expect_err("should reject the widening");
+        match error {
+            RecipeLoadError::FromWidensMcp { agent, .. } => assert_eq!(agent, "child"),
+            other => panic!("expected FromWidensMcp, got {other:?}"),
+        }
     }
 }

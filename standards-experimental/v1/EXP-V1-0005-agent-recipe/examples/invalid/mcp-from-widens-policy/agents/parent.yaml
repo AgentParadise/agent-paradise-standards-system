@@ -1,0 +1,8 @@
+name: parent
+harness: claude
+from: grandparent
+mcp:
+  servers:
+    warehouse:
+      include:
+        - run_query
