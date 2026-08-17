@@ -4,9 +4,9 @@ schema = "aps.experiment/v1"
 id = "EXP-V1-0005"
 name = "Agent Recipe Standard"
 slug = "agent-recipe"
-version = "0.2.0"
+version = "0.3.0"
 category = "technical"
-backwards_compat = false  # Directory shape (0.2.0) is a breaking change from the 0.1.0 single-file schema
+backwards_compat = false  # 0.3.0 renames agent to harness, makes tools an enforced allowlist, and restricts from: inheritance to narrowing only; all are breaking changes from 0.2.0
 
 [aps]
 aps_major = "v1"

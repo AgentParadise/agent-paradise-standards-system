@@ -3,7 +3,7 @@
 **ID:** `EXP-V1-0005`
 **Type:** Experiment
 **Slug:** `agent-recipe`
-**Version:** `0.2.0`
+**Version:** `0.3.0`
 
 ⚠️ **EXPERIMENTAL**: This standard is in incubation and may change significantly before promotion.
 
