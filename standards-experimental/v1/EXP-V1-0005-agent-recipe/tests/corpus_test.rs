@@ -11,6 +11,19 @@
 //! this standard rejects an ordinary, real workflow expressed that way. That
 //! is the whole of what this test establishes.
 //!
+//! **How the transcription itself is held honest.** The corpus below is
+//! hand-encoded, so validating it proves only that the transcriptions are
+//! well-formed, not that they faithfully describe their sources. The 14 local
+//! sources are therefore vendored verbatim under `tests/fixtures/corpus/` and
+//! compared field by field (see "Source fidelity" at the end of this file):
+//! `local_corpus_phase_inventory_matches_source` fails if a phase is dropped,
+//! renamed, or invented, and `local_corpus_phase_fields_match_source` fails if
+//! an inline `max_tokens` or `allow_delegation` is mistranscribed. The 4
+//! marketplace cases are read over the network from a separate repository and
+//! are NOT verified this way; `corpus_source_coverage_is_declared` asserts
+//! that 14/4 split so the unverified remainder stays visible rather than
+//! implied.
+//!
 //! **What this test does NOT prove.** `render_agent_yaml` never emits
 //! `from`, `mcp`, `subagents`, `skills`, `system_instructions`,
 //! `model.effort`, `model.temperature`, or `description`, and
@@ -42,7 +55,7 @@
 
 use agent_recipe::validate_recipe_dir;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// One phase's agent-shaped content, already migrated field-by-field per the
 /// mapping table in `docs/06-migration-from-syntropic137.md`. Fields the
@@ -710,5 +723,209 @@ fn literal_migration_without_harness_inference_trips_the_agnostic_builtin_rule()
         "a literal (no-harness-inferred) migration of a real Syntropic137 \
          frontmatter phase using Claude Code tool names should trip \
          RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL; got {codes:?}"
+    );
+}
+
+// --- Source fidelity -------------------------------------------------------
+//
+// Everything above proves the *transcriptions* validate. That is not the same
+// as proving they faithfully describe the workflows they claim to describe: a
+// phase could be dropped, or a `max_tokens` mistyped, and every assertion
+// above would still pass. These tests close that gap for the 14 local cases by
+// vendoring their sources under `tests/fixtures/corpus/` and comparing the
+// hand-encoded corpus against them field by field.
+//
+// The 4 marketplace cases are read from a separate repository over the network
+// and cannot be vendored here; they remain hand-encoded and unverified, which
+// `corpus_source_coverage_is_declared` states explicitly rather than leaving
+// implied.
+
+/// The subset of the Syntropic137 workflow schema this corpus actually claims
+/// to transcribe. Unknown fields are ignored on purpose: this is a fidelity
+/// check against the fields the corpus carries, not a validator for their
+/// schema.
+#[derive(serde::Deserialize)]
+struct SourceWorkflow {
+    id: String,
+    #[serde(default)]
+    phases: Vec<SourcePhase>,
+}
+
+#[derive(serde::Deserialize)]
+struct SourcePhase {
+    id: String,
+    #[serde(default)]
+    max_tokens: Option<u32>,
+    #[serde(default)]
+    agent: Option<SourceAgent>,
+}
+
+#[derive(serde::Deserialize)]
+struct SourceAgent {
+    #[serde(default)]
+    allow_delegation: Option<bool>,
+}
+
+fn fixtures_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("corpus")
+}
+
+/// The vendored fixture path for a `local:` source label, or `None` for a
+/// marketplace case.
+fn vendored_source(source: &str) -> Option<PathBuf> {
+    let rel = source.strip_prefix("local: ")?;
+    // Several labels append a parenthetical note after the path (for example
+    // "(phase 1 via prompts/research-discovery.md frontmatter)"). The path is
+    // everything before it.
+    let rel = rel.split(" (").next().unwrap_or(rel).trim();
+    Some(fixtures_root().join(rel))
+}
+
+/// Every `local:` corpus case must name a source that is actually vendored.
+/// Without this, a typo'd or deleted source path would silently downgrade the
+/// fidelity checks below into no-ops.
+#[test]
+fn every_local_corpus_source_is_vendored() {
+    let mut checked = 0usize;
+    for case in corpus_cases() {
+        if let Some(path) = vendored_source(case.source) {
+            assert!(
+                path.is_file(),
+                "{} names source {} but {} is not vendored under tests/fixtures/corpus/",
+                case.workflow_id,
+                case.source,
+                path.display()
+            );
+            checked += 1;
+        }
+    }
+    assert_eq!(
+        checked, 14,
+        "expected all 14 local corpus sources to be vendored"
+    );
+}
+
+/// The corpus's `workflow_id` and its phase inventory must match the vendored
+/// source. This is the check that makes a dropped or mistranscribed phase
+/// visible: the union of `agent_phases` and `workflow_layer_only` must equal
+/// the source's phase ids exactly.
+#[test]
+fn local_corpus_phase_inventory_matches_source() {
+    for case in corpus_cases() {
+        let Some(path) = vendored_source(case.source) else {
+            continue;
+        };
+        let text = fs::read_to_string(&path).expect("read vendored source");
+        let source: SourceWorkflow =
+            serde_yaml::from_str(&text).expect("vendored source should parse");
+
+        assert_eq!(
+            source.id,
+            case.workflow_id,
+            "corpus workflow_id disagrees with the id in {}",
+            path.display()
+        );
+
+        let mut transcribed: Vec<&str> = case
+            .agent_phases
+            .iter()
+            .map(|phase| phase.phase_id)
+            .chain(case.workflow_layer_only.iter().copied())
+            .collect();
+        transcribed.sort_unstable();
+
+        let mut actual: Vec<&str> = source.phases.iter().map(|p| p.id.as_str()).collect();
+        actual.sort_unstable();
+
+        assert_eq!(
+            transcribed,
+            actual,
+            "{} transcribes a different phase set than {}",
+            case.workflow_id,
+            path.display()
+        );
+    }
+}
+
+/// Per-phase field fidelity for the two fields the source declares inline and
+/// the corpus claims to carry verbatim: `max_tokens` and
+/// `agent.allow_delegation`. `model` and `tools` are deliberately not checked
+/// here because several cases derive them from `prompt_file` frontmatter or
+/// from the migration doc's inference rules rather than from the phase body;
+/// `docs/06-migration-from-syntropic137.md` is the authority for those.
+#[test]
+fn local_corpus_phase_fields_match_source() {
+    for case in corpus_cases() {
+        let Some(path) = vendored_source(case.source) else {
+            continue;
+        };
+        let text = fs::read_to_string(&path).expect("read vendored source");
+        let source: SourceWorkflow =
+            serde_yaml::from_str(&text).expect("vendored source should parse");
+
+        for phase in &case.agent_phases {
+            let Some(source_phase) = source.phases.iter().find(|p| p.id == phase.phase_id) else {
+                panic!(
+                    "{} transcribes phase '{}' that {} does not declare",
+                    case.workflow_id,
+                    phase.phase_id,
+                    path.display()
+                );
+            };
+            // Only assert where the source states the value inline. A phase
+            // that takes max_tokens from prompt_file frontmatter states
+            // nothing here, and the migration doc governs that path.
+            if let Some(source_max) = source_phase.max_tokens {
+                assert_eq!(
+                    phase.max_tokens,
+                    Some(source_max),
+                    "{} phase '{}' transcribes max_tokens {:?} but {} declares {}",
+                    case.workflow_id,
+                    phase.phase_id,
+                    phase.max_tokens,
+                    path.display(),
+                    source_max
+                );
+            }
+            let source_delegation = source_phase
+                .agent
+                .as_ref()
+                .and_then(|a| a.allow_delegation)
+                .unwrap_or(false);
+            assert_eq!(
+                phase.allow_delegation,
+                source_delegation,
+                "{} phase '{}' transcribes allow_delegation {} but {} declares {}",
+                case.workflow_id,
+                phase.phase_id,
+                phase.allow_delegation,
+                path.display(),
+                source_delegation
+            );
+        }
+    }
+}
+
+/// State the corpus's verification coverage as an assertion rather than a
+/// prose claim: 14 of 18 cases are checked against a vendored source, and the
+/// 4 marketplace cases are not.
+#[test]
+fn corpus_source_coverage_is_declared() {
+    let cases = corpus_cases();
+    let verified = cases
+        .iter()
+        .filter(|c| vendored_source(c.source).is_some())
+        .count();
+    let unverified = cases.len() - verified;
+    assert_eq!(
+        verified, 14,
+        "14 local cases are checked against a vendored source"
+    );
+    assert_eq!(
+        unverified, 4,
+        "4 marketplace cases are hand-encoded and NOT verified against a source"
     );
 }
