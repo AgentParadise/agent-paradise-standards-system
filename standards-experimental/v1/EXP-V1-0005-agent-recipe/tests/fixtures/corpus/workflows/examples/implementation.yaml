@@ -90,7 +90,7 @@ phases:
       3. Consider maintainability, performance, and testing implications
       4. Recommend the best approach with justification
 
-      **CRITICAL: No concrete planning yet — just ideas and trade-offs.**
+      **CRITICAL: No concrete planning yet: just ideas and trade-offs.**
 
       Output approach options with a trade-off analysis.
 
@@ -155,7 +155,7 @@ phases:
       {{plan}}
 
       ## How to Approach This
-      1. Follow the plan exactly — no deviations
+      1. Follow the plan exactly, no deviations
       2. Implement changes in the specified order
       3. Run tests after each milestone
       4. Document any issues encountered

@@ -95,11 +95,9 @@ phases:
       1. Confirm that 3 subagents were spawned (look for Task tool usage in the output above)
       2. List what each subagent accomplished
       3. Verify the coordinator produced a hello.py file by checking `artifacts/input/coordinator.md`
-         (each phase runs in its own container — previous phase outputs are in `artifacts/input/`, NOT `artifacts/output/`)
+         (each phase runs in its own container, previous phase outputs are in `artifacts/input/`, NOT `artifacts/output/`)
       4. Note any issues or successes
 
       Output a brief verification report.
 
       DO NOT spawn any subagents in this phase - just summarize and verify.
-
-

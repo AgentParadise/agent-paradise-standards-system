@@ -11,7 +11,7 @@ description: |
 type: research
 classification: standard
 
-# No default repository — research workflows don't need repo access.
+# No default repository: research workflows don't need repo access.
 repository: null
 requires_repos: false
 

@@ -14,7 +14,7 @@ project_name: null
 
 inputs:
   - name: task
-    description: "Placeholder task (unused — prompt is hard-coded)."
+    description: "Placeholder task (unused: prompt is hard-coded)."
     required: false
 
 phases:

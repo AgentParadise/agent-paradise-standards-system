@@ -14,7 +14,7 @@
 //! **How the transcription itself is held honest.** The corpus below is
 //! hand-encoded, so validating it proves only that the transcriptions are
 //! well-formed, not that they faithfully describe their sources. The 14 local
-//! sources are therefore vendored verbatim under `tests/fixtures/corpus/` and
+//! sources are therefore vendored under `tests/fixtures/corpus/` and
 //! compared field by field (see "Source fidelity" at the end of this file):
 //! `local_corpus_phase_inventory_matches_source` fails if a phase is dropped,
 //! renamed, or invented, and `local_corpus_phase_fields_match_source` fails if
@@ -23,6 +23,11 @@
 //! are NOT verified this way; `corpus_source_coverage_is_declared` asserts
 //! that 14/4 split so the unverified remainder stays visible rather than
 //! implied.
+//!
+//! The vendored copies differ from their originals in exactly one respect:
+//! em dashes in prose fields (`name`, `description`, `prompt_template`) were
+//! replaced per AGENTS.md, which forbids them repo-wide. No field this test
+//! compares was touched.
 //!
 //! **What this test does NOT prove.** `render_agent_yaml` never emits
 //! `from`, `mcp`, `subagents`, `skills`, `system_instructions`,
