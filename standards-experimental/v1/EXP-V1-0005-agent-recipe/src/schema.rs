@@ -29,7 +29,7 @@
 //! malformed skill/tool refs). A failed load is surfaced as a single
 //! diagnostic carrying the loader's stable error code.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -98,6 +98,14 @@ pub struct RecipeManifest {
     /// [`McpPolicy`] and [`mcp_policy_widenings`].
     #[serde(default, skip_serializing_if = "McpPolicy::is_empty")]
     pub mcp: McpPolicy,
+    /// Root entries this recipe declares beyond the known kinds (section 2.1).
+    /// The recipe root is a closed allowlist so that a directory carrying
+    /// credentials, task input, or infrastructure configuration cannot
+    /// validate clean; anything else a recipe legitimately ships (a LICENSE,
+    /// a CHANGELOG) MUST be named here. Entries are matched literally against
+    /// the root entry name, never as a glob or a prefix.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_paths: Vec<String>,
 }
 
 /// Per-server MCP method policy. `include` names the permitted methods;
@@ -582,7 +590,11 @@ pub struct AgentManifest {
     /// `docs/01_spec.md` section 4.6 for the enforcement rule and
     /// `validate::is_harness_builtin` for the harness-agnostic check that
     /// consumes these entries.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_rejecting_null",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub tools: Option<Vec<String>>,
     /// Agent-tier MCP server policy, checked against the package's `mcp`
     /// (section 7). `None` (absent) declares no restriction of its own: the
@@ -592,7 +604,11 @@ pub struct AgentManifest {
     /// the package does not, or a method set wider than the package permits
     /// for a shared server, is `RECIPE_MCP_AGENT_WIDENS_POLICY`. See
     /// [`mcp_policy_widenings`].
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_rejecting_null",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub mcp: Option<McpPolicy>,
     /// Names of other agents (files in `agents/`, without the `.yaml`
     /// extension) this agent may delegate to as subagents.
@@ -739,6 +755,11 @@ pub mod error_codes {
     pub const RECIPE_MALFORMED_EVAL_CASE: &str = "RECIPE_MALFORMED_EVAL_CASE";
     /// A `judges/*.yaml` file failed to parse as a [`super::JudgeManifest`].
     pub const RECIPE_MALFORMED_JUDGE_MANIFEST: &str = "RECIPE_MALFORMED_JUDGE_MANIFEST";
+    /// A direct child of `tools/` has no `tool.yaml` (section 5.2).
+    pub const RECIPE_MISSING_TOOL_MANIFEST: &str = "RECIPE_MISSING_TOOL_MANIFEST";
+    /// The recipe root holds an entry that is neither a known kind nor named
+    /// in `extra_paths` (section 2.1).
+    pub const RECIPE_UNDECLARED_ROOT_ENTRY: &str = "RECIPE_UNDECLARED_ROOT_ENTRY";
 }
 
 /// Failure modes of [`load_recipe_dir`].
@@ -801,6 +822,27 @@ pub enum RecipeLoadError {
         /// Underlying I/O error.
         #[source]
         source: std::io::Error,
+    },
+    /// A direct child of `tools/` has no `tool.yaml` (section 5.2).
+    #[error("tool package '{tool_ref}' at {path} has no {TOOL_MANIFEST_FILE}")]
+    MissingToolManifest {
+        /// The `tools/` subdirectory name that is missing its manifest.
+        tool_ref: String,
+        /// The offending tool package directory.
+        path: PathBuf,
+    },
+    /// The recipe root holds an entry that is neither a known kind nor
+    /// declared in `extra_paths` (section 2.1).
+    #[error(
+        "undeclared entry '{entry}' at the recipe root: a recipe MUST NOT carry task input, \
+         credentials, or infrastructure configuration; declare it in 'extra_paths' if it is \
+         legitimately part of this recipe"
+    )]
+    UndeclaredRootEntry {
+        /// The offending root entry name.
+        entry: String,
+        /// The offending path.
+        path: PathBuf,
     },
     /// A `from:` chain revisited an agent already seen while resolving it
     /// (including an agent whose `from:` names itself).
@@ -914,6 +956,8 @@ impl RecipeLoadError {
             Self::MalformedTool { .. } => error_codes::RECIPE_MALFORMED_TOOL_MANIFEST,
             Self::MalformedEvalCase { .. } => error_codes::RECIPE_MALFORMED_EVAL_CASE,
             Self::MalformedJudge { .. } => error_codes::RECIPE_MALFORMED_JUDGE_MANIFEST,
+            Self::MissingToolManifest { .. } => error_codes::RECIPE_MISSING_TOOL_MANIFEST,
+            Self::UndeclaredRootEntry { .. } => error_codes::RECIPE_UNDECLARED_ROOT_ENTRY,
         }
     }
 
@@ -936,6 +980,8 @@ impl RecipeLoadError {
             Self::MalformedTool { path, .. } => path,
             Self::MalformedEvalCase { path, .. } => path,
             Self::MalformedJudge { path, .. } => path,
+            Self::MissingToolManifest { path, .. } => path,
+            Self::UndeclaredRootEntry { path, .. } => path,
         }
     }
 }
@@ -965,6 +1011,8 @@ pub fn load_recipe_dir(path: &Path) -> Result<Recipe, RecipeLoadError> {
             source,
         }
     })?;
+
+    check_root_entries(path, &manifest)?;
 
     let agents_dir = path.join(AGENTS_DIR);
     let mut agents = BTreeMap::new();
@@ -1071,10 +1119,10 @@ pub fn resolved_system(agent: &AgentManifest, system_md: Option<&str>) -> Option
     match &agent.system_instructions {
         Some(instructions) => match instructions.mode {
             InstructionMode::Append => match system_md {
-                Some(base) if !base.is_empty() => {
-                    Some(format!("{base}\n\n{}", instructions.content))
-                }
-                _ => Some(instructions.content.clone()),
+                // Section 6.1's merge table keys on presence, not emptiness: a
+                // present-but-empty SYSTEM.md still contributes its separator.
+                Some(base) => Some(format!("{base}\n\n{}", instructions.content)),
+                None => Some(instructions.content.clone()),
             },
             InstructionMode::Replace => Some(instructions.content.clone()),
         },
@@ -1311,11 +1359,104 @@ fn read_to_string(path: &Path) -> Result<String, RecipeLoadError> {
 /// Unlike [`Path::exists`], which collapses every I/O error to `false`, this
 /// uses [`Path::try_exists`] so an unreadable recipe fails with `RECIPE_IO_ERROR`
 /// per the spec rather than masquerading as a missing marker / missing file.
+/// Deserialize an optional field that MUST NOT be written as an explicit
+/// `null`.
+///
+/// Serde collapses a missing field and an explicit `null` into the same
+/// `None`, which is wrong for permission-bearing fields: `tools` absent means
+/// "unrestricted" while `tools: []` means "no tools" (section 4.6), so a
+/// malformed `tools: null` would silently resolve to maximum permission. This
+/// is only invoked when the key is present, so seeing `None` here always
+/// means an explicit `null` was written.
+fn deserialize_rejecting_null<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    match Option::<T>::deserialize(deserializer)? {
+        Some(value) => Ok(Some(value)),
+        None => Err(serde::de::Error::custom(
+            "explicit null is not permitted here: omit the field to leave it unset, \
+             or give it an explicit value",
+        )),
+    }
+}
+
 fn path_exists(path: &Path) -> Result<bool, RecipeLoadError> {
     path.try_exists().map_err(|source| RecipeLoadError::Io {
         path: path.to_path_buf(),
         source,
     })
+}
+
+/// Whether `path` exists and is a *regular file*. Directories return
+/// `Ok(false)`: an eval asset or tool manifest that is a directory is not
+/// readable as the file the spec requires, and must not satisfy a
+/// required-file check. `Ok(false)` only for a definite "not found"; any
+/// other I/O failure surfaces as [`RecipeLoadError::Io`].
+/// Root entries every recipe may carry without declaring them. README.md is
+/// included because a recipe is a shareable artifact and documenting it is
+/// never a compliance risk.
+const KNOWN_ROOT_ENTRIES: &[&str] = &[
+    RECIPE_MARKER_FILE,
+    AGENTS_DIR,
+    SKILLS_DIR,
+    TOOLS_DIR,
+    EVALS_DIR,
+    JUDGES_DIR,
+    PROMPTS_DIR,
+    SYSTEM_MD_FILE,
+    "README.md",
+];
+
+/// Enforce section 2.1's closed root allowlist.
+///
+/// The rule is stated as a MUST NOT ("a recipe MUST NOT contain task-specific
+/// input, credentials, or infrastructure configuration"), and a deny-list of
+/// suspicious names would only ever be a sieve: the next secret filename
+/// nobody enumerated still validates clean. A closed allowlist inverts that,
+/// so the failure mode is a recipe author being told to declare a file rather
+/// than a credential silently passing. `extra_paths` is the declared escape
+/// hatch for anything a recipe legitimately ships.
+fn check_root_entries(path: &Path, manifest: &RecipeManifest) -> Result<(), RecipeLoadError> {
+    let declared: HashSet<&str> = manifest.extra_paths.iter().map(String::as_str).collect();
+    let entries = fs::read_dir(path).map_err(|source| RecipeLoadError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let mut offending: Vec<(String, PathBuf)> = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|source| RecipeLoadError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if KNOWN_ROOT_ENTRIES.contains(&name.as_str()) || declared.contains(name.as_str()) {
+            continue;
+        }
+        offending.push((name, entry.path()));
+    }
+    // Sorted so the reported entry is stable across filesystems rather than
+    // whichever one read_dir happened to yield first.
+    offending.sort();
+    if let Some((entry, offending_path)) = offending.into_iter().next() {
+        return Err(RecipeLoadError::UndeclaredRootEntry {
+            entry,
+            path: offending_path,
+        });
+    }
+    Ok(())
+}
+
+fn file_exists(path: &Path) -> Result<bool, RecipeLoadError> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.is_file()),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(source) => Err(RecipeLoadError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
 }
 
 /// Whether `path` exists and is a directory. `Ok(false)` only for a definite
@@ -1406,8 +1547,11 @@ fn list_tool_manifests(dir: &Path) -> Result<BTreeMap<String, ToolManifest>, Rec
             .map(str::to_string)
             .unwrap_or_default();
         let manifest_path = entry.path().join(TOOL_MANIFEST_FILE);
-        if !path_exists(&manifest_path)? {
-            continue;
+        if !file_exists(&manifest_path)? {
+            return Err(RecipeLoadError::MissingToolManifest {
+                tool_ref,
+                path: entry.path(),
+            });
         }
         let content = read_to_string(&manifest_path)?;
         let manifest: ToolManifest =
@@ -1455,14 +1599,14 @@ fn list_eval_cases(dir: &Path) -> Result<Vec<EvalCase>, RecipeLoadError> {
     for (name, case_dir) in case_dirs {
         let input_path = case_dir.join(EVAL_INPUT_FILE);
         let expected_path = case_dir.join(EVAL_EXPECTED_FILE);
-        if !path_exists(&input_path)? {
+        if !file_exists(&input_path)? {
             return Err(RecipeLoadError::MalformedEvalCase {
                 name,
                 missing: EVAL_INPUT_FILE,
                 path: case_dir,
             });
         }
-        if !path_exists(&expected_path)? {
+        if !file_exists(&expected_path)? {
             return Err(RecipeLoadError::MalformedEvalCase {
                 name,
                 missing: EVAL_EXPECTED_FILE,
@@ -1975,6 +2119,7 @@ subagents:
                 version: "0.1.0".to_string(),
                 default_agent: "child".to_string(),
                 mcp: McpPolicy::default(),
+                extra_paths: Vec::new(),
             },
             agents: map,
             agent_sources: BTreeMap::new(),

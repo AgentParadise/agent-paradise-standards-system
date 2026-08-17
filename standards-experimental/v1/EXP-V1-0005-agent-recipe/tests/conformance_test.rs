@@ -742,3 +742,115 @@ fn from_may_inherit_or_repeat_allow_delegation_without_widening() {
         diagnostics.iter().map(|d| &d.code).collect::<Vec<_>>()
     );
 }
+
+// --- Section 2.1 closed root allowlist, section 4.6 null rejection, and the
+// --- required-file checks for tool packages and eval assets. Each of these
+// --- guards a case where the loader previously accepted a recipe it should
+// --- have rejected, so each test asserts the specific error code rather than
+// --- merely that loading failed.
+
+/// A recipe root carrying an undeclared file (here: credentials) must not
+/// load. Section 2.1 states a recipe MUST NOT contain credentials, and before
+/// the closed allowlist this validated clean.
+#[test]
+fn undeclared_root_entry_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\n");
+    fs::write(temp.path().join("credentials.env"), "TOKEN=hunter2\n").expect("write credentials");
+
+    let error = load_recipe_dir(temp.path()).expect_err("undeclared root entry must fail to load");
+    assert_eq!(error.code(), "RECIPE_UNDECLARED_ROOT_ENTRY");
+}
+
+/// The same entry, once declared in `extra_paths`, loads: the allowlist is a
+/// declaration requirement, not a prohibition on shipping extra files.
+#[test]
+fn declared_extra_path_is_accepted() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\n");
+    fs::write(
+        temp.path().join("recipe.yaml"),
+        "name: harness-test\nversion: 0.1.0\ndefault_agent: main\nextra_paths:\n  - LICENSE\n",
+    )
+    .expect("write recipe.yaml");
+    fs::write(temp.path().join("LICENSE"), "MIT\n").expect("write LICENSE");
+
+    let recipe = load_recipe_dir(temp.path()).expect("declared extra path must load");
+    assert_eq!(recipe.manifest.extra_paths, vec!["LICENSE".to_string()]);
+}
+
+/// `tools: null` must not be read as "unrestricted". Serde collapses a missing
+/// key and an explicit null into `None`, which would silently turn malformed
+/// input into maximum permission; section 4.6 permits only an absent field or
+/// an array.
+#[test]
+fn explicit_null_tools_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\ntools: null\n");
+
+    let error = load_recipe_dir(temp.path()).expect_err("explicit null tools must fail to load");
+    assert_eq!(error.code(), "RECIPE_MALFORMED_HARNESS_YAML");
+}
+
+/// An empty allowlist still means "no tools", and must keep loading: it is the
+/// deliberate, meaningful counterpart to an absent field.
+#[test]
+fn empty_tools_allowlist_still_loads() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\ntools: []\n");
+
+    let recipe = load_recipe_dir(temp.path()).expect("empty tools allowlist must load");
+    let agent = recipe.agents.get("main").expect("main agent");
+    assert_eq!(agent.tools.as_deref(), Some(&[][..]));
+}
+
+/// Section 5.2: every direct child of `tools/` MUST carry a `tool.yaml`. A
+/// package without one was previously skipped in silence, certifying a
+/// structurally incomplete recipe.
+#[test]
+fn tool_package_without_manifest_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\n");
+    fs::create_dir_all(temp.path().join("tools").join("extract_citations"))
+        .expect("create tool package");
+
+    let error =
+        load_recipe_dir(temp.path()).expect_err("tool package without a manifest must fail");
+    assert_eq!(error.code(), "RECIPE_MISSING_TOOL_MANIFEST");
+}
+
+/// Section 9.1: an eval asset must be a readable file. A *directory* named
+/// `input.json` previously satisfied the existence check and was recorded as a
+/// valid eval case, recreating exactly the silently-broken evaluation the
+/// section exists to prevent.
+#[test]
+fn eval_asset_that_is_a_directory_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\n");
+    let case_dir = temp.path().join("evals").join("flags-sql-injection");
+    fs::create_dir_all(case_dir.join("input.json")).expect("create directory named input.json");
+    fs::write(case_dir.join("expected.md"), "flagged\n").expect("write expected.md");
+
+    let error = load_recipe_dir(temp.path()).expect_err("directory eval asset must fail to load");
+    assert_eq!(error.code(), "RECIPE_MALFORMED_EVAL_CASE");
+}
+
+/// Section 6.1 keys its merge table on presence, not emptiness: a present but
+/// empty `SYSTEM.md` still contributes its separator under append mode.
+#[test]
+fn empty_system_md_still_contributes_separator() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(
+        temp.path(),
+        "agents/main.yaml",
+        "name: main\nsystem_instructions:\n  mode: append\n  content: extra\n",
+    );
+    fs::write(temp.path().join("SYSTEM.md"), "").expect("write empty SYSTEM.md");
+
+    let recipe = load_recipe_dir(temp.path()).expect("recipe with empty SYSTEM.md must load");
+    let agent = recipe.agents.get("main").expect("main agent");
+    assert_eq!(
+        agent_recipe::resolved_system(agent, recipe.system_md.as_deref()).as_deref(),
+        Some("\n\nextra")
+    );
+}
