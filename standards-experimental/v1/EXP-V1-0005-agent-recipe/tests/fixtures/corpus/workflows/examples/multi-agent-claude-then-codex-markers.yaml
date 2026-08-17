@@ -18,7 +18,7 @@ inputs: []
 
 phases:
   - id: claude_first
-    name: Phase 1: claude marker
+    name: Phase 1, claude marker
     order: 1
     execution_type: sequential
     argument_hint: "(none)"
@@ -36,7 +36,7 @@ phases:
       else.
 
   - id: codex_second
-    name: Phase 2: codex marker on shared workspace
+    name: Phase 2, codex marker on shared workspace
     order: 2
     execution_type: sequential
     argument_hint: "(none)"
