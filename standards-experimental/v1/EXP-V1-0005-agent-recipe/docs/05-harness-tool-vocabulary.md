@@ -20,12 +20,12 @@ relationship to pi.recipes' vocabulary.
 The identifiers in this document are the harness-builtin tool names for this
 version of the standard. A tool reference in an `AgentManifest.tools` entry
 that is not in this document, and not resolvable under `tools/` (see
-[01_spec.md section 5](./01_spec.md) for the resolution rule that section
-defines for `skills`; `tools` entries carry no execution semantics and no
-analogous bundled-directory resolution today - see section 1.3), is a
-recipe-provided reference and MUST resolve per the harness-neutrality rule in
-section 4.3: it is treated as opaque outside this standard's scope, not
-matched against the tables below.
+[01_spec.md section 5.2](./01_spec.md), which defines bundled-directory
+resolution for `tools` entries; a name that resolves there is recipe-provided
+and wins over any builtin of the same name), is treated as opaque outside this
+standard's scope, not matched against the tables below. `tools` entries still
+carry no execution semantics: section 5.2 governs how a name resolves, not how
+the tool runs.
 
 Concretely, for the validator this document backs (`is_harness_builtin`):
 

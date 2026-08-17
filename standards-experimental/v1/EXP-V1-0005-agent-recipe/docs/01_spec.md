@@ -1,6 +1,6 @@
 # EXP-V1-0005 - Agent Recipe Directory Standard (Experimental Specification)
 
-**Version**: 0.2.0
+**Version**: 0.3.0
 **Status**: Experimental
 **Category**: technical
 
@@ -70,6 +70,8 @@ A workspace (an executor living outside this repository) consumes a `RunSpec`, p
 
 An **agent recipe** (or **recipe**) is a directory that identifies one or more agents to run, each with a harness, model and reasoning effort, injected skills, and system instructions. A recipe MUST NOT contain task-specific input, credentials, or infrastructure configuration.
 
+This is enforced as a **closed allowlist of recipe-root entries**, not as a denylist of suspicious filenames: a denylist is only ever a sieve, since the next credential filename nobody enumerated still validates clean. A conforming loader MUST reject any root entry that is neither one of the kinds this specification defines (`recipe.yaml`, `agents/`, `skills/`, `tools/`, `evals/`, `judges/`, `prompts/`, `SYSTEM.md`, `README.md`) nor named literally in the manifest's OPTIONAL `extra_paths` list, reporting `RECIPE_UNDECLARED_ROOT_ENTRY` (section 10.1). `extra_paths` is the declared escape hatch for anything a recipe legitimately ships, such as a `LICENSE`; declaring an entry is an assertion by the author that it is not task input, a credential, or infrastructure configuration. The check is on the recipe root only and does not descend into the directories above.
+
 ### 2.2 Harness
 
 A **harness** is the underlying agent CLI or SDK that executes an agent (for example, Claude Code or OpenAI Codex CLI). The schema is harness-neutral: the `harness` field is a closed enumeration within any single version of this standard, but is version-extensible, so additional harnesses (e.g. `opencode`, `gemini`) MAY be added in future minor versions without breaking existing recipes.
@@ -134,6 +136,7 @@ default_agent: main
 | `version` | string | YES | SemVer-ish recipe version. |
 | `default_agent` | string | YES | Name of the entry-point agent. MUST resolve to `agents/<default_agent>.yaml`. |
 | `mcp` | object | NO | Package-tier MCP server policy: the ceiling every agent's own `mcp` is checked against. Absent means no MCP server is permitted for any agent. See section 7. |
+| `extra_paths` | array of string | NO | Recipe-root entries this recipe ships beyond the kinds this specification defines. Each is matched literally against a root entry name, never as a glob or a prefix. Declaring an entry asserts it is not task input, a credential, or infrastructure configuration. See section 2.1. |
 
 No other top-level fields are permitted; `RecipeManifest` uses `#[serde(deny_unknown_fields)]`.
 
@@ -242,6 +245,8 @@ The intended consequence is that a single recipe carries one definition of good 
 
 `tools` is an allowlist, not a set of hints. A conforming consumer MUST NOT grant an agent a tool its `tools` list does not permit. An absent `tools` field places no restriction; a present but empty list permits no tools. These are distinct states and a consumer MUST NOT treat them alike.
 
+Because those two states differ in permission, `tools` MUST be written as either an absent key or an array; **an explicit `tools: null` is malformed and MUST be rejected**, not silently read as absent. Many YAML and JSON deserializers collapse a missing key and an explicit null into the same "unset" value, which on a permission-bearing field means malformed input fails *open*, granting everything. The same rule applies to agent-tier `mcp` (section 7) for the same reason.
+
 A tool reference is either **harness-builtin** (provided natively by the harness named in `harness`, per `05-harness-tool-vocabulary.md`) or **recipe-provided** (resolving under `tools/`, section 5.2). Recipe-provided tools are portable by construction because the recipe carries them. When a name matches both, recipe-provided wins (section 5.2).
 
 An agent that omits `harness` is harness-agnostic (section 4.3) and MUST NOT reference a name that is harness-builtin under *any* harness this standard knows about, because an agnostic agent declares no single vocabulary to check its `tools` entries against. A validator MUST report such a reference as `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` (section 10).
@@ -344,9 +349,13 @@ Section 4.3 lets an agent omit `harness` and assert harness-agnosticism, and sec
 
 No other fields are permitted; `ToolManifest` uses `#[serde(deny_unknown_fields)]`.
 
+**Every direct child of `tools/` MUST contain a `tool.yaml`.** A subdirectory without one is reported as `RECIPE_MISSING_TOOL_MANIFEST` (section 10.1), never skipped: skipping it would certify a recipe whose tool package is structurally incomplete.
+
 **Resolution.** A `tools` entry `<ref>` is **recipe-provided** when `tools/<ref>/tool.yaml` exists inside the recipe directory and parses as a `ToolManifest`; `Recipe::resolve_tool(ref)` is the single function every consumer of this standard MUST use to answer that question. An entry that does not resolve this way is either harness-builtin (checked against `05-harness-tool-vocabulary.md`, per harness) or simply unresolvable, neither of which this section governs.
 
 **The portability rule.** A recipe-provided tool MUST NOT link a harness API. It MUST be invocable as a subprocess by any conforming consumer. This is precisely what distinguishes `tools/` from an `extensions/`-style directory that imports the harness's own runtime API: an extension of that kind cannot cross harnesses, because its implementation is written against one harness's process. A self-contained script, a compiled binary, or an MCP stdio server can all satisfy this rule, because none of them require the invoking process to *be* a particular harness - they only require a process to invoke them, which every harness has.
+
+**This rule is author-enforced, not machine-checked.** A `tool.yaml` `command` is an opaque string, so a validator cannot decide whether the process it names links a harness API: `command: claude` and `command: ./bin/extract` are indistinguishable to a static check, and any denylist of harness binary names would both miss wrappers and reject legitimate ones. A conforming validator therefore MUST NOT be read as certifying portability of a recipe-provided tool; it certifies only that the manifest is well-formed (section 10.2). Recipe authors are responsible for this rule, and a consumer that needs a stronger guarantee MUST establish it out of band. Note the consequence for section 4.6: because recipe-provided wins on a name collision, an agnostic agent CAN reference a harness-builtin name by shipping a `tools/<name>/tool.yaml`, and `RECIPE_AGNOSTIC_AGENT_USES_BUILTIN_TOOL` will not fire. That is the intended precedence, and it is sound only to the degree the author honors this rule.
 
 **Protocol semantics.**
 
@@ -503,7 +512,7 @@ Each subdirectory directly under `evals/` is an eval case, named by `<name>` - t
 | `input.json` | YES | The case's input, in whatever shape the consumer that runs the eval expects. This standard does not define or validate its contents. |
 | `expected.md` | YES | The bar this case's output is judged against, in prose. This standard does not define or validate its contents. |
 
-An `evals/<name>/` directory missing either file is malformed and MUST be reported as `RECIPE_MALFORMED_EVAL_CASE` (section 10), never silently skipped. Silently skipping a broken eval case is the worst failure mode available here: the bar quietly shrinks by one case while the suite continues to report green, and nothing signals that it happened.
+An `evals/<name>/` directory missing either file is malformed and MUST be reported as `RECIPE_MALFORMED_EVAL_CASE` (section 10), never silently skipped. Both MUST be **regular files**: a conforming loader checks file type, not mere existence, so that a directory named `input.json` does not satisfy the requirement. A path that exists but cannot be read as a file is exactly the silently-broken bar this rule exists to prevent. Silently skipping a broken eval case is the worst failure mode available here: the bar quietly shrinks by one case while the suite continues to report green, and nothing signals that it happened.
 
 This is discovered by `schema::load_recipe_dir` into `Recipe::evals: Vec<EvalCase>`, each carrying `name`, `input_path`, and `expected_path`, sorted by case name.
 
@@ -552,6 +561,8 @@ These are emitted by `schema::load_recipe_dir` and surfaced verbatim by `validat
 | `RECIPE_MALFORMED_TOOL_MANIFEST` | A `tools/*/tool.yaml` file failed to parse as a `ToolManifest` (missing/extra/invalid fields, or a non-string key). See section 5.2. |
 | `RECIPE_MALFORMED_EVAL_CASE` | An `evals/<name>/` directory is missing `input.json` or `expected.md`. Reported rather than silently skipped, so an incomplete eval case cannot quietly shrink the bar while the suite still reports green. See section 9.1. |
 | `RECIPE_MALFORMED_JUDGE_MANIFEST` | A `judges/*.yaml` file failed to parse as a `JudgeManifest` (missing/extra/invalid fields, or a non-string key). See section 9.2. |
+| `RECIPE_MISSING_TOOL_MANIFEST` | A direct child of `tools/` has no `tool.yaml`. Reported rather than silently skipped, for the same reason as `RECIPE_MALFORMED_EVAL_CASE`: skipping certifies a structurally incomplete tool package. See section 5.2. |
+| `RECIPE_UNDECLARED_ROOT_ENTRY` | The recipe root holds an entry that is neither a kind this specification defines nor named in `extra_paths`. This is how section 2.1's prohibition on task input, credentials, and infrastructure configuration is enforced. See section 2.1. |
 
 ### 10.2 Validator Codes
 

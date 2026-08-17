@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Agent Recipe Architecture — Bill of Lading</title>
+<title>Agent Recipe Architecture: Bill of Lading</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Shantell+Sans:wght@500&display=swap" rel="stylesheet">
@@ -235,7 +235,7 @@ li .d{color:var(--mute)}
   <div class="hero r" style="animation-delay:.14s">
     <div class="big">RunSpec <b>&rarr;</b> Recipe. <b>One way.</b></div>
     <div class="note">
-      The RunSpec holds <b>recipe: PathBuf</b> — a directory path, never an inlined copy.
+      The RunSpec holds <b>recipe: PathBuf</b>, a directory path, never an inlined copy.
       The recipe never points back. That asymmetry is the whole design.
     </div>
   </div>
@@ -288,7 +288,7 @@ li .d{color:var(--mute)}
       <div class="edge r" style="animation-delay:.58s">
         <div class="arrow">&darr;</div>
         <div class="txt">references by <b>directory path</b>, never inlines<br>
-          <span style="color:var(--mute)">then calls load_recipe_dir() — the single parser</span></div>
+          <span style="color:var(--mute)">then calls load_recipe_dir(), the single parser</span></div>
       </div>
 
       <div class="layer L1 r" style="animation-delay:.62s">
@@ -313,7 +313,7 @@ li .d{color:var(--mute)}
       </div>
 
       <div class="oneway r" style="animation-delay:.66s">
-        <b>The recipe knows nothing above it.</b> That is what makes it shareable —
+        <b>The recipe knows nothing above it.</b> That is what makes it shareable,
         the same directory runs under any RunSpec, in any workflow, on any machine.
         Inline it into the RunSpec and every property below dies at once.
       </div>
@@ -323,10 +323,10 @@ li .d{color:var(--mute)}
       <div class="r" style="animation-delay:.70s">
         <h2>Consumer Flow</h2>
         <ol>
-          <li><b>Load</b> <span class="d">— call load_recipe_dir(spec.recipe); never re-implement the shape</span></li>
-          <li><b>Resolve entry</b> <span class="d">— default_agent picks harness, model, resolved system prompt</span></li>
-          <li><b>Resolve skills</b> <span class="d">— refs → plugin dirs, order preserved</span></li>
-          <li><b>Run</b> <span class="d">— launch harness against the run's task</span></li>
+          <li><b>Load</b> <span class="d">calls load_recipe_dir(spec.recipe); never re-implement the shape</span></li>
+          <li><b>Resolve entry</b> <span class="d">default_agent picks harness, model, resolved system prompt</span></li>
+          <li><b>Resolve skills</b> <span class="d">refs → plugin dirs, order preserved</span></li>
+          <li><b>Run</b> <span class="d">launches harness against the run's task</span></li>
         </ol>
       </div>
 
@@ -336,7 +336,7 @@ li .d{color:var(--mute)}
           <li><b>Re-encode</b> the recipe into a parallel schema</li>
           <li><b>Read</b> credentials or task input from the recipe</li>
           <li><b>Inline</b> the recipe instead of holding a path
-            <span class="d">— the live Python bug: AgentRunSpec.recipe is an object, not a Path</span></li>
+            <span class="d">the live Python bug: AgentRunSpec.recipe is an object, not a Path</span></li>
         </ul>
       </div>
 
@@ -345,7 +345,7 @@ li .d{color:var(--mute)}
         <ul>
           <li><b>Subagent execution</b> <span class="d">- subagents resolve and validate today; delegating work to them at runtime is proposed (APSS #125)</span></li>
           <li><b>pi migration mapping</b> <span class="d">- documented field-by-field, but no automated migrator exists yet</span></li>
-          <li><b>Model override</b> <span class="d">— allowed, but evals must record the effective model</span></li>
+          <li><b>Model override</b> <span class="d">allowed, but evals must record the effective model</span></li>
         </ul>
       </div>
     </div>
@@ -355,14 +355,14 @@ li .d{color:var(--mute)}
     <h2 class="r" style="animation-delay:.82s">The Four Binding Seams</h2>
     <table class="r" style="animation-delay:.86s">
       <tr><th style="width:15%">Seam</th><th style="width:42%">Recipe declares</th><th>RunSpec binds</th></tr>
-      <tr><td class="k">Tools</td><td>the allowlist — an upper bound you can audit statically</td><td>may narrow it further, never widen</td></tr>
+      <tr><td class="k">Tools</td><td>the allowlist: an upper bound you can audit statically</td><td>may narrow it further, never widen</td></tr>
       <tr><td class="k">MCP</td><td>which methods are permitted per server <em>(policy)</em></td><td>endpoint + credentials for those servers <em>(connection)</em></td></tr>
-      <tr><td class="k">Skills</td><td>refs and pins — source_url, version, resolved_sha</td><td>where they got materialized on disk</td></tr>
-      <tr><td class="k">Harness</td><td>the family — claude, codex</td><td>the execution path — interactive vs headless, tmux pane</td></tr>
+      <tr><td class="k">Skills</td><td>refs and pins: source_url, version, resolved_sha</td><td>where they got materialized on disk</td></tr>
+      <tr><td class="k">Harness</td><td>the family: claude, codex</td><td>the execution path: interactive vs headless, tmux pane</td></tr>
     </table>
     <div class="rule r" style="animation-delay:.90s">
       <b>Monotonicity rule.</b> A RunSpec MUST NOT grant a tool or MCP method the recipe does not permit.
-      Only then is the recipe's permission set a real ceiling — auditable on its own, without reading a single run.
+      Only then is the recipe's permission set a real ceiling, auditable on its own, without reading a single run.
     </div>
   </div>
 

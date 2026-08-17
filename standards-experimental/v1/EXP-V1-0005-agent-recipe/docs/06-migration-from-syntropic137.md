@@ -237,7 +237,7 @@ picture for `agent_id`:
   `agent_id` were purely a run-spec placement detail, this phase's *recipe*
   harness would be undetermined; in fact it is exactly as determined as
   `codex-demo.yaml`'s `provider: codex` phase, just spelled differently
-  because the launch mechanism (headless vs. an interactive-tmux pane) 
+  because the launch mechanism (headless vs. an interactive-tmux pane)
   differs.
 
 Resolution used throughout this corpus, and encoded in `corpus_test.rs`'s
