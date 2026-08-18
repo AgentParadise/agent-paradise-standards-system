@@ -831,16 +831,21 @@ pub enum RecipeLoadError {
         /// The offending tool package directory.
         path: PathBuf,
     },
-    /// The recipe root holds an entry that is neither a known kind nor
-    /// declared in `extra_paths` (section 2.1).
+    /// The recipe holds an entry that is neither a kind this standard defines
+    /// nor declared in `extra_paths` (section 2.1). Reported for the recipe
+    /// root and for the structured directories whose contents the standard
+    /// fixes (`agents/`, `judges/`, `prompts/`, `evals/`).
     #[error(
-        "undeclared entry '{entry}' at the recipe root: a recipe MUST NOT carry task input, \
+        "undeclared entry '{entry}' in {location}: a recipe MUST NOT carry task input, \
          credentials, or infrastructure configuration; declare it in 'extra_paths' if it is \
          legitimately part of this recipe"
     )]
     UndeclaredRootEntry {
-        /// The offending root entry name.
+        /// The offending entry name.
         entry: String,
+        /// Where the entry was found, as a recipe-relative description (for
+        /// example "the recipe root" or "agents/").
+        location: String,
         /// The offending path.
         path: PathBuf,
     },
@@ -1442,6 +1447,7 @@ fn check_root_entries(path: &Path, manifest: &RecipeManifest) -> Result<(), Reci
     if let Some((entry, offending_path)) = offending.into_iter().next() {
         return Err(RecipeLoadError::UndeclaredRootEntry {
             entry,
+            location: "the recipe root".to_string(),
             path: offending_path,
         });
     }
@@ -1468,6 +1474,12 @@ fn check_structured_dir(
     declared: &HashSet<&str>,
     extensions: &[&str],
 ) -> Result<(), RecipeLoadError> {
+    let location = format!(
+        "{}/",
+        dir.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+    );
     if !dir_exists(dir)? {
         return Ok(());
     }
@@ -1491,6 +1503,7 @@ fn check_structured_dir(
     if let Some((entry, offending_path)) = offending.into_iter().next() {
         return Err(RecipeLoadError::UndeclaredRootEntry {
             entry,
+            location,
             path: offending_path,
         });
     }
@@ -1529,6 +1542,7 @@ fn check_evals_dir(dir: &Path, declared: &HashSet<&str>) -> Result<(), RecipeLoa
     if let Some((entry, offending_path)) = offending.into_iter().next() {
         return Err(RecipeLoadError::UndeclaredRootEntry {
             entry,
+            location: format!("{EVALS_DIR}/"),
             path: offending_path,
         });
     }
