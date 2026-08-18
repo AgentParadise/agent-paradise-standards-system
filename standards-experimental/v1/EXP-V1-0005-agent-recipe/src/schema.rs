@@ -1445,7 +1445,111 @@ fn check_root_entries(path: &Path, manifest: &RecipeManifest) -> Result<(), Reci
             path: offending_path,
         });
     }
+
+    // A root-only check would leave section 2.1 mostly unenforced: `agents/.env`
+    // and `prompts/credentials.json` are exactly the content the section
+    // prohibits, and neither appears at the root. The structured directories
+    // are the ones whose contents this specification already fixes, so their
+    // shape is checkable. `tools/` and `skills/` are deliberately exempt: they
+    // carry vendored package payloads of arbitrary shape, and policing them
+    // would reject legitimate recipes rather than catch credentials.
+    check_structured_dir(&path.join(AGENTS_DIR), &declared, &["yaml", "yml"])?;
+    check_structured_dir(&path.join(JUDGES_DIR), &declared, &["yaml", "yml"])?;
+    check_structured_dir(&path.join(PROMPTS_DIR), &declared, &["md"])?;
+    check_evals_dir(&path.join(EVALS_DIR), &declared)?;
     Ok(())
+}
+
+/// Reject any entry under a structured directory that is not a regular file
+/// with one of `extensions`. Nested subdirectories are rejected too: none of
+/// `agents/`, `judges/`, or `prompts/` defines a nested shape.
+fn check_structured_dir(
+    dir: &Path,
+    declared: &HashSet<&str>,
+    extensions: &[&str],
+) -> Result<(), RecipeLoadError> {
+    if !dir_exists(dir)? {
+        return Ok(());
+    }
+    let mut offending: Vec<(String, PathBuf)> = Vec::new();
+    for entry in read_dir_entries(dir)? {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if declared.contains(name.as_str()) {
+            continue;
+        }
+        let entry_path = entry.path();
+        let permitted = entry_path.is_file()
+            && entry_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| extensions.contains(&ext));
+        if !permitted {
+            offending.push((name, entry_path));
+        }
+    }
+    offending.sort();
+    if let Some((entry, offending_path)) = offending.into_iter().next() {
+        return Err(RecipeLoadError::UndeclaredRootEntry {
+            entry,
+            path: offending_path,
+        });
+    }
+    Ok(())
+}
+
+/// `evals/` holds one directory per case, and each case holds exactly the two
+/// assets section 9.1 defines. Anything else in either tier is undeclared.
+fn check_evals_dir(dir: &Path, declared: &HashSet<&str>) -> Result<(), RecipeLoadError> {
+    if !dir_exists(dir)? {
+        return Ok(());
+    }
+    let mut offending: Vec<(String, PathBuf)> = Vec::new();
+    for entry in read_dir_entries(dir)? {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if declared.contains(name.as_str()) {
+            continue;
+        }
+        let case_dir = entry.path();
+        if !case_dir.is_dir() {
+            offending.push((name, case_dir));
+            continue;
+        }
+        for asset in read_dir_entries(&case_dir)? {
+            let asset_name = asset.file_name().to_string_lossy().into_owned();
+            if declared.contains(asset_name.as_str())
+                || asset_name == EVAL_INPUT_FILE
+                || asset_name == EVAL_EXPECTED_FILE
+            {
+                continue;
+            }
+            offending.push((asset_name, asset.path()));
+        }
+    }
+    offending.sort();
+    if let Some((entry, offending_path)) = offending.into_iter().next() {
+        return Err(RecipeLoadError::UndeclaredRootEntry {
+            entry,
+            path: offending_path,
+        });
+    }
+    Ok(())
+}
+
+/// Read `dir`'s entries, mapping every per-entry failure onto the directory
+/// itself so callers get one consistent I/O anchor.
+fn read_dir_entries(dir: &Path) -> Result<Vec<fs::DirEntry>, RecipeLoadError> {
+    let entries = fs::read_dir(dir).map_err(|source| RecipeLoadError::Io {
+        path: dir.to_path_buf(),
+        source,
+    })?;
+    entries
+        .map(|entry| {
+            entry.map_err(|source| RecipeLoadError::Io {
+                path: dir.to_path_buf(),
+                source,
+            })
+        })
+        .collect()
 }
 
 fn file_exists(path: &Path) -> Result<bool, RecipeLoadError> {
@@ -1524,9 +1628,10 @@ fn list_skill_dirs(dir: &Path) -> Result<Vec<PathBuf>, RecipeLoadError> {
 }
 
 /// Parse every `tools/<ref>/tool.yaml` directly under `dir`, keyed by the
-/// `<ref>` directory name. A subdirectory with no `tool.yaml` is ignored
-/// (not every directory under `tools/` need be a tool package); one that
-/// has one but fails to parse is [`RecipeLoadError::MalformedTool`].
+/// `<ref>` directory name. Section 5.2 requires every direct child of
+/// `tools/` to be a tool package, so one with no `tool.yaml` is
+/// [`RecipeLoadError::MissingToolManifest`]; one that has a manifest that
+/// fails to parse is [`RecipeLoadError::MalformedTool`].
 fn list_tool_manifests(dir: &Path) -> Result<BTreeMap<String, ToolManifest>, RecipeLoadError> {
     let mut manifests = BTreeMap::new();
     for entry in read_dir(dir)? {
@@ -1566,8 +1671,8 @@ fn list_tool_manifests(dir: &Path) -> Result<BTreeMap<String, ToolManifest>, Rec
 
 /// List the eval cases directly under `dir` (`evals/`), sorted by case name.
 ///
-/// Every subdirectory under `evals/` is treated as an eval case, unlike
-/// `tools/` (where a subdirectory with no `tool.yaml` is simply ignored):
+/// Every subdirectory under `evals/` is treated as an eval case, mirroring
+/// `tools/` (where a subdirectory with no `tool.yaml` is likewise an error):
 /// section 9's "MUST be reported, not silently skipped" ruling means a case
 /// directory missing `input.json` or `expected.md` fails the whole load as
 /// [`RecipeLoadError::MalformedEvalCase`] rather than being dropped from the
