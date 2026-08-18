@@ -355,14 +355,14 @@ li .d{color:var(--mute)}
     <h2 class="r" style="animation-delay:.82s">The Four Binding Seams</h2>
     <table class="r" style="animation-delay:.86s">
       <tr><th style="width:15%">Seam</th><th style="width:42%">Recipe declares</th><th>RunSpec binds</th></tr>
-      <tr><td class="k">Tools</td><td>the allowlist: an upper bound you can audit statically</td><td>may narrow it further, never widen</td></tr>
+      <tr><td class="k">Tools</td><td>the allowlist: an upper bound you can audit statically, bounding subagents too (4.4a)</td><td>may narrow it further, never widen</td></tr>
       <tr><td class="k">MCP</td><td>which methods are permitted per server <em>(policy)</em></td><td>endpoint + credentials for those servers <em>(connection)</em></td></tr>
       <tr><td class="k">Skills</td><td>refs and pins: source_url, version, resolved_sha</td><td>where they got materialized on disk</td></tr>
       <tr><td class="k">Harness</td><td>the family: claude, codex</td><td>the execution path: interactive vs headless, tmux pane</td></tr>
     </table>
     <div class="rule r" style="animation-delay:.90s">
       <b>Monotonicity rule.</b> A RunSpec MUST NOT grant a tool or MCP method the recipe does not permit.
-      Only then is the recipe's permission set a real ceiling, auditable on its own, without reading a single run.
+      Only then is the recipe's permission set a real ceiling, auditable on its own, without reading a single run. One caveat: the ceiling covers tools, mcp, delegation and subagents, but not the portability of tools the recipe ships itself, which is author-enforced (spec 5.2).
     </div>
   </div>
 
