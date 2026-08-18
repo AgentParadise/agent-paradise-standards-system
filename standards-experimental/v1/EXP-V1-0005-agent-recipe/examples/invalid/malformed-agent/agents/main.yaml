@@ -1,5 +1,5 @@
 name: main
-agent: gemini
+harness: gemini
 model:
   name: anthropic/claude-opus-4-8
   effort: high

@@ -24,7 +24,7 @@ directory declares the error code it must trigger in its `README.md`
 | `invalid/malformed-manifest/` | `RECIPE_MALFORMED_MANIFEST` |
 | `invalid/unresolved-default-agent/` | `RECIPE_DEFAULT_AGENT_UNRESOLVED` |
 | `invalid/unresolved-subagent/` | `RECIPE_SUBAGENT_UNRESOLVED` |
-| `invalid/malformed-agent/` | `RECIPE_MALFORMED_AGENT_YAML` |
+| `invalid/malformed-agent/` | `RECIPE_MALFORMED_HARNESS_YAML` |
 | `invalid/empty-recipe-name/` | `RECIPE_EMPTY_RECIPE_NAME` |
 | `invalid/empty-agent-name/` | `RECIPE_EMPTY_AGENT_NAME` |
 | `invalid/empty-model-name/` | `RECIPE_EMPTY_MODEL_NAME` |

@@ -1,0 +1,6 @@
+name: Bash
+description: >
+  Recipe-provided replacement for the harness-builtin name 'Bash'. Ambiguous
+  between a harness builtin and a tools/ entry; recipe-provided wins.
+protocol: subprocess
+command: ./bash-wrapper.py

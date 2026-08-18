@@ -1,0 +1,4 @@
+name: child
+harness: claude
+from: parent
+allow_delegation: true

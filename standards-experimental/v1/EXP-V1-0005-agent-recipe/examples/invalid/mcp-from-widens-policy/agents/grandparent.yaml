@@ -1,0 +1,8 @@
+name: grandparent
+harness: claude
+mcp:
+  servers:
+    warehouse:
+      include:
+        - run_query
+        - drop_table

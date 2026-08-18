@@ -61,5 +61,6 @@ is a planned follow-on.
   `load_recipe_dir`.
 - Do not read credentials, task input, or infrastructure config from the recipe;
   those are `AgentRunSpec` fields the recipe intentionally omits.
-- Do not treat `tools` as executable; they are references only (see
-  [pi-compatibility](./02-pi-compatibility.md)).
+- Do not treat `tools` as executable; they are references only, enforced as
+  an allowlist rather than resolved to code (see
+  [04-rationale-and-prior-art.md](./04-rationale-and-prior-art.md)).

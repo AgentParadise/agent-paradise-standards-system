@@ -1,0 +1,8 @@
+name: mcp-agent-widens-policy
+version: 0.1.0
+default_agent: main
+mcp:
+  servers:
+    warehouse:
+      include:
+        - run_query

@@ -1,0 +1,6 @@
+name: child
+harness: claude
+from: parent
+tools:
+  - Read
+  - Write

@@ -1,5 +1,5 @@
 name: main
-agent: claude
+harness: claude
 model:
   name: anthropic/claude-opus-4-8
   effort: high
@@ -18,7 +18,7 @@ subagents: []
 # uncomment it, and reference it from `subagents:` above to wire it in.
 #
 # name: reviewer
-# agent: codex
+# harness: codex
 # model:
 #   name: openai/gpt-5-codex
 #   effort: medium

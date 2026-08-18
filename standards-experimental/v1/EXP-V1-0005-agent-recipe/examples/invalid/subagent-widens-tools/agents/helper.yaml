@@ -1,0 +1,5 @@
+name: helper
+harness: claude
+tools:
+  - Read
+  - Bash

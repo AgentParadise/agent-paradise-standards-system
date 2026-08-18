@@ -1,0 +1,6 @@
+name: main
+harness: claude
+tools:
+  - Read
+subagents:
+  - helper

@@ -1,0 +1,7 @@
+name: correctness
+description: Judges whether the review's findings are technically correct.
+prompt: |
+  Given the agent's review output and the eval case's expected.md, judge
+  whether every finding the review makes is technically accurate. A review
+  that raises a real but unrelated issue does not fail this judge; a review
+  that raises a factually wrong issue does.
