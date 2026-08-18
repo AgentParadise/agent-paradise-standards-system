@@ -18,7 +18,10 @@
 //! compared field by field (see "Source fidelity" at the end of this file):
 //! `local_corpus_phase_inventory_matches_source` fails if a phase is dropped,
 //! renamed, or invented, and `local_corpus_phase_fields_match_source` fails if
-//! an inline `max_tokens` or `allow_delegation` is mistranscribed. The 4
+//! `model`, `max_tokens`, `tools`, or `allow_delegation` is mistranscribed,
+//! resolving each through the phase's `prompt_file` frontmatter where the
+//! phase body does not state it. Absence is compared as strictly as presence,
+//! so deleting a source value fails rather than switching the check off. The 4
 //! marketplace cases are read over the network from a separate repository and
 //! are NOT verified this way; `corpus_source_coverage_is_declared` asserts
 //! that 14/4 split so the unverified remainder stays visible rather than
@@ -763,12 +766,118 @@ struct SourcePhase {
     max_tokens: Option<u32>,
     #[serde(default)]
     agent: Option<SourceAgent>,
+    #[serde(default)]
+    prompt_file: Option<String>,
+    /// Syntropic137 spells the tool allowlist three ways across the corpus.
+    #[serde(default, alias = "allowed-tools", alias = "tools")]
+    allowed_tools: Option<SourceTools>,
 }
 
 #[derive(serde::Deserialize)]
 struct SourceAgent {
     #[serde(default)]
     allow_delegation: Option<bool>,
+    #[serde(default)]
+    model: Option<String>,
+}
+
+/// `allowed_tools` appears both as a YAML list and as a comma-separated
+/// string (the prompt-frontmatter spelling).
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum SourceTools {
+    List(Vec<String>),
+    Csv(String),
+}
+
+impl SourceTools {
+    fn into_vec(self) -> Vec<String> {
+        match self {
+            SourceTools::List(list) => list,
+            SourceTools::Csv(csv) => csv
+                .split(',')
+                .map(str::trim)
+                .filter(|entry| !entry.is_empty())
+                .map(str::to_string)
+                .collect(),
+        }
+    }
+}
+
+/// The `model:` / `max-tokens:` / `allowed-tools:` a phase inherits from its
+/// `prompt_file`'s YAML frontmatter.
+#[derive(Default, serde::Deserialize)]
+struct Frontmatter {
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default, rename = "max-tokens")]
+    max_tokens: Option<u32>,
+    #[serde(default, rename = "allowed-tools")]
+    allowed_tools: Option<SourceTools>,
+}
+
+/// Resolve a phase's `prompt_file` to a vendored path. `shared://<name>`
+/// refers to `<plugin root>/phase-library/<name>.md`; anything else is
+/// relative to the workflow file's own directory.
+fn resolve_prompt_file(workflow_path: &Path, prompt_file: &str) -> Option<PathBuf> {
+    let dir = workflow_path.parent()?;
+    if let Some(name) = prompt_file.strip_prefix("shared://") {
+        // Walk up to the plugin root, the nearest ancestor holding a
+        // phase-library/ directory.
+        let mut candidate = dir;
+        loop {
+            let shared = candidate.join("phase-library").join(format!("{name}.md"));
+            if shared.is_file() {
+                return Some(shared);
+            }
+            candidate = candidate.parent()?;
+            if !candidate.starts_with(fixtures_root()) {
+                return None;
+            }
+        }
+    }
+    let direct = dir.join(prompt_file);
+    direct.is_file().then_some(direct)
+}
+
+/// Parse the leading `---` YAML frontmatter block of a prompt Markdown file.
+fn parse_frontmatter(path: &Path) -> Frontmatter {
+    let text = fs::read_to_string(path).expect("read vendored prompt file");
+    let Some(rest) = text.strip_prefix("---\n") else {
+        return Frontmatter::default();
+    };
+    let Some(end) = rest.find("\n---") else {
+        return Frontmatter::default();
+    };
+    serde_yaml::from_str(&rest[..end]).expect("prompt frontmatter should parse")
+}
+
+/// The effective model / max_tokens / tools for a source phase: the phase's
+/// own inline values, falling back to its `prompt_file` frontmatter.
+fn effective_source_fields(
+    workflow_path: &Path,
+    phase: &SourcePhase,
+) -> (Option<String>, Option<u32>, Option<Vec<String>>) {
+    let frontmatter = phase
+        .prompt_file
+        .as_deref()
+        .and_then(|prompt_file| resolve_prompt_file(workflow_path, prompt_file))
+        .map(|path| parse_frontmatter(&path))
+        .unwrap_or_default();
+
+    let model = phase
+        .agent
+        .as_ref()
+        .and_then(|agent| agent.model.clone())
+        .or(frontmatter.model);
+    let max_tokens = phase.max_tokens.or(frontmatter.max_tokens);
+    let tools = match (&phase.allowed_tools, frontmatter.allowed_tools) {
+        (Some(SourceTools::List(list)), _) => Some(list.clone()),
+        (Some(SourceTools::Csv(csv)), _) => Some(SourceTools::Csv(csv.clone()).into_vec()),
+        (None, Some(tools)) => Some(tools.into_vec()),
+        (None, None) => None,
+    };
+    (model, max_tokens, tools)
 }
 
 fn fixtures_root() -> PathBuf {
@@ -855,12 +964,14 @@ fn local_corpus_phase_inventory_matches_source() {
     }
 }
 
-/// Per-phase field fidelity for the two fields the source declares inline and
-/// the corpus claims to carry verbatim: `max_tokens` and
-/// `agent.allow_delegation`. `model` and `tools` are deliberately not checked
-/// here because several cases derive them from `prompt_file` frontmatter or
-/// from the migration doc's inference rules rather than from the phase body;
-/// `docs/06-migration-from-syntropic137.md` is the authority for those.
+/// Per-phase field fidelity across every field the corpus claims to carry:
+/// `model`, `max_tokens`, `tools`, and `allow_delegation`. Each is compared
+/// against the phase's inline value, falling back to its `prompt_file`
+/// frontmatter, so a mistranscription in either place fails.
+///
+/// Absence is compared as strictly as presence. An earlier version asserted
+/// `max_tokens` only when the source declared it, which meant deleting the
+/// source value silently turned the comparison off instead of failing.
 #[test]
 fn local_corpus_phase_fields_match_source() {
     for case in corpus_cases() {
@@ -880,21 +991,35 @@ fn local_corpus_phase_fields_match_source() {
                     path.display()
                 );
             };
-            // Only assert where the source states the value inline. A phase
-            // that takes max_tokens from prompt_file frontmatter states
-            // nothing here, and the migration doc governs that path.
-            if let Some(source_max) = source_phase.max_tokens {
-                assert_eq!(
-                    phase.max_tokens,
-                    Some(source_max),
-                    "{} phase '{}' transcribes max_tokens {:?} but {} declares {}",
-                    case.workflow_id,
-                    phase.phase_id,
-                    phase.max_tokens,
-                    path.display(),
-                    source_max
-                );
-            }
+            let (model, max_tokens, tools) = effective_source_fields(&path, source_phase);
+
+            assert_eq!(
+                phase.max_tokens,
+                max_tokens,
+                "{} phase '{}': max_tokens disagrees with {}",
+                case.workflow_id,
+                phase.phase_id,
+                path.display()
+            );
+            assert_eq!(
+                phase.model.map(str::to_string),
+                model,
+                "{} phase '{}': model disagrees with {}",
+                case.workflow_id,
+                phase.phase_id,
+                path.display()
+            );
+            let transcribed_tools: Option<Vec<String>> = phase
+                .tools
+                .map(|tools| tools.iter().map(|t| (*t).to_string()).collect());
+            assert_eq!(
+                transcribed_tools,
+                tools,
+                "{} phase '{}': tools disagree with {}",
+                case.workflow_id,
+                phase.phase_id,
+                path.display()
+            );
             let source_delegation = source_phase
                 .agent
                 .as_ref()
@@ -903,12 +1028,10 @@ fn local_corpus_phase_fields_match_source() {
             assert_eq!(
                 phase.allow_delegation,
                 source_delegation,
-                "{} phase '{}' transcribes allow_delegation {} but {} declares {}",
+                "{} phase '{}': allow_delegation disagrees with {}",
                 case.workflow_id,
                 phase.phase_id,
-                phase.allow_delegation,
-                path.display(),
-                source_delegation
+                path.display()
             );
         }
     }

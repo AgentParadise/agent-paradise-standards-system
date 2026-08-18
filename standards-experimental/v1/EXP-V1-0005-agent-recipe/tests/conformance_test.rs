@@ -854,3 +854,220 @@ fn empty_system_md_still_contributes_separator() {
         Some("\n\nextra")
     );
 }
+
+// --- Section 4.4a: delegation is not a permission escape hatch -------------
+
+/// A delegator that restricts its own `tools` must not reach a wider tool set
+/// through a subagent. Before this rule, `tools: []` delegating to a sibling
+/// with `tools: [Bash, Write]` validated clean, which made section 4.6's
+/// "enforced allowlist" and section 4.7's monotonic-narrowing claim false.
+#[test]
+fn subagent_widening_tools_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(
+        temp.path(),
+        "agents/main.yaml",
+        "name: main\nharness: claude\ntools: []\nsubagents:\n  - helper\n",
+    );
+    fs::write(
+        temp.path().join("agents").join("helper.yaml"),
+        "name: helper\nharness: claude\ntools:\n  - Bash\n  - Write\n",
+    )
+    .expect("write helper");
+
+    let diagnostics = validate_recipe_dir(temp.path());
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_SUBAGENT_WIDENS_TOOLS"),
+        "expected RECIPE_SUBAGENT_WIDENS_TOOLS, got {codes:?}"
+    );
+}
+
+/// An absent `tools` on the subagent means unrestricted (section 4.6), which a
+/// bounded delegator cannot confer. This is the case a subset check alone
+/// would miss.
+#[test]
+fn subagent_with_no_tools_restriction_is_rejected_under_a_bounded_delegator() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(
+        temp.path(),
+        "agents/main.yaml",
+        "name: main\nharness: claude\ntools:\n  - shell\nsubagents:\n  - helper\n",
+    );
+    fs::write(
+        temp.path().join("agents").join("helper.yaml"),
+        "name: helper\nharness: claude\n",
+    )
+    .expect("write helper");
+
+    let diagnostics = validate_recipe_dir(temp.path());
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_SUBAGENT_WIDENS_TOOLS"),
+        "expected RECIPE_SUBAGENT_WIDENS_TOOLS, got {codes:?}"
+    );
+}
+
+/// A subagent within the delegator's allowlist is fine: the rule bounds
+/// delegation, it does not forbid it.
+#[test]
+fn subagent_within_the_delegators_allowlist_is_accepted() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(
+        temp.path(),
+        "agents/main.yaml",
+        "name: main\nharness: claude\ntools:\n  - shell\n  - Read\nsubagents:\n  - helper\n",
+    );
+    fs::write(
+        temp.path().join("agents").join("helper.yaml"),
+        "name: helper\nharness: claude\ntools:\n  - Read\n",
+    )
+    .expect("write helper");
+
+    let diagnostics = validate_recipe_dir(temp.path());
+    assert!(
+        !diagnostics.has_errors(),
+        "narrowing subagent should validate, got: {:?}",
+        diagnostics
+            .iter()
+            .map(|d| d.code.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+/// An unrestricted delegator bounds nothing, so any subagent is permitted.
+#[test]
+fn unrestricted_delegator_bounds_nothing() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(
+        temp.path(),
+        "agents/main.yaml",
+        "name: main\nharness: claude\nsubagents:\n  - helper\n",
+    );
+    fs::write(
+        temp.path().join("agents").join("helper.yaml"),
+        "name: helper\nharness: claude\ntools:\n  - Bash\n",
+    )
+    .expect("write helper");
+
+    let diagnostics = validate_recipe_dir(temp.path());
+    assert!(
+        !diagnostics.has_errors(),
+        "absent delegator tools bounds nothing"
+    );
+}
+
+/// The comparison is on *resolved* manifests: a subagent must not acquire a
+/// wider tool set through its own `from:` chain either.
+#[test]
+fn subagent_widening_through_its_own_from_chain_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(
+        temp.path(),
+        "agents/main.yaml",
+        "name: main\nharness: claude\ntools:\n  - Read\nsubagents:\n  - helper\n",
+    );
+    let agents = temp.path().join("agents");
+    fs::write(
+        agents.join("wide.yaml"),
+        "name: wide\nharness: claude\ntools:\n  - Read\n  - Bash\n",
+    )
+    .expect("write wide");
+    fs::write(agents.join("helper.yaml"), "name: helper\nfrom: wide\n").expect("write helper");
+
+    let diagnostics = validate_recipe_dir(temp.path());
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_SUBAGENT_WIDENS_TOOLS"),
+        "expected RECIPE_SUBAGENT_WIDENS_TOOLS via from:, got {codes:?}"
+    );
+}
+
+/// The same bound applies to MCP policy, reusing `mcp_policy_widenings` so the
+/// subset rule has exactly one definition.
+#[test]
+fn subagent_widening_mcp_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(
+        temp.path().join("recipe.yaml"),
+        "name: t\nversion: 0.1.0\ndefault_agent: main\nmcp:\n  servers:\n    github:\n      include:\n        - list_issues\n",
+    )
+    .expect("write recipe.yaml");
+    let agents = temp.path().join("agents");
+    fs::create_dir_all(&agents).expect("agents dir");
+    fs::write(
+        agents.join("main.yaml"),
+        "name: main\nharness: claude\nmcp:\n  servers:\n    github:\n      include:\n        - list_issues\nsubagents:\n  - helper\n",
+    )
+    .expect("write main");
+    fs::write(
+        agents.join("helper.yaml"),
+        "name: helper\nharness: claude\nmcp:\n  servers:\n    github:\n      include:\n        - list_issues\n        - create_issue\n",
+    )
+    .expect("write helper");
+
+    let diagnostics = validate_recipe_dir(temp.path());
+    let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert!(
+        codes.contains(&"RECIPE_SUBAGENT_WIDENS_MCP")
+            || codes.contains(&"RECIPE_MCP_AGENT_WIDENS_POLICY"),
+        "expected a subagent/agent MCP widening code, got {codes:?}"
+    );
+}
+
+/// Section 2.1's prohibition reaches inside the structured directories, not
+/// just the recipe root: `agents/.env` is exactly the content the section
+/// forbids and appears at no root path.
+#[test]
+fn nested_credentials_in_a_structured_dir_are_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\n");
+    fs::write(temp.path().join("agents").join(".env"), "TOKEN=hunter2\n")
+        .expect("write nested credentials");
+
+    let error = load_recipe_dir(temp.path()).expect_err("nested credentials must fail to load");
+    assert_eq!(error.code(), "RECIPE_UNDECLARED_ROOT_ENTRY");
+}
+
+/// The same reach applies to `prompts/`, which section 9.3 defines as holding
+/// `<name>.md` and nothing else.
+#[test]
+fn nested_non_markdown_in_prompts_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\n");
+    let prompts = temp.path().join("prompts");
+    fs::create_dir_all(&prompts).expect("prompts dir");
+    fs::write(prompts.join("credentials.json"), "{\"key\":\"x\"}\n").expect("write");
+
+    let error = load_recipe_dir(temp.path()).expect_err("nested credentials must fail to load");
+    assert_eq!(error.code(), "RECIPE_UNDECLARED_ROOT_ENTRY");
+}
+
+/// `tools/` and `skills/` are deliberately exempt: they carry vendored package
+/// payloads of arbitrary shape. Policing them would reject legitimate recipes
+/// rather than catch credentials, so the exemption is asserted, not assumed.
+#[test]
+fn tools_and_skills_payloads_are_exempt_from_the_nested_check() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\n");
+    let tool = temp.path().join("tools").join("extract");
+    fs::create_dir_all(tool.join("vendor")).expect("tool dirs");
+    fs::write(tool.join("tool.yaml"), "name: extract\ncommand: ./run.sh\n").expect("tool.yaml");
+    fs::write(tool.join("vendor").join("anything.bin"), "x").expect("payload");
+    let skill = temp.path().join("skills").join("code-review");
+    fs::create_dir_all(&skill).expect("skill dir");
+    fs::write(skill.join("SKILL.md"), "# skill\n").expect("skill");
+
+    load_recipe_dir(temp.path()).expect("tools/ and skills/ payloads must load");
+}
+
+/// `mcp: null` must be rejected for the same reason as `tools: null`: an
+/// explicit null on a permission-bearing field would otherwise read as absent.
+#[test]
+fn explicit_null_mcp_is_rejected() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    write_minimal_recipe(temp.path(), "agents/main.yaml", "name: main\nmcp: null\n");
+
+    let error = load_recipe_dir(temp.path()).expect_err("explicit null mcp must fail to load");
+    assert_eq!(error.code(), "RECIPE_MALFORMED_HARNESS_YAML");
+}
