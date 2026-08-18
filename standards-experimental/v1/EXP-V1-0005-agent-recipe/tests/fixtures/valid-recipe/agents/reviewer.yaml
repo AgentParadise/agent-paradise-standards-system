@@ -3,3 +3,7 @@ harness: codex
 model:
   name: openai/gpt-5-codex
   effort: medium
+# Narrower than main's `tools: [shell]`: a delegated agent's permissions are
+# bounded by its delegator's (section 4.4a), and an absent `tools` would mean
+# unrestricted, which a bounded delegator cannot confer.
+tools: []

@@ -12,3 +12,7 @@ system_instructions:
   # resolved prompt is added after the harness's own built-in prompt,
   # even though `mode` itself discarded SYSTEM.md. The two axes vary
   # independently.
+# Bounded by main's `tools: [shell]`: a delegated agent's permissions are
+# bounded by its delegator's (section 4.4a). An absent `tools` would mean
+# unrestricted, which a bounded delegator cannot confer.
+tools: []

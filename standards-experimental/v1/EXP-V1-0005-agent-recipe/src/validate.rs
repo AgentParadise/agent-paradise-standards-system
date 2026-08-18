@@ -16,6 +16,7 @@
 //! file rather than as separate codes.
 
 use apss_core::{Diagnostic, Diagnostics};
+use std::collections::HashSet;
 use std::path::Path;
 
 use crate::schema::{
@@ -28,6 +29,12 @@ use crate::schema::{
 pub mod error_codes {
     /// A `subagents` entry names an agent with no matching `agents/*.yaml`.
     pub const RECIPE_SUBAGENT_UNRESOLVED: &str = "RECIPE_SUBAGENT_UNRESOLVED";
+    /// A named subagent's resolved `tools` is not a subset of the delegating
+    /// agent's resolved `tools` (section 4.4a).
+    pub const RECIPE_SUBAGENT_WIDENS_TOOLS: &str = "RECIPE_SUBAGENT_WIDENS_TOOLS";
+    /// A named subagent's resolved `mcp` is not a subset of the delegating
+    /// agent's resolved `mcp` (section 4.4a).
+    pub const RECIPE_SUBAGENT_WIDENS_MCP: &str = "RECIPE_SUBAGENT_WIDENS_MCP";
     /// `recipe.yaml`'s `name` is present (serde) but empty.
     pub const RECIPE_EMPTY_RECIPE_NAME: &str = "RECIPE_EMPTY_RECIPE_NAME";
     /// An agent manifest's `name` is present (serde) but empty.
@@ -506,6 +513,84 @@ fn validate_agent(
                 )
                 .with_path(agent_path.clone()),
             );
+        }
+    }
+
+    // Delegation must not be a permission escape hatch. Sections 4.6 and 4.7
+    // claim `tools` is an enforced allowlist and that permission narrows
+    // monotonically at every tier; without this check a delegator with
+    // `tools: []` could name a sibling declaring `tools: [Bash, Write]` and
+    // validate clean, so neither claim would hold. Both sides are compared
+    // *resolved*, because a subagent can acquire permission through its own
+    // `from:` chain, and an as-authored comparison would miss exactly that.
+    //
+    // An absent `tools` on the delegator means "unrestricted" (section 4.6),
+    // so it bounds nothing and the check is skipped; an absent `tools` on the
+    // subagent is likewise unrestricted, which a bounded delegator MUST NOT
+    // confer.
+    if let Ok(resolved_delegator) = resolve_inherited(recipe, stem) {
+        for subagent in &agent.subagents {
+            if !recipe.agents.contains_key(subagent) {
+                continue;
+            }
+            let Ok(resolved_subagent) = resolve_inherited(recipe, subagent) else {
+                continue;
+            };
+            if let Some(ceiling) = resolved_delegator.tools.as_deref() {
+                let permitted: HashSet<&str> = ceiling.iter().map(String::as_str).collect();
+                match resolved_subagent.tools.as_deref() {
+                    None => diagnostics.push(
+                        Diagnostic::error(
+                            error_codes::RECIPE_SUBAGENT_WIDENS_TOOLS,
+                            format!(
+                                "agent '{stem}' restricts its own tools but delegates to subagent '{subagent}', which declares no tools restriction at all"
+                            ),
+                        )
+                        .with_path(agent_path.clone())
+                        .with_hint(format!(
+                            "give '{subagent}' an explicit tools allowlist within '{stem}'s own"
+                        )),
+                    ),
+                    Some(subagent_tools) => {
+                        let offending: Vec<&str> = subagent_tools
+                            .iter()
+                            .map(String::as_str)
+                            .filter(|tool| !permitted.contains(tool))
+                            .collect();
+                        if !offending.is_empty() {
+                            diagnostics.push(
+                                Diagnostic::error(
+                                    error_codes::RECIPE_SUBAGENT_WIDENS_TOOLS,
+                                    format!(
+                                        "agent '{stem}' delegates to subagent '{subagent}', which grants tools {offending:?} that '{stem}' does not permit"
+                                    ),
+                                )
+                                .with_path(agent_path.clone())
+                                .with_hint(format!(
+                                    "remove {offending:?} from '{subagent}', or grant them to '{stem}'"
+                                )),
+                            );
+                        }
+                    }
+                }
+            }
+            let delegator_mcp = resolved_delegator.mcp.clone().unwrap_or_default();
+            let subagent_mcp = resolved_subagent.mcp.clone().unwrap_or_default();
+            let offending = mcp_policy_widenings(&delegator_mcp, &subagent_mcp);
+            if !offending.is_empty() {
+                diagnostics.push(
+                    Diagnostic::error(
+                        error_codes::RECIPE_SUBAGENT_WIDENS_MCP,
+                        format!(
+                            "agent '{stem}' delegates to subagent '{subagent}', whose mcp policy names server(s) {offending:?} that '{stem}' does not permit"
+                        ),
+                    )
+                    .with_path(agent_path.clone())
+                    .with_hint(format!(
+                        "narrow '{subagent}'s mcp policy to within '{stem}'s own"
+                    )),
+                );
+            }
         }
     }
 
