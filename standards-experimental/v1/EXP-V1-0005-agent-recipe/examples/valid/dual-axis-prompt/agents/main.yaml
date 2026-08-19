@@ -1,0 +1,21 @@
+name: main
+harness: claude
+model:
+  name: anthropic/claude-opus-4-8
+  effort: high
+system_instructions:
+  # mode: append composes with SYSTEM.md as usual.
+  mode: append
+  content: |
+    Operate with the full weight of the shared SYSTEM.md above, and also
+    fully replace the harness's own built-in system prompt below.
+  # harness_prompt is the independent axis: even though `mode` still
+  # appends to SYSTEM.md, `replace` here means the resolved text stands in
+  # for the harness's own default prompt rather than adding to it. A
+  # consumer whose harness cannot suppress its built-in prompt MUST fail
+  # loudly rather than silently degrade to append.
+  harness_prompt: replace
+tools:
+  - shell
+subagents:
+  - quiet

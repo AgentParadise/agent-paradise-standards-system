@@ -50,7 +50,7 @@ Once the crate is published:
 
 ```toml
 [dependencies]
-apss-v1-0004-session-capture = "1.0"
+apss-v1-0004-session-capture = "2.0"
 ```
 
 Before it is published, pin the git revision so the build is reproducible:

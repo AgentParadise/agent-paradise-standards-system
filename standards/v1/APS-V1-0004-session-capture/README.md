@@ -3,7 +3,7 @@
 **ID:** `APS-V1-0004`
 **Type:** Official standard
 **Slug:** `session-capture`
-**Version:** `1.0.0`
+**Version:** `2.0.0`
 **Status:** Active (ratified, promoted from `EXP-V1-0003` on 2026-08-06)
 
 One contract so "back up my agent sessions" works identically across every

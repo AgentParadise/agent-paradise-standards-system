@@ -4,7 +4,7 @@ schema = "aps.standard/v1"
 id = "APS-V1-0004"
 name = "Session Capture Standard"
 slug = "session-capture"
-version = "1.0.0"
+version = "2.0.0"
 category = "technical"
 status = "active"
 

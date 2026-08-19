@@ -1,5 +1,5 @@
 name: main
-agent: claude
+harness: claude
 model:
   name: anthropic/claude-opus-4-8
   effort: low

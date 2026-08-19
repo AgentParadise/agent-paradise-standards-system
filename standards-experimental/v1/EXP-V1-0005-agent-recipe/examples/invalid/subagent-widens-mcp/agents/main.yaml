@@ -1,0 +1,9 @@
+name: main
+harness: claude
+mcp:
+  servers:
+    github:
+      include:
+        - list_issues
+subagents:
+  - helper

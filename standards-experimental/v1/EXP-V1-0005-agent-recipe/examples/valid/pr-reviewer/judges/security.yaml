@@ -1,0 +1,3 @@
+name: security
+description: Judges whether the review catches the security issue under test.
+prompt_file: security-bar.md

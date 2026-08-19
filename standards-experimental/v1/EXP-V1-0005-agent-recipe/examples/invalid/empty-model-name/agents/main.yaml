@@ -1,5 +1,5 @@
 name: main
-agent: claude
+harness: claude
 model:
   name: ""
   effort: high

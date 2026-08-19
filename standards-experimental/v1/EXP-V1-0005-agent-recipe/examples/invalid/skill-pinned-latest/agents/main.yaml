@@ -1,0 +1,9 @@
+name: main
+harness: claude
+model:
+  name: anthropic/claude-opus-4-8
+  effort: high
+skills:
+  - ref: research
+    source_url: https://example.com/research.git
+    version: "@latest"

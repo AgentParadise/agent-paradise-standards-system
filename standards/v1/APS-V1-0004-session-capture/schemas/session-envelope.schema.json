@@ -40,7 +40,10 @@
       "minLength": 1
     },
     "parent_session_id": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "For a subagent session, the id of its parent session. Reserved in v1; filled in a later phase."
     },
     "started_at": {
@@ -54,24 +57,41 @@
       "description": "Real time of the last activity in the session (RFC3339)."
     },
     "content_hash": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Hash over the CAPTURED CONTENT, computed by the store at ingest before sanitizing (section 4.2.3). ABSENT OR NULL in an envelope in flight from a producer; PRESENT in a stored envelope. Within scs_version 1.x the algorithm MUST be SHA-256 and the digest MUST be lowercase hexadecimal, because dedup compares these as strings and equal digest bytes in different cases would not match.",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "metadata": {
       "description": "Freeform, non-load-bearing metadata. Explicit null is accepted and equivalent to omission, so a producer that always emits the key does not become non-conformant.",
-      "oneOf": [{ "$ref": "#/$defs/Metadata" }, { "type": "null" }]
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Metadata"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "raw": {
       "description": "The provider-native transcript, preserved verbatim. Opaque to the standard. A string carries the transcript's exact bytes and is the ONLY shape that supports byte-exact reconstitution, so it is required for any source_format in the reconstitution registry (section 4.3.1). Object and array shapes are valid but not reconstitutable. Scalars (number, boolean, null) are not a transcript and are rejected.",
-      "type": ["object", "array", "string"]
+      "type": [
+        "object",
+        "array",
+        "string"
+      ]
     }
   },
   "$defs": {
     "Origin": {
       "type": "object",
       "description": "Where the envelope came from, so a multi-source corpus stays attributable.",
-      "required": ["host", "environment"],
+      "required": [
+        "host",
+        "environment"
+      ],
       "additionalProperties": true,
       "properties": {
         "host": {
@@ -83,7 +103,22 @@
           "type": "string",
           "description": "Class of environment the session ran in. Known values are local, vps, container, and workflow. NOT a closed enum: section 8.3 requires consumers to tolerate values added in a later minor version, so validating against a fixed list here would reject envelopes the standard declares conformant.",
           "minLength": 1,
-          "examples": ["local", "vps", "container", "workflow"]
+          "examples": [
+            "local",
+            "vps",
+            "container",
+            "workflow"
+          ]
+        },
+        "deployment": {
+          "type": "string",
+          "description": "OPTIONAL deployment identity: WHICH concrete deployment produced the session, as distinct from `environment`, which is the class of runtime. Convention is `<app>__<tier>` (double underscore), for example syntropic137__dev. A consumer MAY split on the first `__` to roll up app -> tier -> host. Absent means the producer is a single deployment with no tier, which is the common local case.",
+          "minLength": 1,
+          "examples": [
+            "syntropic137__dev",
+            "syntropic137__beta",
+            "syntropic137__prod"
+          ]
         }
       }
     },
@@ -114,7 +149,9 @@
         },
         "tags": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Free-form operator tags."
         },
         "message_count": {
@@ -127,7 +164,10 @@
           "description": "The transcript's original path on the capturing machine, relative to the harness session root. Used preferentially by a Reconstitutor (section 6.4). Untrusted input: a Reconstitutor MUST reject absolute values or values escaping the harness root (section 6.4.5)."
         },
         "workflow_id": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "For Exporter sessions produced as part of a multi-agent run, the shared id that groups the run's per-agent envelopes."
         }
       }

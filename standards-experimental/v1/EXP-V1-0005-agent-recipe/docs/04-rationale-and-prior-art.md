@@ -3,27 +3,59 @@
 This document tells the "how we got here" story behind EXP-V1-0005: what
 existing work inspired it, why the recipe is a *directory* rather than a single
 file, what we deliberately kept, and what we deliberately changed. It is
-informative - the normative rules live in [01_spec.md](./01_spec.md), and the
-precise pi.recipes deltas are catalogued in
-[02-pi-compatibility.md](./02-pi-compatibility.md).
+informative - the normative rules live in [01_spec.md](./01_spec.md).
 
 ## Credits / Prior Art
 
 The recipe-directory concept is **derived from pi.recipes**, the recipe format
 from the [**introspection.dev**](https://introspection.dev) project by the
-introspection-recipes team. pi.recipes established the core idea this standard
-builds on: an agent run can be captured as a reusable, declarative artifact -
-agent, model, skills, and instructions - instead of being reconstructed from
-command-line flags every time.
+introspection-recipes team (reference implementation:
+[introspection-recipes/pi-codex](https://github.com/introspection-recipes/pi-codex)).
+pi.recipes established the core idea this standard builds on: an agent run can
+be captured as a reusable, declarative artifact - agent, model, skills, and
+instructions - instead of being reconstructed from command-line flags every
+time.
 
 - pi.recipes / introspection.dev: https://introspection.dev
 - Reference implementation: https://github.com/introspection-recipes/pi-codex
 
 EXP-V1-0005 is our generalization of that idea into a harness-neutral,
-language-neutral directory standard. Where our shape overlaps pi.recipes we keep
-the same field names and enum values on purpose (see
-[What Carries Over](./02-pi-compatibility.md#what-carries-over)); where we
-diverge, we say why below and in the compatibility doc.
+language-neutral directory standard. Where our shape overlaps pi.recipes we
+keep the same field names and enum values on purpose (see
+[What Carries Over](#what-carries-over) below); where we diverge, including in
+ways that break loading a pi recipe outright, we say why below.
+
+## Inspired By pi.recipes, Not Compatible With It
+
+The credit above is real: pi.recipes contributed the core idea this standard
+builds on, a recipe as a directory of agent manifests plus shared assets. What
+this standard does NOT offer is loading a pi recipe as-is. Three semantic
+changes make that impossible:
+
+- **`tools` became an enforced allowlist.** In pi.recipes (and in an earlier
+  draft of this standard) `tools` was a hint: a consumer could grant more than
+  a recipe listed. Section 4.6 of [01_spec.md](./01_spec.md) now makes it an
+  allowlist a conforming consumer MUST NOT exceed. A pi recipe authored under
+  the old, permissive assumption may under-declare `tools` relative to what it
+  actually needs, and would silently lose capability if loaded here.
+- **`system_instructions.mode` split into two independent axes.** pi.recipes
+  has one `mode` (append/replace against the shared system prompt). This
+  standard separates that from a second, independent axis,
+  `harness_prompt`, which governs composition with the *harness's own*
+  built-in system prompt (section 6 of [01_spec.md](./01_spec.md)). The two
+  axes do not have a one-to-one mapping back to pi's single `mode`.
+- **`harness` has no pi equivalent.** pi.recipes never needed a field naming
+  its own runtime, because pi IS the harness - there is nothing to name. This
+  standard is deliberately harness-neutral, so it needs a field pi's format
+  structurally cannot have.
+
+Because of these three changes, a pi recipe does not load correctly against
+this standard. Claiming partial compatibility would promise something the
+revised semantics cannot deliver, which is worse than a clean break plus
+honest credit. **Migration from a pi recipe is possible under a documented
+mapping; it is not a load.** The credit for the idea stands regardless: this
+standard generalizes pi.recipes' core insight so it is not tied to a single
+harness.
 
 ## The Goal, in One Line
 
@@ -78,25 +110,40 @@ into one YAML file would make it large and hard to review. A directory with a
 marker file carries all of it cleanly, and the marker gives consumers a cheap,
 unambiguous "is this a recipe?" test.
 
-## What We Deliberately Diverged On (and Why)
+## What We Changed and Why
 
-These are the intentional departures from pi.recipes. They are catalogued with
-their schema anchors in [02-pi-compatibility.md](./02-pi-compatibility.md); the
-summary and reasoning:
+This table is prior-art documentation, not a compatibility claim: it exists so
+someone who knows pi.recipes can see exactly what differs and why, even though
+the two formats no longer interoperate.
 
 | Divergence | pi.recipes | EXP-V1-0005 | Why |
 |-----------|------------|-------------|-----|
-| No TypeScript `extensions` | `extensions/` of executable TS code | `tools` are references (names) only; no `extensions/`, no code | Keeps a recipe a pure, safe-to-commit **data** artifact - cloning or diffing never pulls in executable code - and keeps the schema crate free of any runtime/language dependency. |
-| Harness is per-agent | Runtime-level | Required `agent: claude \| codex` on each agent manifest | One recipe can mix harnesses (a `claude` default agent delegating to a `codex` subagent). The enum is closed per version but version-extensible (`opencode`, `gemini`, ...). |
+| No TypeScript `extensions` | `extensions/` of executable TS code | No `extensions/`, no code; `tools` names what an agent may use, enforced as an allowlist (see below) | Keeps a recipe a pure, safe-to-commit **data** artifact - cloning or diffing never pulls in executable code - and keeps the schema crate free of any runtime/language dependency. |
+| `tools` enforcement | Not applicable (no `tools` concept; `extensions/` is code, not a permission list) | `tools` is an ALLOWLIST: a conforming consumer MUST NOT grant a tool the list does not permit. Absent means unrestricted; `[]` means none | Makes a recipe's permission surface auditable statically, without reading a single run. This is the change that most directly breaks naive pi compatibility (see "Inspired By, Not Compatible With" above). |
+| Harness selection | Runtime-level; pi IS the harness, so its format never named one | OPTIONAL `harness` field per agent manifest, closed enum (`claude`, `codex`) | A field pi structurally cannot have. Absence is meaningful (harness-agnostic, checked against harness-builtin tool names); presence is a declared dependency. One recipe can mix harnesses per agent. Closed per version, version-extensible (`opencode`, `gemini`, ...). |
 | `effort` instead of `thinking_level` | `thinking_level` (Claude-specific) | `model.effort: low \| medium \| high` (harness-neutral) | Three coarse levels map cleanly across harnesses that expose different reasoning granularities; the adapter translates to the native parameter, not the recipe. |
+| System prompt composition | Single `mode` (append/replace) | Two independent axes: `mode` (composition with `SYSTEM.md`) and `harness_prompt` (append/replace the harness's own built-in prompt) | pi's single `mode` conflates two different prompts being composed. Splitting them lets a recipe say "add to my shared SYSTEM.md" and "replace the harness's default prompt" independently. |
 | Agents and subagents unified | Separate concepts | One `agents/` directory; a subagent is just an agent another agent references in `subagents` | No separate schema, directory, or marker for subagents. Role is decided by `default_agent` and other agents' `subagents` lists, nothing structural. |
 
 Each of these is verifiable against the reference types in
-[`src/schema.rs`](../src/schema.rs): `tools: Vec<String>` (references, no code),
-the `AgentKind` enum (`Claude`, `Codex`) on `AgentManifest.agent`, the
-`EffortLevel` enum (`Low`, `Medium`, `High`) on `ModelSpec.effort`, and the
+[`src/schema.rs`](../src/schema.rs): `tools: Option<Vec<String>>` (an allowlist,
+`None` unrestricted vs `Some(vec![])` empty), the `HarnessKind` enum (`Claude`,
+`Codex`) on `AgentManifest.harness` (itself `Option<HarnessKind>`), the
+`EffortLevel` enum (`Low`, `Medium`, `High`) on `ModelSpec.effort`, the
+`HarnessPromptMode` enum on `SystemInstructions.harness_prompt`, and the
 single `agents: BTreeMap<String, AgentManifest>` that unifies agents and
 subagents on `Recipe`.
+
+## What Carries Over
+
+Field names and enum values are kept identical to pi.recipes' single-agent
+manifest shape where they overlap: `name`, `model.name`, `model.effort`,
+`skills`, and the `mode` half of `system_instructions` (`append` \|
+`replace`). Someone fluent in pi.recipes reads these fields without a
+translation table, even though the recipe as a whole does not load as pi's
+format. The directory shape adds `harness`, `tools`, `subagents`, `mcp`,
+`evals/`, `judges/`, and `prompts/` on top of that carried-over agent shape;
+none of these has a pi.recipes equivalent.
 
 ## How It Maps onto the APSS Meta-Standard
 
@@ -119,5 +166,5 @@ truth for the shape.
 
 - [00_overview.md](./00_overview.md) - quick tour of the directory shape.
 - [01_spec.md](./01_spec.md) - the normative specification.
-- [02-pi-compatibility.md](./02-pi-compatibility.md) - the detailed pi.recipes deltas.
+- [05-harness-tool-vocabulary.md](./05-harness-tool-vocabulary.md) - the harness-builtin tool names the `tools` allowlist and `harness` field are checked against.
 - [03-syntropic137-mapping.md](./03-syntropic137-mapping.md) - how a consumer runs a recipe.

@@ -1,0 +1,185 @@
+# GitHub Pull Request Workflow
+# A workflow that demonstrates agent-driven PR creation using git and gh CLI.
+# Uses Claude Code command pattern: $ARGUMENTS for the primary task.
+#
+# This workflow is the canonical example of a true E2E agentic workflow:
+# 1. Agent runs in isolated Docker container
+# 2. GitHub App installation token is generated (1-hour TTL, see ADR-024)
+# 3. Git credentials are configured during setup phase, then cleared
+# 4. Agent uses standard git and gh CLI commands with cached credentials
+# 5. All operations are observable in the event store
+
+id: github-pr-workflow
+name: GitHub PR Workflow
+description: |
+  Creates a Pull Request with agent-generated changes using standard git
+  and GitHub CLI tools. Demonstrates true end-to-end agentic workflow with
+  full observability and secure token injection.
+
+type: implementation
+classification: standard
+
+# Default repository context (should be overridden at runtime)
+repository:
+  url: "{{repository}}"
+  ref: main
+
+# Project association (optional)
+project_name: null
+
+# Input declarations (ISS-211: CC command inputs)
+inputs:
+  - name: task
+    description: "What changes to make (issue body, change description, etc.)"
+    required: true
+  - name: repository
+    description: "Repository URL (owner/repo or full GitHub URL)"
+    required: false
+    default: "https://github.com/syntropic137/sandbox_syn-engineer-beta"
+
+phases:
+  - id: create-pr
+    name: Create Pull Request
+    order: 1
+    execution_type: sequential
+    argument_hint: "[change-description]"
+    description: |
+      Clone repository, create a branch, make changes, and open a PR.
+      Uses injected GitHub credentials for authentication.
+    input_artifacts: []
+    output_artifacts:
+      - pr_metadata
+      - changes_summary
+    max_tokens: 8192
+    timeout_seconds: 600
+
+    # Tools available for this phase
+    tools:
+      - bash
+      - computer
+
+    prompt_template: |
+      You are a software engineer with access to git and the GitHub CLI (gh).
+
+      ## Your Task
+      $ARGUMENTS
+
+      ### Context
+      - **Repository:** {{repo_url}}
+      - **Execution ID:** {{execution_id}}
+
+      ### Instructions
+
+      1. **Clone the repository:**
+         ```bash
+         cd /workspace/repos
+         git clone {{repo_url}}
+         cd $(basename {{repo_url}} .git)
+         ```
+
+      2. **Create a feature branch:**
+         ```bash
+         git checkout -b feat/agent-{{execution_id}}
+         ```
+
+      3. **Make the requested changes:**
+         - Create or modify files based on the task description
+         - Write clean, well-documented code
+         - Follow existing project conventions
+
+      4. **Commit your changes:**
+         ```bash
+         git add .
+         git commit -m "feat: <concise description of changes>"
+         ```
+
+      5. **Push and create PR:**
+         ```bash
+         git push origin feat/agent-{{execution_id}}
+         gh pr create \
+           --title "Agent: <concise description>" \
+           --body "## Summary
+
+         This PR was created by a Syn137 agent.
+
+         **Execution ID:** {{execution_id}}
+
+         ## Details
+
+         [Describe the changes you made]
+
+         ---
+         *Automated PR by syn-engineer-beta[bot]*"
+         ```
+
+      6. **Write summary to artifacts (REQUIRED):**
+         After creating the PR, you MUST write your actual summary to `/workspace/artifacts/output/deliverable.md`.
+
+         **Include these details with your ACTUAL content (not placeholders):**
+         - What changes you made
+         - The commit hash(es)
+         - The PR URL from `gh pr create`
+         - A brief executive summary
+
+      ### Important Notes
+
+      - Git credentials are pre-configured via the setup phase (ADR-024)
+      - Git user.name and user.email are set to the GitHub App bot identity
+      - You have full access to bash commands in the workspace
+      - Clone repositories to `/workspace/repos/`
+      - **The code on GitHub is the deliverable. The artifact is your summary.**
+
+  - id: verify-pr
+    name: Verify Pull Request
+    order: 2
+    execution_type: sequential
+    argument_hint: "[change-description]"
+    description: |
+      Verify the PR was created successfully and collect metadata.
+    input_artifacts:
+      - pr_metadata
+    output_artifacts:
+      - verification_report
+    max_tokens: 2048
+    timeout_seconds: 120
+
+    tools:
+      - bash
+
+    prompt_template: |
+      You are verifying that the Pull Request was created successfully.
+
+      ## Original Task
+      $ARGUMENTS
+
+      ## Previous Phase Output
+
+      First, check what files are available from the previous phase:
+      ```bash
+      ls -la /workspace/artifacts/input/
+      ```
+
+      Read the summary from the previous phase:
+      ```bash
+      cat /workspace/artifacts/input/create-pr.md
+      ```
+
+      This should contain the PR URL and summary of changes made by the create-pr phase.
+
+      **If the file contains only placeholder text (like "# [Title]" with "..."),
+      that means the previous phase did NOT complete successfully. Report this as a failure.**
+
+      ## Instructions
+
+      1. Read the previous phase summary to find the PR URL
+      2. Clone the repository to access gh CLI context:
+         ```bash
+         cd /workspace/repos
+         git clone {{repo_url}}
+         cd $(basename {{repo_url}} .git)
+         ```
+      3. Use `gh pr view` to verify the PR exists:
+         ```bash
+         gh pr view <PR_NUMBER_OR_URL> --json url,number,state,headRefName,files
+         ```
+      4. Write a verification report to `/workspace/artifacts/output/deliverable.md`

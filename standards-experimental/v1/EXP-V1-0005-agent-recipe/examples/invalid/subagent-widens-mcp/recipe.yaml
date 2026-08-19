@@ -1,0 +1,9 @@
+name: subagent-widens-mcp
+version: 0.1.0
+default_agent: main
+mcp:
+  servers:
+    github:
+      include:
+        - list_issues
+        - create_issue
