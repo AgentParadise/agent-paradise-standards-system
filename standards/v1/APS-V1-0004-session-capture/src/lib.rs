@@ -158,7 +158,16 @@ pub struct SessionEnvelope {
 }
 
 /// Where an envelope came from (APS-V1-0004 section 4.2.1).
+///
+/// `#[non_exhaustive]`: construct with [`Origin::new`] and the `with_*`
+/// builders rather than a struct literal. Section 8 lets this standard add
+/// OPTIONAL `origin` fields in a minor version, and a public struct whose
+/// literal construction is exhaustive turns every such addition into a
+/// source-breaking change for every downstream crate. Taking that break once,
+/// here in 2.0.0, is what keeps the next optional field additive in Rust as
+/// well as on the wire.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Origin {
     /// Human-meaningful host identity.
     pub host: String,
@@ -175,9 +184,53 @@ pub struct Origin {
     /// on the first `__` to roll up app -> tier -> host.
     ///
     /// Absent means a single deployment with no tier, which is the common
-    /// local case. Added in 1.1.0; consumers on 1.0.0 ignore it (section 8.3).
+    /// local case. Added in 2.0.0; consumers on 1.x ignore it on the wire (section 8.3).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deployment: Option<String>,
+}
+
+impl Origin {
+    /// A new origin with the two REQUIRED fields (section 4.2.1).
+    ///
+    /// `environment` is the CLASS of runtime (`local`, `vps`, `container`,
+    /// `workflow`), NOT which deployment produced the session. Use
+    /// [`Origin::with_deployment`] for that.
+    pub fn new(host: impl Into<String>, environment: impl Into<String>) -> Self {
+        Self {
+            host: host.into(),
+            environment: environment.into(),
+            deployment: None,
+        }
+    }
+
+    /// Set the OPTIONAL deployment identity, conventionally `<app>__<tier>`.
+    #[must_use]
+    pub fn with_deployment(mut self, deployment: impl Into<String>) -> Self {
+        self.deployment = Some(deployment.into());
+        self
+    }
+
+    /// The application segment of [`Origin::deployment`]: everything before the
+    /// FIRST `__`, or the whole value when it carries none.
+    ///
+    /// Returns `None` only when `deployment` is absent, so a caller can
+    /// distinguish "no deployment stamped" from "deployment with no tier".
+    #[must_use]
+    pub fn deployment_app(&self) -> Option<&str> {
+        self.deployment
+            .as_deref()
+            .map(|d| d.split_once("__").map_or(d, |(app, _)| app))
+    }
+
+    /// The tier segment of [`Origin::deployment`]: everything after the FIRST
+    /// `__`. `None` when `deployment` is absent or carries no `__`.
+    #[must_use]
+    pub fn deployment_tier(&self) -> Option<&str> {
+        self.deployment
+            .as_deref()
+            .and_then(|d| d.split_once("__"))
+            .map(|(_, tier)| tier)
+    }
 }
 
 /// Freeform, first-class-for-search metadata (APS-V1-0004 section 4.4).
@@ -498,6 +551,56 @@ fn is_valid_content_hash(hash: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::Origin;
+
+    /// The `<app>__<tier>` split is a documented convention that two
+    /// independent implementations must agree on, so its edges are pinned here
+    /// rather than left to each consumer's `split` call.
+    #[test]
+    fn deployment_split_is_unambiguous_at_every_edge() {
+        // Absent: distinguishable from "present but no tier".
+        let bare = Origin::new("host-a", "local");
+        assert_eq!(bare.deployment_app(), None);
+        assert_eq!(bare.deployment_tier(), None);
+
+        // No `__`: the whole label is the app, and it is conformant.
+        let flat = Origin::new("host-a", "local").with_deployment("laptop");
+        assert_eq!(flat.deployment_app(), Some("laptop"));
+        assert_eq!(flat.deployment_tier(), None);
+
+        // The ordinary case.
+        let normal = Origin::new("ws-1", "workflow").with_deployment("syntropic137__dev");
+        assert_eq!(normal.deployment_app(), Some("syntropic137"));
+        assert_eq!(normal.deployment_tier(), Some("dev"));
+
+        // Multiple `__`: split on the FIRST, so the tier keeps the remainder
+        // rather than being silently truncated.
+        let multi = Origin::new("ws-1", "workflow").with_deployment("app__dev__eu");
+        assert_eq!(multi.deployment_app(), Some("app"));
+        assert_eq!(multi.deployment_tier(), Some("dev__eu"));
+
+        // Leading `__`: empty app segment. Preserved, not coerced - a consumer
+        // that wants to reject it can, but the parse must be predictable.
+        let leading = Origin::new("ws-1", "workflow").with_deployment("__dev");
+        assert_eq!(leading.deployment_app(), Some(""));
+        assert_eq!(leading.deployment_tier(), Some("dev"));
+
+        // Trailing `__`: empty tier segment, likewise preserved.
+        let trailing = Origin::new("ws-1", "workflow").with_deployment("app__");
+        assert_eq!(trailing.deployment_app(), Some("app"));
+        assert_eq!(trailing.deployment_tier(), Some(""));
+    }
+
+    /// `environment` carries the runtime CLASS and `deployment` the identity.
+    /// Conflating them is the drift this field exists to correct, so the two
+    /// stay independent.
+    #[test]
+    fn environment_and_deployment_are_independent() {
+        let o = Origin::new("ws-1", "workflow").with_deployment("syntropic137__prod");
+        assert_eq!(o.environment, "workflow");
+        assert_eq!(o.deployment.as_deref(), Some("syntropic137__prod"));
+    }
+
     use super::*;
 
     fn valid_json() -> &'static str {

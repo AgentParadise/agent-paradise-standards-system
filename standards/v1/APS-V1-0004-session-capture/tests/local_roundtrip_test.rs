@@ -119,11 +119,7 @@ fn envelope_for(path: &Path, agent: &str, source_format: &str) -> (SessionEnvelo
 
     let envelope = SessionEnvelope {
         scs_version: SCS_VERSION.to_string(),
-        origin: session_capture::Origin {
-            host: "local-conformance-harness".to_string(),
-            environment: "local".to_string(),
-            deployment: None,
-        },
+        origin: session_capture::Origin::new("local-conformance-harness", "local"),
         agent: agent.to_string(),
         source_format: source_format.to_string(),
         session_id,
