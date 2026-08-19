@@ -366,6 +366,16 @@ impl SessionEnvelope {
         if !is_valid_scs_version(&self.scs_version) {
             return Err(ValidationError::MalformedScsVersion);
         }
+        // `deployment` is OPTIONAL, but PRESENT-AND-EMPTY is not a third state.
+        // The schema enforces `minLength: 1`, so without this check Rust would
+        // accept an envelope the schema rejects, and the two acceptance domains
+        // would disagree on exactly the field this version added. Omit it or
+        // give it a value.
+        if let Some(deployment) = &self.origin.deployment {
+            if deployment.trim().is_empty() {
+                return Err(ValidationError::EmptyField("origin.deployment"));
+            }
+        }
         for (name, value) in [
             ("started_at", &self.started_at),
             ("last_activity_at", &self.last_activity_at),
@@ -589,6 +599,40 @@ mod tests {
         let trailing = Origin::new("ws-1", "workflow").with_deployment("app__");
         assert_eq!(trailing.deployment_app(), Some("app"));
         assert_eq!(trailing.deployment_tier(), Some(""));
+    }
+
+    /// The schema enforces `minLength: 1` on `deployment`. Rust must agree, or
+    /// the two acceptance domains disagree on the field this version added.
+    #[test]
+    fn present_but_empty_deployment_is_rejected_like_the_schema_rejects_it() {
+        let json = r#"{
+          "scs_version": "1.0",
+          "origin": { "host": "h", "environment": "vps" },
+          "agent": "Codex",
+          "source_format": "codex-turns-v1",
+          "session_id": "s1",
+          "started_at": "2026-05-02T14:03:11Z",
+          "last_activity_at": "2026-05-02T15:20:44Z",
+          "content_hash": "sha256:00ff000000000000000000000000000000000000000000000000000000000000",
+          "raw": "opaque string transcript"
+        }"#;
+        let mut e: SessionEnvelope = serde_json::from_str(json).unwrap();
+
+        // Absent stays valid: optional means optional.
+        assert!(e.validate().is_ok());
+
+        // Present and non-empty stays valid.
+        e.origin = Origin::new("h", "vps").with_deployment("syntropic137__dev");
+        assert!(e.validate().is_ok());
+
+        // Present-and-empty is NOT a third state. The schema rejects it via
+        // minLength: 1, so Rust must too, or the acceptance domains disagree
+        // on the field this version added.
+        e.origin = Origin::new("h", "vps").with_deployment("   ");
+        assert!(matches!(
+            e.validate(),
+            Err(ValidationError::EmptyField("origin.deployment"))
+        ));
     }
 
     /// `environment` carries the runtime CLASS and `deployment` the identity.

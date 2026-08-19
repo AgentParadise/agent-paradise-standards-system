@@ -1,6 +1,6 @@
 # APS-V1-0004 - Session Capture Standard
 
-**Version**: 1.0.0
+**Version**: 2.0.0
 **Status**: Active (ratified)
 **Category**: Technical
 **Promoted from**: EXP-V1-0003 on 2026-08-06
@@ -376,6 +376,19 @@ them, but MUST NOT silently reinterpret them.
 "Absent app" and "app with no tier" are distinguishable, which is why a consumer
 should test for the presence of `deployment` rather than for a non-empty split
 result.
+
+`deployment` is either ABSENT or a non-empty string. Present-and-empty is not a
+third state: the schema enforces `minLength: 1` and conformant implementations
+MUST reject an empty value rather than treat it as absent. An implementation that
+accepts one and rejects the other has two different acceptance domains for the
+same envelope.
+
+Version note, because three numbers are in play and they are not the same thing:
+the STANDARD package is 2.0.0, the envelope WIRE contract is still `scs_version`
+"1.0" and the schema `$id` still ends `:1.0.0` (adding an OPTIONAL field is
+additive on the wire), and `registry/reconstitution.toml` carries its own
+`registry_version`. The major was spent on Rust source compatibility, not on the
+wire.
 
 Producers MUST NOT overload `environment` to carry deployment identity. Doing so
 puts values outside the documented class set into a field consumers filter on,
