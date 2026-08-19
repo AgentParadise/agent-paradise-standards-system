@@ -165,7 +165,19 @@ pub struct Origin {
     /// Environment class: `local`, `vps`, `container`, or `workflow`.
     /// Consumers MUST tolerate unknown values (section 8.3), so this stays a
     /// `String` rather than a closed enum.
+    ///
+    /// This is the CLASS of runtime, not which deployment it was. For that,
+    /// see [`Origin::deployment`].
     pub environment: String,
+    /// OPTIONAL deployment identity: which concrete deployment produced the
+    /// session. Convention is `<app>__<tier>` (double underscore), e.g.
+    /// `syntropic137__dev`, so one field carries both and a consumer MAY split
+    /// on the first `__` to roll up app -> tier -> host.
+    ///
+    /// Absent means a single deployment with no tier, which is the common
+    /// local case. Added in 1.1.0; consumers on 1.0.0 ignore it (section 8.3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deployment: Option<String>,
 }
 
 /// Freeform, first-class-for-search metadata (APS-V1-0004 section 4.4).

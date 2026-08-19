@@ -134,8 +134,15 @@ See section 6.4.
 
 ### 2.8 Origin
 
-The **origin** is where an envelope came from: its `host` and `environment`. It
-keeps a multi-source corpus attributable.
+The **origin** is where an envelope came from: its `host`, its `environment`,
+and optionally its `deployment`. It keeps a multi-source corpus attributable.
+
+`environment` and `deployment` answer different questions and are not
+interchangeable. `environment` is the CLASS of runtime (`local`, `vps`,
+`container`, `workflow`). `deployment` is WHICH concrete deployment produced the
+session (`syntropic137__dev`). A corpus needs both: without the class you cannot
+tell a laptop session from a CI one, and without the deployment every workflow
+run from every tier of every app collapses into the single value `workflow`.
 
 ### 2.9 Sanitization
 
@@ -332,10 +339,27 @@ It validates both envelope states, so it does not mark `content_hash` `required`
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `host` | string | YES | Human-meaningful host identity, for example `macbook-neural` or the VPS hostname. |
-| `environment` | enum | YES | One of `local`, `vps`, `container`, `workflow`. |
+| `environment` | enum | YES | One of `local`, `vps`, `container`, `workflow`. The class of runtime, NOT which deployment. |
+| `deployment` | string | NO | Which concrete deployment produced the session. Convention `<app>__<tier>`, e.g. `syntropic137__dev`. |
 
 New `environment` values MAY be added in a later minor version (section 8);
 consumers MUST tolerate unknown values.
+
+`deployment` is OPTIONAL and was added in 1.1.0. Producers that are a single
+deployment with no tier SHOULD omit it rather than inventing a value. Producers
+that run the same software across tiers (dev, beta, prod) SHOULD set it, because
+`environment` alone cannot separate them: every containerised workflow run
+reports `workflow` regardless of which deployment it came from.
+
+The `<app>__<tier>` convention uses a double underscore so that a consumer MAY
+split on the first `__` to render an app -> tier -> host rollup. Double
+underscore is chosen because hostnames and app names commonly contain hyphens
+and dots but not `__`. A `deployment` with no `__` is conformant and denotes an
+app with a single tier; consumers MUST NOT reject it.
+
+Producers MUST NOT overload `environment` to carry deployment identity. Doing so
+puts values outside the documented class set into a field consumers filter on,
+which silently breaks the queries in section 7.4.
 
 #### 4.2.2 Timestamps
 
@@ -861,7 +885,7 @@ for each profile it claims.
 
 A conforming store MUST support querying and filtering sessions by `metadata`
 fields, not only full-text over content. At minimum, a store MUST support
-filtering by `origin.host`, `origin.environment`, `agent`, and the well-known
+filtering by `origin.host`, `origin.environment`, `origin.deployment`, `agent`, and the well-known
 metadata fields it received (for example `repo`, `project`, `model`, `tags`).
 Representative queries a store MUST be able to answer include:
 
@@ -902,6 +926,7 @@ view:
 - New OPTIONAL header or metadata fields.
 - New `source_format` values.
 - New `origin.environment` values.
+- `origin.deployment` (added 1.1.0), and any later OPTIONAL `origin` field.
 
 A change that removes a field, renames a field, or narrows a type MUST bump the
 major version, and MUST be negotiated at the batch endpoint.
