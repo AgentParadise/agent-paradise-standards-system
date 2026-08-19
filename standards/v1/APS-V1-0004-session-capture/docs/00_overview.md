@@ -180,7 +180,11 @@ server-side parser.
 captured across Claude, Codex, and Cursor, which is what qualified it for
 ratification: consumers can now take a stable, versioned dependency on it.
 
-Within major version 1, changes are additive only (specification section 8).
+Within a major version, changes are additive only (specification section 8).
+The current major is 2. It was spent not on a wire change - the envelope stayed
+additive - but on Rust source compatibility: `Origin` became `#[non_exhaustive]`
+with constructors, so that every FUTURE optional field is additive in Rust as
+well as on the wire.
 
 ## Learn more
 
