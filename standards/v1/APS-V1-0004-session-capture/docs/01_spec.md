@@ -1008,8 +1008,12 @@ here. It comprises:
 - Source implementations for Claude, Codex, and Cursor (the pull half).
 - A reference exporter and CLI for the push half: batching, retry, auth, and
   origin-stamping.
-- The server-side sanitizer and the per-provider parsers that build the
-  searchable view (section 7.3).
+- The server-side sanitizer and the searchable-view projection (section 7.3).
+- The per-provider transcript parsers that read each provider's raw format into
+  envelopes. These are part of the PULL half and run in the client, not the
+  store: the store receives envelopes and never parses a provider transcript.
+  They are listed here because they currently live in the same repository, not
+  because they are server-side.
 - The Reconstitutor client (section 6.4): path resolution, relocation, and native
   resume handoff.
 
