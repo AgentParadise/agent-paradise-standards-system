@@ -6,7 +6,7 @@ name = "Retrospectives"
 slug = "retrospectives"
 version = "0.1.0"
 parent_id = "APS-V1-0003"
-parent_major = "0"
+parent_major = "1"
 
 [ownership]
 maintainers = ["AgentParadise"]

@@ -1,9 +1,11 @@
 //! Composed CLI for the Documentation and Context Engineering standard
 //! (APS-V1-0003, ADR-0002, issue #68).
 //!
-//! This module hosts the command implementations that back `apss run docs
-//! <command>` in composed consumer binaries and `apss-dev run documentation
-//! <command>` in the development CLI. Both routes dispatch through
+//! This module hosts the command implementations that back `apss run
+//! documentation <command>` in composed consumer binaries and
+//! `apss-dev run documentation|docs|doc <command>` in the development CLI.
+//! `documentation` is the canonical slug and the only one a composed binary
+//! resolves; `docs` and `doc` are dev-CLI aliases. Both routes dispatch through
 //! [`DocumentationCommandHandler`], which implements
 //! [`apss_core::registry::CommandHandler`].
 //!
@@ -24,7 +26,9 @@ use apss_core::registry::{CommandHandler, CommandInfo};
 
 use crate::config::{ApssConfig, ConfigError, DocsConfig};
 
-/// Handler that backs `run docs <command>` in composed binaries.
+/// Handler that backs `run documentation <command>` in composed binaries.
+/// The `docs`/`doc` spellings are accepted only by the development CLI
+/// `apss-dev`; a composed consumer binary matches on the canonical slug.
 pub struct DocumentationCommandHandler;
 
 impl DocumentationCommandHandler {
@@ -59,7 +63,7 @@ impl CommandHandler for DocumentationCommandHandler {
 /// Load docs config from a custom path (for the `--config` flag).
 ///
 /// Mirrors [`crate::config::load_config`] but works against an arbitrary path
-/// so operators can point `apss run docs validate` at a non-default
+/// so operators can point `apss run documentation validate` at a non-default
 /// `apss.yaml`. YAML format per the unified-config brief (2026-06-04); other
 /// top-level sections owned by other standards are tolerated and ignored.
 fn load_docs_config(path: &str) -> Result<ApssConfig, ConfigError> {

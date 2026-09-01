@@ -7,7 +7,7 @@ description: "Normative rules for Architecture Decision Record validation"
 
 - **Substandard:** APS-V1-0003.AD01
 - **Parent:** APS-V1-0003 (Documentation and Context Engineering)
-- **Version:** 0.1.0
+- **Version:** 1.0.0
 
 Key words: MUST, MUST NOT, SHOULD, SHALL per [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
@@ -277,7 +277,7 @@ docs:
 The standard provides a default ADR template with the required front matter fields and section headers. Tooling MAY use this template to scaffold new ADRs:
 
 ```bash
-apss run docs new adr <name>     # Scaffold a new ADR from template (future CLI)
+apss run documentation new adr <name>     # Scaffold a new ADR from template (future CLI)
 ```
 
 The template includes:

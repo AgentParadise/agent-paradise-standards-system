@@ -100,8 +100,12 @@ amount of project-wide infrastructure:
    [`02_install_contract.md`](02_install_contract.md).
 3. **Per-directory and per-repo context files.** `AGENTS.md` is the
    canonical agent context file; `CLAUDE.md` ships alongside it as a
-   symlink (Gemini reads `AGENTS.md` natively, so the standard ships
-   no `GEMINI.md`). Both are required at the docs root, at the
+   committed, byte-identical copy - never a symlink, never an
+   `@AGENTS.md` import stub (Gemini reads `AGENTS.md` natively, so the
+   standard ships no `GEMINI.md`). Byte equality is enforced
+   mechanically as a fitness function: `--fix` in the pre-commit hook,
+   `--check` in CI (see [`01_spec.md` Section 6.4](01_spec.md#64-doc03-claude-md-copy)).
+   Both are required at the docs root, at the
    repository root, and in every docs subdirectory. The root files MUST
    reference APSS, the docs root, and every active doc type's location
    so a fresh-context agent can orient itself in one read. For the

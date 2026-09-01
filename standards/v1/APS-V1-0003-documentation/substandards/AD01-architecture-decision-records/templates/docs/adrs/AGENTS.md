@@ -10,15 +10,23 @@ ADRs are the persistent memory of why this codebase is shaped the way it
 is. When you read code that feels surprising, the ADR is usually the
 answer.
 
-This file is the canonical agent-context file for this directory.
-`CLAUDE.md` in the same directory is a symlink to this file so Claude
-Code follows the symlink and reads the same content. Gemini reads
-`AGENTS.md` natively, so this directory does not ship a `GEMINI.md`.
-The APSS documentation standard scaffolds this `AGENTS.md` and its
-`CLAUDE.md` symlink on first install and never overwrites them on
-subsequent installs (see `02_install_contract.md` Section 1.5 of the
-parent standard); the content below is a starting point that a
-project is free to edit.
+`AGENTS.md` in this directory is the canonical agent-context file.
+`CLAUDE.md` beside it is a committed, byte-identical copy of
+`AGENTS.md` - a regular file, never a symlink and never an
+`@AGENTS.md` import stub - so Claude Code reads exactly the same
+content. You are reading one of those two files and their bytes are
+identical, which is why this paragraph names the canonical file rather
+than saying "this file": read as `CLAUDE.md` it would otherwise
+declare the derived copy canonical.
+
+Edit `AGENTS.md`. `CLAUDE.md` is regenerated from it, and an edit made
+to `CLAUDE.md` will be discarded (loudly) the next time the copy is
+reconciled. Gemini reads `AGENTS.md` natively, so this directory does
+not ship a `GEMINI.md`. The APSS documentation standard scaffolds
+`AGENTS.md` and its `CLAUDE.md` copy on first install and never
+overwrites them on subsequent installs (see `02_install_contract.md`
+Section 1.5 of the parent standard); the content below is a starting
+point that a project is free to edit.
 
 ## Where ADRs live
 

@@ -8,11 +8,12 @@ This is an official, active standard under APS-V1-0003 (promoted from EXP-V1-000
 
 - [`docs/00_overview.md`](docs/00_overview.md): what this standard provides and why.
 - [`docs/01_spec.md`](docs/01_spec.md): the normative spec (frontmatter, indexing, validator contract, doc type registry, backlinking, diagnostic codes).
+- [`evolution/major/1.0.0/`](evolution/major/1.0.0/): the 1.0.0 evolution pack - why `CLAUDE.md` stopped being a symlink, what breaks, and how to migrate.
 - [`docs/02_install_contract.md`](docs/02_install_contract.md): the normative install entry point, validator API, index generator API, the AGENTS.md and CLAUDE.md scaffolding contract (create-if-missing, never-overwrite), and the git pre-commit hook contract.
 
 ## Substandards (active doc types)
 
-- [`substandards/AD01-architecture-decision-records/`](substandards/AD01-architecture-decision-records/): Architecture Decision Records under `docs/adrs/`. Ships templates (README, AGENTS.md, CLAUDE.md symlink, ADR-000 template) and the ADR reference accuracy validator (`ADR01-unknown-reference`).
+- [`substandards/AD01-architecture-decision-records/`](substandards/AD01-architecture-decision-records/): Architecture Decision Records under `docs/adrs/`. Ships templates (README, AGENTS.md, CLAUDE.md byte-identical copy, ADR-000 template) and the ADR reference accuracy validator (`ADR01-unknown-reference`).
 - [`substandards/PV01-purpose-and-vision/`](substandards/PV01-purpose-and-vision/): the North Star (Mission, Vision, Position), a single document at `docs/north-star.md`. Slug `north-star`.
 - [`substandards/RT01-retrospectives/`](substandards/RT01-retrospectives/): append-only retrospectives under `docs/retrospectives/`.
 

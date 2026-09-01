@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0003-documentation"
-version = "0.1.1"
+version = "1.0.0"
 dependencies = [
  "apss-core",
  "glob",
