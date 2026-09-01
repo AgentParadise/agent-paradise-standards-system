@@ -592,27 +592,44 @@ actively destructive. `--fix` MUST, for each divergent pair:
    the link and reports the target), and separately read the recorded
    index mode (`git ls-files -s -- CLAUDE.md`). Either source alone
    misses a real case; see the Condition note in Section 6.4.
-3. **Unlink, never write through.** When `CLAUDE.md` exists, remove
-   the directory entry first (`remove_file`, which operates on the
-   link itself), then create a fresh regular file. `--fix` MUST NOT
+3. **Replace atomically; never write through.** `--fix` MUST NOT
    open `CLAUDE.md` for writing while it is still a symlink: on Unix,
    writing through a symlink truncates and overwrites its **target**,
    which here is `AGENTS.md` - the canonical file, destroyed by the
    tool meant to protect it. This is the single most important
    sentence in this section.
-4. **Write a regular file with mode `100644`.** Create the new file
-   with the bytes from step 1 and file permissions `0644` on
-   Unix-like systems.
+4. **Write a sibling temp file, then rename over the path.** Create a
+   NEW file beside `CLAUDE.md` with exclusive-create semantics
+   (`O_EXCL`, which fails rather than following an existing link),
+   write the bytes from step 1, set permissions `0644`, then
+   atomically `rename` it over `CLAUDE.md`.
+
+   Unlink-then-create is NOT sufficient and MUST NOT be used. It is
+   not failure-atomic: a failure between the unlink and a successful
+   write leaves the repository with no `CLAUDE.md` at all, having
+   destroyed the file it was asked to repair. It also opens a TOCTOU
+   window in which another process can place a symlink at the path
+   between the two operations, after which an ordinary create follows
+   it and reintroduces the exact write-through hazard step 3 forbids.
+   Rename closes both: the destination is replaced in one step, and
+   the path is never opened for writing while it may be a link.
 5. **Stage it as a `100644` blob.** `git add` alone does not
    necessarily rewrite a recorded `120000` entry into a `100644`
    entry, so `--fix` MUST force the mode - for example
    `git update-index --add --cacheinfo 100644,<blob>,<path>`, or
    `git rm --cached` followed by `git add` - rather than assuming
    `git add` reclassifies it.
-6. **Verify by re-reading the index.** After staging, re-read
-   `git ls-files -s -- CLAUDE.md` and confirm the mode is `100644`
-   and the blob hash equals the blob hash of `AGENTS.md`. Equal blob
-   hashes are git's own proof of byte-identity. If either check
+6. **Verify by re-reading the index, against the STAGED `AGENTS.md`.**
+   After staging, re-read `git ls-files -s -- AGENTS.md CLAUDE.md` and
+   confirm both modes are `100644` and the two blob hashes are equal.
+   Equal blob hashes are git's own proof of byte-identity.
+
+   The comparison MUST be staged-against-staged, not staged-against-
+   worktree. Under partial staging the two can differ: `--fix` reads
+   an unstaged on-disk `AGENTS.md`, stages those bytes as `CLAUDE.md`,
+   and the resulting COMMIT is divergent even though the working tree
+   looks repaired. A hook that reports success while committing a
+   divergent pair is worse than no hook. If either check
    fails, `--fix` MUST report `claude-md-divergent` and exit non-zero
    rather than reporting a repair it did not achieve.
 

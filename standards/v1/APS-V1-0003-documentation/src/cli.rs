@@ -26,7 +26,9 @@ use apss_core::registry::{CommandHandler, CommandInfo};
 
 use crate::config::{ApssConfig, ConfigError, DocsConfig};
 
-/// Handler that backs `run docs <command>` in composed binaries.
+/// Handler that backs `run documentation <command>` in composed binaries.
+/// The `docs`/`doc` spellings are accepted only by the development CLI
+/// `apss-dev`; a composed consumer binary matches on the canonical slug.
 pub struct DocumentationCommandHandler;
 
 impl DocumentationCommandHandler {

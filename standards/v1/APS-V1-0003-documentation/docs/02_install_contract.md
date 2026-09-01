@@ -203,12 +203,16 @@ the pair:
 |---|---|
 | Both `AGENTS.md` and `CLAUDE.md` present | Create neither. Emit `install-template-conflict` (warning) per file. Do NOT reconcile divergence; that is `claude-md --fix`'s job, not the installer's. |
 | `AGENTS.md` present, `CLAUDE.md` absent | Create `CLAUDE.md` as a byte-identical copy of the **on-disk adjacent `AGENTS.md`**, NEVER from the shipped `CLAUDE.md` template. Emit `install-template-conflict` for the skipped `AGENTS.md` only. |
-| `AGENTS.md` absent, `CLAUDE.md` present | Scaffold `AGENTS.md` from the shipped template. Do NOT touch the existing `CLAUDE.md` - never-overwrite applies. The pair is then divergent and the validator will say so; the installer MUST print a line naming `apss run documentation claude-md --fix` as the repair. |
+| `AGENTS.md` absent, `CLAUDE.md` present | Scaffold `AGENTS.md` from the shipped template. Do NOT touch the existing `CLAUDE.md` - never-overwrite applies. The pair MAY then be divergent - the existing `CLAUDE.md` could already equal the shipped template and be mode `100644` - so the validator, not the installer, decides; the installer MUST print a line naming `apss run documentation claude-md --fix` as the repair. |
 | Both absent | Scaffold `AGENTS.md` from the shipped template, then create `CLAUDE.md` as a byte-identical copy of the `AGENTS.md` it just wrote. Copying the file it wrote, rather than the shipped `CLAUDE.md` template, keeps the two identical by construction even if the two shipped templates ever drift apart. |
 
 In every row where the installer creates `CLAUDE.md`, the source is
 the adjacent `AGENTS.md` **on disk**, never the shipped template. That
-single rule is what makes the four states collapse to one invariant.
+single rule is what keeps the pair identical by construction wherever
+the installer is the one creating it. It does NOT make all four states
+convergent: the installer deliberately leaves an existing pair
+unreconciled, so divergence is the validator's to report and
+`claude-md --fix`'s to repair.
 
 **Never overwrite.** When the target `AGENTS.md` already exists, the
 installer MUST NOT overwrite or modify it. Full stop. `--force` does
