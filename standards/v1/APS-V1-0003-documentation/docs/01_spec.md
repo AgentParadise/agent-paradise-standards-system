@@ -349,10 +349,14 @@ Diagnostic: `readme-missing` (error).
 
 Directories under the docs root MUST contain `AGENTS.md` and an
 adjacent `CLAUDE.md`. `AGENTS.md` is the canonical agent context file
-and carries the orientation prose; `CLAUDE.md` is a symlink to the
-adjacent `AGENTS.md` (on filesystems that do not support symlinks, a
-verbatim copy of the `AGENTS.md` content). The standard ships no
-`GEMINI.md`; Gemini reads `AGENTS.md` natively.
+and carries the orientation prose; `CLAUDE.md` MUST be a committed,
+regular file whose bytes are identical to the adjacent `AGENTS.md`, on
+every platform. It MUST NOT be a symlink and MUST NOT be an
+`@AGENTS.md` import stub. Section 6.4 is normative on the copy rule,
+carries the reasoning, and defines the divergence diagnostic; it
+applies to every `AGENTS.md`/`CLAUDE.md` pair this standard governs,
+including these docs-root pairs. The standard ships no `GEMINI.md`;
+Gemini reads `AGENTS.md` natively.
 
 A minimal `AGENTS.md` for a docs subdirectory:
 
@@ -365,20 +369,27 @@ description: "AI context for <directory name>"
 See [README.md](README.md) for the index and overview of this directory.
 ```
 
-The validator MUST check existence only. An `AGENTS.md` that already
-exists with project-specific content passes validation as long as its
-frontmatter is well-formed per Section 4; the validator MUST NOT
-compare on-disk content against any shipped template. The installer's
-template-conflict warning (see `02_install_contract.md` Section 1.5)
-is the surface for content drift.
+For `AGENTS.md`, the validator MUST check existence only. An
+`AGENTS.md` that already exists with project-specific content passes
+validation as long as its frontmatter is well-formed per Section 4;
+the validator MUST NOT compare on-disk content against any shipped
+template. The installer's template-conflict warning (see
+`02_install_contract.md` Section 1.5) is the surface for drift between
+a project's file and the shipped template.
+
+That rule is about template drift and does not exempt `CLAUDE.md` from
+Section 6.4. The standard does not own what `AGENTS.md` says, but it
+does own the requirement that `CLAUDE.md` says exactly the same thing,
+because that requirement is mechanical and has one correct
+resolution.
 
 Substandards MAY ship a templated `AGENTS.md` for their own docs-area
 directories (for example ADR01 ships `docs/adrs/AGENTS.md` with ADR
-context and a `CLAUDE.md` symlink); the install contract's
+context and a byte-identical `CLAUDE.md` copy); the install contract's
 create-if-missing, never-overwrite rule applies in full.
 
 Diagnostics: `agents-md-missing` (warning), `claude-md-missing`
-(warning).
+(warning), `claude-md-divergent` (error, Section 6.4).
 
 ---
 
@@ -420,7 +431,158 @@ Diagnostic: `root-self-reference-missing` (warning). The validator MUST check fo
 - The docs root path (matching `docs.root_context.docs_reference_pattern`).
 - Each active doc type's location (`docs.adr.directory`, `docs.north-star.location`, ...).
 
-### 6.4 DOC03-skills-format
+### 6.4 DOC03-claude-md-copy
+
+`CLAUDE.md` MUST be a committed, regular file whose bytes are identical
+to the `AGENTS.md` in the same directory. This holds at the repository
+root, at the docs root, and in every directory this standard governs.
+It holds on every platform. There is no OS-conditional behaviour and no
+install-time branch.
+
+`AGENTS.md` is canonical. `CLAUDE.md` is a derived artefact of it.
+
+Two shapes are explicitly non-conformant:
+
+- **A symlink.** `CLAUDE.md` MUST NOT be a symbolic link to
+  `AGENTS.md`. In git terms, it MUST commit as mode `100644`, never as
+  mode `120000`.
+- **An import stub.** `CLAUDE.md` MUST NOT be a one-line
+  `@AGENTS.md` import.
+
+Diagnostic: `claude-md-divergent` (**error**).
+
+Condition: an `AGENTS.md` and an adjacent `CLAUDE.md` both exist and
+their bytes differ, or `CLAUDE.md` is not a regular file.
+
+The severity is **error**, in deliberate contrast to
+`root-claude-md-missing` (Section 6.1, a warning). The downgrade in
+6.1 exists because the standard does not own the root context file's
+*content* and the installer is not allowed to scaffold it, so blocking
+on absence would contradict the install contract. Divergence is a
+different kind of fact. The standard does own it, it is entirely
+mechanical, and it has exactly one correct resolution: copy
+`AGENTS.md` over `CLAUDE.md`. A defect that a tool can repair without
+consulting the operator is a defect the build should refuse to ship.
+
+#### 6.4.1 Why a copy and not a symlink
+
+The obvious objection is that this standard previously required a
+symlink with a Windows carve-out: "on Windows the installer MUST
+instead copy the link target's contents." That rule looks correct and
+is not, because it fixes the wrong moment.
+
+**The hazard is at clone time, not at install time.** The installer
+runs on the machine of whoever adopts the standard. If that machine is
+macOS or Linux, the installer takes the symlink branch and a symlink is
+**committed** to the repository. From that point on, every contributor
+who clones the repository inherits the committed symlink, and the
+installer never runs for them, so its Windows branch never fires. The
+old rule protected the person installing on Windows and did nothing at
+all for everyone who inherited the artefact they produced.
+
+**The concrete failure.** Git for Windows defaults to
+`core.symlinks=false`; turning it on requires Developer Mode or an
+Administrator shell, which is not the default state of a corporate
+laptop. With `core.symlinks=false`, git materialises a committed
+symlink as a **plain text file whose content is the target path**. So
+`CLAUDE.md` checks out as a 9-byte file containing the literal string
+`AGENTS.md`. Claude Code then loads those 9 bytes as the entire project
+context. Nothing errors. Nothing warns. The repository looks correctly
+configured, the file is present, validation for existence passes - and
+the agent is running with no project instructions at all.
+
+The failure is silent, it is invisible to the person who caused it, and
+it degrades agent output rather than breaking a build. That is the
+worst possible shape for a defect.
+
+Therefore the mechanism MUST be a property of **what is committed**,
+not a property of **who ran the installer**. A byte-identical regular
+file is correct on every filesystem, under every git configuration,
+for every contributor, with no branch anywhere.
+
+#### 6.4.2 Why not the `@AGENTS.md` import stub
+
+A `CLAUDE.md` containing the single line `@AGENTS.md` is portable, and
+it is a real alternative that a future reader will be tempted to
+"simplify" to. It is rejected for two reasons.
+
+**It does not satisfy this section.** The requirement is that
+`CLAUDE.md` and `AGENTS.md` are byte-identical. A stub is a different,
+much smaller file. It approximates the intent by indirection rather
+than meeting it, and it reintroduces a class of failure the copy rule
+closes: the stub is correct only for as long as the consuming harness
+keeps supporting that import syntax, whereas a copy depends on nothing
+but the file existing.
+
+**It costs a nesting level.** Claude Code resolves imported context
+files to a bounded depth of 5. A stub spends one of those hops just
+reaching `AGENTS.md`, so every import chain that starts in `AGENTS.md`
+is one level shallower than it would otherwise be. This was measured,
+not assumed: two identical file trees, each a chain of context files
+carrying a depth marker at each level, queried with `--tools ""` so
+that only context actually loaded into the model could answer.
+
+| Bridge form | `CLAUDE.md` content | Depth markers recovered | Levels below `AGENTS.md` |
+|---|---|---|---|
+| Import stub | `@AGENTS.md` | 0, 1, 2, 3 | 3 |
+| Copy (or symlink) | identical to `AGENTS.md` | 0, 1, 2, 3, 4 | 4 |
+
+The copy reaches one level deeper than the stub with the same budget.
+For a standard whose whole purpose is getting context in front of an
+agent, giving up a quarter of the available depth to a bridge file is
+not a simplification.
+
+#### 6.4.3 Enforcement (fitness function)
+
+Equality is enforced mechanically by one validator with two modes.
+Both compare `CLAUDE.md` to the adjacent `AGENTS.md` byte for byte;
+they differ only in what they do about a difference.
+
+```bash
+apss run docs claude-md --fix      # regenerate CLAUDE.md from AGENTS.md and stage it
+apss run docs claude-md --check    # exit non-zero on divergence; change nothing
+```
+
+**`--fix`** runs from the pre-commit hook (Section 9.4). When
+`CLAUDE.md` is not byte-identical to `AGENTS.md`, it overwrites
+`CLAUDE.md` with the contents of `AGENTS.md` and `git add`s the result
+so the commit is self-consistent. Because `AGENTS.md` is canonical,
+`AGENTS.md` always wins. The resolution is deterministic. It is never a
+merge, never a three-way reconcile, and never a guess about which side
+is newer.
+
+**`--fix` MUST report what it discarded.** The realistic way to hit
+divergence is that someone edited `CLAUDE.md` when they meant to edit
+`AGENTS.md`. Overwriting that edit is the correct resolution, but doing
+it silently destroys work the author believes they saved. So when
+`--fix` discards content, it MUST print, prominently and on every run
+that discards anything:
+
+1. The path of the `CLAUDE.md` it overwrote.
+2. The full diff of what was discarded.
+3. An explicit statement that `AGENTS.md` is the canonical file and is
+   the file the author meant to edit, named by path.
+
+It MUST NOT reduce this to a summary line, and it MUST NOT be
+suppressible by a quiet flag.
+
+**`--check`** runs in QA and CI. It reports `claude-md-divergent`
+(error) for each divergent pair and exits non-zero. It MUST NOT modify
+the working tree. This makes the equality a fitness function: a static,
+whole-repository property enforced mechanically on every build rather
+than a convention that holds while people remember it.
+
+**The hook is convenience; CI is the guarantee.** A git hook does not
+exist in a fresh clone until an install step runs, it is skipped by
+`git commit --no-verify`, and it is not present at all in a CI
+checkout. A contributor can therefore push a divergent `CLAUDE.md`
+through a hook that never executed. The `--check` run in CI is what
+actually holds the invariant; `--fix` in the hook exists so the
+invariant is repaired before it becomes a review comment. An adopter
+who installs the hook but does not wire `--check` into CI has NOT
+satisfied this section.
+
+### 6.5 DOC03-skills-format
 
 `CLAUDE.md`, `AGENTS.md`, and any `agents/skills/*/README.md` files SHOULD follow the Claude Code skills format documented at <https://code.claude.com/docs/en/skills.md>:
 
@@ -648,6 +810,7 @@ The validator is the source of truth. The hook and the standalone CLI MUST call 
 **Exit behavior**:
 
 - `apss run docs validate` MUST exit `0` only when `summary.errors == 0`.
+- `apss run docs claude-md --check` MUST exit `0` only when every governed `CLAUDE.md` is byte-identical to its adjacent `AGENTS.md`, and MUST NOT modify the working tree. `--check` and `--fix` MUST share the single comparison implementation so the two modes can never disagree about what counts as divergent.
 - The hook MUST refuse the commit when `summary.errors > 0`. Warnings MUST be printed but MUST NOT block the commit.
 - An internal failure (panic, IO error, regex compile failure on a built in pattern) MUST be reported as the synthetic diagnostic `validator-internal-error` with severity `error` and MUST block the commit. The validator MUST NOT swallow internal errors silently.
 
@@ -677,9 +840,14 @@ The installed hook is a small shell wrapper that calls into `apss run docs hook 
 
 1. Resolve the repository root and the staged file list (`git diff --cached --name-only --diff-filter=ACMR`).
 2. Refresh indexes for any docs directory whose contents changed in the staged set, by calling the index generator in `--write` mode. The hook MUST re-stage rewritten `README.md` files (`git add`) so the commit is self consistent.
-3. Run the validator with `scope = Changed { staged_paths }`.
-4. Exit non zero (and print every error diagnostic) when the validator reports errors. The commit is blocked.
-5. Print warnings but allow the commit.
+3. Regenerate any `CLAUDE.md` that has diverged from its adjacent `AGENTS.md`, by calling `apss run docs claude-md --fix` (Section 6.4.3). The hook MUST re-stage each rewritten `CLAUDE.md` (`git add`) and MUST print the discarded diff per Section 6.4.3.
+4. Run the validator with `scope = Changed { staged_paths }`.
+5. Exit non zero (and print every error diagnostic) when the validator reports errors. The commit is blocked.
+6. Print warnings but allow the commit.
+
+The hook is not the guarantee for Section 6.4: a fresh clone has no
+hook until an install step runs, and `--no-verify` bypasses it. The
+`--check` run in CI is the guarantee (Section 6.4.3).
 
 **Inputs/outputs**:
 
@@ -721,6 +889,7 @@ Existing numeric or composite codes (for example, `ADR01-001`) MAY be retained a
 | `unknown-config-field` | error | Config | A known section under `docs` contains an unknown scalar field. |
 | `readme-missing` | error | DOC02 | Directory missing `README.md`. |
 | `claude-md-missing` | warning | DOC02 | Directory missing `CLAUDE.md`. |
+| `claude-md-divergent` | error | DOC03 | `CLAUDE.md` is not a byte-identical regular-file copy of the adjacent `AGENTS.md` (it differs, is a symlink, or is an `@AGENTS.md` import stub). Mechanical and auto-repairable by `apss run docs claude-md --fix`, so unlike the DOC03 missing-file codes it is an error rather than a warning; see Section 6.4. |
 | `agents-md-missing` | warning | DOC02 | Directory missing `AGENTS.md`. |
 | `index-missing` | warning | DOC02 | `README.md` missing `## Index` section. |
 | `index-stale` | warning | DOC02 | `## Index` content does not match the generator. |
@@ -754,6 +923,8 @@ apss run docs uninstall [<repo-root>]               # Planned (not yet implement
 apss run docs validate [<path>] [--json]            # Run validator (CI-friendly)
 apss run docs index [<path>] [--write]              # Run index generator
 apss run docs hook --staged                         # Planned (not yet implemented): hook entry point (used by pre-commit)
+apss run docs claude-md --check                      # Planned (not yet implemented): fail on any CLAUDE.md that diverges from its adjacent AGENTS.md (CI)
+apss run docs claude-md --fix                        # Planned (not yet implemented): regenerate divergent CLAUDE.md files from AGENTS.md and stage them (hook)
 ```
 
 Every command MUST emit the same diagnostics shape as the validator (Section 9.2).
@@ -766,6 +937,7 @@ Every command MUST emit the same diagnostics shape as the validator (Section 9.2
 - [ ] Every docs directory has `README.md` with a valid `## Index` section.
 - [ ] `.md` files under the docs root have closed frontmatter with the configured fields.
 - [ ] `CLAUDE.md` and `AGENTS.md` present per docs directory.
+- [ ] Every `CLAUDE.md` is a regular file (git mode `100644`, never `120000`) byte-identical to its adjacent `AGENTS.md`; `apss run docs claude-md --check` passes and is wired into CI.
 - [ ] Root `CLAUDE.md` and `AGENTS.md` exist and reference APSS, the docs root, and every active doc type's location.
 - [ ] For every active doc type, the substandard's own checks pass.
 - [ ] No code file references a missing, deprecated, or superseded doc identifier.

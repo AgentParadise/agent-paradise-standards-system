@@ -90,4 +90,4 @@ description: "AI context for Architecture Decision Records"
 See [README.md](README.md) for full index and overview of this directory.
 ```
 
-`CLAUDE.md` in the same directory is a symlink to `AGENTS.md` so Claude Code follows the symlink and reads the same content.
+`CLAUDE.md` in the same directory is a committed, byte-identical copy of `AGENTS.md` (a regular file, not a symlink and not an `@AGENTS.md` import stub) so Claude Code reads the same content on every platform. Edit `AGENTS.md`; `CLAUDE.md` is regenerated from it.

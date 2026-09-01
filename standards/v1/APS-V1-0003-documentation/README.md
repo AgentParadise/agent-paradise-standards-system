@@ -12,7 +12,7 @@ This is an official, active standard under APS-V1-0003 (promoted from EXP-V1-000
 
 ## Substandards (active doc types)
 
-- [`substandards/AD01-architecture-decision-records/`](substandards/AD01-architecture-decision-records/): Architecture Decision Records under `docs/adrs/`. Ships templates (README, AGENTS.md, CLAUDE.md symlink, ADR-000 template) and the ADR reference accuracy validator (`ADR01-unknown-reference`).
+- [`substandards/AD01-architecture-decision-records/`](substandards/AD01-architecture-decision-records/): Architecture Decision Records under `docs/adrs/`. Ships templates (README, AGENTS.md, CLAUDE.md byte-identical copy, ADR-000 template) and the ADR reference accuracy validator (`ADR01-unknown-reference`).
 - [`substandards/PV01-purpose-and-vision/`](substandards/PV01-purpose-and-vision/): the North Star (Mission, Vision, Position), a single document at `docs/north-star.md`. Slug `north-star`.
 - [`substandards/RT01-retrospectives/`](substandards/RT01-retrospectives/): append-only retrospectives under `docs/retrospectives/`.
 

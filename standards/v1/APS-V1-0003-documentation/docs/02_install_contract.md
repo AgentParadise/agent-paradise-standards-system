@@ -99,14 +99,18 @@ defaults receives `docs/adrs/README.md` and so on. The "verbatim"
 clause in earlier drafts applied to **file content**, not to the
 path; this section is the authoritative path rule.
 
-`AGENTS.md` is the canonical agent context file. `CLAUDE.md` ships as
-a symlink to the adjacent `AGENTS.md` (Claude Code follows the symlink
-and reads the AGENTS.md content). Gemini reads `AGENTS.md` natively, so
-this standard ships NO `GEMINI.md`; agents that want a separate Gemini
-context file are out of scope and MUST NOT be added by the installer.
-Symlinks in the source tree (the `CLAUDE.md` symlink to `AGENTS.md`)
-are preserved on filesystems that support symlinks; on Windows the
-installer MUST instead copy the link target's contents.
+`AGENTS.md` is the canonical agent context file. `CLAUDE.md` ships as a
+regular file whose bytes are identical to the adjacent `AGENTS.md`.
+Gemini reads `AGENTS.md` natively, so this standard ships NO
+`GEMINI.md`; agents that want a separate Gemini context file are out of
+scope and MUST NOT be added by the installer.
+
+The standard's templates MUST NOT contain symlinks, and the installer
+MUST NOT create one, on any platform. There is no OS-conditional
+branch: the behaviour is identical on Linux, macOS, and Windows. The
+reason is that the hazard is at clone time, not install time - see
+parent spec Section 6.4. A `CLAUDE.md` that is an `@AGENTS.md` import
+stub is likewise non-conformant.
 
 The shipped inventory at the time of this contract:
 
@@ -119,7 +123,7 @@ The shipped inventory at the time of this contract:
   - `AGENTS.md` - canonical agent-context file for the docs root,
     pointing at the README and naming the active doc-type
     directories.
-  - `CLAUDE.md` (symlink to `AGENTS.md`).
+  - `CLAUDE.md` (byte-identical copy of `AGENTS.md`).
 
   These three templates exist so a fresh adopter does not trip
   `readme-missing` (error) at the docs root on the first commit
@@ -135,8 +139,8 @@ The shipped inventory at the time of this contract:
   - `AGENTS.md` - the canonical agent-context block for the ADR
     directory: where ADRs live, when to use one, the parent-level
     backlink rule, and references back to the ADR01 substandard spec.
-  - `CLAUDE.md` (symlink to `AGENTS.md`) - so Claude Code follows the
-    symlink and reads the AGENTS.md content.
+  - `CLAUDE.md` (byte-identical copy of `AGENTS.md`) - so Claude Code
+    reads the AGENTS.md content on every platform.
   - `ADR-000-template.md.example` - Nygard-style template with the
     required frontmatter (`name`, `description`, `status`) and the
     `## Context`, `## Decision`, `## Consequences` sections. The
@@ -173,7 +177,7 @@ This is a normative contract rule, broken out of Section 1.4 because
 the operator surface depends on it being unambiguous.
 
 **Scope.** This rule covers every `AGENTS.md` and every adjacent
-`CLAUDE.md` symlink under the docs root that the standard's templates
+`CLAUDE.md` copy under the docs root that the standard's templates
 target. The shipped templates today are the docs-area files at
 `docs/adrs/AGENTS.md` and `docs/adrs/CLAUDE.md` (ADR01 substandard);
 future substandards add to this list through Section 1.4.
@@ -184,17 +188,21 @@ from the substandard's template, including the explanatory context the
 template carries (for ADR01: what ADRs are, where they live, when to
 write one, the backlink rule, and a reference back to the ADR01
 substandard spec). The installer MUST also create the adjacent
-`CLAUDE.md` as a symlink to the just-created `AGENTS.md` (on Windows,
-copy the AGENTS.md content into `CLAUDE.md` instead). This is a real
-install step, not a validation warning.
+`CLAUDE.md` by copying the just-created `AGENTS.md` byte for byte, as a
+regular file, on every platform. This is a real install step, not a
+validation warning.
 
 **Never overwrite.** When the target `AGENTS.md` already exists, the
 installer MUST NOT overwrite or modify it. Full stop. `--force` does
 not change this rule. The existing file MAY have different content
 from the standard template; that is the project's business and is
 not the installer's call to reconcile. The same rule applies to an
-existing `CLAUDE.md`, whether it is a regular file or a symlink with
-a different target. The installer MUST emit
+existing `CLAUDE.md`, whatever form it takes on disk. Divergence
+between an existing `AGENTS.md` and an existing `CLAUDE.md` is not the
+installer's problem either: it is reported by the validator as
+`claude-md-divergent` (error, parent spec Section 6.4) and repaired by
+`apss run docs claude-md --fix`, never by the installer overwriting a
+file it did not create. The installer MUST emit
 `install-template-conflict` (warning) for each existing file it
 skipped, naming both the template and the target so the operator can
 diff them manually.

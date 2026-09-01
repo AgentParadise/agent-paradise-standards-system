@@ -115,8 +115,11 @@ creates the following files (create-if-missing, never overwrite):
   parent-level backlink rule, and a reference back to this substandard
   spec. `AGENTS.md` is the canonical file; Gemini reads it natively, so
   this substandard ships no `GEMINI.md`.
-- `docs/adrs/CLAUDE.md` - a symlink to the adjacent `AGENTS.md`, so
-  Claude Code follows the symlink and reads the same content.
+- `docs/adrs/CLAUDE.md` - a regular file whose bytes are identical to
+  the adjacent `AGENTS.md`, so Claude Code reads the same content on
+  every platform. It is never a symlink and never an `@AGENTS.md`
+  import stub; see parent spec Section 6.4 for why, and for the
+  `--fix`/`--check` enforcement that keeps the two files equal.
 - `docs/adrs/ADR-000-template.md.example` - a Nygard-style ADR template with the
   required frontmatter and `## Context`, `## Decision`, `## Consequences`
   sections.

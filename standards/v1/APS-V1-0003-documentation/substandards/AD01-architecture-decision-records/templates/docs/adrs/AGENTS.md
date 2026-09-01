@@ -11,11 +11,13 @@ is. When you read code that feels surprising, the ADR is usually the
 answer.
 
 This file is the canonical agent-context file for this directory.
-`CLAUDE.md` in the same directory is a symlink to this file so Claude
-Code follows the symlink and reads the same content. Gemini reads
-`AGENTS.md` natively, so this directory does not ship a `GEMINI.md`.
-The APSS documentation standard scaffolds this `AGENTS.md` and its
-`CLAUDE.md` symlink on first install and never overwrites them on
+`CLAUDE.md` in the same directory is a committed, byte-identical copy
+of this file - a regular file, never a symlink and never an
+`@AGENTS.md` import stub - so Claude Code reads exactly this content.
+Gemini reads `AGENTS.md` natively, so this directory does not ship a
+`GEMINI.md`. Edit `AGENTS.md`; `CLAUDE.md` is regenerated from it. The
+APSS documentation standard scaffolds this `AGENTS.md` and its
+`CLAUDE.md` copy on first install and never overwrites them on
 subsequent installs (see `02_install_contract.md` Section 1.5 of the
 parent standard); the content below is a starting point that a
 project is free to edit.

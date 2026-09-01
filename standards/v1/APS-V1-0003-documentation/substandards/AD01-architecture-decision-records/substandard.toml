@@ -4,7 +4,7 @@ schema = "aps.substandard/v1"
 id = "APS-V1-0003.AD01"
 name = "Architecture Decision Records"
 slug = "adr"
-version = "0.1.0"
+version = "0.2.0"
 parent_id = "APS-V1-0003"
 parent_major = "0"
 

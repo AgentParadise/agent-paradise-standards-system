@@ -4,7 +4,7 @@ schema = "aps.standard/v1"
 id = "APS-V1-0003"
 name = "Documentation and Context Engineering"
 slug = "documentation"
-version = "0.1.1"
+version = "0.2.0"
 category = "governance"
 status = "active"
 
