@@ -23,8 +23,8 @@ The contract has four parts:
 ## 1. Install Entry Point
 
 ```
-apss run docs install   [<repo-root>] [--force] [--no-config]
-apss run docs uninstall [<repo-root>]
+apss run documentation install   [<repo-root>] [--force] [--no-config]
+apss run documentation uninstall [<repo-root>]
 ```
 
 ### 1.1 `install` semantics
@@ -39,7 +39,7 @@ Steps, in order:
    - The hook MUST insert a block delimited by the sentinels:
      ```
      # >>> apss-docs-hook >>>
-     apss run docs hook --staged || exit $?
+     apss run documentation hook --staged || exit $?
      # <<< apss-docs-hook <<<
      ```
    - The block MUST be placed at the end of any existing `#!` shebang block and before any user-defined hook body, so that a user hook that exits early does not skip APSS validation.
@@ -192,6 +192,24 @@ substandard spec). The installer MUST also create the adjacent
 regular file, on every platform. This is a real install step, not a
 validation warning.
 
+**The four presence states (normative).** The generic template rule in
+Section 1.1 step 4 ("create the destination only when missing") is not
+sufficient for this pair, because a `CLAUDE.md` created from the
+*shipped* template beside a project-customised `AGENTS.md` is divergent
+the instant it is written. The installer MUST therefore special-case
+the pair:
+
+| On disk | Installer action |
+|---|---|
+| Both `AGENTS.md` and `CLAUDE.md` present | Create neither. Emit `install-template-conflict` (warning) per file. Do NOT reconcile divergence; that is `claude-md --fix`'s job, not the installer's. |
+| `AGENTS.md` present, `CLAUDE.md` absent | Create `CLAUDE.md` as a byte-identical copy of the **on-disk adjacent `AGENTS.md`**, NEVER from the shipped `CLAUDE.md` template. Emit `install-template-conflict` for the skipped `AGENTS.md` only. |
+| `AGENTS.md` absent, `CLAUDE.md` present | Scaffold `AGENTS.md` from the shipped template. Do NOT touch the existing `CLAUDE.md` - never-overwrite applies. The pair is then divergent and the validator will say so; the installer MUST print a line naming `apss run documentation claude-md --fix` as the repair. |
+| Both absent | Scaffold `AGENTS.md` from the shipped template, then create `CLAUDE.md` as a byte-identical copy of the `AGENTS.md` it just wrote. Copying the file it wrote, rather than the shipped `CLAUDE.md` template, keeps the two identical by construction even if the two shipped templates ever drift apart. |
+
+In every row where the installer creates `CLAUDE.md`, the source is
+the adjacent `AGENTS.md` **on disk**, never the shipped template. That
+single rule is what makes the four states collapse to one invariant.
+
 **Never overwrite.** When the target `AGENTS.md` already exists, the
 installer MUST NOT overwrite or modify it. Full stop. `--force` does
 not change this rule. The existing file MAY have different content
@@ -201,20 +219,36 @@ existing `CLAUDE.md`, whatever form it takes on disk. Divergence
 between an existing `AGENTS.md` and an existing `CLAUDE.md` is not the
 installer's problem either: it is reported by the validator as
 `claude-md-divergent` (error, parent spec Section 6.4) and repaired by
-`apss run docs claude-md --fix`, never by the installer overwriting a
+`apss run documentation claude-md --fix`, never by the installer overwriting a
 file it did not create. The installer MUST emit
 `install-template-conflict` (warning) for each existing file it
 skipped, naming both the template and the target so the operator can
 diff them manually.
 
-**Validation checks existence only.** The validator (Section 2.5)
-checks that `AGENTS.md` and `CLAUDE.md` are present at the configured
-locations. The validator MUST NOT compare an existing file's content
-against the shipped template. An `AGENTS.md` that differs from the
-template passes validation as long as it exists and carries valid
-frontmatter per the parent indexing rules (Section 4 of `01_spec.md`).
-Content drift between the template and an existing project file is the
-project's business, not the validator's.
+**Two different comparisons, and only one of them is forbidden.** The
+original "existence only" wording predates the copy rule and, read
+literally today, would forbid the equality check that parent spec
+Section 6.4 mandates. It does not. The two comparisons are distinct
+and are governed separately:
+
+1. **File vs. shipped template - FORBIDDEN.** The validator MUST NOT
+   compare any on-disk `AGENTS.md` or `CLAUDE.md` against the content
+   this standard ships in `templates/`. An `AGENTS.md` that has been
+   rewritten entirely by the project passes validation as long as it
+   exists and carries valid frontmatter per the parent indexing rules
+   (Section 4 of `01_spec.md`). Drift from the template is the
+   project's business. The installer's `install-template-conflict`
+   warning is the only surface for it.
+2. **`CLAUDE.md` vs. its adjacent `AGENTS.md` - REQUIRED.** Whenever
+   both files exist, the validator MUST compare them byte for byte and
+   MUST emit `claude-md-divergent` (error) when they differ or when
+   `CLAUDE.md` is not a regular file committed as mode `100644`. This
+   is not a template comparison: it involves no shipped content at
+   all, only two files the project already owns, and it has exactly
+   one correct repair. Parent spec Section 6.4 is normative.
+
+For `AGENTS.md` alone, existence and well-formed frontmatter remain
+the whole of the check.
 
 **Root context files (DOC03) stay project-specific.** The repository
 root `AGENTS.md` and root `CLAUDE.md` carry project-specific
@@ -248,7 +282,7 @@ enum ValidationScope {
 }
 ```
 
-- `Full`: walk the entire docs root and every active doc type directory. Used by `apss run docs validate` and by CI.
+- `Full`: walk the entire docs root and every active doc type directory. Used by `apss run documentation validate` and by CI.
 - `Changed`: only inspect docs touched by `staged_paths`. The hook MUST use this scope. The validator MUST still load enough surrounding state (for example, the doc type directories themselves) to detect dead backlinks introduced by the change set.
 
 When `scope = Changed` and the staged set contains an `apss.yaml` modification, the validator MUST run the `Full` set of checks; config changes can invalidate the entire tree.
@@ -281,7 +315,7 @@ The `machine_readable` field MUST contain the same content as `diagnostics`/`sum
 
 ### 2.4 Exit behavior
 
-- `apss run docs validate` exits `0` iff `summary.errors == 0`. Warnings do not cause a non-zero exit.
+- `apss run documentation validate` exits `0` iff `summary.errors == 0`. Warnings do not cause a non-zero exit.
 - A panic, uncaught IO error, or regex compile failure on a built-in pattern MUST be reported as `validator-internal-error` (error severity) and MUST result in a non-zero exit. The validator MUST NOT exit `0` after eating an internal error.
 
 ### 2.5 What "valid structure" means
@@ -294,16 +328,31 @@ The validator MUST enforce, for each active doc type:
 
 For every doc type, the validator MUST also enforce the parent rules: frontmatter present and well formed, README index present and up to date, per directory context files present.
 
-**Existence-only check for `AGENTS.md` and `CLAUDE.md`.** Per Section
-1.5, the validator MUST verify that the substandard's docs-area
-`AGENTS.md` and the adjacent `CLAUDE.md` exist at the configured
-locations. The validator MUST NOT compare the on-disk file's content
-against the substandard's shipped template. A project that has
-authored its own `AGENTS.md` content for a docs subdirectory passes
-validation as long as the file is present and carries valid
-frontmatter per Section 4 of `01_spec.md`. The installer's
-`install-template-conflict` warning is the surface for content
-divergence; the validator stays silent on it.
+**Context files: no template comparison, but a required adjacent-file
+comparison.** Per Section 1.5, the validator MUST verify that the
+substandard's docs-area `AGENTS.md` and the adjacent `CLAUDE.md` exist
+at the configured locations, and:
+
+- The validator MUST NOT compare either file's content against the
+  substandard's **shipped template**. A project that has authored its
+  own `AGENTS.md` for a docs subdirectory passes as long as the file is
+  present and carries valid frontmatter per Section 4 of `01_spec.md`.
+  The installer's `install-template-conflict` warning is the only
+  surface for template drift; the validator stays silent on it.
+- The validator MUST compare `CLAUDE.md` against **its adjacent
+  `AGENTS.md`** byte for byte whenever both exist, and MUST emit
+  `claude-md-divergent` (error) on any mismatch, on a non-regular
+  file, or on a git index mode other than `100644`. See parent spec
+  Section 6.4 for the condition, the severity rationale, and the
+  repair algorithm.
+
+The distinction is the whole point: the standard does not own what
+`AGENTS.md` says, but it does own the requirement that `CLAUDE.md`
+says exactly the same thing.
+
+> **Not yet implemented.** As with the rest of this document,
+> `claude-md-divergent` is a forward specification. No shipped code
+> emits it today.
 
 ---
 
@@ -342,8 +391,8 @@ When a docs directory has no indexable `.md` siblings, the generator MUST still 
 
 ### 3.5 Exit behavior
 
-- `apss run docs index` (dry run) exits `0` regardless of whether content would change, as long as no file read fails.
-- `apss run docs index --write` exits `0` when every write succeeds, even if no file actually changed. A write failure MUST emit `index-write-failed` and exit non zero.
+- `apss run documentation index` (dry run) exits `0` regardless of whether content would change, as long as no file read fails.
+- `apss run documentation index --write` exits `0` when every write succeeds, even if no file actually changed. A write failure MUST emit `index-write-failed` and exit non zero.
 
 ---
 
@@ -354,7 +403,7 @@ The hook is the operator facing surface of the install. Its job is to keep index
 ### 4.1 Entry point
 
 ```
-apss run docs hook --staged
+apss run documentation hook --staged
 ```
 
 The installed `.git/hooks/pre-commit` block MUST do nothing more than call this command and forward its exit code. The hook's logic lives in the Rust binary so it can be tested and version controlled.
@@ -379,12 +428,30 @@ The installed `.git/hooks/pre-commit` block MUST do nothing more than call this 
    rewritten `README.md`, the hook MUST run `git add <path>` so the
    regenerated index is part of the commit. If a write fails,
    exit `2`. See Section 4.3 for the `git commit -p` interaction.
-4. **Validate.** Call `validate(repo_root, config, Changed { staged_paths: staged })`.
-5. **Report.** Print all error and warning diagnostics in human readable form (color when TTY, plain otherwise). When stdout is being piped, also write the `machine_readable` JSON to a temporary file referenced in the human output, so CI can pick it up.
-6. **Exit.**
+4. **Reconcile `CLAUDE.md`.** Call `claude-md --fix` (parent spec
+   Section 6.4.3) over the directories in scope. For every `CLAUDE.md`
+   it replaces, the hook MUST stage the result as a `100644` blob and
+   MUST print the discarded diff and the "you meant to edit
+   `AGENTS.md`" notice required by Section 6.4.3 - never a summary
+   line, never suppressed by a quiet flag. Where `AGENTS.md` exists
+   and `CLAUDE.md` is absent, `--fix` creates `CLAUDE.md` from the
+   on-disk `AGENTS.md`. Where `AGENTS.md` is absent, `--fix` does
+   nothing. If a replacement or its verification fails, exit `2` with
+   `hook-claude-md-fix-failed`. This step runs BEFORE validation so
+   the validator sees the repaired tree and the commit is
+   self-consistent.
+5. **Validate.** Call `validate(repo_root, config, Changed { staged_paths: staged })`.
+6. **Report.** Print all error and warning diagnostics in human readable form (color when TTY, plain otherwise). When stdout is being piped, also write the `machine_readable` JSON to a temporary file referenced in the human output, so CI can pick it up.
+7. **Exit.**
    - `0` when `summary.errors == 0` (warnings allowed).
    - `1` when `summary.errors > 0`.
-   - `2` for any internal hook error (config load failure, index write failure, missing `apss` binary).
+   - `2` for any internal hook error (config load failure, index write failure, `claude-md --fix` failure, missing `apss` binary).
+
+The hook is convenience, not the guarantee. A fresh clone has no hook
+until `install` runs, `--no-verify` bypasses it, and a CI checkout has
+no hook at all. Adopters MUST additionally run
+`apss run documentation claude-md --check` in CI; that run is what
+actually holds the Section 6.4 invariant.
 
 ### 4.3 Concurrency and recursion
 
@@ -419,6 +486,7 @@ afterward.
 | `hook-not-in-repo` | error | `git rev-parse --show-toplevel` failed. |
 | `hook-missing-apss` | error | The `apss` binary is not on `PATH`. |
 | `hook-staged-rewrite-failed` | error | A `git add` for a regenerated index failed. |
+| `hook-claude-md-fix-failed` | error | `claude-md --fix` could not replace a `CLAUDE.md`, or the post-write index verification did not report mode `100644` with the `AGENTS.md` blob hash. |
 
 These are emitted in addition to the validator and generator diagnostics above; the hook is just the runner.
 
@@ -429,10 +497,19 @@ These are emitted in addition to the validator and generator diagnostics above; 
 A typical commit flow with the standard installed:
 
 1. Operator edits `docs/adrs/ADR-001-security.md` and commits.
-2. Pre-commit hook fires `apss run docs hook --staged`.
+2. Pre-commit hook fires `apss run documentation hook --staged`.
 3. The hook regenerates `docs/adrs/README.md` (the index), `git add`s it.
-4. The hook runs the validator in `Changed` scope. ADR01 checks pass. Backlink checks see no new dangling references. Frontmatter and `status` are valid.
-5. The hook prints a one-line success banner and exits `0`. The commit completes with the regenerated index included.
+4. The hook runs `claude-md --fix`. `docs/adrs/CLAUDE.md` is already byte-identical to `docs/adrs/AGENTS.md`, so nothing changes and nothing is printed.
+5. The hook runs the validator in `Changed` scope. ADR01 checks pass. Backlink checks see no new dangling references. Frontmatter and `status` are valid.
+6. The hook prints a one-line success banner and exits `0`. The commit completes with the regenerated index included.
+
+If the operator instead edited `docs/adrs/CLAUDE.md` (the derived file)
+rather than `docs/adrs/AGENTS.md`:
+
+1. The hook regenerates the index as usual.
+2. `claude-md --fix` sees the pair diverge. It reads `AGENTS.md`, unlinks `CLAUDE.md`, writes a fresh `100644` regular file with the `AGENTS.md` bytes, stages it, and re-reads the index to confirm the mode and blob hash.
+3. It prints the full diff of what it discarded, names `docs/adrs/CLAUDE.md` as the file overwritten and `docs/adrs/AGENTS.md` as the canonical file the operator meant to edit, and does not abbreviate either.
+4. Validation runs against the repaired tree and passes. The commit completes, containing the operator's *unintended* edit nowhere - which is why step 3 is loud.
 
 If the operator instead saved an ADR without a `status` field:
 

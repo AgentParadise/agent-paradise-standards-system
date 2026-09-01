@@ -8,6 +8,7 @@ This is an official, active standard under APS-V1-0003 (promoted from EXP-V1-000
 
 - [`docs/00_overview.md`](docs/00_overview.md): what this standard provides and why.
 - [`docs/01_spec.md`](docs/01_spec.md): the normative spec (frontmatter, indexing, validator contract, doc type registry, backlinking, diagnostic codes).
+- [`evolution/major/1.0.0/`](evolution/major/1.0.0/): the 1.0.0 evolution pack - why `CLAUDE.md` stopped being a symlink, what breaks, and how to migrate.
 - [`docs/02_install_contract.md`](docs/02_install_contract.md): the normative install entry point, validator API, index generator API, the AGENTS.md and CLAUDE.md scaffolding contract (create-if-missing, never-overwrite), and the git pre-commit hook contract.
 
 ## Substandards (active doc types)

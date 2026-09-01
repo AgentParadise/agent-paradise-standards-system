@@ -5,7 +5,7 @@ description: "Normative rules for documentation structure, the doc type registry
 
 # APS-V1-0003 - Documentation and Context Engineering (Canonical Specification)
 
-**Version**: 0.1.0
+**Version**: 1.0.0
 **Status**: Active (official; promoted from EXP-V1-0004)
 **Category**: Governance
 
@@ -316,8 +316,8 @@ Rendering rules:
 When `docs.index.auto_generate` is `true`, the CLI and the install hook MAY write indexes directly into `README.md` files. The dry run and write paths MUST produce identical content for the same input directory:
 
 ```bash
-apss run docs index [path]          # Dry run: print the indexes that would be written
-apss run docs index [path] --write  # Write indexes into README.md files
+apss run documentation index [path]          # Dry run: print the indexes that would be written
+apss run documentation index [path] --write  # Write indexes into README.md files
 ```
 
 The generator MUST traverse only file entries; a directory named `something.md` MUST NOT be treated as a document.
@@ -441,18 +441,49 @@ install-time branch.
 
 `AGENTS.md` is canonical. `CLAUDE.md` is a derived artefact of it.
 
-Two shapes are explicitly non-conformant:
+> **Enforcement status: forward specification.** No validator implements
+> `claude-md-divergent` today, and neither `apss run documentation
+> validate` nor the pre-commit hook checks it yet. This section is the
+> contract the implementation MUST satisfy, in the same sense as
+> Sections 9.1, 9.4, and the whole of `02_install_contract.md`. Do not
+> read this release as an executable conformance release for 6.4.
+
+Three shapes are explicitly non-conformant:
 
 - **A symlink.** `CLAUDE.md` MUST NOT be a symbolic link to
-  `AGENTS.md`. In git terms, it MUST commit as mode `100644`, never as
-  mode `120000`.
+  `AGENTS.md`, and MUST NOT be recorded in the git index as mode
+  `120000`.
+- **A non-`100644` regular file.** The committed mode MUST be exactly
+  `100644`. Mode `100755` is a regular file but is NOT conformant: a
+  context document is not an executable, and permitting two modes
+  would leave the diagnostic with two "correct" answers to pick
+  between when repairing.
 - **An import stub.** `CLAUDE.md` MUST NOT be a one-line
   `@AGENTS.md` import.
 
 Diagnostic: `claude-md-divergent` (**error**).
 
-Condition: an `AGENTS.md` and an adjacent `CLAUDE.md` both exist and
-their bytes differ, or `CLAUDE.md` is not a regular file.
+**Condition (normative).** `claude-md-divergent` is emitted for a
+governed directory when an `AGENTS.md` exists there and ANY of the
+following holds for the adjacent `CLAUDE.md`:
+
+1. `CLAUDE.md` exists and its bytes differ from `AGENTS.md`.
+2. `CLAUDE.md` is not a regular file, as determined by
+   `symlink_metadata` (not `metadata`, which follows links). A symlink
+   whose target happens to have identical bytes is still divergent.
+3. `CLAUDE.md` is tracked and its git index mode is not `100644`.
+
+Condition 3 is separate from condition 2 on purpose. Under
+`core.symlinks=false` a checked-out `CLAUDE.md` is a *regular file* on
+disk whose bytes are the target path, while the index still records
+`120000`. Checking only the working tree would miss it, and checking
+only the index would miss an untracked working-tree symlink. Both
+MUST be inspected.
+
+The import-stub shape needs no separate rule: a stub differs in bytes
+from `AGENTS.md`, so condition 1 already catches it. The stub is
+called out above because it is a shape a future author will
+deliberately propose, not because it needs its own check.
 
 The severity is **error**, in deliberate contrast to
 `root-claude-md-missing` (Section 6.1, a warning). The downgrade in
@@ -539,17 +570,51 @@ Both compare `CLAUDE.md` to the adjacent `AGENTS.md` byte for byte;
 they differ only in what they do about a difference.
 
 ```bash
-apss run docs claude-md --fix      # regenerate CLAUDE.md from AGENTS.md and stage it
-apss run docs claude-md --check    # exit non-zero on divergence; change nothing
+apss run documentation claude-md --fix      # regenerate CLAUDE.md from AGENTS.md and stage it
+apss run documentation claude-md --check    # exit non-zero on divergence; change nothing
 ```
 
-**`--fix`** runs from the pre-commit hook (Section 9.4). When
-`CLAUDE.md` is not byte-identical to `AGENTS.md`, it overwrites
-`CLAUDE.md` with the contents of `AGENTS.md` and `git add`s the result
-so the commit is self-consistent. Because `AGENTS.md` is canonical,
-`AGENTS.md` always wins. The resolution is deterministic. It is never a
-merge, never a three-way reconcile, and never a guess about which side
-is newer.
+**`--fix`** runs from the pre-commit hook (Section 9.4). Because
+`AGENTS.md` is canonical, `AGENTS.md` always wins. The resolution is
+deterministic: it is never a merge, never a three-way reconcile, and
+never a guess about which side is newer.
+
+**The replacement algorithm is normative, because the naive form is
+wrong.** "Overwrite `CLAUDE.md` with `AGENTS.md` and `git add` it" is
+not sufficient, and during a migration away from symlinks it is
+actively destructive. `--fix` MUST, for each divergent pair:
+
+1. **Read the canonical bytes first.** Read `AGENTS.md` into memory
+   before touching `CLAUDE.md` at all, so a failure part-way through
+   cannot leave the directory with neither file intact.
+2. **Classify with `symlink_metadata` AND the git index.** Call
+   `symlink_metadata` on `CLAUDE.md` (never `metadata`, which follows
+   the link and reports the target), and separately read the recorded
+   index mode (`git ls-files -s -- CLAUDE.md`). Either source alone
+   misses a real case; see the Condition note in Section 6.4.
+3. **Unlink, never write through.** When `CLAUDE.md` exists, remove
+   the directory entry first (`remove_file`, which operates on the
+   link itself), then create a fresh regular file. `--fix` MUST NOT
+   open `CLAUDE.md` for writing while it is still a symlink: on Unix,
+   writing through a symlink truncates and overwrites its **target**,
+   which here is `AGENTS.md` - the canonical file, destroyed by the
+   tool meant to protect it. This is the single most important
+   sentence in this section.
+4. **Write a regular file with mode `100644`.** Create the new file
+   with the bytes from step 1 and file permissions `0644` on
+   Unix-like systems.
+5. **Stage it as a `100644` blob.** `git add` alone does not
+   necessarily rewrite a recorded `120000` entry into a `100644`
+   entry, so `--fix` MUST force the mode - for example
+   `git update-index --add --cacheinfo 100644,<blob>,<path>`, or
+   `git rm --cached` followed by `git add` - rather than assuming
+   `git add` reclassifies it.
+6. **Verify by re-reading the index.** After staging, re-read
+   `git ls-files -s -- CLAUDE.md` and confirm the mode is `100644`
+   and the blob hash equals the blob hash of `AGENTS.md`. Equal blob
+   hashes are git's own proof of byte-identity. If either check
+   fails, `--fix` MUST report `claude-md-divergent` and exit non-zero
+   rather than reporting a repair it did not achieve.
 
 **`--fix` MUST report what it discarded.** The realistic way to hit
 divergence is that someone edited `CLAUDE.md` when they meant to edit
@@ -566,11 +631,33 @@ that discards anything:
 It MUST NOT reduce this to a summary line, and it MUST NOT be
 suppressible by a quiet flag.
 
-**`--check`** runs in QA and CI. It reports `claude-md-divergent`
-(error) for each divergent pair and exits non-zero. It MUST NOT modify
-the working tree. This makes the equality a fitness function: a static,
-whole-repository property enforced mechanically on every build rather
-than a convention that holds while people remember it.
+**`--check`** runs in QA and CI. It MUST NOT modify the working tree,
+the index, or the filesystem in any way. This makes the equality a
+fitness function: a static, whole-repository property enforced
+mechanically on every build rather than a convention that holds while
+people remember it.
+
+**`--check` covers divergence only, not presence.** Presence is
+already owned by `claude-md-missing` (warning, Section 5.2) and
+`root-claude-md-missing` / `root-agents-md-missing` (warnings,
+Sections 6.1 and 6.2), whose severities are deliberate: the standard
+does not own root file content and the installer may not scaffold it,
+so absence must not block. If `--check` failed on a missing file it
+would silently promote those warnings to build-breaking errors and
+contradict the install contract. It does not. The full state table,
+identical at repository-root scope and at docs-directory scope:
+
+| `AGENTS.md` | `CLAUDE.md` | Diagnostic | `--check` exit | `--fix` action |
+|---|---|---|---|---|
+| present | present, byte-identical, regular, index `100644` | none | 0 | none |
+| present | present, any other form | `claude-md-divergent` (error) | non-zero | replace from `AGENTS.md` per the algorithm above |
+| present | absent | `claude-md-missing` / `root-claude-md-missing` (warning) | 0 | create `CLAUDE.md` from the **on-disk adjacent** `AGENTS.md` |
+| absent | present | `agents-md-missing` / `root-agents-md-missing` (warning) | 0 | none - there is no canonical source to copy from, and `--fix` MUST NOT invent one or delete `CLAUDE.md` |
+| absent | absent | both missing-file warnings | 0 | none |
+
+The two rows where `--check` exits 0 despite a warning are the point
+of the table: `--check` is a divergence gate, not a completeness gate.
+`validate` still reports the missing-file warnings as it does today.
 
 **The hook is convenience; CI is the guarantee.** A git hook does not
 exist in a fresh clone until an install step runs, it is skipped by
@@ -776,8 +863,8 @@ This section is normative. Installing this standard into a project installs thre
 ### 9.1 Install entry point
 
 ```bash
-apss run docs install [<repo-root>]
-apss run docs uninstall [<repo-root>]
+apss run documentation install [<repo-root>]
+apss run documentation uninstall [<repo-root>]
 ```
 
 Behavior:
@@ -809,8 +896,8 @@ The validator is the source of truth. The hook and the standalone CLI MUST call 
 
 **Exit behavior**:
 
-- `apss run docs validate` MUST exit `0` only when `summary.errors == 0`.
-- `apss run docs claude-md --check` MUST exit `0` only when every governed `CLAUDE.md` is byte-identical to its adjacent `AGENTS.md`, and MUST NOT modify the working tree. `--check` and `--fix` MUST share the single comparison implementation so the two modes can never disagree about what counts as divergent.
+- `apss run documentation validate` MUST exit `0` only when `summary.errors == 0`.
+- `apss run documentation claude-md --check` MUST exit non-zero if and only if at least one governed pair is divergent per the Section 6.4 condition, per the state table in Section 6.4.3. A missing `CLAUDE.md` or `AGENTS.md` is a warning and MUST NOT make `--check` exit non-zero; presence is owned by the DOC02/DOC03 missing-file diagnostics, whose warning severity is deliberate. `--check` MUST NOT modify the working tree or the index. `--check` and `--fix` MUST share the single classification implementation so the two modes can never disagree about what counts as divergent.
 - The hook MUST refuse the commit when `summary.errors > 0`. Warnings MUST be printed but MUST NOT block the commit.
 - An internal failure (panic, IO error, regex compile failure on a built in pattern) MUST be reported as the synthetic diagnostic `validator-internal-error` with severity `error` and MUST block the commit. The validator MUST NOT swallow internal errors silently.
 
@@ -831,16 +918,16 @@ The index generator and the validator MUST agree:
 
 **Exit behavior**:
 
-- `apss run docs index --write` MUST exit `0` after a successful write, even if it made no changes.
+- `apss run documentation index --write` MUST exit `0` after a successful write, even if it made no changes.
 - Failure to write any individual file MUST emit `index-write-failed` and MUST exit non zero.
 
 ### 9.4 Git pre-commit hook contract
 
-The installed hook is a small shell wrapper that calls into `apss run docs hook --staged`. The hook MUST:
+The installed hook is a small shell wrapper that calls into `apss run documentation hook --staged`. The hook MUST:
 
 1. Resolve the repository root and the staged file list (`git diff --cached --name-only --diff-filter=ACMR`).
 2. Refresh indexes for any docs directory whose contents changed in the staged set, by calling the index generator in `--write` mode. The hook MUST re-stage rewritten `README.md` files (`git add`) so the commit is self consistent.
-3. Regenerate any `CLAUDE.md` that has diverged from its adjacent `AGENTS.md`, by calling `apss run docs claude-md --fix` (Section 6.4.3). The hook MUST re-stage each rewritten `CLAUDE.md` (`git add`) and MUST print the discarded diff per Section 6.4.3.
+3. Regenerate any `CLAUDE.md` that has diverged from its adjacent `AGENTS.md`, by calling `apss run documentation claude-md --fix` (Section 6.4.3). The hook MUST re-stage each rewritten `CLAUDE.md` (`git add`) and MUST print the discarded diff per Section 6.4.3.
 4. Run the validator with `scope = Changed { staged_paths }`.
 5. Exit non zero (and print every error diagnostic) when the validator reports errors. The commit is blocked.
 6. Print warnings but allow the commit.
@@ -889,7 +976,7 @@ Existing numeric or composite codes (for example, `ADR01-001`) MAY be retained a
 | `unknown-config-field` | error | Config | A known section under `docs` contains an unknown scalar field. |
 | `readme-missing` | error | DOC02 | Directory missing `README.md`. |
 | `claude-md-missing` | warning | DOC02 | Directory missing `CLAUDE.md`. |
-| `claude-md-divergent` | error | DOC03 | `CLAUDE.md` is not a byte-identical regular-file copy of the adjacent `AGENTS.md` (it differs, is a symlink, or is an `@AGENTS.md` import stub). Mechanical and auto-repairable by `apss run docs claude-md --fix`, so unlike the DOC03 missing-file codes it is an error rather than a warning; see Section 6.4. |
+| `claude-md-divergent` | error | DOC03 | An `AGENTS.md` exists and the adjacent `CLAUDE.md` differs in bytes, is not a regular file per `symlink_metadata`, or is recorded in the git index with a mode other than `100644`. Mechanical and auto-repairable by `apss run documentation claude-md --fix`, so unlike the DOC03 missing-file codes it is an error rather than a warning; see Section 6.4. Emitted only when `AGENTS.md` is present - absence is covered by the missing-file codes. **Not yet implemented** (Section 6.4). |
 | `agents-md-missing` | warning | DOC02 | Directory missing `AGENTS.md`. |
 | `index-missing` | warning | DOC02 | `README.md` missing `## Index` section. |
 | `index-stale` | warning | DOC02 | `## Index` content does not match the generator. |
@@ -915,16 +1002,20 @@ Substandard codes are defined in their own specs.
 
 ## 11. CLI Interface
 
-This section specifies the full CLI surface this standard MUST expose. The `validate` and `index` subcommands are implemented today. The `install`, `uninstall`, and `hook` subcommands are a forward specification and are NOT yet implemented by the handler (planned follow-up, contract in Section 9 and [`02_install_contract.md`](02_install_contract.md)).
+This section specifies the full CLI surface this standard MUST expose. The `validate` and `index` subcommands are implemented today. The `install`, `uninstall`, `hook`, and `claude-md` subcommands are a forward specification and are NOT yet implemented by the handler (planned follow-up, contract in Section 9 and [`02_install_contract.md`](02_install_contract.md)).
+
+The implemented `validate` subcommand does NOT yet enforce Section 6.4: `claude-md-divergent` is specified but not emitted by any code path, including `validate`. Section 6.4 becomes executable when the `claude-md` subcommand lands.
+
+The canonical dispatch slug is `documentation`. The `docs` and `doc` spellings are aliases accepted only by the development CLI `apss-dev`; a composed consumer binary resolves the canonical slug only, so every command below MUST be written as `apss run documentation ...` in installed hooks, CI configuration, and operator documentation.
 
 ```bash
-apss run docs install [<repo-root>]                 # Planned (not yet implemented): install hook + default config (idempotent)
-apss run docs uninstall [<repo-root>]               # Planned (not yet implemented): remove hook (config preserved)
-apss run docs validate [<path>] [--json]            # Run validator (CI-friendly)
-apss run docs index [<path>] [--write]              # Run index generator
-apss run docs hook --staged                         # Planned (not yet implemented): hook entry point (used by pre-commit)
-apss run docs claude-md --check                      # Planned (not yet implemented): fail on any CLAUDE.md that diverges from its adjacent AGENTS.md (CI)
-apss run docs claude-md --fix                        # Planned (not yet implemented): regenerate divergent CLAUDE.md files from AGENTS.md and stage them (hook)
+apss run documentation install [<repo-root>]                 # Planned (not yet implemented): install hook + default config (idempotent)
+apss run documentation uninstall [<repo-root>]               # Planned (not yet implemented): remove hook (config preserved)
+apss run documentation validate [<path>] [--json]            # Run validator (CI-friendly)
+apss run documentation index [<path>] [--write]              # Run index generator
+apss run documentation hook --staged                         # Planned (not yet implemented): hook entry point (used by pre-commit)
+apss run documentation claude-md --check                      # Planned (not yet implemented): fail on any CLAUDE.md that diverges from its adjacent AGENTS.md (CI)
+apss run documentation claude-md --fix                        # Planned (not yet implemented): regenerate divergent CLAUDE.md files from AGENTS.md and stage them (hook)
 ```
 
 Every command MUST emit the same diagnostics shape as the validator (Section 9.2).
@@ -937,7 +1028,7 @@ Every command MUST emit the same diagnostics shape as the validator (Section 9.2
 - [ ] Every docs directory has `README.md` with a valid `## Index` section.
 - [ ] `.md` files under the docs root have closed frontmatter with the configured fields.
 - [ ] `CLAUDE.md` and `AGENTS.md` present per docs directory.
-- [ ] Every `CLAUDE.md` is a regular file (git mode `100644`, never `120000`) byte-identical to its adjacent `AGENTS.md`; `apss run docs claude-md --check` passes and is wired into CI.
+- [ ] Every `CLAUDE.md` is a regular file committed as git mode `100644` (never `120000`, never `100755`) and byte-identical to its adjacent `AGENTS.md`; `apss run documentation claude-md --check` passes and is wired into CI. (Forward specification: not yet enforced by any implemented command - see Section 6.4.)
 - [ ] Root `CLAUDE.md` and `AGENTS.md` exist and reference APSS, the docs root, and every active doc type's location.
 - [ ] For every active doc type, the substandard's own checks pass.
 - [ ] No code file references a missing, deprecated, or superseded doc identifier.

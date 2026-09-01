@@ -54,7 +54,7 @@ apss run code-topology analyze .   # run a standard's command through the projec
 standards:
   code-topology:        { id: APS-V1-0001, version: ">=0.2.0" }
   architecture-fitness: { id: APS-V1-0002, version: ">=1.0.0" }
-  documentation:        { id: APS-V1-0003, version: ">=0.1.0" }
+  documentation:        { id: APS-V1-0003, version: ">=1.0.0" }
 ```
 
 For offline or air-gapped installs, build a bundle locally and point the install at it. Bundles are the optional offline and catalog format, not the default transport:

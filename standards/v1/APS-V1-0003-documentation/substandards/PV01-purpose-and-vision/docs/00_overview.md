@@ -36,7 +36,7 @@ root index by `description`.
 
 ```bash
 # Validate the North Star document (runs as part of docs validate)
-apss run docs validate .
+apss run documentation validate .
 ```
 
 A minimal valid `docs/north-star.md`:

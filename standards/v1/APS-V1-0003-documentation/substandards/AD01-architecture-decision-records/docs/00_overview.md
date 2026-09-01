@@ -130,14 +130,22 @@ The source templates ship inside this substandard at
 create-if-missing, never-overwrite behaviour: an existing
 `AGENTS.md` or `CLAUDE.md` in a project's docs-area directory is
 never modified by the installer regardless of how it differs from
-the shipped template; the validator checks only that the files exist
-and have well-formed frontmatter.
+the shipped template.
+
+The validator's two comparisons are separate. It never compares either
+file against the **shipped template** - for `AGENTS.md`, existence plus
+well-formed frontmatter is the whole check. It does compare
+`CLAUDE.md` against **its adjacent `AGENTS.md`** byte for byte and
+emits `claude-md-divergent` (error) on any mismatch (parent spec
+Section 6.4; forward specification, not yet implemented). Repair is
+`apss run documentation claude-md --fix`, which is the operator's tool,
+not the installer's.
 
 ## Quick Start
 
 ```bash
 # Validate ADRs (runs as part of docs validate)
-apss run docs validate .
+apss run documentation validate .
 
 # Configure required ADR keywords in apss.yaml at the repo root
 # (config is owned by APS-V1-0000.CF01; the docs standard contributes the docs: block)

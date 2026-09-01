@@ -1,0 +1,54 @@
+schema = "aps.evolution.rationale/v1"
+
+[evolution]
+standard_id = "APS-V1-0003"
+from_version = "0.1.1"
+to_version = "1.0.0"
+kind = "major"
+date = "2026-09-01"
+
+[rationale]
+summary = """
+The standard required `CLAUDE.md` to be a symlink to the adjacent
+`AGENTS.md`, with an install-time carve-out: "on Windows the installer
+MUST instead copy the link target's contents." That rule is now
+replaced by an unconditional requirement that `CLAUDE.md` be a
+committed, byte-identical regular-file copy on every platform.
+"""
+
+detail = """
+The old rule branched at the wrong moment. The installer runs on the
+machine of whoever adopts the standard; if that machine is macOS or
+Linux it takes the symlink branch and a symlink is COMMITTED. Every
+contributor who later clones the repository inherits that artefact,
+and the installer never runs for them, so its Windows branch never
+fires. The rule protected the person installing on Windows and did
+nothing for everyone who inherited the result.
+
+Git for Windows defaults to `core.symlinks=false`, and enabling it
+requires Developer Mode or an Administrator shell. In that state git
+materialises a committed symlink as a plain text file whose content is
+the target path: `CLAUDE.md` checks out as a 9-byte file containing
+the string `AGENTS.md`, and Claude Code loads those 9 bytes as the
+entire project context. Nothing errors and nothing warns. The failure
+is silent, invisible to the person who caused it, and degrades agent
+output rather than breaking a build.
+
+`.gitattributes` offers no mechanism to force a symlink to materialise
+as its target's content, so the hazard cannot be closed at the
+repository-configuration layer either. The mechanism therefore has to
+be a property of WHAT IS COMMITTED rather than of WHO RAN THE
+INSTALLER, which is what a byte-identical regular file gives.
+
+The `@AGENTS.md` import stub was evaluated as an alternative and
+rejected: it does not satisfy byte-equality at all, and it costs one
+of Claude Code's five levels of context-import depth. Measured with
+identical file trees and `--tools ""`, the stub recovered depth
+markers 0-3 while a copy recovered 0-4.
+"""
+
+alternatives_rejected = [
+  "Keep the symlink and document the Windows hazard - leaves the silent-failure mode in place for every inheriting clone.",
+  "Force materialisation via .gitattributes - no such mechanism exists.",
+  "CLAUDE.md as an `@AGENTS.md` import stub - portable, but fails byte-equality and costs one level of the five-deep import budget.",
+]
