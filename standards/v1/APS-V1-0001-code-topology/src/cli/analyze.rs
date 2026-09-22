@@ -141,25 +141,8 @@ pub(super) fn topology_analyze(
                 all_calls.extend(calls);
             }
 
-            match adapter.extract_functions(&source, file_path) {
-                Ok(functions) => {
-                    for func in functions {
-                        // Compute metrics for each function
-                        match adapter.compute_metrics(&source, &func) {
-                            Ok(metrics) => {
-                                all_functions.push((func, metrics));
-                            }
-                            Err(e) => {
-                                if verbose {
-                                    eprintln!(
-                                        "  Warning: Could not compute metrics for {}: {e}",
-                                        func.name
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
+            match adapter.analyze_functions(&source, file_path) {
+                Ok(functions) => all_functions.extend(functions),
                 Err(e) => {
                     if verbose {
                         eprintln!("  Warning: Could not parse {}: {e}", file_path.display());
