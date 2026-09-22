@@ -1,0 +1,179 @@
+[
+  {
+    "name": "accepted sanitized content differs",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duplicate": false
+    },
+    "accepted": true
+  },
+  {
+    "name": "duplicate acknowledged",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duplicate": true
+    },
+    "accepted": true
+  },
+  {
+    "name": "reject storage_key 'qts1:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duplicate": false
+    },
+    "accepted": false
+  },
+  {
+    "name": "reject content_hash 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "stored_content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duplicate": false
+    },
+    "accepted": false
+  },
+  {
+    "name": "reject stored_content_hash 'sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "duplicate": false
+    },
+    "accepted": false
+  },
+  {
+    "name": "reject stored_content_hash 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "duplicate": false
+    },
+    "accepted": false
+  },
+  {
+    "name": "reject stored_content_hash 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n'",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
+      "duplicate": false
+    },
+    "accepted": false
+  },
+  {
+    "name": "reject duplicate 'true'",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duplicate": "true"
+    },
+    "accepted": false
+  },
+  {
+    "name": "reject unexpected True",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duplicate": false,
+      "unexpected": true
+    },
+    "accepted": false
+  },
+  {
+    "name": "reject malformed matching original hash",
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "bad",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "bad",
+      "stored_content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duplicate": false
+    },
+    "accepted": false
+  },
+  {
+    "name": "reject other namespace",
+    "identity": {
+      "source_instance_id": "two",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "receipt": {
+      "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "stored_content_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duplicate": false
+    },
+    "accepted": false
+  }
+]

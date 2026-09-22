@@ -32,7 +32,7 @@ default:
 
 # Run all QA checks (format, lint, typecheck, test, release build, APS validation)
 [group('qa')]
-qa: format lint typecheck test build-release aps-validate aps-validate-distribution
+qa: format lint typecheck test python-contract build-release aps-validate aps-validate-distribution
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
     @echo '{{ GREEN }}✓ QA passed!{{ NORMAL }}'
     @echo '{{ GREEN }}════════════════════════════════════════{{ NORMAL }}'
@@ -40,6 +40,11 @@ qa: format lint typecheck test build-release aps-validate aps-validate-distribut
 # Run all QA checks
 [group('qa')]
 check: qa
+
+# Build the Python contract and run fixtures against its installed wheel.
+[group('qa')]
+python-contract:
+    python3 standards/v1/APS-V1-0004-session-capture/python/check_package.py
 
 # Run QA with auto-fixes
 [group('qa')]
