@@ -23,6 +23,9 @@ This guide walks through wiring architectural fitness governance into a Rust pro
 
 **Separation of concerns:** APS-V1-0001 produces data. APS-V1-0002 asserts on it. The artifacts at `.topology/metrics/` are the contract between them, governed by the `.proto` schemas in `APS-V1-0001-code-topology/proto/`.
 
+For slow CI, see [CI performance](03_ci-performance.md): measure tool setup,
+artifact production, and rule evaluation separately while preserving this contract.
+
 ## 1. Prerequisites
 
 - A Rust project (single crate or workspace) using 2021+ edition.
