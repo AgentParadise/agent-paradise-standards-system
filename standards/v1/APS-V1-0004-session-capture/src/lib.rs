@@ -57,6 +57,8 @@ use serde::{Deserialize, Serialize};
 
 pub mod cli;
 pub mod content_hash;
+/// Optional portable workflow association and inventory contracts.
+pub mod inventory;
 pub mod reconstitution;
 
 pub use content_hash::{ContentHashError, content_hash_for};

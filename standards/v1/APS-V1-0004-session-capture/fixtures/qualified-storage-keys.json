@@ -1,0 +1,66 @@
+[
+  {
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "storage_key": "qts1:dad165bf11b27266bc17ad9bc867460553e7165909179d8f40d3074125f87e95"
+  },
+  {
+    "identity": {
+      "source_instance_id": "two",
+      "harness": "claude",
+      "native_session_id": "same"
+    },
+    "storage_key": "qts1:3e66f10fc36dd68381b5298c235d6ebe8a610f2d723b9c4f203285437687d211"
+  },
+  {
+    "identity": {
+      "source_instance_id": "one",
+      "harness": "codex",
+      "native_session_id": "same"
+    },
+    "storage_key": "qts1:b0b89e7e1f4079b274fdd38ad5442bd7e7eec68e72b110d6ea03c3dfea1c6868"
+  },
+  {
+    "identity": {
+      "source_instance_id": "ab",
+      "harness": "c",
+      "native_session_id": "d"
+    },
+    "storage_key": "qts1:6c27bdae3a0e3ef07923e26d0bffbb2439ad752dfff83a9f37005a0fe54598e7"
+  },
+  {
+    "identity": {
+      "source_instance_id": "a",
+      "harness": "bc",
+      "native_session_id": "d"
+    },
+    "storage_key": "qts1:0fcbad4278c6406d90c9e01ece3135f4a63c605f5131ceb1a882b15bbf53b9ca"
+  },
+  {
+    "identity": {
+      "source_instance_id": "source",
+      "harness": "harness",
+      "native_session_id": " ../native/雪 %2F "
+    },
+    "storage_key": "qts1:0bafe0182d238ea9cbdc651db11dc0539e917924f9b99a450e7aef91ec4ade4c"
+  },
+  {
+    "identity": {
+      "source_instance_id": "source",
+      "harness": "harness",
+      "native_session_id": "é"
+    },
+    "storage_key": "qts1:d0d5602a2fc19c83589f47625b1677b1f5979ee9f1bead34d418f3e77e3db13a"
+  },
+  {
+    "identity": {
+      "source_instance_id": "source",
+      "harness": "harness",
+      "native_session_id": "é"
+    },
+    "storage_key": "qts1:ec72334e001ed9b2e207e6847b8347652538d9b7804008fddecfe17dd6331a0a"
+  }
+]

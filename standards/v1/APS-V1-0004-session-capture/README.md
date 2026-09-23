@@ -3,7 +3,7 @@
 **ID:** `APS-V1-0004`
 **Type:** Official standard
 **Slug:** `session-capture`
-**Version:** `2.0.0`
+**Version:** `2.1.0`
 **Status:** Active (ratified, promoted from `EXP-V1-0003` on 2026-08-06)
 
 One contract so "back up my agent sessions" works identically across every
@@ -18,7 +18,10 @@ wraps each provider's raw transcript verbatim.
 - [standard.toml](standard.toml)
 - [Overview](docs/00_overview.md)
 - [Specification](docs/01_spec.md)
+- [Optional workflow inventory profile](docs/02_inventory_profile.md)
 - [JSON Schema](schemas/session-envelope.schema.json)
+- [Inventory operation schema](schemas/inventory-operation.schema.json)
+- [Python inventory models](python/README.md)
 - [Reconstitution registry](registry/reconstitution.toml)
 - [Examples](examples/)
 - [Tests](tests/)

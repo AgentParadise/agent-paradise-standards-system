@@ -1,0 +1,1395 @@
+[
+  {
+    "name": "node",
+    "valid": true,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "membership",
+    "valid": true,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "membership",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "membership",
+          "payload": {
+            "node": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "run": {
+              "source_instance_id": "installation",
+              "execution_id": "run"
+            },
+            "phase_id": null,
+            "attempt_id": "attempt",
+            "segment": null,
+            "confidence": "registered",
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "edge",
+    "valid": true,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "edge",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "edge",
+          "payload": {
+            "parent": {
+              "kind": "invocation",
+              "source_instance_id": "installation",
+              "local_id": "invocation",
+              "harness": null
+            },
+            "child": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "relation": "spawn",
+            "confidence": "corroborated",
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ],
+            "parent_segment": null,
+            "child_segment": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "binding",
+    "valid": true,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "binding",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "binding",
+          "payload": {
+            "owner": {
+              "kind": "invocation",
+              "source_instance_id": "installation",
+              "local_id": "invocation",
+              "harness": null
+            },
+            "transcript": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "segment": null,
+            "confidence": "registered",
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "capture",
+    "valid": true,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "capture",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "capture",
+          "payload": {
+            "node": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "availability": "present",
+            "receipt_sequence": 1,
+            "evidence": {
+              "evidence_id": "e1",
+              "producer_id": "observer",
+              "source_revision": "v1",
+              "locator": "line:1",
+              "extractor_version": "parser/1"
+            },
+            "destination": "local",
+            "transcript_revision": "revision",
+            "archived_byte_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "gap",
+    "valid": true,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "gap",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "gap",
+          "payload": {
+            "reason": "missing",
+            "node_keys": [
+              "key"
+            ],
+            "evidence_ids": []
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "retraction",
+    "valid": true,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "retraction",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "retraction",
+          "payload": {
+            "target": {
+              "evidence_id": "e1",
+              "producer_id": "observer",
+              "source_revision": "v1",
+              "locator": "line:1",
+              "extractor_version": "parser/1"
+            },
+            "evidence": {
+              "evidence_id": "e2",
+              "producer_id": "observer",
+              "source_revision": "v1",
+              "locator": "line:1",
+              "extractor_version": "parser/1"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "stage",
+    "valid": true,
+    "value": {
+      "operation": "stage",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "revision_id": "r1",
+        "parent_revision_id": null,
+        "revision_sequence": 1,
+        "producer_id": "replicator",
+        "sequence_high_watermark": 7,
+        "resolver_version": "resolver/1",
+        "coverage": "missing",
+        "expected_record_count": 7
+      }
+    }
+  },
+  {
+    "name": "publish",
+    "valid": true,
+    "value": {
+      "operation": "publish",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "revision_id": "r1",
+        "parent_revision_id": null,
+        "revision_sequence": 1,
+        "producer_id": "replicator",
+        "sequence_high_watermark": 7,
+        "resolver_version": "resolver/1",
+        "coverage": "missing",
+        "expected_record_count": 7
+      }
+    }
+  },
+  {
+    "name": "manifest",
+    "valid": true,
+    "value": {
+      "operation": "manifest",
+      "body": {
+        "revision": {
+          "run": {
+            "source_instance_id": "installation",
+            "execution_id": "run"
+          },
+          "revision_id": "r1",
+          "parent_revision_id": null,
+          "revision_sequence": 1,
+          "producer_id": "replicator",
+          "sequence_high_watermark": 7,
+          "resolver_version": "resolver/1",
+          "coverage": "missing",
+          "expected_record_count": 7
+        },
+        "start": 0,
+        "record_ids": [
+          "node",
+          "membership",
+          "edge",
+          "binding",
+          "capture",
+          "gap",
+          "retraction"
+        ]
+      }
+    }
+  },
+  {
+    "name": "cross-source",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "other",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "blank-native",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": " ",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "missing-harness",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": null
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "unknown-field",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        },
+        "unexpected": true
+      }
+    }
+  },
+  {
+    "name": "negative-sequence",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": -1,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "overflow-sequence",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": 9223372036854775808,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "boolean-sequence",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": true,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "string-sequence",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": "1",
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "array-bound",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "gap",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "gap",
+          "payload": {
+            "reason": "missing",
+            "node_keys": [
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x"
+            ],
+            "evidence_ids": []
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "missing-local-hash",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "capture",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "capture",
+          "payload": {
+            "node": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "availability": "present",
+            "receipt_sequence": 1,
+            "evidence": {
+              "evidence_id": "e1",
+              "producer_id": "observer",
+              "source_revision": "v1",
+              "locator": "line:1",
+              "extractor_version": "parser/1"
+            },
+            "destination": "local",
+            "transcript_revision": "revision",
+            "archived_byte_hash": null
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "forged-retraction",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "retraction",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "retraction",
+          "payload": {
+            "target": {
+              "evidence_id": "e1",
+              "producer_id": "observer",
+              "source_revision": "v1",
+              "locator": "line:1",
+              "extractor_version": "parser/1"
+            },
+            "evidence": {
+              "evidence_id": "e2",
+              "producer_id": "other",
+              "source_revision": "v1",
+              "locator": "line:1",
+              "extractor_version": "parser/1"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "self-parent",
+    "valid": false,
+    "value": {
+      "operation": "stage",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "revision_id": "r1",
+        "parent_revision_id": "r1",
+        "revision_sequence": 1,
+        "producer_id": "replicator",
+        "sequence_high_watermark": 7,
+        "resolver_version": "resolver/1",
+        "coverage": "missing",
+        "expected_record_count": 7
+      }
+    }
+  },
+  {
+    "name": "manifest-overrun",
+    "valid": false,
+    "value": {
+      "operation": "manifest",
+      "body": {
+        "revision": {
+          "run": {
+            "source_instance_id": "installation",
+            "execution_id": "run"
+          },
+          "revision_id": "r1",
+          "parent_revision_id": null,
+          "revision_sequence": 1,
+          "producer_id": "replicator",
+          "sequence_high_watermark": 7,
+          "resolver_version": "resolver/1",
+          "coverage": "missing",
+          "expected_record_count": 7
+        },
+        "start": 1,
+        "record_ids": [
+          "node",
+          "membership",
+          "edge",
+          "binding",
+          "capture",
+          "gap",
+          "retraction"
+        ]
+      }
+    }
+  },
+  {
+    "name": "empty-manifest",
+    "valid": false,
+    "value": {
+      "operation": "manifest",
+      "body": {
+        "revision": {
+          "run": {
+            "source_instance_id": "installation",
+            "execution_id": "run"
+          },
+          "revision_id": "r1",
+          "parent_revision_id": null,
+          "revision_sequence": 1,
+          "producer_id": "replicator",
+          "sequence_high_watermark": 7,
+          "resolver_version": "resolver/1",
+          "coverage": "missing",
+          "expected_record_count": 7
+        },
+        "start": 0,
+        "record_ids": []
+      }
+    }
+  },
+  {
+    "name": "membership-run",
+    "valid": false,
+    "value": {
+      "operation": "record",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "membership",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "membership",
+          "payload": {
+            "node": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "run": {
+              "source_instance_id": "installation",
+              "execution_id": "other"
+            },
+            "phase_id": null,
+            "attempt_id": "attempt",
+            "segment": null,
+            "confidence": "registered",
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "unknown-operation",
+    "valid": false,
+    "value": {
+      "operation": "invented",
+      "body": {
+        "run": {
+          "source_instance_id": "installation",
+          "execution_id": "run"
+        },
+        "producer_id": "replicator",
+        "record_id": "node",
+        "producer_sequence": 1,
+        "fact": {
+          "kind": "node",
+          "payload": {
+            "ref": {
+              "kind": "transcript",
+              "source_instance_id": "installation",
+              "local_id": "Native/雪 %2F",
+              "harness": "third-party"
+            },
+            "evidence": [
+              {
+                "evidence_id": "e1",
+                "producer_id": "observer",
+                "source_revision": "v1",
+                "locator": "line:1",
+                "extractor_version": "parser/1"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]
