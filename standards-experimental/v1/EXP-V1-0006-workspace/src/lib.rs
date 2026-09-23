@@ -14,6 +14,64 @@ pub const NAME: &str = "Agentic Workspace";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const MANIFEST_SCHEMA: &str = "apss.workspace-launch/v1";
 
+pub fn register(registry: &mut dyn apss_core::registry::StandardRegistry) {
+    registry.register(
+        apss_core::registry::RegisteredStandard {
+            id: ID.into(),
+            slug: SLUG.into(),
+            name: NAME.into(),
+            description: "Provider-neutral agent workspace launch contract".into(),
+            version: VERSION.into(),
+            commands: vec!["validate".into()],
+        },
+        Box::new(WorkspaceCommandHandler),
+    );
+}
+
+struct WorkspaceCommandHandler;
+
+impl apss_core::registry::CommandHandler for WorkspaceCommandHandler {
+    fn execute(&self, command: &str, args: &[String], _config: &toml::Value) -> i32 {
+        if command != "validate" || args.len() != 1 {
+            eprintln!("usage: apss run workspace validate <workspace-launch.json>");
+            return 3;
+        }
+        let path = std::path::Path::new(&args[0]);
+        let contents = match std::fs::read_to_string(path) {
+            Ok(contents) => contents,
+            Err(error) => {
+                eprintln!("cannot read {}: {error}", path.display());
+                return 1;
+            }
+        };
+        let manifest: LaunchManifest = match serde_json::from_str(&contents) {
+            Ok(manifest) => manifest,
+            Err(error) => {
+                eprintln!("invalid JSON manifest: {error}");
+                return 1;
+            }
+        };
+        match manifest.validate() {
+            Ok(()) => {
+                println!("valid workspace launch manifest");
+                0
+            }
+            Err(error) => {
+                eprintln!("invalid workspace launch manifest: {error}");
+                1
+            }
+        }
+    }
+
+    fn commands(&self) -> Vec<apss_core::registry::CommandInfo> {
+        vec![apss_core::registry::CommandInfo {
+            name: "validate".into(),
+            description: "Validate a workspace launch manifest".into(),
+            usage: "validate <workspace-launch.json>".into(),
+        }]
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LaunchManifest {
