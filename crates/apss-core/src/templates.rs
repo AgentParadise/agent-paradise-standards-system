@@ -78,6 +78,7 @@ impl TemplateEngine {
 
             // Render the path itself (allows {{slug}} in filenames)
             let rendered_path = self.render_path(rel_path, context)?;
+            let rendered_path = strip_template_suffix(rendered_path);
             let target_path = output_dir.join(&rendered_path);
 
             if entry.file_type().is_dir() {
@@ -95,7 +96,9 @@ impl TemplateEngine {
                 }
 
                 // Check if file should be rendered as template
-                if should_render_as_template(entry.path()) {
+                if entry.path().extension().is_some_and(|ext| ext == "hbs")
+                    || should_render_as_template(entry.path())
+                {
                     let content = self.render_file(entry.path(), context)?;
                     fs::write(&target_path, content).map_err(|e| TemplateError::Io {
                         path: target_path.clone(),
@@ -131,6 +134,16 @@ impl TemplateEngine {
         } else {
             Ok(path.to_path_buf())
         }
+    }
+}
+
+/// Template manifests use a `.hbs` suffix so Cargo never discovers and tries
+/// to parse their placeholder package names in a git dependency checkout.
+fn strip_template_suffix(path: PathBuf) -> PathBuf {
+    if path.extension().is_some_and(|extension| extension == "hbs") {
+        path.with_extension("")
+    } else {
+        path
     }
 }
 
@@ -332,5 +345,32 @@ mod tests {
         let content = fs::read_to_string(output_dir.join("README.md")).unwrap();
         assert!(content.contains("My Standard"));
         assert!(content.contains("1.0.0"));
+    }
+
+    #[test]
+    fn template_suffix_is_removed_from_rendered_file() {
+        let engine = TemplateEngine::new();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let skeleton_dir = temp_dir.path().join("skeleton");
+        fs::create_dir_all(&skeleton_dir).unwrap();
+        fs::write(
+            skeleton_dir.join("Cargo.toml.hbs"),
+            "[package]\nname = \"{{slug}}\"\n",
+        )
+        .unwrap();
+
+        let output_dir = temp_dir.path().join("output");
+        let context = StandardContext::new("APS-V1-0001", "My Standard", "my-standard");
+        let files = engine
+            .render_skeleton(&skeleton_dir, &output_dir, &context)
+            .unwrap();
+
+        assert_eq!(files, vec![output_dir.join("Cargo.toml")]);
+        assert!(
+            fs::read_to_string(output_dir.join("Cargo.toml"))
+                .unwrap()
+                .contains("name = \"my-standard\"")
+        );
+        assert!(!output_dir.join("Cargo.toml.hbs").exists());
     }
 }
