@@ -289,6 +289,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "apss-v1-0006-workspace"
+version = "0.1.0"
+dependencies = [
+ "apss-core",
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
