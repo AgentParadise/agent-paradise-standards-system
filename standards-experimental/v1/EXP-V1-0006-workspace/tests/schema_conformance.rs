@@ -159,7 +159,12 @@ fn apply_failure_fixture(fixture: &Value) -> (String, Value, Value) {
     let base = fixture["base"].as_str().unwrap();
     let schema = format!(
         "{}.schema.json",
-        Path::new(base).parent().unwrap().file_name().unwrap().to_string_lossy()
+        Path::new(base)
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
     );
     let original = read_json(&root().join("fixtures").join(base));
     let mut document = original.clone();
@@ -196,8 +201,17 @@ fn every_failure_fixture_is_rejected() {
     for path in fixtures {
         let (schema, original, document) = apply_failure_fixture(&read_json(&path));
         let validator = contract.validator(&schema);
-        assert!(validator.is_valid(&original), "{}: base must be valid", path.display());
-        assert_ne!(original, document, "{}: mutation is a no-op", path.display());
+        assert!(
+            validator.is_valid(&original),
+            "{}: base must be valid",
+            path.display()
+        );
+        assert_ne!(
+            original,
+            document,
+            "{}: mutation is a no-op",
+            path.display()
+        );
         assert!(
             !validator.is_valid(&document),
             "{} must be rejected by {schema}",
@@ -340,7 +354,10 @@ fn check_scenario(contract: &Contract, path: &Path) {
         let call = step["call"].as_str().unwrap();
         let document = &step["expect"]["document"];
         let schema = step["expect"]["schema"].as_str().unwrap();
-        assert!(contract.validator(schema).is_valid(document), "{at}: {schema}");
+        assert!(
+            contract.validator(schema).is_valid(document),
+            "{at}: {schema}"
+        );
         if document.get("schema").is_some() {
             assert!(contract.accepts(document), "{at}: discriminator dispatch");
         }
@@ -351,7 +368,10 @@ fn check_scenario(contract: &Contract, path: &Path) {
         if call == "start" {
             let spec = &step["args"]["spec"];
             let key = &spec["operation_key"];
-            match started.iter().find(|(earlier, _)| &earlier["operation_key"] == key) {
+            match started
+                .iter()
+                .find(|(earlier, _)| &earlier["operation_key"] == key)
+            {
                 Some((earlier, earlier_ref)) if earlier == spec => {
                     assert_eq!(document, earlier_ref, "{at}: same key, same spec, same ref");
                     assert_eq!(now, launches, "{at}: an idempotent start launches nothing");
