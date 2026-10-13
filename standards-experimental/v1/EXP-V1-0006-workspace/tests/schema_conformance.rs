@@ -231,6 +231,12 @@ fn required_failure_cases_are_present() {
         "complete-on-running",
         "credential-value-on-ref",
         "credential-value-on-binding",
+        "credential-value-in-environment",
+        "credential-token-in-environment",
+        "credential-value-in-operation-metadata",
+        "credential-value-in-status-metadata",
+        "credential-value-in-result-metadata",
+        "credential-value-in-result-process-metadata",
         "descriptor-missing-enforceable-limits",
         "error-kind-not-in-closed-set",
     ] {
@@ -256,13 +262,10 @@ fn object_pointers(value: &Value, pointer: String, out: &mut Vec<String>) {
     }
 }
 
-/// Free-form `{string: string}` maps. JSON Schema cannot tell a secret from
-/// any other string value there; spec §5.1 forbids credentials in them
-/// normatively. Every other object must refuse a smuggled value field.
-const STRING_MAPS: [&str; 2] = ["environment", "metadata"];
-
+/// Every object node, typed objects and free-form string maps alike, must
+/// refuse a smuggled credential value field.
 #[test]
-fn no_typed_object_admits_a_credential_value_field() {
+fn no_object_admits_a_credential_value_field() {
     let contract = Contract::load();
     for (schema, path) in success_fixtures() {
         let validator = contract.validator(&schema);
@@ -270,17 +273,15 @@ fn no_typed_object_admits_a_credential_value_field() {
         let mut pointers = Vec::new();
         object_pointers(&document, String::new(), &mut pointers);
         for pointer in pointers {
-            let is_map = STRING_MAPS
-                .iter()
-                .any(|map| pointer.ends_with(&format!("/{map}")));
-            for field in ["value", "secret", "token", "password"] {
+            for field in [
+                "value", "secret", "token", "password", "GH_TOKEN", "api_key",
+            ] {
                 let mut mutated = document.clone();
                 let target = mutated.pointer_mut(&pointer).unwrap();
                 target[field] = json!("ghp_exampleSecretValue");
-                assert_eq!(
-                    validator.is_valid(&mutated),
-                    is_map,
-                    "{} at '{pointer}' with `{field}`",
+                assert!(
+                    !validator.is_valid(&mutated),
+                    "{} at '{pointer}' admits `{field}`",
                     path.display()
                 );
             }
@@ -333,18 +334,96 @@ fn is_terminal(state: &str) -> bool {
     TERMINAL_STATES.contains(&state)
 }
 
+/// The fixture provider's cursor encoding, `g<generation>:<byte offset>`.
+/// Portable consumers treat cursors as opaque; only this oracle reads them.
+fn parse_cursor(cursor: &Value, at: &str) -> (u64, u64) {
+    let text = cursor.as_str().unwrap();
+    text.strip_prefix('g')
+        .and_then(|rest| rest.split_once(':'))
+        .and_then(|(generation, offset)| Some((generation.parse().ok()?, offset.parse().ok()?)))
+        .unwrap_or_else(|| panic!("{at}: cursor {text} is not g<generation>:<offset>"))
+}
+
+/// Decoded length of a padded base64 string the schema has already accepted.
+fn decoded_len(data_b64: &str) -> u64 {
+    let padding = data_b64.bytes().rev().take_while(|b| *b == b'=').count();
+    (data_b64.len() / 4 * 3 - padding) as u64
+}
+
+/// Every byte from `cursor` to `next_cursor` is either returned in
+/// `data_b64` or declared lost in `gap`. Returns the bytes the page declares
+/// lost, `None` when the extent is unknown.
+fn check_page_accounting(page: &Value, at: &str) -> Option<u64> {
+    let (generation, offset) = parse_cursor(&page["cursor"], at);
+    let (next_generation, next) = parse_cursor(&page["next_cursor"], at);
+    assert_eq!(
+        next_generation, generation,
+        "{at}: a page stays in its generation"
+    );
+    let returned = decoded_len(page["data_b64"].as_str().unwrap());
+    let lost = match page.get("gap") {
+        None => Some(0),
+        Some(gap) => gap["lost_bytes"].as_u64(),
+    };
+    match lost {
+        Some(lost) => assert_eq!(
+            next,
+            offset + lost + returned,
+            "{at}: bytes between cursors are neither returned nor declared lost"
+        ),
+        None => assert!(
+            next >= offset + returned,
+            "{at}: next cursor precedes the data"
+        ),
+    }
+    lost
+}
+
+#[test]
+fn every_observation_fixture_accounts_for_every_byte() {
+    let pages = json_files(&root().join("fixtures/valid/workspace-observation"));
+    assert!(
+        pages
+            .iter()
+            .any(|path| read_json(path).get("gap").is_some())
+    );
+    for path in pages {
+        check_page_accounting(&read_json(&path), &path.display().to_string());
+    }
+}
+
+/// Seeded output state for a scenario: `produced_bytes` written in
+/// `generation`, of which the descriptor's `retention_bytes` are retained.
+struct SeededOutput {
+    generation: u64,
+    retained_from: u64,
+    produced: u64,
+}
+
 /// Replays one scripted scenario: every expected response satisfies its
 /// schema, and the runtime rules schemas cannot express hold across steps.
 fn check_scenario(contract: &Contract, path: &Path) {
     let scenario = read_json(path);
     let name = path.display();
-    let integrity = scenario["provider"].as_str().map(|provider| {
+    let descriptor = scenario["provider"].as_str().map(|provider| {
         let descriptor = read_json(&root().join("fixtures").join(provider));
         assert!(contract.accepts(&descriptor), "{name}: provider descriptor");
-        descriptor["observation"]["integrity"]
-            .as_str()
-            .unwrap()
-            .to_string()
+        descriptor
+    });
+    let integrity = descriptor
+        .as_ref()
+        .map(|descriptor| descriptor["observation"]["integrity"].as_str().unwrap());
+    let output = scenario.get("output").map(|output| {
+        let retention = descriptor.as_ref().expect("seeded output needs a provider")["observation"]
+            ["retention_bytes"]
+            .as_u64()
+            .unwrap();
+        let produced = output["produced_bytes"].as_u64().unwrap();
+        SeededOutput {
+            generation: output["generation"].as_u64().unwrap(),
+            retained_from: produced.saturating_sub(retention),
+            produced,
+        }
     });
     let mut launches = 0;
     let mut started: Vec<(Value, Value)> = Vec::new();
@@ -399,10 +478,35 @@ fn check_scenario(contract: &Contract, path: &Path) {
             }
         }
         if let Some(gap) = document.get("gap") {
-            match integrity.as_deref() {
+            match integrity {
                 Some("exact") => assert!(gap["lost_bytes"].is_u64(), "{at}: exact gap"),
                 Some(_) => {}
                 None => panic!("{at}: a gap needs the provider descriptor"),
+            }
+            assert!(
+                output.is_some(),
+                "{at}: a gap needs seeded output to derive it"
+            );
+        }
+        if call == "observe" && document.get("data_b64").is_some() {
+            assert_eq!(
+                document["cursor"], step["args"]["cursor"],
+                "{at}: a page starts at the requested cursor"
+            );
+            let lost = check_page_accounting(document, &at);
+            if let Some(output) = &output {
+                let (generation, offset) = parse_cursor(&document["cursor"], &at);
+                let (_, next) = parse_cursor(&document["next_cursor"], &at);
+                assert_eq!(generation, output.generation, "{at}: seeded generation");
+                assert_eq!(
+                    lost,
+                    Some(output.retained_from.saturating_sub(offset)),
+                    "{at}: loss must follow from seeded retention"
+                );
+                assert!(
+                    next <= output.produced,
+                    "{at}: page runs past produced output"
+                );
             }
         }
     }

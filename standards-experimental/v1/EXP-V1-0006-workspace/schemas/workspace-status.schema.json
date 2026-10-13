@@ -82,10 +82,7 @@
           "minLength": 1
         },
         "metadata": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "credential-ref.schema.json#/$defs/credentialFreeStringMap"
         }
       },
       "if": {

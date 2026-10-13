@@ -214,9 +214,12 @@ both under `apss.workspace-status/v1`.
 - `environment` and every `metadata` map MUST NOT carry credentials.
   Credentials go in `credential_bindings`, which is what lets an
   `OperationSpec` be persisted and logged. The schemas reject value fields on
-  every typed object; they cannot recognize a secret placed as the value of a
-  free-form string map, so this clause is normative and enforced by
-  implementations.
+  every typed object, and these maps share `CredentialFreeStringMap`, which
+  rejects any key that names a credential: exactly `value`, or containing
+  `secret`, `token`, `password`, `passwd`, `api_key`, `apikey`,
+  `private_key`, `privatekey` or `credential`, in any letter case. No schema
+  can recognize a secret placed under an innocuous key, so for that case this
+  clause stays normative and is enforced by implementations.
 - When `launch_marker` is present, the provider MUST emit `line` on the
   observation stream from a process that precedes the workload and is replaced
   by it, under the name `argv0`. Neither value may be readable by the workload

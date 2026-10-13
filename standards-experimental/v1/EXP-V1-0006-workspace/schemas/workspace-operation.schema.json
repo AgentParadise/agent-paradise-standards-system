@@ -46,10 +46,7 @@
           "pattern": "^[^/]"
         },
         "environment": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "credential-ref.schema.json#/$defs/credentialFreeStringMap"
         },
         "credential_bindings": {
           "type": "array",
@@ -80,10 +77,7 @@
           "minimum": 1
         },
         "metadata": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "credential-ref.schema.json#/$defs/credentialFreeStringMap"
         }
       }
     },
