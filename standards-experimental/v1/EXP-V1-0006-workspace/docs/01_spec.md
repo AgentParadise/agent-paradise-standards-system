@@ -1,6 +1,6 @@
 # EXP-V1-0006: Agentic Workspace
 
-**Version:** 0.1.0  
+**Version:** 0.2.0  
 **Status:** Experimental  
 **Category:** Technical
 
@@ -27,7 +27,8 @@ consumes the manifest through an implementation-specific adapter.
 
 The normative input artifact is a JSON document conforming to
 `schemas/workspace-launch.schema.json` and the semantic rules in this document.
-Its schema discriminator is `apss.workspace-launch/v1`.
+Its schema discriminator is `apss.workspace-launch/v1`. The operation contract
+artifacts are listed in Section 5.1.1.
 
 Unknown fields MUST be rejected. Additive evolution requires a new schema
 version when an older strict reader could not accept the document.
@@ -148,6 +149,177 @@ The port MUST support provision, hydration, execution, cancellation, status,
 logs, file collection, and destruction. Interactive send, await, and capture
 operations are OPTIONAL capabilities and MUST be discoverable rather than
 assumed.
+
+### 5.1 Operation contract
+
+Added in 0.2.0. The operation contract describes what crosses the provider
+port: one operation started inside a workspace, its status, its output stream,
+the provider's published capabilities, the finalization outcome, and the
+terminal result. It is purely additive: `apss.workspace-launch/v1` and its
+schema are unchanged, and a document valid under 0.1.0 is valid under 0.2.0.
+
+Scheduling, budgets, placement, attempt numbering, and queueing remain out of
+scope (Section 1). Harness-specific formats remain in provider and harness
+implementations.
+
+#### 5.1.1 Artifacts
+
+| Schema file (`schemas/`) | Discriminator | Defines |
+|---|---|---|
+| `workspace-ref.schema.json` | `apss.workspace-ref/v1` | `WorkspaceRef` |
+| `content-ref.schema.json` | `apss.content-ref/v1` | `ContentRef` |
+| `environment-ref.schema.json` | `apss.environment-ref/v1` | `EnvironmentRef` |
+| `credential-ref.schema.json` | `apss.credential-ref/v1` | `CredentialRef`, `CredentialBinding` |
+| `workspace-operation.schema.json` | `apss.workspace-operation/v1` | `OperationSpec`, `OperationRef` |
+| `workspace-status.schema.json` | `apss.workspace-status/v1` | `OperationStatus`, `OperationError` |
+| `workspace-observation.schema.json` | `apss.workspace-observation/v1` | `ObservationPage` |
+| `workspace-provider.schema.json` | `apss.workspace-provider/v1` | `ProviderDescriptor` |
+| `workspace-finalization.schema.json` | `apss.workspace-finalization/v1` | `FinalizationOutcome` |
+| `workspace-result.schema.json` | `apss.workspace-result/v1` | `WorkspaceResult` |
+
+Every object is closed: unknown fields MUST be rejected. A standalone document
+MUST carry its `schema` discriminator. A copy embedded in another document
+MAY omit it and, when present, it MUST equal the discriminator above.
+`OperationRef`, `CredentialBinding`, and `OperationError` inside a result are
+embedded types only.
+
+A status response is exactly one of `OperationStatus` or `OperationError`,
+both under `apss.workspace-status/v1`.
+
+#### 5.1.2 References
+
+- `WorkspaceRef` is opaque. A consumer MUST NOT parse it or derive a path from
+  it. Equality is the only operation.
+- `ContentRef` identity is `digest` (`sha256:<64 lowercase hex>`). `locator`
+  is opaque to core consumers and resolved only by the provider. A provider
+  MUST verify digest and `size_bytes` before the content is visible to the
+  workload, and MUST fail hydration with `hydration_failed` on mismatch.
+  `authority` is a `CredentialRef`, never a value.
+- `EnvironmentRef.kind` is an open, provider-interpreted namespace, for
+  example an OCI image, a template version, or a snapshot id. Core consumers
+  MUST treat the ref as opaque and compare by equality only. A provider MUST
+  report the effective environment in the result. Given a requested ref it
+  cannot run exactly, it MUST refuse rather than substitute.
+- A credential value MUST NOT appear in any APSS artifact. `CredentialRef`
+  names a credential that the provider resolves through implementation-owned
+  configuration (Section 3.3). `CredentialBinding` says how the resolved value
+  is delivered (`env` or `file`) and where (`target`). A binding MUST NOT be
+  persisted into results or observations.
+
+#### 5.1.3 Operation rules
+
+- `start` returns an `OperationRef` once the operation is accepted, without
+  waiting for it to end. The workload's environment is exactly the provider
+  defaults plus `environment` plus the resolved `credential_bindings`.
+- `environment` and every `metadata` map MUST NOT carry credentials.
+  Credentials go in `credential_bindings`, which is what lets an
+  `OperationSpec` be persisted and logged. The schemas reject value fields on
+  every typed object, and these maps share `CredentialFreeStringMap`, which
+  rejects any key that names a credential: exactly `value`, or containing
+  `secret`, `token`, `password`, `passwd`, `api_key`, `apikey`,
+  `private_key`, `privatekey` or `credential`, in any letter case. No schema
+  can recognize a secret placed under an innocuous key, so for that case this
+  clause stays normative and is enforced by implementations.
+- When `launch_marker` is present, the provider MUST emit `line` on the
+  observation stream from a process that precedes the workload and is replaced
+  by it, under the name `argv0`. Neither value may be readable by the workload
+  through its environment, files, or argv after it starts. The marker is
+  opaque to the provider.
+- Idempotency scope is one workspace. The same `(workspace, operation_key)`
+  with an equal spec MUST return the same ref and launch nothing. Concurrent
+  same-key starts MUST yield exactly one launch. The same key with a different
+  spec MUST fail with `conflict`. The idempotency record MUST live at least as
+  long as the workspace, so a retried start whose first response was lost
+  returns the original ref.
+- `operation_key` is opaque to the provider. The orchestrator composes it.
+
+#### 5.1.4 Status and error rules
+
+- `state` is one of `pending`, `running`, `succeeded`, `failed`,
+  `cancelled`, `timed_out`, `lost`. The last five are terminal.
+- `state` MUST come from a channel the workload cannot write. Terminal states
+  are sticky.
+- A non-terminal status carries no `exit_code`, `signal`, or `ended_at`.
+- `lost` is reported only when the provider has positively established that
+  the resource or process is gone with no recorded outcome.
+- When the provider cannot answer, `status` returns `OperationError` with kind
+  `provider_unavailable`, not an `OperationStatus`. An unknown ref returns kind
+  `unknown_operation`.
+- `cancel` is idempotent. It returns `cancelled` only after the process and its
+  descendants are confirmed gone. If the provider cannot confirm that, it MUST
+  escalate to terminating the workspace's processes and report it.
+- `OperationError.kind` is closed for v1: `rejected_policy`,
+  `unsupported_capability`, `hydration_failed`, `conflict`,
+  `unknown_operation`, `timeout`, `cancelled`, `resource_lost`,
+  `provider_unavailable`, `internal`. Adding a kind requires a new
+  discriminator version.
+
+#### 5.1.5 Observation rules
+
+- `cursor` and `next_cursor` are opaque strings to consumers. A provider
+  encodes a generation and a byte offset in them; offsets are monotonic within
+  a generation.
+- A cursor from another generation or another ref MUST return
+  `OperationError` with kind `unknown_operation`. A cursor older than retention
+  MUST return the oldest retained data plus `gap`.
+- A serialized page MUST NOT exceed the descriptor's `max_page_bytes`, base64
+  and envelope included.
+- Data lost to retention MUST be reported as `gap`, never silently skipped.
+  `lost_bytes` is at least 1. It MUST be exact when the descriptor declares
+  `integrity: exact`, and MAY be `null` (loss detected, extent unknown) only
+  when it declares `continuity_detected`.
+- `state` is the operation state the provider observed when it served the
+  page. `complete` is true only when that state is terminal and every retained
+  byte up to the terminal offset has been returned. A read after a terminal
+  state returns the remaining bytes before `complete` becomes true.
+
+#### 5.1.6 Provider descriptor
+
+A provider MUST publish its `ProviderDescriptor` before launch. It declares
+which limits it can enforce (`enforceable_limits`, every limit stated), its
+capabilities, its observation retention, page bound and integrity, whether it
+supports interaction, and which environment kinds it accepts. A request outside
+the descriptor MUST be refused with `unsupported_capability` or
+`rejected_policy` before launch.
+
+#### 5.1.7 Finalization rules
+
+- A cancel or timeout MUST pass through finalization before destroy.
+- `completed` carries no error. `failed` carries an `error` and the `stage`
+  that failed (`while_running` or `before_delete`).
+- `retained` means a `before_delete` failure left the data in place. It
+  carries the `error` and the `WorkspaceRef` to retry against. Deletion MUST
+  NOT occur in that state, and a later finalization by the same ref MUST be
+  possible.
+- Process completion and capture success are separate facts.
+
+#### 5.1.8 Result rules
+
+- `process` is a terminal `OperationStatus`.
+- `success` is derived, not chosen:
+  `success = process.state == succeeded and (not capture.required or
+  capture.state == captured)`.
+- A result whose process succeeded has no `primary_failure`.
+- `teardown_failure` MUST NOT overwrite `primary_failure` (Section 4).
+- `capture.state` MUST be mapped from the implementation's authoritative
+  capture verdict, not re-judged.
+
+#### 5.1.9 Behaviour fixtures
+
+`fixtures/behaviour/` holds scripted call sequences with the response expected
+at each step: idempotent start, same-key conflict, repeated cancel, cursor
+after retention, late read after termination, required capture, and unknown
+ref. Schema acceptance cannot express these sequences. Implementations in any
+language MUST reproduce them.
+
+#### 5.1.10 Reserved: `apss.workspace-launch/v2`
+
+`apss.workspace-launch/v2` is reserved as "launch/v1 plus a requested
+`environment: EnvironmentRef` and `ContentRef` entries in `content.inputs`".
+It is defined, not adopted: 0.2.0 ships no v2 schema, uses the reference types
+only in results and alongside operations, and every launch manifest remains
+`apss.workspace-launch/v1`. A v1 manifest carrying either field is rejected.
+Adoption is deferred until a remote provider requires it.
 
 ## 6. Conformance profiles
 
