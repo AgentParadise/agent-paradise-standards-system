@@ -5,7 +5,7 @@ id = "EXP-V1-0007"
 name = "Knowledge Store"
 slug = "knowledge-store"
 version = "0.1.0"
-category = "technical"
+category = "design"
 backwards_compat = true  # 0.x: the principles may change shape while incubating
 
 [aps]

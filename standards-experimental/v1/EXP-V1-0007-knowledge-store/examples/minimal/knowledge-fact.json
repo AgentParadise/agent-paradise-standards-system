@@ -3,12 +3,16 @@
   "item_id": "7b0a0c0e-5a44-4c3e-9d6e-1d3f3c1b2a90",
   "compartment_id": "0d9f6c2e-2b1a-4f6b-8a4e-6c7d8e9f0a1b",
   "content": {
-    "hash": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "address": "hmac-sha256:4f1c9a2e7d3b8c605e1a9f2d7c4b3e8a1d6f0c5b9e2a7d4c8f3b1e6a0d9c2f57",
+    "alg": "hmac-sha256",
+    "key_scope": "compartment",
     "kind": "text/markdown",
     "length": 2048
   },
   "provenance": {
-    "hash": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+    "address": "hmac-sha256:a83d0e5f2c7b1946d8e3f0a2b5c7d9e1f4a6b8c0d2e4f6a8b0c2d4e6f8a0b1c3",
+    "alg": "hmac-sha256",
+    "key_scope": "compartment",
     "kind": "application/vnd.knowledge-store.provenance+json",
     "length": 160
   }

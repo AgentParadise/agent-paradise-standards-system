@@ -19,16 +19,18 @@ proven the principles. Until then every clause here may change, and the
 
 ## Artifacts
 
+- [Package metadata](experiment.toml)
 - [Overview](docs/00_overview.md)
 - [Normative specification (principles and open questions)](docs/01_spec.md)
 - [A reference-only fact, as an example](examples/minimal/knowledge-fact.json)
 - Rust: the principle list as data, and a `principles` command (`src/lib.rs`)
+- [Tests](tests/README.md)
 
 ## Validation
 
 ```bash
 cargo test -p apss-v1-0007-knowledge-store
-cargo run -p aps-cli --bin apss-dev -- v1 validate package EXP-V1-0007
+cargo run -p aps-cli --bin apss-dev -- v1 validate experiment EXP-V1-0007
 ```
 
 ## Promotion gate

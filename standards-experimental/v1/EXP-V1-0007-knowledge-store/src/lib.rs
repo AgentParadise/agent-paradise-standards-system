@@ -42,12 +42,12 @@ pub fn principles() -> Vec<Principle> {
         Principle {
             id: "P4",
             title: "Read models are rebuildable",
-            statement: "Every read model is derivable by folding the log, and none is the source of truth.",
+            statement: "Every read model is derivable by folding the log plus the referenced blobs still present (an erased blob folds as erased), and none is the source of truth.",
         },
         Principle {
             id: "P5",
-            title: "One stream per item",
-            statement: "Each item has its own stream, which is the consistency boundary; appends name an expected position so concurrent writers get one winner.",
+            title: "One stream per aggregate, and the item is the aggregate",
+            statement: "Each aggregate instance has its own stream keyed by its entity id, which is the consistency boundary; in a knowledge store the item is the aggregate. Cross-item rules use a reservation or a read-model check, never a compartment- or corpus-wide stream.",
         },
         Principle {
             id: "P6",
@@ -63,6 +63,11 @@ pub fn principles() -> Vec<Principle> {
             id: "P8",
             title: "The log is built to be hash-chained",
             statement: "Facts serialize deterministically, append at an expected position, and never derive idempotency from the payload, so a hash chain with externally anchored, signed heads can be added without changing a fact.",
+        },
+        Principle {
+            id: "P9",
+            title: "The content address is opaque",
+            statement: "A reference's address is a keyed MAC under a per-isolation-unit key (recommended) or a digest over ciphertext, never an unkeyed digest of plaintext; it names its algorithm and key scope, never the key. The object store checks integrity on read.",
         },
     ]
 }
@@ -118,6 +123,6 @@ mod tests {
             .iter()
             .map(|p| p["id"].as_str().unwrap())
             .collect();
-        assert_eq!(ids, ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"]);
+        assert_eq!(ids, ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"]);
     }
 }
