@@ -3,17 +3,22 @@
 **ID:** `EXP-V1-0006`  
 **Type:** Experiment  
 **Slug:** `workspace`  
-**Version:** `0.1.0`
+**Version:** `0.2.0`
 
 This experiment defines a provider-neutral launch manifest and observable
-workspace lifecycle for agent execution. It is implemented first by the
+workspace lifecycle for agent execution. Since 0.2.0 it also defines the
+operation contract at the provider port: operations, status, observation
+pages, provider descriptors, finalization, results, and immutable references.
+It is implemented first by the
 Agentic Workspace Local and Docker adapters.
 
 ## Artifacts
 
 - [Normative specification](docs/01_spec.md)
 - [Launch manifest JSON Schema](schemas/workspace-launch.schema.json)
+- [Operation contract JSON Schemas](schemas/) (spec Section 5.1)
 - [Minimal manifest](examples/minimal/workspace-launch.json)
+- [Success, failure, and behaviour fixtures](fixtures/)
 - Rust types and semantic validation in `src/lib.rs`
 
 ## Validation
