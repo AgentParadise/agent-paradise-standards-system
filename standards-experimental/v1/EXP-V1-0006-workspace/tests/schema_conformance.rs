@@ -501,12 +501,21 @@ fn check_scenario(contract: &Contract, path: &Path) -> Option<String> {
             bound
         });
         if let Some(given) = given {
-            assert!(!given.is_empty(), "{at}: given names at least one condition");
+            assert!(
+                !given.is_empty(),
+                "{at}: given names at least one condition"
+            );
             for condition in given {
                 let condition = condition.as_str().unwrap();
-                assert!(CONDITIONS.contains(&condition), "{at}: unknown condition {condition}");
+                assert!(
+                    CONDITIONS.contains(&condition),
+                    "{at}: unknown condition {condition}"
+                );
             }
-            assert!(bound.is_some(), "{at}: an injected condition needs a settlement bound");
+            assert!(
+                bound.is_some(),
+                "{at}: an injected condition needs a settlement bound"
+            );
             injected = true;
         }
 
@@ -546,9 +555,13 @@ fn check_scenario(contract: &Contract, path: &Path) -> Option<String> {
         }
         launches = now;
 
+        // Operation states only: a finalization outcome has its own `state`
+        // and no operation ref.
         let states: Vec<&str> = outcomes
             .iter()
-            .filter_map(|outcome| outcome["document"]["state"].as_str())
+            .map(|outcome| &outcome["document"])
+            .filter(|document| document.get("ref").is_some())
+            .filter_map(|document| document["state"].as_str())
             .collect();
         if let Some(previous) = &terminal {
             for state in &states {
@@ -634,8 +647,8 @@ fn every_lifecycle_hazard_has_a_fixture_and_a_must_clause() {
         );
         let tag = format!("**{hazard}**");
         assert!(
-            spec.lines()
-                .any(|line| line.contains(&tag) && line.contains("MUST")),
+            spec.split("\n- ")
+                .any(|clause| clause.starts_with(&tag) && clause.contains("MUST")),
             "{hazard}: the spec names no MUST clause for it"
         );
     }
