@@ -20,7 +20,8 @@ consumer.
   `expect`), and `descendant_alive` on a response (whether any workload
   process, detached descendants included, survives the call). A response
   with `descendant_alive: true` is never `cancelled`. The unconfirmed cancel
-  outcome is `OperationError` kind `timeout` carrying the `ref`. Further step
+  outcome is `OperationError` kind `timeout` carrying the `ref`; it does not
+  pin `descendant_alive`, because unconfirmed means unknown. Further step
   fields:
   - `operation_records`: the provider's operation records for the workspace
     once the call returns. Required, and 0, under a destroy condition.

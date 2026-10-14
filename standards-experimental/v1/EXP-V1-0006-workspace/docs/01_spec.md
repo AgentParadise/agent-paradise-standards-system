@@ -1,6 +1,6 @@
 # EXP-V1-0006: Agentic Workspace
 
-**Version:** 0.2.1  
+**Version:** 0.2.2  
 **Status:** Experimental  
 **Category:** Technical
 
@@ -251,6 +251,12 @@ both under `apss.workspace-status/v1`.
   is `OperationError` kind `timeout` carrying the `ref`: termination was
   requested and escalated but not confirmed within the provider's bound.
   `status` MUST NOT report `cancelled` until termination is confirmed.
+
+  An executed termination that cannot be confirmed within the provider's
+  bound is `timeout` with `ref`, whatever a harness later measures. A provider
+  that could not execute or inspect termination reports `provider_unavailable`
+  with `ref`.
+
 - `OperationError.kind` is closed for v1: `rejected_policy`,
   `unsupported_capability`, `hydration_failed`, `conflict`,
   `unknown_operation`, `timeout`, `cancelled`, `resource_lost`,
@@ -351,6 +357,11 @@ the provider's event loop synchronously still fails its bound.
 A scenario may name the `hazard` it encodes. The only contract schema change
 in 0.2.1 is the optional `loss_detected` on `ObservationPage` (5.1.5).
 
+Since 0.2.2 the unconfirmed `timeout` alternative of the LH-1, LH-2 and LH-3
+cancel steps carries no `descendant_alive`, so it is accepted whether or not a
+descendant survives. The `cancelled` alternative still requires
+`descendant_alive: false`. Every response 0.2.1 accepted is still accepted.
+
 #### 5.1.10 Reserved: `apss.workspace-launch/v2`
 
 `apss.workspace-launch/v2` is reserved as "launch/v1 plus a requested
@@ -401,6 +412,12 @@ every one.
   `file_exists` and `read_file` on a FIFO the workload left behind MUST NOT
   block: each MUST settle within its bound, and a read MUST return a typed
   error rather than open the FIFO. `finalize` MUST settle within its bound.
+
+The unconfirmed outcome in LH-1, LH-2 and LH-3 is the one in 5.1.4. An
+executed termination that cannot be confirmed within the provider's bound is
+`timeout` with `ref`, whatever a harness later measures. A provider that could
+not execute or inspect termination reports `provider_unavailable` with `ref`.
+Its fixture alternative therefore does not pin `descendant_alive`.
 
 ## 6. Conformance profiles
 
