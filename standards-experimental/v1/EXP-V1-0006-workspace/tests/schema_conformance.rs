@@ -400,11 +400,67 @@ struct SeededOutput {
     produced: u64,
 }
 
+/// Lifecycle hazards (spec 5.1.11). Every id needs a behaviour fixture and a
+/// MUST clause in the spec naming it.
+const HAZARDS: [&str; 7] = ["LH-1", "LH-2", "LH-3", "LH-4", "LH-5", "LH-6", "LH-7"];
+/// Conditions a provider harness injects before a step (`given`). Closed so a
+/// misspelled condition fails here instead of being silently not injected.
+const CONDITIONS: [&str; 9] = [
+    "detached_descendant",
+    "caller_cancelled_during_confirmation",
+    "launch_header_not_seen",
+    "destroyed_during_credential_resolution",
+    "workspace_destroyed",
+    "backend_stuck_removing",
+    "timeout_elapsed",
+    "observation_gap",
+    "fifo_in_workspace",
+];
+/// Conditions under which the provider must hold no operation record once the
+/// call returns, so the step must declare `operation_records: 0`.
+const DESTROYED: [&str; 2] = [
+    "destroyed_during_credential_resolution",
+    "workspace_destroyed",
+];
+/// Calls a step may make: the operation contract plus the harness file calls
+/// (`file_exists`, `read_file`) that LH-7 drives against a named path.
+const CALLS: [&str; 8] = [
+    "start",
+    "status",
+    "cancel",
+    "observe",
+    "result",
+    "finalize",
+    "file_exists",
+    "read_file",
+];
+/// Outcome schemas outside `schemas/`: fixture-level shapes for harness calls
+/// the contract does not define.
+const FIXTURE_SCHEMA_PREFIX: &str = "fixtures/";
+/// Upper bound on any `settles_within_seconds`: a bound larger than this is
+/// not a settlement bound.
+const MAX_SETTLE_SECONDS: f64 = 300.0;
+
+/// The responses a step accepts: its single `expect`, or each of
+/// `expect_one_of` when the contract allows more than one correct outcome.
+fn step_outcomes<'a>(step: &'a Value, at: &str) -> Vec<&'a Value> {
+    match (step.get("expect"), step.get("expect_one_of")) {
+        (Some(expect), None) => vec![expect],
+        (None, Some(Value::Array(outcomes))) if !outcomes.is_empty() => outcomes.iter().collect(),
+        _ => panic!("{at}: exactly one of expect or a non-empty expect_one_of"),
+    }
+}
+
 /// Replays one scripted scenario: every expected response satisfies its
 /// schema, and the runtime rules schemas cannot express hold across steps.
-fn check_scenario(contract: &Contract, path: &Path) {
+/// Returns the scenario's hazard id, if it encodes one.
+fn check_scenario(contract: &Contract, path: &Path) -> Option<String> {
     let scenario = read_json(path);
     let name = path.display();
+    let hazard = scenario["hazard"].as_str().map(|hazard| {
+        assert!(HAZARDS.contains(&hazard), "{name}: unknown hazard {hazard}");
+        hazard.to_string()
+    });
     let descriptor = scenario["provider"].as_str().map(|provider| {
         let descriptor = read_json(&root().join("fixtures").join(provider));
         assert!(contract.accepts(&descriptor), "{name}: provider descriptor");
@@ -428,25 +484,154 @@ fn check_scenario(contract: &Contract, path: &Path) {
     let mut launches = 0;
     let mut started: Vec<(Value, Value)> = Vec::new();
     let mut terminal: Option<String> = None;
+    let mut injected = false;
+    let mut loss_seen = false;
+    let mut stuck_drained = false;
+    let mut fifo_given = false;
+    let mut fifo_calls: Vec<&str> = Vec::new();
     for (index, step) in scenario["steps"].as_array().unwrap().iter().enumerate() {
         let at = format!("{name} step {index}");
         let call = step["call"].as_str().unwrap();
-        let document = &step["expect"]["document"];
-        let schema = step["expect"]["schema"].as_str().unwrap();
-        assert!(
-            contract.validator(schema).is_valid(document),
-            "{at}: {schema}"
-        );
-        if document.get("schema").is_some() {
-            assert!(contract.accepts(document), "{at}: discriminator dispatch");
+        assert!(CALLS.contains(&call), "{at}: unknown call {call}");
+        let outcomes = step_outcomes(step, &at);
+        for outcome in &outcomes {
+            let document = &outcome["document"];
+            let schema = outcome["schema"].as_str().unwrap();
+            let valid = match schema.strip_prefix(FIXTURE_SCHEMA_PREFIX) {
+                Some(file) => {
+                    jsonschema::validator_for(&read_json(&root().join("fixtures").join(file)))
+                        .unwrap()
+                        .is_valid(document)
+                }
+                None => contract.validator(schema).is_valid(document),
+            };
+            assert!(valid, "{at}: {schema}");
+            if document.get("schema").is_some() {
+                assert!(contract.accepts(document), "{at}: discriminator dispatch");
+            }
+            // A confirmed cancel and a live descendant cannot coexist; under a
+            // hazard the outcome must say which one it is.
+            let cancelled = document["state"] == "cancelled";
+            match outcome.get("descendant_alive").map(Value::as_bool) {
+                Some(Some(true)) => assert!(!cancelled, "{at}: cancelled while a descendant lives"),
+                Some(Some(false)) => {}
+                Some(None) => panic!("{at}: descendant_alive is a boolean"),
+                None => assert!(
+                    !(cancelled && hazard.is_some()),
+                    "{at}: a confirmed cancel under a hazard must declare descendant_alive false"
+                ),
+            }
+        }
+
+        let given = step.get("given").map(|given| given.as_array().unwrap());
+        let bound = step.get("settles_within_seconds").map(|bound| {
+            let bound = bound.as_f64().expect("settles_within_seconds is a number");
+            assert!(
+                bound > 0.0 && bound <= MAX_SETTLE_SECONDS,
+                "{at}: settlement bound {bound} outside (0, {MAX_SETTLE_SECONDS}]"
+            );
+            bound
+        });
+        if let Some(given) = given {
+            assert!(
+                !given.is_empty(),
+                "{at}: given names at least one condition"
+            );
+            for condition in given {
+                let condition = condition.as_str().unwrap();
+                assert!(
+                    CONDITIONS.contains(&condition),
+                    "{at}: unknown condition {condition}"
+                );
+            }
+            assert!(
+                bound.is_some(),
+                "{at}: an injected condition needs a settlement bound"
+            );
+            injected = true;
+        }
+        let given: Vec<&str> = given
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+
+        // LH-4: a destroyed workspace holds no operation record. The harness
+        // counts the provider's records (idempotency and registry entries) for
+        // the workspace once the call, and any resolver it blocked on, returns.
+        match step.get("operation_records").map(Value::as_u64) {
+            Some(Some(records)) => assert!(
+                records == 0 || !given.iter().any(|c| DESTROYED.contains(c)),
+                "{at}: a destroyed workspace retains {records} operation record(s)"
+            ),
+            Some(None) => panic!("{at}: operation_records is a count"),
+            None => assert!(
+                !given.iter().any(|c| DESTROYED.contains(c)),
+                "{at}: after destroy the step must declare operation_records 0"
+            ),
+        }
+
+        // LH-5: a drain repeats observe, following next_cursor, until a page
+        // completes or the call fails. The bound covers the whole loop.
+        let drains = match step.get("repeat_until_complete") {
+            None => false,
+            Some(Value::Bool(true)) => {
+                assert_eq!(call, "observe", "{at}: only observe repeats");
+                assert!(bound.is_some(), "{at}: a drain needs a total bound");
+                for outcome in &outcomes {
+                    let document = &outcome["document"];
+                    assert!(
+                        document["complete"] == true || document.get("kind").is_some(),
+                        "{at}: a drain ends complete or with a typed error"
+                    );
+                }
+                true
+            }
+            Some(_) => panic!("{at}: repeat_until_complete is true when present"),
+        };
+        if given.contains(&"backend_stuck_removing") && !stuck_drained {
+            // A status call first could repair settlement the drain must reach
+            // on its own.
+            assert!(
+                drains && given.contains(&"timeout_elapsed"),
+                "{at}: a stuck backend is first met by a timeout drain"
+            );
+            stuck_drained = true;
+        }
+
+        // LH-7: the file boundary itself is driven, against a named path.
+        fifo_given |= given.contains(&"fifo_in_workspace");
+        if call == "file_exists" || call == "read_file" {
+            assert!(
+                step["args"]["workspace"].is_object() && step["args"]["path"].is_string(),
+                "{at}: a file call names its workspace and path"
+            );
+            if given.contains(&"fifo_in_workspace") {
+                fifo_calls.push(call);
+            }
+        }
+        if call == "read_file" {
+            for outcome in &outcomes {
+                assert!(
+                    outcome["document"].get("kind").is_some(),
+                    "{at}: reading a non-regular file is a typed error, not data"
+                );
+            }
         }
 
         let now = step["launches"].as_u64().unwrap();
         assert!(now >= launches, "{at}: launches never decrease");
-        let is_error = document.get("kind").is_some();
         if call == "start" {
             let spec = &step["args"]["spec"];
             let key = &spec["operation_key"];
+            let document = &outcomes[0]["document"];
+            let is_error = outcomes
+                .iter()
+                .all(|outcome| outcome["document"].get("kind").is_some());
+            assert!(
+                outcomes.len() == 1 || is_error,
+                "{at}: a start with alternative outcomes may only fail"
+            );
             match started
                 .iter()
                 .find(|(earlier, _)| &earlier["operation_key"] == key)
@@ -463,61 +648,130 @@ fn check_scenario(contract: &Contract, path: &Path) {
                     assert_eq!(now, launches + 1, "{at}: a new start launches once");
                     started.push((spec.clone(), document.clone()));
                 }
-                None => {}
+                None => assert_eq!(now, launches, "{at}: a failed start launches nothing"),
             }
         } else {
             assert_eq!(now, launches, "{at}: only start launches");
         }
         launches = now;
 
-        if let Some(state) = document["state"].as_str() {
-            if let Some(previous) = &terminal {
+        // Operation states only: a finalization outcome has its own `state`
+        // and no operation ref.
+        let states: Vec<&str> = outcomes
+            .iter()
+            .map(|outcome| &outcome["document"])
+            .filter(|document| document.get("ref").is_some())
+            .filter_map(|document| document["state"].as_str())
+            .collect();
+        if let Some(previous) = &terminal {
+            for state in &states {
                 assert_eq!(state, previous, "{at}: terminal states are sticky");
-            } else if is_terminal(state) {
+            }
+        } else if let [state] = states[..] {
+            // Only an unambiguous outcome fixes the terminal state.
+            if outcomes.len() == 1 && is_terminal(state) {
                 terminal = Some(state.to_string());
             }
         }
-        if let Some(gap) = document.get("gap") {
-            match integrity {
-                Some("exact") => assert!(gap["lost_bytes"].is_u64(), "{at}: exact gap"),
-                Some(_) => {}
-                None => panic!("{at}: a gap needs the provider descriptor"),
-            }
-            assert!(
-                output.is_some(),
-                "{at}: a gap needs seeded output to derive it"
-            );
-        }
-        if call == "observe" && document.get("data_b64").is_some() {
-            assert_eq!(
-                document["cursor"], step["args"]["cursor"],
-                "{at}: a page starts at the requested cursor"
-            );
-            let lost = check_page_accounting(document, &at);
-            if let Some(output) = &output {
-                let (generation, offset) = parse_cursor(&document["cursor"], &at);
-                let (_, next) = parse_cursor(&document["next_cursor"], &at);
-                assert_eq!(generation, output.generation, "{at}: seeded generation");
-                assert_eq!(
-                    lost,
-                    Some(output.retained_from.saturating_sub(offset)),
-                    "{at}: loss must follow from seeded retention"
-                );
+
+        for outcome in &outcomes {
+            let document = &outcome["document"];
+            if let Some(gap) = document.get("gap") {
+                match integrity {
+                    Some("exact") => assert!(gap["lost_bytes"].is_u64(), "{at}: exact gap"),
+                    Some(_) => {}
+                    None => panic!("{at}: a gap needs the provider descriptor"),
+                }
                 assert!(
-                    next <= output.produced,
-                    "{at}: page runs past produced output"
+                    output.is_some(),
+                    "{at}: a gap needs seeded output to derive it"
                 );
+            }
+            if call == "observe" && document.get("data_b64").is_some() {
+                // A drain's final page starts wherever the loop reached.
+                if !drains {
+                    assert_eq!(
+                        document["cursor"], step["args"]["cursor"],
+                        "{at}: a page starts at the requested cursor"
+                    );
+                }
+                let lost = check_page_accounting(document, &at);
+                // LH-6: loss persists to completion, whichever page saw it.
+                loss_seen |= lost != Some(0);
+                if document.get("loss_detected").is_some() {
+                    assert!(loss_seen, "{at}: loss_detected without a loss");
+                }
+                if loss_seen && document["complete"] == true {
+                    assert_eq!(
+                        document["loss_detected"], true,
+                        "{at}: completion after a loss must carry loss_detected"
+                    );
+                }
+                if let Some(output) = &output {
+                    let (generation, offset) = parse_cursor(&document["cursor"], &at);
+                    let (_, next) = parse_cursor(&document["next_cursor"], &at);
+                    assert_eq!(generation, output.generation, "{at}: seeded generation");
+                    assert_eq!(
+                        lost,
+                        Some(output.retained_from.saturating_sub(offset)),
+                        "{at}: loss must follow from seeded retention"
+                    );
+                    assert!(
+                        next <= output.produced,
+                        "{at}: page runs past produced output"
+                    );
+                    if document["complete"] == true {
+                        assert_eq!(
+                            next, output.produced,
+                            "{at}: completion before the terminal offset truncates output"
+                        );
+                    }
+                }
             }
         }
     }
+    if hazard.is_some() {
+        assert!(injected, "{name}: a hazard scenario injects its condition");
+    }
+    if fifo_given {
+        for call in ["file_exists", "read_file"] {
+            assert!(
+                fifo_calls.contains(&call),
+                "{name}: the FIFO must be met by {call}"
+            );
+        }
+    }
+    hazard
 }
 
 #[test]
 fn behaviour_fixtures_replay_with_expected_states() {
     let contract = Contract::load();
     let scenarios = json_files(&root().join("fixtures/behaviour"));
-    assert!(scenarios.len() >= 4);
+    assert!(scenarios.len() >= 14);
     for path in scenarios {
         check_scenario(&contract, &path);
+    }
+}
+
+#[test]
+fn every_lifecycle_hazard_has_a_fixture_and_a_must_clause() {
+    let contract = Contract::load();
+    let covered: Vec<String> = json_files(&root().join("fixtures/behaviour"))
+        .iter()
+        .filter_map(|path| check_scenario(&contract, path))
+        .collect();
+    let spec = std::fs::read_to_string(root().join("docs/01_spec.md")).unwrap();
+    for hazard in HAZARDS {
+        assert!(
+            covered.iter().any(|id| id == hazard),
+            "{hazard}: no behaviour fixture encodes it"
+        );
+        let tag = format!("**{hazard}**");
+        assert!(
+            spec.split("\n- ")
+                .any(|clause| clause.starts_with(&tag) && clause.contains("MUST")),
+            "{hazard}: the spec names no MUST clause for it"
+        );
     }
 }

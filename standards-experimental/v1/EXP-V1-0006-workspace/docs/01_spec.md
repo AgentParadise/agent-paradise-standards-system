@@ -1,6 +1,6 @@
 # EXP-V1-0006: Agentic Workspace
 
-**Version:** 0.2.0  
+**Version:** 0.2.1  
 **Status:** Experimental  
 **Category:** Technical
 
@@ -247,7 +247,10 @@ both under `apss.workspace-status/v1`.
   `unknown_operation`.
 - `cancel` is idempotent. It returns `cancelled` only after the process and its
   descendants are confirmed gone. If the provider cannot confirm that, it MUST
-  escalate to terminating the workspace's processes and report it.
+  escalate to terminating the workspace's processes and report it. The report
+  is `OperationError` kind `timeout` carrying the `ref`: termination was
+  requested and escalated but not confirmed within the provider's bound.
+  `status` MUST NOT report `cancelled` until termination is confirmed.
 - `OperationError.kind` is closed for v1: `rejected_policy`,
   `unsupported_capability`, `hydration_failed`, `conflict`,
   `unknown_operation`, `timeout`, `cancelled`, `resource_lost`,
@@ -272,6 +275,12 @@ both under `apss.workspace-status/v1`.
   page. `complete` is true only when that state is terminal and every retained
   byte up to the terminal offset has been returned. A read after a terminal
   state returns the remaining bytes before `complete` becomes true.
+- Since 0.2.1 a page MAY carry `loss_detected: true` when its generation lost
+  bytes to retention before `next_cursor`, on that page or an earlier one. The
+  completing page of a drain that lost bytes MUST carry it, whether or not
+  that page has a `gap` of its own. `gap` stays a per-page delta: a later page
+  never repeats bytes already reported lost. The field is optional, so every
+  0.2.0 page remains valid.
 
 #### 5.1.6 Provider descriptor
 
@@ -308,9 +317,39 @@ the descriptor MUST be refused with `unsupported_capability` or
 
 `fixtures/behaviour/` holds scripted call sequences with the response expected
 at each step: idempotent start, same-key conflict, repeated cancel, cursor
-after retention, late read after termination, required capture, and unknown
-ref. Schema acceptance cannot express these sequences. Implementations in any
-language MUST reproduce them.
+after retention, late read after termination, required capture, unknown
+ref, and one scenario per lifecycle hazard (5.1.11). Schema acceptance cannot
+express these sequences. Implementations in any language MUST reproduce them.
+
+Since 0.2.1 a step may also carry, additively to the fixture format:
+
+- `given`: conditions the provider harness establishes before the call, from a
+  closed vocabulary listed in `fixtures/README.md`.
+- `settles_within_seconds`: the call MUST return within this bound. Every step
+  with a `given` carries one.
+- `expect_one_of`: in place of `expect`, the correct responses when the
+  contract allows more than one. The provider MUST produce one of them.
+- `descendant_alive` on an expected response: whether any workload process,
+  including a detached descendant, is still alive once the call returns. The
+  provider harness MUST check it. A response with `descendant_alive: true`
+  never has state `cancelled`.
+- `operation_records` on a step: how many operation records (idempotency and
+  registry entries) the provider holds for the workspace once the call, and
+  anything it blocked on, has returned. The provider harness MUST observe the
+  actual count.
+- `repeat_until_complete` on an `observe` step: the harness repeats the call,
+  following `next_cursor`, until a page is `complete` or the call returns an
+  `OperationError`. `settles_within_seconds` bounds the whole loop.
+- The harness calls `file_exists` and `read_file`, with `workspace` and a
+  workspace-relative `path`. A probe result has the fixture-level shape
+  `fixtures/file-probe.schema.json`; a refusal is an `OperationError`.
+
+Every `settles_within_seconds` MUST be enforced by a watchdog outside the
+provider's own scheduler (another thread or process), so a call that blocks
+the provider's event loop synchronously still fails its bound.
+
+A scenario may name the `hazard` it encodes. The only contract schema change
+in 0.2.1 is the optional `loss_detected` on `ObservationPage` (5.1.5).
 
 #### 5.1.10 Reserved: `apss.workspace-launch/v2`
 
@@ -320,6 +359,48 @@ It is defined, not adopted: 0.2.0 ships no v2 schema, uses the reference types
 only in results and alongside operations, and every launch manifest remains
 `apss.workspace-launch/v1`. A v1 manifest carrying either field is rejected.
 Adoption is deferred until a remote provider requires it.
+
+#### 5.1.11 Lifecycle hazards
+
+Each hazard below recurred across independent provider implementations. Each
+is encoded as a behaviour fixture named after it, and a provider MUST pass
+every one.
+
+- **LH-1** Double-fork orphan (`hazard-double-fork-orphan.json`): when the
+  workload started a descendant that detached into its own session and was
+  reparented before cancel, `cancel` MUST NOT report `cancelled` while that
+  descendant is alive. It MUST kill it and confirm, or return the unconfirmed
+  outcome (5.1.4).
+- **LH-2** Interrupted cancel (`hazard-interrupted-cancel.json`): when the
+  caller abandons `cancel` while termination is being confirmed, status MUST
+  NOT become `cancelled` without confirmation, and a retried `cancel` MUST
+  settle within its bound.
+- **LH-3** Cancel before the launch header
+  (`hazard-cancel-before-launch-header.json`): a `cancel` that arrives before
+  the provider knows the workload leader MUST settle within its bound without
+  waiting for the header, and MUST fail closed: terminate the workspace's
+  processes and confirm, or return the unconfirmed outcome.
+- **LH-4** Destroy during start (`hazard-destroy-during-start.json`): when
+  `destroy` runs while a `start` is blocked in credential resolution, that
+  start MUST fail without launching, no workload MUST launch after destroy,
+  and no operation record MUST be retained: the provider MUST hold zero
+  operation records for the workspace once the blocked start has returned.
+- **LH-5** Permanently stuck intermediate state
+  (`hazard-stuck-removal-timeout-settles.json`): when the backend keeps
+  reporting an intermediate state such as removal in progress, a timeout drain
+  (`observe` repeated until complete, with no `status` call before it) MUST
+  settle within its total bound, completing with `timed_out` or failing with
+  `provider_unavailable`. Status MUST NOT be required to unblock it.
+- **LH-6** Drain with an observation gap
+  (`hazard-drain-with-gap-reports-loss.json`): a drain that loses data to
+  retention MUST report the `gap` on the page where the bytes were lost, and
+  its completing page MUST carry `loss_detected: true` even when the loss was
+  on an earlier page. Completion MUST NOT be reached with output silently
+  truncated.
+- **LH-7** Non-regular file in the workspace (`hazard-fifo-in-workspace.json`):
+  `file_exists` and `read_file` on a FIFO the workload left behind MUST NOT
+  block: each MUST settle within its bound, and a read MUST return a typed
+  error rather than open the FIFO. `finalize` MUST settle within its bound.
 
 ## 6. Conformance profiles
 
