@@ -405,16 +405,38 @@ struct SeededOutput {
 const HAZARDS: [&str; 7] = ["LH-1", "LH-2", "LH-3", "LH-4", "LH-5", "LH-6", "LH-7"];
 /// Conditions a provider harness injects before a step (`given`). Closed so a
 /// misspelled condition fails here instead of being silently not injected.
-const CONDITIONS: [&str; 8] = [
+const CONDITIONS: [&str; 9] = [
     "detached_descendant",
     "caller_cancelled_during_confirmation",
     "launch_header_not_seen",
     "destroyed_during_credential_resolution",
     "workspace_destroyed",
     "backend_stuck_removing",
+    "timeout_elapsed",
     "observation_gap",
     "fifo_in_workspace",
 ];
+/// Conditions under which the provider must hold no operation record once the
+/// call returns, so the step must declare `operation_records: 0`.
+const DESTROYED: [&str; 2] = [
+    "destroyed_during_credential_resolution",
+    "workspace_destroyed",
+];
+/// Calls a step may make: the operation contract plus the harness file calls
+/// (`file_exists`, `read_file`) that LH-7 drives against a named path.
+const CALLS: [&str; 8] = [
+    "start",
+    "status",
+    "cancel",
+    "observe",
+    "result",
+    "finalize",
+    "file_exists",
+    "read_file",
+];
+/// Outcome schemas outside `schemas/`: fixture-level shapes for harness calls
+/// the contract does not define.
+const FIXTURE_SCHEMA_PREFIX: &str = "fixtures/";
 /// Upper bound on any `settles_within_seconds`: a bound larger than this is
 /// not a settlement bound.
 const MAX_SETTLE_SECONDS: f64 = 300.0;
@@ -463,17 +485,27 @@ fn check_scenario(contract: &Contract, path: &Path) -> Option<String> {
     let mut started: Vec<(Value, Value)> = Vec::new();
     let mut terminal: Option<String> = None;
     let mut injected = false;
+    let mut loss_seen = false;
+    let mut stuck_drained = false;
+    let mut fifo_given = false;
+    let mut fifo_calls: Vec<&str> = Vec::new();
     for (index, step) in scenario["steps"].as_array().unwrap().iter().enumerate() {
         let at = format!("{name} step {index}");
         let call = step["call"].as_str().unwrap();
+        assert!(CALLS.contains(&call), "{at}: unknown call {call}");
         let outcomes = step_outcomes(step, &at);
         for outcome in &outcomes {
             let document = &outcome["document"];
             let schema = outcome["schema"].as_str().unwrap();
-            assert!(
-                contract.validator(schema).is_valid(document),
-                "{at}: {schema}"
-            );
+            let valid = match schema.strip_prefix(FIXTURE_SCHEMA_PREFIX) {
+                Some(file) => {
+                    jsonschema::validator_for(&read_json(&root().join("fixtures").join(file)))
+                        .unwrap()
+                        .is_valid(document)
+                }
+                None => contract.validator(schema).is_valid(document),
+            };
+            assert!(valid, "{at}: {schema}");
             if document.get("schema").is_some() {
                 assert!(contract.accepts(document), "{at}: discriminator dispatch");
             }
@@ -517,6 +549,74 @@ fn check_scenario(contract: &Contract, path: &Path) -> Option<String> {
                 "{at}: an injected condition needs a settlement bound"
             );
             injected = true;
+        }
+        let given: Vec<&str> = given
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+
+        // LH-4: a destroyed workspace holds no operation record. The harness
+        // counts the provider's records (idempotency and registry entries) for
+        // the workspace once the call, and any resolver it blocked on, returns.
+        match step.get("operation_records").map(Value::as_u64) {
+            Some(Some(records)) => assert!(
+                records == 0 || !given.iter().any(|c| DESTROYED.contains(c)),
+                "{at}: a destroyed workspace retains {records} operation record(s)"
+            ),
+            Some(None) => panic!("{at}: operation_records is a count"),
+            None => assert!(
+                !given.iter().any(|c| DESTROYED.contains(c)),
+                "{at}: after destroy the step must declare operation_records 0"
+            ),
+        }
+
+        // LH-5: a drain repeats observe, following next_cursor, until a page
+        // completes or the call fails. The bound covers the whole loop.
+        let drains = match step.get("repeat_until_complete") {
+            None => false,
+            Some(Value::Bool(true)) => {
+                assert_eq!(call, "observe", "{at}: only observe repeats");
+                assert!(bound.is_some(), "{at}: a drain needs a total bound");
+                for outcome in &outcomes {
+                    let document = &outcome["document"];
+                    assert!(
+                        document["complete"] == true || document.get("kind").is_some(),
+                        "{at}: a drain ends complete or with a typed error"
+                    );
+                }
+                true
+            }
+            Some(_) => panic!("{at}: repeat_until_complete is true when present"),
+        };
+        if given.contains(&"backend_stuck_removing") && !stuck_drained {
+            // A status call first could repair settlement the drain must reach
+            // on its own.
+            assert!(
+                drains && given.contains(&"timeout_elapsed"),
+                "{at}: a stuck backend is first met by a timeout drain"
+            );
+            stuck_drained = true;
+        }
+
+        // LH-7: the file boundary itself is driven, against a named path.
+        fifo_given |= given.contains(&"fifo_in_workspace");
+        if call == "file_exists" || call == "read_file" {
+            assert!(
+                step["args"]["workspace"].is_object() && step["args"]["path"].is_string(),
+                "{at}: a file call names its workspace and path"
+            );
+            if given.contains(&"fifo_in_workspace") {
+                fifo_calls.push(call);
+            }
+        }
+        if call == "read_file" {
+            for outcome in &outcomes {
+                assert!(
+                    outcome["document"].get("kind").is_some(),
+                    "{at}: reading a non-regular file is a typed error, not data"
+                );
+            }
         }
 
         let now = step["launches"].as_u64().unwrap();
@@ -588,11 +688,25 @@ fn check_scenario(contract: &Contract, path: &Path) -> Option<String> {
                 );
             }
             if call == "observe" && document.get("data_b64").is_some() {
-                assert_eq!(
-                    document["cursor"], step["args"]["cursor"],
-                    "{at}: a page starts at the requested cursor"
-                );
+                // A drain's final page starts wherever the loop reached.
+                if !drains {
+                    assert_eq!(
+                        document["cursor"], step["args"]["cursor"],
+                        "{at}: a page starts at the requested cursor"
+                    );
+                }
                 let lost = check_page_accounting(document, &at);
+                // LH-6: loss persists to completion, whichever page saw it.
+                loss_seen |= lost != Some(0);
+                if document.get("loss_detected").is_some() {
+                    assert!(loss_seen, "{at}: loss_detected without a loss");
+                }
+                if loss_seen && document["complete"] == true {
+                    assert_eq!(
+                        document["loss_detected"], true,
+                        "{at}: completion after a loss must carry loss_detected"
+                    );
+                }
                 if let Some(output) = &output {
                     let (generation, offset) = parse_cursor(&document["cursor"], &at);
                     let (_, next) = parse_cursor(&document["next_cursor"], &at);
@@ -618,6 +732,14 @@ fn check_scenario(contract: &Contract, path: &Path) -> Option<String> {
     }
     if hazard.is_some() {
         assert!(injected, "{name}: a hazard scenario injects its condition");
+    }
+    if fifo_given {
+        for call in ["file_exists", "read_file"] {
+            assert!(
+                fifo_calls.contains(&call),
+                "{name}: the FIFO must be met by {call}"
+            );
+        }
     }
     hazard
 }

@@ -1,5 +1,5 @@
 {
-  "description": "destroy runs while a start is blocked in credential resolution. The blocked start fails without launching, nothing launches after destroy, and a retried start finds no retained record.",
+  "description": "destroy runs while a start is blocked in credential resolution. The blocked start fails without launching, nothing launches after destroy, and once each call returns the provider holds no operation record for the workspace.",
   "hazard": "LH-4",
   "steps": [
     {
@@ -61,7 +61,8 @@
           }
         }
       ],
-      "launches": 0
+      "launches": 0,
+      "operation_records": 0
     },
     {
       "call": "start",
@@ -114,7 +115,8 @@
           }
         }
       ],
-      "launches": 0
+      "launches": 0,
+      "operation_records": 0
     }
   ]
 }

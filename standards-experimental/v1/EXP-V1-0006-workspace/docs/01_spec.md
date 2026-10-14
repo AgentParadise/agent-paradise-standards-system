@@ -275,6 +275,12 @@ both under `apss.workspace-status/v1`.
   page. `complete` is true only when that state is terminal and every retained
   byte up to the terminal offset has been returned. A read after a terminal
   state returns the remaining bytes before `complete` becomes true.
+- Since 0.2.1 a page MAY carry `loss_detected: true` when its generation lost
+  bytes to retention before `next_cursor`, on that page or an earlier one. The
+  completing page of a drain that lost bytes MUST carry it, whether or not
+  that page has a `gap` of its own. `gap` stays a per-page delta: a later page
+  never repeats bytes already reported lost. The field is optional, so every
+  0.2.0 page remains valid.
 
 #### 5.1.6 Provider descriptor
 
@@ -327,9 +333,23 @@ Since 0.2.1 a step may also carry, additively to the fixture format:
   including a detached descendant, is still alive once the call returns. The
   provider harness MUST check it. A response with `descendant_alive: true`
   never has state `cancelled`.
+- `operation_records` on a step: how many operation records (idempotency and
+  registry entries) the provider holds for the workspace once the call, and
+  anything it blocked on, has returned. The provider harness MUST observe the
+  actual count.
+- `repeat_until_complete` on an `observe` step: the harness repeats the call,
+  following `next_cursor`, until a page is `complete` or the call returns an
+  `OperationError`. `settles_within_seconds` bounds the whole loop.
+- The harness calls `file_exists` and `read_file`, with `workspace` and a
+  workspace-relative `path`. A probe result has the fixture-level shape
+  `fixtures/file-probe.schema.json`; a refusal is an `OperationError`.
 
-A scenario may name the `hazard` it encodes. The contract schemas are
-unchanged by 0.2.1.
+Every `settles_within_seconds` MUST be enforced by a watchdog outside the
+provider's own scheduler (another thread or process), so a call that blocks
+the provider's event loop synchronously still fails its bound.
+
+A scenario may name the `hazard` it encodes. The only contract schema change
+in 0.2.1 is the optional `loss_detected` on `ObservationPage` (5.1.5).
 
 #### 5.1.10 Reserved: `apss.workspace-launch/v2`
 
@@ -363,18 +383,24 @@ every one.
 - **LH-4** Destroy during start (`hazard-destroy-during-start.json`): when
   `destroy` runs while a `start` is blocked in credential resolution, that
   start MUST fail without launching, no workload MUST launch after destroy,
-  and no operation record MUST be retained.
+  and no operation record MUST be retained: the provider MUST hold zero
+  operation records for the workspace once the blocked start has returned.
 - **LH-5** Permanently stuck intermediate state
   (`hazard-stuck-removal-timeout-settles.json`): when the backend keeps
   reporting an intermediate state such as removal in progress, a timeout drain
-  MUST settle within its bound to `timed_out` or `provider_unavailable`.
+  (`observe` repeated until complete, with no `status` call before it) MUST
+  settle within its total bound, completing with `timed_out` or failing with
+  `provider_unavailable`. Status MUST NOT be required to unblock it.
 - **LH-6** Drain with an observation gap
   (`hazard-drain-with-gap-reports-loss.json`): a drain that loses data to
-  retention MUST report the `gap` on its pages, including the completing page.
-  Completion MUST NOT be reached with output silently truncated.
+  retention MUST report the `gap` on the page where the bytes were lost, and
+  its completing page MUST carry `loss_detected: true` even when the loss was
+  on an earlier page. Completion MUST NOT be reached with output silently
+  truncated.
 - **LH-7** Non-regular file in the workspace (`hazard-fifo-in-workspace.json`):
-  probing or reading workspace files, including a FIFO the workload left
-  behind, MUST NOT block. `finalize` MUST settle within its bound.
+  `file_exists` and `read_file` on a FIFO the workload left behind MUST NOT
+  block: each MUST settle within its bound, and a read MUST return a typed
+  error rather than open the FIFO. `finalize` MUST settle within its bound.
 
 ## 6. Conformance profiles
 

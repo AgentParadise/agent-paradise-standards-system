@@ -1,5 +1,5 @@
 {
-  "description": "The workload leaves a FIFO where finalization probes and reads workspace files. Probing and reading never open it blocking: finalize settles within its bound, completed (non-regular file skipped) or retained with a typed error.",
+  "description": "The workload leaves a FIFO with no writer at outputs/pipe. Probing it settles with a non-regular result or a typed refusal, reading it settles with a typed error and no data, and finalize settles completed (non-regular file skipped) or retained with a typed error.",
   "hazard": "LH-7",
   "steps": [
     {
@@ -82,6 +82,72 @@
           "exit_code": 0
         }
       },
+      "launches": 1
+    },
+    {
+      "call": "file_exists",
+      "args": {
+        "workspace": {
+          "provider": "docker",
+          "resource_id": "ws-7f3a"
+        },
+        "path": "outputs/pipe"
+      },
+      "given": [
+        "fifo_in_workspace"
+      ],
+      "settles_within_seconds": 10,
+      "expect_one_of": [
+        {
+          "schema": "fixtures/file-probe.schema.json",
+          "document": {
+            "path": "outputs/pipe",
+            "exists": true,
+            "regular_file": false
+          }
+        },
+        {
+          "schema": "workspace-status.schema.json",
+          "document": {
+            "schema": "apss.workspace-status/v1",
+            "kind": "rejected_policy",
+            "message": "outputs/pipe is not a regular file"
+          }
+        }
+      ],
+      "launches": 1
+    },
+    {
+      "call": "read_file",
+      "args": {
+        "workspace": {
+          "provider": "docker",
+          "resource_id": "ws-7f3a"
+        },
+        "path": "outputs/pipe"
+      },
+      "given": [
+        "fifo_in_workspace"
+      ],
+      "settles_within_seconds": 10,
+      "expect_one_of": [
+        {
+          "schema": "workspace-status.schema.json",
+          "document": {
+            "schema": "apss.workspace-status/v1",
+            "kind": "rejected_policy",
+            "message": "outputs/pipe is not a regular file"
+          }
+        },
+        {
+          "schema": "workspace-status.schema.json",
+          "document": {
+            "schema": "apss.workspace-status/v1",
+            "kind": "internal",
+            "message": "refusing to open non-regular file outputs/pipe"
+          }
+        }
+      ],
       "launches": 1
     },
     {
