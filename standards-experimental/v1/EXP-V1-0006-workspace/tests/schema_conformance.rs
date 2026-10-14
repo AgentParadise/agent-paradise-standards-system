@@ -400,11 +400,45 @@ struct SeededOutput {
     produced: u64,
 }
 
+/// Lifecycle hazards (spec 5.1.11). Every id needs a behaviour fixture and a
+/// MUST clause in the spec naming it.
+const HAZARDS: [&str; 7] = ["LH-1", "LH-2", "LH-3", "LH-4", "LH-5", "LH-6", "LH-7"];
+/// Conditions a provider harness injects before a step (`given`). Closed so a
+/// misspelled condition fails here instead of being silently not injected.
+const CONDITIONS: [&str; 8] = [
+    "detached_descendant",
+    "caller_cancelled_during_confirmation",
+    "launch_header_not_seen",
+    "destroyed_during_credential_resolution",
+    "workspace_destroyed",
+    "backend_stuck_removing",
+    "observation_gap",
+    "fifo_in_workspace",
+];
+/// Upper bound on any `settles_within_seconds`: a bound larger than this is
+/// not a settlement bound.
+const MAX_SETTLE_SECONDS: f64 = 300.0;
+
+/// The responses a step accepts: its single `expect`, or each of
+/// `expect_one_of` when the contract allows more than one correct outcome.
+fn step_outcomes<'a>(step: &'a Value, at: &str) -> Vec<&'a Value> {
+    match (step.get("expect"), step.get("expect_one_of")) {
+        (Some(expect), None) => vec![expect],
+        (None, Some(Value::Array(outcomes))) if !outcomes.is_empty() => outcomes.iter().collect(),
+        _ => panic!("{at}: exactly one of expect or a non-empty expect_one_of"),
+    }
+}
+
 /// Replays one scripted scenario: every expected response satisfies its
 /// schema, and the runtime rules schemas cannot express hold across steps.
-fn check_scenario(contract: &Contract, path: &Path) {
+/// Returns the scenario's hazard id, if it encodes one.
+fn check_scenario(contract: &Contract, path: &Path) -> Option<String> {
     let scenario = read_json(path);
     let name = path.display();
+    let hazard = scenario["hazard"].as_str().map(|hazard| {
+        assert!(HAZARDS.contains(&hazard), "{name}: unknown hazard {hazard}");
+        hazard.to_string()
+    });
     let descriptor = scenario["provider"].as_str().map(|provider| {
         let descriptor = read_json(&root().join("fixtures").join(provider));
         assert!(contract.accepts(&descriptor), "{name}: provider descriptor");
@@ -428,25 +462,67 @@ fn check_scenario(contract: &Contract, path: &Path) {
     let mut launches = 0;
     let mut started: Vec<(Value, Value)> = Vec::new();
     let mut terminal: Option<String> = None;
+    let mut injected = false;
     for (index, step) in scenario["steps"].as_array().unwrap().iter().enumerate() {
         let at = format!("{name} step {index}");
         let call = step["call"].as_str().unwrap();
-        let document = &step["expect"]["document"];
-        let schema = step["expect"]["schema"].as_str().unwrap();
-        assert!(
-            contract.validator(schema).is_valid(document),
-            "{at}: {schema}"
-        );
-        if document.get("schema").is_some() {
-            assert!(contract.accepts(document), "{at}: discriminator dispatch");
+        let outcomes = step_outcomes(step, &at);
+        for outcome in &outcomes {
+            let document = &outcome["document"];
+            let schema = outcome["schema"].as_str().unwrap();
+            assert!(
+                contract.validator(schema).is_valid(document),
+                "{at}: {schema}"
+            );
+            if document.get("schema").is_some() {
+                assert!(contract.accepts(document), "{at}: discriminator dispatch");
+            }
+            // A confirmed cancel and a live descendant cannot coexist; under a
+            // hazard the outcome must say which one it is.
+            let cancelled = document["state"] == "cancelled";
+            match outcome.get("descendant_alive").map(Value::as_bool) {
+                Some(Some(true)) => assert!(!cancelled, "{at}: cancelled while a descendant lives"),
+                Some(Some(false)) => {}
+                Some(None) => panic!("{at}: descendant_alive is a boolean"),
+                None => assert!(
+                    !(cancelled && hazard.is_some()),
+                    "{at}: a confirmed cancel under a hazard must declare descendant_alive false"
+                ),
+            }
+        }
+
+        let given = step.get("given").map(|given| given.as_array().unwrap());
+        let bound = step.get("settles_within_seconds").map(|bound| {
+            let bound = bound.as_f64().expect("settles_within_seconds is a number");
+            assert!(
+                bound > 0.0 && bound <= MAX_SETTLE_SECONDS,
+                "{at}: settlement bound {bound} outside (0, {MAX_SETTLE_SECONDS}]"
+            );
+            bound
+        });
+        if let Some(given) = given {
+            assert!(!given.is_empty(), "{at}: given names at least one condition");
+            for condition in given {
+                let condition = condition.as_str().unwrap();
+                assert!(CONDITIONS.contains(&condition), "{at}: unknown condition {condition}");
+            }
+            assert!(bound.is_some(), "{at}: an injected condition needs a settlement bound");
+            injected = true;
         }
 
         let now = step["launches"].as_u64().unwrap();
         assert!(now >= launches, "{at}: launches never decrease");
-        let is_error = document.get("kind").is_some();
         if call == "start" {
             let spec = &step["args"]["spec"];
             let key = &spec["operation_key"];
+            let document = &outcomes[0]["document"];
+            let is_error = outcomes
+                .iter()
+                .all(|outcome| outcome["document"].get("kind").is_some());
+            assert!(
+                outcomes.len() == 1 || is_error,
+                "{at}: a start with alternative outcomes may only fail"
+            );
             match started
                 .iter()
                 .find(|(earlier, _)| &earlier["operation_key"] == key)
@@ -463,61 +539,104 @@ fn check_scenario(contract: &Contract, path: &Path) {
                     assert_eq!(now, launches + 1, "{at}: a new start launches once");
                     started.push((spec.clone(), document.clone()));
                 }
-                None => {}
+                None => assert_eq!(now, launches, "{at}: a failed start launches nothing"),
             }
         } else {
             assert_eq!(now, launches, "{at}: only start launches");
         }
         launches = now;
 
-        if let Some(state) = document["state"].as_str() {
-            if let Some(previous) = &terminal {
+        let states: Vec<&str> = outcomes
+            .iter()
+            .filter_map(|outcome| outcome["document"]["state"].as_str())
+            .collect();
+        if let Some(previous) = &terminal {
+            for state in &states {
                 assert_eq!(state, previous, "{at}: terminal states are sticky");
-            } else if is_terminal(state) {
+            }
+        } else if let [state] = states[..] {
+            // Only an unambiguous outcome fixes the terminal state.
+            if outcomes.len() == 1 && is_terminal(state) {
                 terminal = Some(state.to_string());
             }
         }
-        if let Some(gap) = document.get("gap") {
-            match integrity {
-                Some("exact") => assert!(gap["lost_bytes"].is_u64(), "{at}: exact gap"),
-                Some(_) => {}
-                None => panic!("{at}: a gap needs the provider descriptor"),
-            }
-            assert!(
-                output.is_some(),
-                "{at}: a gap needs seeded output to derive it"
-            );
-        }
-        if call == "observe" && document.get("data_b64").is_some() {
-            assert_eq!(
-                document["cursor"], step["args"]["cursor"],
-                "{at}: a page starts at the requested cursor"
-            );
-            let lost = check_page_accounting(document, &at);
-            if let Some(output) = &output {
-                let (generation, offset) = parse_cursor(&document["cursor"], &at);
-                let (_, next) = parse_cursor(&document["next_cursor"], &at);
-                assert_eq!(generation, output.generation, "{at}: seeded generation");
-                assert_eq!(
-                    lost,
-                    Some(output.retained_from.saturating_sub(offset)),
-                    "{at}: loss must follow from seeded retention"
-                );
+
+        for outcome in &outcomes {
+            let document = &outcome["document"];
+            if let Some(gap) = document.get("gap") {
+                match integrity {
+                    Some("exact") => assert!(gap["lost_bytes"].is_u64(), "{at}: exact gap"),
+                    Some(_) => {}
+                    None => panic!("{at}: a gap needs the provider descriptor"),
+                }
                 assert!(
-                    next <= output.produced,
-                    "{at}: page runs past produced output"
+                    output.is_some(),
+                    "{at}: a gap needs seeded output to derive it"
                 );
+            }
+            if call == "observe" && document.get("data_b64").is_some() {
+                assert_eq!(
+                    document["cursor"], step["args"]["cursor"],
+                    "{at}: a page starts at the requested cursor"
+                );
+                let lost = check_page_accounting(document, &at);
+                if let Some(output) = &output {
+                    let (generation, offset) = parse_cursor(&document["cursor"], &at);
+                    let (_, next) = parse_cursor(&document["next_cursor"], &at);
+                    assert_eq!(generation, output.generation, "{at}: seeded generation");
+                    assert_eq!(
+                        lost,
+                        Some(output.retained_from.saturating_sub(offset)),
+                        "{at}: loss must follow from seeded retention"
+                    );
+                    assert!(
+                        next <= output.produced,
+                        "{at}: page runs past produced output"
+                    );
+                    if document["complete"] == true {
+                        assert_eq!(
+                            next, output.produced,
+                            "{at}: completion before the terminal offset truncates output"
+                        );
+                    }
+                }
             }
         }
     }
+    if hazard.is_some() {
+        assert!(injected, "{name}: a hazard scenario injects its condition");
+    }
+    hazard
 }
 
 #[test]
 fn behaviour_fixtures_replay_with_expected_states() {
     let contract = Contract::load();
     let scenarios = json_files(&root().join("fixtures/behaviour"));
-    assert!(scenarios.len() >= 4);
+    assert!(scenarios.len() >= 14);
     for path in scenarios {
         check_scenario(&contract, &path);
+    }
+}
+
+#[test]
+fn every_lifecycle_hazard_has_a_fixture_and_a_must_clause() {
+    let contract = Contract::load();
+    let covered: Vec<String> = json_files(&root().join("fixtures/behaviour"))
+        .iter()
+        .filter_map(|path| check_scenario(&contract, path))
+        .collect();
+    let spec = std::fs::read_to_string(root().join("docs/01_spec.md")).unwrap();
+    for hazard in HAZARDS {
+        assert!(
+            covered.iter().any(|id| id == hazard),
+            "{hazard}: no behaviour fixture encodes it"
+        );
+        let tag = format!("**{hazard}**");
+        assert!(
+            spec.lines()
+                .any(|line| line.contains(&tag) && line.contains("MUST")),
+            "{hazard}: the spec names no MUST clause for it"
+        );
     }
 }
