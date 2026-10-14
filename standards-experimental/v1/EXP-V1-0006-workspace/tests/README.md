@@ -19,7 +19,11 @@ negative security cases. `schema_conformance.rs` also:
   `given` is a known condition with a settlement bound, every alternative in
   `expect_one_of` satisfies its schema, a confirmed `cancelled` under a hazard
   declares `descendant_alive: false`, and a completing page reaches the
-  seeded terminal offset.
+  seeded terminal offset;
+- matches responses against the LH-1, LH-2 and LH-3 cancel steps the way a
+  harness does: the unconfirmed `timeout` with `ref` is accepted whether or
+  not a descendant survives, and `cancelled` with a live descendant is
+  rejected.
 
 ```bash
 cargo test -p apss-v1-0006-workspace

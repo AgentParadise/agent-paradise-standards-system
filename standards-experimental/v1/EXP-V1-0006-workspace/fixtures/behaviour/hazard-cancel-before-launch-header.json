@@ -103,8 +103,7 @@
               "operation_id": "op-0001",
               "operation_key": "exec-42:phase-1:fence-9:agent"
             }
-          },
-          "descendant_alive": true
+          }
         }
       ],
       "launches": 1

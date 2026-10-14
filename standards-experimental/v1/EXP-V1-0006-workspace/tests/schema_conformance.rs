@@ -754,6 +754,70 @@ fn behaviour_fixtures_replay_with_expected_states() {
     }
 }
 
+/// The cancel steps whose unconfirmed outcome (5.1.4) leaves the descendant
+/// unknown: LH-1 step 1, LH-2 step 3 (the retried cancel), LH-3 step 1.
+const UNCONFIRMED_CANCEL_STEPS: [(&str, usize); 3] = [
+    ("hazard-double-fork-orphan.json", 1),
+    ("hazard-interrupted-cancel.json", 3),
+    ("hazard-cancel-before-launch-header.json", 1),
+];
+
+/// Whether a step accepts a provider's response, as a harness replays it:
+/// some outcome's document equals the response, and that outcome's
+/// `descendant_alive`, when present, equals what the harness observed.
+fn step_accepts(step: &Value, response: &Value, descendant_alive: bool) -> bool {
+    step_outcomes(step, "step").iter().any(|outcome| {
+        outcome["document"] == *response
+            && outcome
+                .get("descendant_alive")
+                .is_none_or(|pinned| pinned.as_bool() == Some(descendant_alive))
+    })
+}
+
+#[test]
+fn unconfirmed_cancel_accepts_either_descendant_state_and_cancelled_only_when_dead() {
+    for (file, index) in UNCONFIRMED_CANCEL_STEPS {
+        let scenario = read_json(&root().join("fixtures/behaviour").join(file));
+        let step = &scenario["steps"][index];
+        let at = format!("{file} step {index}");
+        assert_eq!(step["call"], "cancel", "{at}");
+        let outcomes = step_outcomes(step, &at);
+        let find = |key: &str, value: &str| {
+            outcomes
+                .iter()
+                .map(|outcome| &outcome["document"])
+                .find(|document| document[key] == value)
+                .unwrap_or_else(|| panic!("{at}: no {key} {value} alternative"))
+        };
+        let cancelled = find("state", "cancelled");
+        let timeout = find("kind", "timeout");
+        assert!(
+            timeout.get("ref").is_some(),
+            "{at}: timeout carries the ref"
+        );
+
+        // Accepted by 0.2.1, still accepted.
+        assert!(
+            step_accepts(step, cancelled, false),
+            "{at}: confirmed cancel"
+        );
+        assert!(
+            step_accepts(step, timeout, true),
+            "{at}: timeout, descendant alive"
+        );
+        // New in 0.2.2: unconfirmed means unknown, not known alive.
+        assert!(
+            step_accepts(step, timeout, false),
+            "{at}: timeout, descendant gone"
+        );
+        // Still rejected: a confirmed cancel while a descendant lives.
+        assert!(
+            !step_accepts(step, cancelled, true),
+            "{at}: cancelled while alive"
+        );
+    }
+}
+
 #[test]
 fn every_lifecycle_hazard_has_a_fixture_and_a_must_clause() {
     let contract = Contract::load();

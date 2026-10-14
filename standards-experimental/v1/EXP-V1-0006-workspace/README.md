@@ -3,7 +3,7 @@
 **ID:** `EXP-V1-0006`  
 **Type:** Experiment  
 **Slug:** `workspace`  
-**Version:** `0.2.1`
+**Version:** `0.2.2`
 
 This experiment defines a provider-neutral launch manifest and observable
 workspace lifecycle for agent execution. Since 0.2.0 it also defines the
