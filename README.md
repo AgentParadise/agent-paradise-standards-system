@@ -22,6 +22,7 @@ The slug in the first command word is the **canonical slug** and must match the 
 | Standard | Description |
 |----------|-------------|
 | [EXP-V1-0002 TODO Tracker](standards-experimental/v1/EXP-V1-0002-todo-tracker/docs/00_overview.md) | Scans TODO/FIXME comments, enforces issue references |
+| [EXP-V1-0007 Knowledge Store](standards-experimental/v1/EXP-V1-0007-knowledge-store/docs/00_overview.md) | EXPERIMENTAL placeholder: principles of an event-sourced, privacy-first knowledge store (references never content, real deletion, read models as the query surface, the Compartment as the isolation unit) plus open questions. Nothing enforced |
 
 ### Governance
 
