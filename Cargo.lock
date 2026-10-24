@@ -214,7 +214,7 @@ dependencies = [
 
 [[package]]
 name = "apss-v1-0002-architecture-fitness"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "apss-core",
  "chrono",

@@ -198,6 +198,21 @@
         "severity": {
           "type": "string",
           "enum": ["error", "warning"]
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Graph-shape patterns only, and required by both: the dependency-depth ceiling (`max_dependency_depth`) or the fan-out ceiling for a node that is not a composition root (`max_fan_out`)."
+        },
+        "composition_roots": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "`max_fan_out` only. Globs naming the declared composition roots. A glob that matches no node, or matches a node outside `from`, is a config error."
+        },
+        "root_max": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "`max_fan_out` only. Fan-out cap for a composition root. Absent means no cap; each root's fan-out is still emitted as a reading."
         }
       }
     },
