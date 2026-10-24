@@ -83,7 +83,7 @@ severity = "warning"
 
 ### 3.3 Graph Shape: `max_dependency_depth`
 
-Both graph-shape patterns (§3.3, §3.4) read the same input as the patterns above: `graphs/dependency-graph.json` under `topology_dir` (nodes, and directed edges `[from, to]` meaning "from depends on to"). Both use the exception file with a per-entity `value` ceiling, as threshold rules do, so a project can baseline today and ratchet down.
+Both graph-shape patterns (§3.3, §3.4) read the same input as the patterns above: `graphs/dependency-graph.json` under `topology_dir` (nodes, and directed edges `[from, to]` meaning "from depends on to"). Both use the exception file with a per-entity `value` ceiling, as threshold rules do, so a project can baseline today and ratchet down. A node's edge to itself is not a dependency in either pattern: it adds no depth, no fan-out, and a root's self-edge does not break flatness. The carve-out is local to these patterns; the graph keeps the self-loop, so cycle rules still see it.
 
 ```toml
 [[rules.structural]]

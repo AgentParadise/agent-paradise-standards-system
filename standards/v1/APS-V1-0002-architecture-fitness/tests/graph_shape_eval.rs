@@ -590,3 +590,35 @@ fn report_with_readings_and_messages_matches_schema() {
         .collect();
     assert!(errors.is_empty(), "{errors:#?}");
 }
+
+#[test]
+fn root_config_error_does_not_stale_existing_exceptions() {
+    // A mis-globbed root stops evaluation; the c/hub exception must not be
+    // reported stale (it may still be violating once the glob is fixed).
+    let report = run(
+        &fan_rule(2, r#"composition_roots = ["c/renamed-root"]"#),
+        STAR,
+        Some("[fan.\"c/hub\"]\nvalue = 3\nissue = \"#1\"\n"),
+    );
+    assert_eq!(only(&report).status, RuleStatus::Fail);
+    assert!(
+        report.stale_exceptions.is_empty(),
+        "{:?}",
+        report.stale_exceptions
+    );
+}
+
+#[test]
+fn explicit_empty_composition_roots_is_rejected_where_not_valid() {
+    let err = load_err(&depth_rule(3, "composition_roots = []"));
+    assert!(err.contains("only valid for `max_fan_out`"), "{err}");
+    let rules = r#"[[rules.structural]]
+id = "layer"
+name = "Layer"
+pattern = "forbidden_import"
+from = { path = "c/a" }
+to = { path = "c/b" }
+composition_roots = []
+"#;
+    assert!(load_err(rules).contains("only valid for"));
+}

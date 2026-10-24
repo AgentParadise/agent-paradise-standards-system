@@ -491,8 +491,8 @@ pub struct StructuralRule {
     /// `max_fan_out`).
     pub max: Option<u64>,
     /// `max_fan_out` only: globs naming the declared composition roots.
-    #[serde(default)]
-    pub composition_roots: Vec<String>,
+    /// `None` when absent; an explicit empty list still counts as set.
+    pub composition_roots: Option<Vec<String>>,
     /// `max_fan_out` only: optional fan-out cap for a composition root.
     pub root_max: Option<u64>,
 }

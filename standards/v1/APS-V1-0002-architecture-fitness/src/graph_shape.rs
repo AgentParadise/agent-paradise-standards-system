@@ -36,7 +36,8 @@ pub fn is_graph_shape(pattern: &str) -> bool {
 /// graph-shape pattern reads is rejected on any other pattern, so a typo in
 /// `pattern` cannot silently drop a ceiling.
 pub fn validate_rule(rule: &StructuralRule) -> Result<(), String> {
-    let has_roots = !rule.composition_roots.is_empty();
+    let has_roots = rule.composition_roots.is_some();
+    let roots = rule.composition_roots.as_deref().unwrap_or(&[]);
     if !is_graph_shape(&rule.pattern) {
         if rule.max.is_some() || has_roots || rule.root_max.is_some() {
             return Err(format!(
@@ -73,13 +74,13 @@ pub fn validate_rule(rule: &StructuralRule) -> Result<(), String> {
             ));
         }
     } else {
-        if rule.root_max.is_some() && !has_roots {
+        if rule.root_max.is_some() && roots.is_empty() {
             return Err(format!(
                 "Rule '{}': `root_max` requires `composition_roots`",
                 rule.id
             ));
         }
-        globs.extend(rule.composition_roots.iter().map(String::as_str));
+        globs.extend(roots.iter().map(String::as_str));
     }
     for glob in globs {
         glob::Pattern::new(glob)
@@ -273,7 +274,11 @@ impl FitnessValidator {
                 }
             }
         } else {
-            let roots = match resolve_roots(&rule.composition_roots, &nodes, &from) {
+            let roots = match resolve_roots(
+                rule.composition_roots.as_deref().unwrap_or(&[]),
+                &nodes,
+                &from,
+            ) {
                 Ok(r) => r,
                 Err(msg) => {
                     result.status = RuleStatus::Fail;
@@ -287,7 +292,15 @@ impl FitnessValidator {
                         excepted: false,
                         message: Some(msg),
                     }];
-                    return Ok((result, vec![], HashSet::new()));
+                    // Nothing was evaluated, so no exception can be judged stale:
+                    // report every entry of this rule as matched.
+                    let all = self
+                        .exceptions
+                        .rules
+                        .get(&rule.id)
+                        .map(|e| e.keys().cloned().collect())
+                        .unwrap_or_default();
+                    return Ok((result, vec![], all));
                 }
             };
             for n in &from {
