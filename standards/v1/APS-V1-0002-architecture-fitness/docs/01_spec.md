@@ -75,7 +75,7 @@ Each dimension has two orthogonal classifications:
 |-------------|-----------|--------|---------|-------|
 | APS-V1-0002.MT01 | Maintainability | active | default-enabled | Function-level McCabe / SonarSource / Halstead metrics from `functions.json` (APS-V1-0001) |
 | APS-V1-0002.MD01 | Modularity & Coupling | active | default-enabled | Martin package metrics (Ca, Ce, I, A, D) from `coupling.json` (APS-V1-0001) |
-| APS-V1-0002.ST01 | Structural Integrity | active | default-enabled | Structural-pattern subset (forbidden_import, required_import, layer_enforcement). CK class-level metrics remain a scoped follow-on. |
+| APS-V1-0002.ST01 | Structural Integrity | active | default-enabled | Structural-pattern subset (forbidden_import, required_import, layer_enforcement, max_dependency_depth, max_fan_out). CK class-level metrics remain a scoped follow-on. |
 | APS-V1-0002.SC01 | Security | active | default-enabled | Adapter-backed; `builtin:cargo-audit` is the reference normalizer. Strict-artifact mode reports `PROMOTION_REQUIREMENT_UNMET` when adapter output is absent. |
 | APS-V1-0002.LG01 | Legality | active | default-enabled | Adapter-backed; `builtin:cargo-deny` (or equivalent license scanner) is the reference normalizer. |
 | APS-V1-0002.AC01 | Accessibility | active | opt-in | Adapter-backed against WCAG 2.1 AA defaults. Opt-in because most backends and CLIs do not produce a11y artifacts. |

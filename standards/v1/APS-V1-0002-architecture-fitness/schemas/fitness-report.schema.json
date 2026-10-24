@@ -187,7 +187,22 @@
           "type": "integer",
           "minimum": 0,
           "description": "Count of entities evaluated by this rule - denominator for dimension scoring. Omitted when the rule was skipped before any entity scan."
+        },
+        "readings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Reading" },
+          "description": "Values measured on every run whether or not they violate (e.g. a composition root's fan-out), so growth stays visible to the ratchet. Omitted when empty."
         }
+      }
+    },
+    "Reading": {
+      "type": "object",
+      "required": ["entity", "field", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "entity": { "type": "string" },
+        "field": { "type": "string" },
+        "value": { "type": "number" }
       }
     },
     "Violation": {
