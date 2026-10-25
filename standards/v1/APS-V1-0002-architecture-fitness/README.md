@@ -14,6 +14,7 @@ Declarative, automated, continuous assertions on architectural properties, organ
 - [Overview](docs/00_overview.md)
 - [Metrics Catalog](docs/02_metrics-catalog.md)
 - [Integration Guide](docs/INTEGRATION.md) (topology then fitness then CI)
+- [CI performance](docs/03_ci-performance.md) (measurement, producer optimization, equivalence evidence)
 - [ADRs](docs/adrs/) (0001 promotion lineage, 0002 MT01 + MD01 active, 0003 six-dimension promotion)
 - [Examples](examples/) (`fitness.toml`, `fitness-exceptions.toml`, `fitness-report.json`)
 - [Tests](tests/) (engine + schema round-trip + structural patterns)

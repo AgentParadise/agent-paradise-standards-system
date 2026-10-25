@@ -150,7 +150,7 @@ is the sole declarative input.
 
 `<bootstrap> run <slug> <cmd>` (DI01 §3.3) remains the escape hatch for
 invoking a single standard directly without re-installing. Per the
-brief, individual installation (e.g. `<bootstrap> run docs install`)
+brief, individual installation (e.g. `<bootstrap> run documentation install`)
 also remains supported as an escape hatch; the unified installer is
 the documented primary path.
 

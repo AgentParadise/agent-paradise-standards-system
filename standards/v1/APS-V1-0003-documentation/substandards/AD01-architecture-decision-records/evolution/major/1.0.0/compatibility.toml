@@ -1,0 +1,37 @@
+schema = "aps.evolution.compatibility/v1"
+
+[compatibility]
+substandard_id = "APS-V1-0003.AD01"
+parent_id = "APS-V1-0003"
+from_version = "0.1.0"
+to_version = "1.0.0"
+backwards_compatible = false
+
+[[breaks]]
+area = "shipped-templates"
+what = "templates/docs/adrs/CLAUDE.md"
+was = "A git symlink to the adjacent AGENTS.md, recorded as mode 120000."
+now = "A regular file recorded as mode 100644, byte-identical to templates/docs/adrs/AGENTS.md."
+impact = "An installer or packaging step that expected to materialise a link now materialises a file."
+
+[[breaks]]
+area = "shipped-templates"
+what = "templates/docs/adrs/AGENTS.md (and therefore its CLAUDE.md copy)"
+was = "Prose describing CLAUDE.md as a symlink, opening with 'This file is the canonical agent-context file.'"
+now = "Prose describing the byte-identical copy, and naming AGENTS.md as canonical by path rather than as 'this file' - correct when read from either member of the pair."
+impact = "Projects that already scaffolded the old template keep it; never-overwrite means the installer will not update it. The change affects new scaffolds only."
+
+[[breaks]]
+area = "parent-alignment"
+what = "parent_major"
+was = "\"0\""
+now = "\"1\", following the parent standard's 1.0.0 release."
+impact = "Metadata only."
+
+[[preserved]]
+area = "diagnostics"
+what = "Every ADR01 diagnostic code and severity is unchanged. No ADR naming, frontmatter, keyword, or backlink rule was touched."
+
+[[preserved]]
+area = "config-schema"
+what = "The `docs.adr` config keys and their defaults are unchanged."

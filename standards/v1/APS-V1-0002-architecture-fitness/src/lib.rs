@@ -30,6 +30,9 @@ pub mod substandards;
 /// Composed CLI command handler (DI01 distribution).
 pub mod cli;
 
+/// ST01 graph-shape patterns (`max_dependency_depth`, `max_fan_out`).
+mod graph_shape;
+
 /// Standard identifier (matches `standard.toml` `id`).
 pub const ID: &str = "APS-V1-0002";
 
@@ -484,11 +487,21 @@ pub struct StructuralRule {
     pub from: Option<PathMatcher>,
     pub to: Option<PathMatcher>,
     pub severity: Option<Severity>,
+    /// Ceiling for the graph-shape patterns (`max_dependency_depth`,
+    /// `max_fan_out`).
+    pub max: Option<u64>,
+    /// `max_fan_out` only: globs naming the declared composition roots.
+    /// `None` when absent; an explicit empty list still counts as set.
+    pub composition_roots: Option<Vec<String>>,
+    /// `max_fan_out` only: optional fan-out cap for a composition root.
+    pub root_max: Option<u64>,
 }
 
 impl StructuralRule {
     /// Validate that the rule definition is well-formed. Rejects unknown
-    /// dimension codes so a misspelled rule is caught at config load.
+    /// dimension codes so a misspelled rule is caught at config load, and
+    /// graph-shape fields that are missing or set on a pattern that does not
+    /// read them.
     pub fn validate(&self) -> Result<(), String> {
         if let Some(dim) = &self.dimension {
             if DimensionCode::parse(dim).is_none() {
@@ -498,7 +511,7 @@ impl StructuralRule {
                 ));
             }
         }
-        Ok(())
+        graph_shape::validate_rule(self)
     }
 }
 
@@ -606,6 +619,19 @@ pub struct RuleResult {
     /// Total entities evaluated (for dimension scoring denominator).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_entities: Option<usize>,
+    /// Values measured on every run whether or not they violate, so growth
+    /// stays visible to the ratchet (e.g. an uncapped composition root's
+    /// fan-out). Omitted when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub readings: Vec<Reading>,
+}
+
+/// A measured value reported regardless of pass or fail.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Reading {
+    pub entity: String,
+    pub field: String,
+    pub value: f64,
 }
 
 /// Rule evaluation status.
@@ -627,6 +653,9 @@ pub struct Violation {
     pub threshold: f64,
     pub direction: ThresholdDirection,
     pub excepted: bool,
+    /// Human-readable detail (e.g. the longest dependency path).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
 }
 
 /// Which bound was violated.
@@ -1020,6 +1049,7 @@ impl FitnessValidator {
                     threshold: 0.0,
                     direction: ThresholdDirection::Max,
                     excepted: false,
+                    message: None,
                 }]
             } else {
                 vec![]
@@ -1034,6 +1064,7 @@ impl FitnessValidator {
                     violations,
                     exceptions_used: 0,
                     total_entities: None,
+                    readings: vec![],
                 },
                 vec![],
                 HashSet::new(),
@@ -1115,6 +1146,7 @@ impl FitnessValidator {
                     threshold,
                     direction,
                     excepted,
+                    message: None,
                 });
             } else {
                 // Entity passes - check if there's a now-stale exception
@@ -1148,6 +1180,7 @@ impl FitnessValidator {
                 violations,
                 exceptions_used,
                 total_entities: Some(entity_count),
+                readings: vec![],
             },
             stale,
             matched_exception_entities,
@@ -1177,6 +1210,7 @@ impl FitnessValidator {
                     violations: vec![],
                     exceptions_used: 0,
                     total_entities: None,
+                    readings: vec![],
                 },
                 vec![],
                 HashSet::new(),
@@ -1258,6 +1292,7 @@ impl FitnessValidator {
                                     threshold: 0.0,
                                     direction: ThresholdDirection::Max,
                                     excepted,
+                                    message: None,
                                 });
                             }
                         }
@@ -1281,6 +1316,7 @@ impl FitnessValidator {
                                 threshold: 0.0,
                                 direction: ThresholdDirection::Max,
                                 excepted,
+                                message: None,
                             });
                         }
                     }
@@ -1308,6 +1344,7 @@ impl FitnessValidator {
                             threshold: 1.0,
                             direction: ThresholdDirection::Min,
                             excepted,
+                            message: None,
                         });
                     }
                 }
@@ -1336,6 +1373,7 @@ impl FitnessValidator {
                             threshold: 0.0,
                             direction: ThresholdDirection::Max,
                             excepted,
+                            message: None,
                         });
                     }
                 }
@@ -1389,6 +1427,7 @@ impl FitnessValidator {
                 violations,
                 exceptions_used,
                 total_entities: Some(entity_count),
+                readings: vec![],
             },
             stale,
             matched_exception_entities,
@@ -1432,6 +1471,10 @@ impl FitnessValidator {
     ) -> Result<(RuleResult, Vec<StaleException>, HashSet<String>), FitnessError> {
         let dimension = rule.dimension.clone().or_else(|| Some("ST01".to_string()));
 
+        if graph_shape::is_graph_shape(&rule.pattern) {
+            return self.evaluate_graph_shape_rule(rule, dimension);
+        }
+
         let dep_rule_type = match rule.pattern.as_str() {
             "forbidden_import" | "layer_enforcement" => "forbidden",
             "required_import" => "required",
@@ -1453,9 +1496,11 @@ impl FitnessValidator {
                             threshold: 0.0,
                             direction: ThresholdDirection::Max,
                             excepted: false,
+                            message: None,
                         }],
                         exceptions_used: 0,
                         total_entities: None,
+                        readings: vec![],
                     },
                     vec![],
                     HashSet::new(),
@@ -1481,9 +1526,11 @@ impl FitnessValidator {
                             threshold: 0.0,
                             direction: ThresholdDirection::Max,
                             excepted: false,
+                            message: None,
                         }],
                         exceptions_used: 0,
                         total_entities: None,
+                        readings: vec![],
                     },
                     vec![],
                     HashSet::new(),
@@ -1520,6 +1567,7 @@ impl FitnessValidator {
                     violations: vec![],
                     exceptions_used: 0,
                     total_entities: None,
+                    readings: vec![],
                 },
                 vec![],
                 HashSet::new(),

@@ -1,0 +1,54 @@
+{
+  "results": [
+    {
+      "command": "/tmp/syn-ci-optimization/apss-before run code-topology analyze /tmp/syn-ci-optimization/input --output /tmp/syn-ci-optimization/full-before",
+      "mean": 50.88619082546666,
+      "stddev": 1.1793402172125025,
+      "median": 51.1328165758,
+      "user": 50.153476006666665,
+      "system": 0.5631305000000001,
+      "min": 49.6030395338,
+      "max": 51.922716366799996,
+      "times": [
+        51.1328165758,
+        51.922716366799996,
+        49.6030395338
+      ],
+      "memory_usage_byte": [
+        1049395200,
+        1049395200,
+        1055064064
+      ],
+      "exit_codes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "command": "/tmp/syn-ci-optimization/apss-after run code-topology analyze /tmp/syn-ci-optimization/input --output /tmp/syn-ci-optimization/full-after",
+      "mean": 36.8004290478,
+      "stddev": 0.25118918912411825,
+      "median": 36.6748713668,
+      "user": 36.28763667333333,
+      "system": 0.4569634999999999,
+      "min": 36.636773658799996,
+      "max": 37.0896421178,
+      "times": [
+        36.636773658799996,
+        37.0896421178,
+        36.6748713668
+      ],
+      "memory_usage_byte": [
+        1078394880,
+        1080786944,
+        1080786944
+      ],
+      "exit_codes": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

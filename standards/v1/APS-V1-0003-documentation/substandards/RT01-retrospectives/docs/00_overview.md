@@ -19,7 +19,7 @@ A retrospective is the project's institutional memory. RETRO01 keeps that memory
 ## Quick Start
 
 ```bash
-apss run docs validate .
+apss run documentation validate .
 ```
 
 A minimal valid `docs/retrospectives/RETRO-001-q1-launch.md`:

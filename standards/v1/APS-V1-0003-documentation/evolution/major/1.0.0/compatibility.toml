@@ -1,0 +1,47 @@
+schema = "aps.evolution.compatibility/v1"
+
+[compatibility]
+standard_id = "APS-V1-0003"
+from_version = "0.1.1"
+to_version = "1.0.0"
+backwards_compatible = false
+
+[[breaks]]
+area = "normative-rule"
+what = "DOC02-context-files / install contract Section 1.4 and 1.5"
+was = "`CLAUDE.md` MUST be a symlink to the adjacent `AGENTS.md`; on Windows the installer copies the target's contents instead."
+now = "`CLAUDE.md` MUST be a committed regular file, git mode 100644, byte-identical to the adjacent `AGENTS.md`, on every platform. No OS-conditional branch."
+impact = "A consumer repository that conformed to 0.1.x by committing a symlink is non-conformant under 1.0.0."
+
+[[breaks]]
+area = "diagnostics"
+what = "New diagnostic `claude-md-divergent`, severity error."
+was = "No diagnostic existed for the relationship between CLAUDE.md and AGENTS.md."
+now = "An error-severity diagnostic can fail a build that previously passed, once the diagnostic is implemented."
+impact = "Builds that pass today will fail after the validator lands, until the repository commits a byte-identical copy."
+
+[[breaks]]
+area = "installer-behaviour"
+what = "Scaffolding of the AGENTS.md / CLAUDE.md pair."
+was = "Create CLAUDE.md as a symlink (or, on Windows, a copy of the shipped template)."
+now = "Create CLAUDE.md by copying the ON-DISK adjacent AGENTS.md, never the shipped CLAUDE.md template. Four presence states are specified explicitly."
+impact = "Installer implementations written against 0.1.x must be updated before they can claim 1.0.0 conformance."
+
+[[breaks]]
+area = "shipped-templates"
+what = "substandards/AD01-architecture-decision-records/templates/docs/adrs/CLAUDE.md"
+was = "A git symlink, mode 120000."
+now = "A regular file, mode 100644, byte-identical to the adjacent AGENTS.md."
+impact = "Anything that consumed the template expecting a link now receives a file. The prose inside the template also changed."
+
+[[preserved]]
+area = "config-schema"
+what = "The `docs:` block of apss.yaml is unchanged. No key was added, removed, renamed, or given a new default."
+
+[[preserved]]
+area = "diagnostics"
+what = "Every 0.1.x diagnostic code keeps its identity and severity, including the deliberate warning severity of `claude-md-missing`, `root-claude-md-missing`, and `root-agents-md-missing`."
+
+[[preserved]]
+area = "cli"
+what = "No implemented subcommand changed behaviour. `validate` and `index` are untouched; `claude-md` is new and not yet implemented."

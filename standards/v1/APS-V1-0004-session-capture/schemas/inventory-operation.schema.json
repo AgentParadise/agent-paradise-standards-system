@@ -1,0 +1,866 @@
+{
+  "$defs": {
+    "Binding": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "enum": [
+            "registered",
+            "corroborated",
+            "candidate",
+            "conflicting"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          },
+          "maxItems": 500,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "owner": {
+          "$ref": "#/$defs/NodeRef"
+        },
+        "segment": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Segment"
+        },
+        "transcript": {
+          "$ref": "#/$defs/NodeRef"
+        }
+      },
+      "required": [
+        "owner",
+        "transcript",
+        "confidence",
+        "evidence"
+      ],
+      "title": "Binding",
+      "type": "object"
+    },
+    "BindingFact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "binding",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Binding"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "title": "BindingFact",
+      "type": "object"
+    },
+    "Capture": {
+      "additionalProperties": false,
+      "properties": {
+        "archived_byte_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Archived Byte Hash"
+        },
+        "availability": {
+          "enum": [
+            "present",
+            "pending",
+            "missing",
+            "expired",
+            "unknown"
+          ],
+          "title": "Availability",
+          "type": "string"
+        },
+        "destination": {
+          "enum": [
+            "local",
+            "remote"
+          ],
+          "title": "Destination",
+          "type": "string"
+        },
+        "evidence": {
+          "$ref": "#/$defs/EvidenceReference"
+        },
+        "node": {
+          "$ref": "#/$defs/NodeRef"
+        },
+        "receipt_sequence": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Receipt Sequence",
+          "type": "integer"
+        },
+        "transcript_revision": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transcript Revision"
+        }
+      },
+      "required": [
+        "node",
+        "availability",
+        "receipt_sequence",
+        "evidence",
+        "destination"
+      ],
+      "title": "Capture",
+      "type": "object"
+    },
+    "CaptureFact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "capture",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Capture"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "title": "CaptureFact",
+      "type": "object"
+    },
+    "Edge": {
+      "additionalProperties": false,
+      "properties": {
+        "child": {
+          "$ref": "#/$defs/NodeRef"
+        },
+        "child_segment": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Child Segment"
+        },
+        "confidence": {
+          "enum": [
+            "registered",
+            "corroborated",
+            "candidate",
+            "conflicting"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          },
+          "maxItems": 500,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "parent": {
+          "$ref": "#/$defs/NodeRef"
+        },
+        "parent_segment": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Segment"
+        },
+        "relation": {
+          "enum": [
+            "spawn",
+            "resume",
+            "fork"
+          ],
+          "title": "Relation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent",
+        "child",
+        "relation",
+        "confidence",
+        "evidence"
+      ],
+      "title": "Edge",
+      "type": "object"
+    },
+    "EdgeFact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "edge",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Edge"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "title": "EdgeFact",
+      "type": "object"
+    },
+    "EvidenceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "maxLength": 2048,
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "extractor_version": {
+          "maxLength": 2048,
+          "title": "Extractor Version",
+          "type": "string"
+        },
+        "locator": {
+          "maxLength": 2048,
+          "title": "Locator",
+          "type": "string"
+        },
+        "producer_id": {
+          "maxLength": 2048,
+          "title": "Producer Id",
+          "type": "string"
+        },
+        "source_revision": {
+          "maxLength": 2048,
+          "title": "Source Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "producer_id",
+        "source_revision",
+        "locator",
+        "extractor_version"
+      ],
+      "title": "EvidenceReference",
+      "type": "object"
+    },
+    "Gap": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_ids": {
+          "items": {
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "maxItems": 500,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "node_keys": {
+          "items": {
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "maxItems": 500,
+          "title": "Node Keys",
+          "type": "array"
+        },
+        "reason": {
+          "maxLength": 2048,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "node_keys",
+        "evidence_ids"
+      ],
+      "title": "Gap",
+      "type": "object"
+    },
+    "GapFact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "gap",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Gap"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "title": "GapFact",
+      "type": "object"
+    },
+    "InventoryManifestBatch": {
+      "additionalProperties": false,
+      "properties": {
+        "record_ids": {
+          "items": {
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "maxItems": 500,
+          "minItems": 1,
+          "title": "Record Ids",
+          "type": "array"
+        },
+        "revision": {
+          "$ref": "#/$defs/InventoryRevision"
+        },
+        "start": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "revision",
+        "start",
+        "record_ids"
+      ],
+      "title": "InventoryManifestBatch",
+      "type": "object"
+    },
+    "InventoryRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "fact": {
+          "discriminator": {
+            "mapping": {
+              "binding": "#/$defs/BindingFact",
+              "capture": "#/$defs/CaptureFact",
+              "edge": "#/$defs/EdgeFact",
+              "gap": "#/$defs/GapFact",
+              "membership": "#/$defs/MembershipFact",
+              "node": "#/$defs/NodeFact",
+              "retraction": "#/$defs/RetractionFact"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NodeFact"
+            },
+            {
+              "$ref": "#/$defs/MembershipFact"
+            },
+            {
+              "$ref": "#/$defs/EdgeFact"
+            },
+            {
+              "$ref": "#/$defs/BindingFact"
+            },
+            {
+              "$ref": "#/$defs/CaptureFact"
+            },
+            {
+              "$ref": "#/$defs/GapFact"
+            },
+            {
+              "$ref": "#/$defs/RetractionFact"
+            }
+          ],
+          "title": "Fact"
+        },
+        "producer_id": {
+          "maxLength": 128,
+          "title": "Producer Id",
+          "type": "string"
+        },
+        "producer_sequence": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Producer Sequence",
+          "type": "integer"
+        },
+        "record_id": {
+          "maxLength": 2048,
+          "title": "Record Id",
+          "type": "string"
+        },
+        "run": {
+          "$ref": "#/$defs/QualifiedRun"
+        }
+      },
+      "required": [
+        "run",
+        "producer_id",
+        "record_id",
+        "producer_sequence",
+        "fact"
+      ],
+      "title": "InventoryRecord",
+      "type": "object"
+    },
+    "InventoryRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage": {
+          "enum": [
+            "unknown",
+            "open",
+            "reconciled",
+            "missing",
+            "unsupported",
+            "conflicting"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        },
+        "expected_record_count": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Expected Record Count",
+          "type": "integer"
+        },
+        "parent_revision_id": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Revision Id"
+        },
+        "producer_id": {
+          "maxLength": 128,
+          "title": "Producer Id",
+          "type": "string"
+        },
+        "resolver_version": {
+          "maxLength": 2048,
+          "title": "Resolver Version",
+          "type": "string"
+        },
+        "revision_id": {
+          "maxLength": 2048,
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "revision_sequence": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Revision Sequence",
+          "type": "integer"
+        },
+        "run": {
+          "$ref": "#/$defs/QualifiedRun"
+        },
+        "sequence_high_watermark": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Sequence High Watermark",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run",
+        "revision_id",
+        "revision_sequence",
+        "producer_id",
+        "sequence_high_watermark",
+        "resolver_version",
+        "coverage",
+        "expected_record_count"
+      ],
+      "title": "InventoryRevision",
+      "type": "object"
+    },
+    "ManifestOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/InventoryManifestBatch"
+        },
+        "operation": {
+          "const": "manifest",
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "body"
+      ],
+      "title": "ManifestOperation",
+      "type": "object"
+    },
+    "Membership": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
+        "confidence": {
+          "enum": [
+            "registered",
+            "corroborated",
+            "candidate",
+            "conflicting"
+          ],
+          "title": "Confidence",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          },
+          "maxItems": 500,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "node": {
+          "$ref": "#/$defs/NodeRef"
+        },
+        "phase_id": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phase Id"
+        },
+        "run": {
+          "$ref": "#/$defs/QualifiedRun"
+        },
+        "segment": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Segment"
+        }
+      },
+      "required": [
+        "node",
+        "run",
+        "confidence",
+        "evidence"
+      ],
+      "title": "Membership",
+      "type": "object"
+    },
+    "MembershipFact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "membership",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Membership"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "title": "MembershipFact",
+      "type": "object"
+    },
+    "Node": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          },
+          "maxItems": 500,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "ref": {
+          "$ref": "#/$defs/NodeRef"
+        }
+      },
+      "required": [
+        "ref",
+        "evidence"
+      ],
+      "title": "Node",
+      "type": "object"
+    },
+    "NodeFact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "node",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Node"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "title": "NodeFact",
+      "type": "object"
+    },
+    "NodeRef": {
+      "additionalProperties": false,
+      "properties": {
+        "harness": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Harness"
+        },
+        "kind": {
+          "enum": [
+            "platform",
+            "invocation",
+            "transcript"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "local_id": {
+          "maxLength": 2048,
+          "title": "Local Id",
+          "type": "string"
+        },
+        "source_instance_id": {
+          "maxLength": 128,
+          "title": "Source Instance Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "source_instance_id",
+        "local_id"
+      ],
+      "title": "NodeRef",
+      "type": "object"
+    },
+    "PublishOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/InventoryRevision"
+        },
+        "operation": {
+          "const": "publish",
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "body"
+      ],
+      "title": "PublishOperation",
+      "type": "object"
+    },
+    "QualifiedRun": {
+      "additionalProperties": false,
+      "properties": {
+        "execution_id": {
+          "maxLength": 128,
+          "title": "Execution Id",
+          "type": "string"
+        },
+        "source_instance_id": {
+          "maxLength": 128,
+          "title": "Source Instance Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_instance_id",
+        "execution_id"
+      ],
+      "title": "QualifiedRun",
+      "type": "object"
+    },
+    "RecordOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/InventoryRecord"
+        },
+        "operation": {
+          "const": "record",
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "body"
+      ],
+      "title": "RecordOperation",
+      "type": "object"
+    },
+    "Retraction": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "$ref": "#/$defs/EvidenceReference"
+        },
+        "target": {
+          "$ref": "#/$defs/EvidenceReference"
+        }
+      },
+      "required": [
+        "target",
+        "evidence"
+      ],
+      "title": "Retraction",
+      "type": "object"
+    },
+    "RetractionFact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "retraction",
+          "title": "Kind",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/Retraction"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "title": "RetractionFact",
+      "type": "object"
+    },
+    "StageOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "$ref": "#/$defs/InventoryRevision"
+        },
+        "operation": {
+          "const": "stage",
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation",
+        "body"
+      ],
+      "title": "StageOperation",
+      "type": "object"
+    }
+  },
+  "$id": "urn:apss:session-inventory:1:operation",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "discriminator": {
+    "mapping": {
+      "manifest": "#/$defs/ManifestOperation",
+      "publish": "#/$defs/PublishOperation",
+      "record": "#/$defs/RecordOperation",
+      "stage": "#/$defs/StageOperation"
+    },
+    "propertyName": "operation"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/RecordOperation"
+    },
+    {
+      "$ref": "#/$defs/StageOperation"
+    },
+    {
+      "$ref": "#/$defs/ManifestOperation"
+    },
+    {
+      "$ref": "#/$defs/PublishOperation"
+    }
+  ]
+}

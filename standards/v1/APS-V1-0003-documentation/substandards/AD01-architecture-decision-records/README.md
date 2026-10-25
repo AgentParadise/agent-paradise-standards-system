@@ -3,7 +3,7 @@
 **ID:** `APS-V1-0003.AD01`
 **Type:** Substandard
 **Slug:** `adr`
-**Version:** `0.1.0`
+**Version:** `1.0.0`
 **Parent:** `APS-V1-0003` (Documentation and Context Engineering)
 
 Enforces ADR naming, frontmatter, required keywords, context files, and

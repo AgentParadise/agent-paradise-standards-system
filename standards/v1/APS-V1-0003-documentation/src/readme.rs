@@ -140,7 +140,7 @@ fn validate_readme_index(
                 diagnostics.push(
                     Diagnostic::warning(code, msg)
                         .with_path(readme_path)
-                        .with_hint("Run `apss run docs index --write` to regenerate"),
+                        .with_hint("Run `apss run documentation index --write` to regenerate"),
                 );
             }
         }

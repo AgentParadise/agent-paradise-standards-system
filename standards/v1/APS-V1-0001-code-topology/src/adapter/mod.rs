@@ -237,6 +237,30 @@ impl TreeSitterAdapter {
         &self.registry
     }
 
+    /// Extract and measure functions using one syntax tree for this source.
+    /// Keep the tree scoped to the call so no file revision can reuse stale data.
+    pub(crate) fn analyze_functions(
+        &self,
+        source: &str,
+        file_path: &Path,
+    ) -> Result<Vec<(FunctionInfo, FunctionMetrics)>, AdapterError> {
+        let (tree, grammar) = self.parse(source, file_path)?;
+        let functions = queries::extract_functions(&tree, source, file_path, grammar)?;
+        let calculator = ComplexityCalculator::new(grammar);
+        Ok(functions
+            .into_iter()
+            .map(|function| {
+                let metrics = calculator.compute_metrics(
+                    &tree,
+                    source.as_bytes(),
+                    function.start_line,
+                    function.end_line,
+                );
+                (function, metrics)
+            })
+            .collect())
+    }
+
     /// Compute metrics for a function using the shared complexity engine.
     pub fn compute_function_metrics(
         &self,
@@ -334,5 +358,85 @@ mod tests {
         let registry = GrammarRegistry::new();
         let adapter = TreeSitterAdapter::new(registry);
         assert!(adapter.registry().languages().is_empty());
+    }
+
+    #[test]
+    fn shared_tree_matches_independent_function_measurements() {
+        use grammars::{PythonGrammar, RustGrammar, TsxGrammar, TypeScriptGrammar};
+
+        let mut registry = GrammarRegistry::new();
+        registry.register(Box::new(RustGrammar::new()));
+        registry.register(Box::new(PythonGrammar::new()));
+        registry.register(Box::new(TypeScriptGrammar::new()));
+        registry.register(Box::new(TsxGrammar::new()));
+        let adapter = TreeSitterAdapter::new(registry);
+        let cases = [
+            (
+                "sample.rs",
+                "fn alpha(x: bool) -> u8 { if x { 1 } else { 2 } }\nfn beta() { for i in 0..3 { if i > 1 { break; } } }",
+            ),
+            (
+                "sample.py",
+                "# café\ndef outer(x):\n    def inner(y):\n        return y and x\n    if x:\n        return inner(x)\n    return 0\n\nclass C:\n    def method(self, x):\n        return x or 3\n",
+            ),
+            (
+                "sample.ts",
+                "export function first(x: boolean) { return x ? 1 : 0; }\nconst second = (x: number) => x && 3;\nclass C { method(x: boolean) { if (x) return 1; return 0; } }",
+            ),
+            (
+                "sample.tsx",
+                "export function View(x: {ok: boolean}) { return x.ok ? <p>yes</p> : <p>no</p>; }\nconst Other = () => <span />;",
+            ),
+        ];
+        for (name, source) in cases {
+            let path = Path::new(name);
+            let expected: Vec<_> = adapter
+                .extract_functions(source, path)
+                .unwrap()
+                .into_iter()
+                .map(|function| {
+                    let metrics = adapter.compute_metrics(source, &function).unwrap();
+                    (function, metrics)
+                })
+                .collect();
+            assert!(
+                !expected.is_empty(),
+                "fixture must exercise functions: {name}"
+            );
+            assert_eq!(
+                adapter.analyze_functions(source, path).unwrap(),
+                expected,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn shared_tree_does_not_reuse_an_earlier_source_revision() {
+        let mut registry = GrammarRegistry::new();
+        registry.register(Box::new(grammars::PythonGrammar::new()));
+        let adapter = TreeSitterAdapter::new(registry);
+        let path = Path::new("same.py");
+        let first = adapter
+            .analyze_functions("def f(x):\n    return x\n", path)
+            .unwrap();
+        let second = adapter
+            .analyze_functions(
+                "def f(x):\n    if x:\n        return 1\n    return 0\n",
+                path,
+            )
+            .unwrap();
+        assert!(second[0].1.cyclomatic_complexity > first[0].1.cyclomatic_complexity);
+        assert!(
+            adapter
+                .analyze_functions("# no functions\n", path)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            adapter
+                .analyze_functions("text", Path::new("unknown.xyz"))
+                .is_err()
+        );
     }
 }

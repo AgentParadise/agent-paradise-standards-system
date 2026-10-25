@@ -256,11 +256,14 @@ pub fn validate_resolved(config: &ResolvedProjectConfig) -> Diagnostics {
 // Helpers
 // ============================================================================
 
-/// Convert a standard ID and slug to a crate name like `"apss-v1-0001-code-topology"`.
-// TODO(DI01): Include slug in crate name per DI01 convention (apss-v1-NNNN-slug)
+/// Convert a standard or experiment ID and slug to an APSS crate name.
 fn standard_id_to_crate_name(id: &str, slug: &str) -> String {
-    let prefix = id.to_lowercase().replace("aps-", "apss-");
-    format!("{prefix}-{slug}")
+    let suffix = id
+        .strip_prefix("APS-")
+        .or_else(|| id.strip_prefix("EXP-"))
+        .unwrap_or(id)
+        .to_lowercase();
+    format!("apss-{suffix}-{slug}")
 }
 
 #[cfg(test)]
@@ -660,6 +663,10 @@ tool:
         assert_eq!(
             standard_id_to_crate_name("APS-V1-0003", "fitness"),
             "apss-v1-0003-fitness"
+        );
+        assert_eq!(
+            standard_id_to_crate_name("EXP-V1-0006", "workspace"),
+            "apss-v1-0006-workspace"
         );
     }
 }
