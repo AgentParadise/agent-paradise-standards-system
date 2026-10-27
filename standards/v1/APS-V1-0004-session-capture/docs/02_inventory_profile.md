@@ -49,6 +49,12 @@ latest. `/v1/transcripts/raw` returns sanitized bytes with `X-Source-Format` and
 `X-Stored-Content-Hash` headers. Stores apply their current read authorization on
 every request, independently of inventory visibility.
 
+`HEAD /v1/transcripts` with the qualified parameters and `content_hash` REQUIRED
+confirms that exact qualified revision, with the outcomes and meaning of base
+revision confirmation (base 5.3.1). Without `content_hash` it MUST be rejected
+with `400`; it never falls back to latest. Uploads made through the base batch
+endpoint are confirmed through the base route, not this one.
+
 `InventoryRecord` carries a run, producer ID, immutable record ID, monotonic
 producer sequence, and a typed fact. Facts describe nodes, memberships, lineage,
 identity bindings, capture receipts, gaps, or explicit corrections. Capture body
