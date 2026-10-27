@@ -641,10 +641,18 @@ GET /v1/capabilities
 ```
 
 ```json
-{ "request_encodings": ["gzip"], "max_encoded_bytes": 0, "max_decoded_bytes": 0 }
+{
+  "request_encodings": ["gzip"],
+  "max_encoded_bytes": 0,
+  "max_decoded_bytes": 0,
+  "revision_confirm": true,
+  "confirm_verifies_body": false
+}
 ```
 
-(`0` stands in for the store's real limits.) Exporter rules:
+(`0` stands in for the store's real limits. The last two keys belong to 5.3.1.
+Consumers MUST tolerate unknown keys in this document, and MUST treat an absent
+`request_encodings` as empty and an absent `revision_confirm` as `false`.) Exporter rules:
 
 - An exporter MAY send `Content-Encoding: gzip` only to a store that advertised
   `gzip` in `request_encodings`.
