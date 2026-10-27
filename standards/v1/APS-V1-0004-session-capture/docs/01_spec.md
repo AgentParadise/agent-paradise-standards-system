@@ -571,6 +571,21 @@ Both transformations produce the stored form (2.9), and both happen AFTER
 hashing. `content_hash` is computed over the captured content as received
 (4.2.3), so neither redaction nor NUL stripping can move a session's identity.
 
+**Physical storage encoding is not a transformation.** This section governs the
+*logical* stored form: sanitized `raw`. A store MAY persist that form under any
+lossless physical storage encoding, such as compression, and MAY change the
+encoding later. Every retrieval MUST return the logical stored form
+byte-identical to what it was before the encoding was applied or changed. A
+stored-form integrity hash (such as the inventory profile's
+`stored_content_hash`) keeps its definition over the logical stored form; any
+physical checksum a store keeps over encoded bytes is separate from it.
+
+Re-encoding existing bodies (informative): verify in two layers. First, the
+decoded physical blob equals its prior physical bytes. Second, the logical `raw`
+decoded from it passes the integrity check that applies to its storage path.
+Hashing decoded blob bytes directly is not a valid check where the physical blob
+is a serialization of `raw` rather than `raw` itself.
+
 ### 4.4 Metadata
 
 `metadata` is OPTIONAL, freeform, and non-load-bearing: the standard makes no
@@ -616,6 +631,45 @@ additively (section 8.1); a bare top-level array can never gain one without a
 breaking change, and at the standard level that cost is paid by every consumer at
 once rather than by one application.
 
+#### 5.1.1 Compressed Request Bodies (OPTIONAL)
+
+A store MAY accept compressed request bodies. A store that does MUST advertise
+it:
+
+```
+GET /v1/capabilities
+```
+
+```json
+{
+  "request_encodings": ["gzip"],
+  "max_encoded_bytes": 0,
+  "max_decoded_bytes": 0,
+  "revision_confirm": true,
+  "confirm_verifies_body": false
+}
+```
+
+(`0` stands in for the store's real limits. The last two keys belong to 5.3.1.
+Consumers MUST tolerate unknown keys in this document, and MUST treat an absent
+`request_encodings` as empty and an absent `revision_confirm` as `false`.) Exporter rules:
+
+- An exporter MAY send `Content-Encoding: gzip` only to a store that advertised
+  `gzip` in `request_encodings`.
+- It MUST send identity encoding when capability discovery fails or the store
+  does not advertise the encoding.
+- It MAY cache the capability document per store for a bounded time, and MUST
+  re-discover after a `415` response.
+
+Store rules:
+
+- Decode the transport encoding first, then parse, then compute `content_hash`
+  exactly as 4.2.3 defines it. Transport encoding never reaches the hash input.
+- Reject an encoded body over `max_encoded_bytes` with `413`, a decoded body over
+  `max_decoded_bytes` with `413` (enforced while decoding, never after), and a
+  malformed stream with `400`.
+- Reject an unadvertised `Content-Encoding` with `415`.
+
 ### 5.2 Authentication
 
 - The request MUST carry `Authorization: Bearer <token>`.
@@ -633,6 +687,45 @@ once rather than by one application.
   MUST NOT create a duplicate.
 - The response MUST report a per-item outcome of `accepted`, `duplicate`, or
   `rejected`, and MUST include a reason for `rejected`.
+
+#### 5.3.1 Revision Confirmation (OPTIONAL)
+
+A store MAY let a client confirm that one exact revision is held, keyed on the
+same pair it deduplicates on:
+
+```
+HEAD /v1/sessions/{session_id}/revisions/{content_hash}
+```
+
+The request requires a read-scoped token and the response has no body. A store
+that implements it MUST advertise `"revision_confirm": true` and
+`"confirm_verifies_body": <bool>` in its capability document (5.1.1); the second
+says whether the handler re-verifies body integrity or trusts committed metadata.
+
+| Status | Meaning |
+|---|---|
+| `200` | The revision is committed (below). `X-Stored-Content-Hash` carries the stored-form integrity hash. |
+| `404` | The store does not hold this revision, including a legitimately superseded one. |
+| `401` / `403` | Unauthorized. |
+| `409` | The stored body failed integrity verification. |
+| `503` | The store is unavailable. |
+
+A client MUST keep these outcomes distinct and MUST NOT fold any of them into
+"absent".
+
+`200` means the revision's sanitized body and its index entry are in a committed
+transaction that survives a store process crash. It is not a retention promise:
+a store MAY later supersede the revision, after which the same request returns
+`404`. It is not a backup signal either: a client that deletes its own copy on
+the strength of a store holding it needs separate, revision-specific backup
+evidence, which this standard does not yet define (section 9).
+
+The client confirms the revision it uploaded. It MUST persist the
+`content_hash` it uploaded together with the `session_id` it uploaded under,
+and MUST NOT recompute the hash from a later local revision, from
+pre-sanitization input, or from a retrieved stored form. It SHOULD confirm a
+revision immediately before acting on the confirmation, because supersession can
+remove an older revision it confirmed earlier.
 
 ### 5.4 Server-Enforced Sanitization
 
@@ -732,8 +825,12 @@ A conforming store MUST:
    (5.3).
 3. Deduplicate on `(session_id, content_hash)` (5.3).
 4. Sanitize before persisting, unconditionally (5.4).
-5. Persist `raw` such that it remains retrievable verbatim.
+5. Persist `raw` such that it remains retrievable verbatim. A lossless physical
+   storage encoding is permitted (4.3.2).
 6. Serve the search baseline of section 7.
+
+A conforming store MAY additionally accept compressed request bodies (5.1.1) and
+answer revision confirmation (5.3.1), each advertised in its capability document.
 
 ### 6.4 Reconstitutor (Restore)
 
@@ -1003,6 +1100,19 @@ additive evolution does not break existing stores.
   against any conformant store. It is a candidate for a future substandard, and it
   MUST remain explicitly lossy and non-load-bearing so the envelope contract stays
   as section 7.3 defines it.
+- **Append upload** - Sending only the bytes appended since a revision the store
+  already holds. Every older revision of a live transcript is observed to be a
+  strict prefix of the newest, so this would cut transport to the delta. It
+  applies only to string `raw`. Resuming the 4.2.3 hash needs the SHA-256
+  chaining state plus the count of canonical (JCS-escaped UTF-8) bytes already
+  hashed, never a finalized digest; a 64-byte block boundary can split an escape
+  or UTF-8 sequence and need not fall on a record boundary, so the producer
+  re-sends from the preceding record boundary and the store skips bytes already
+  hashed. Open risks: secrets spanning the boundary, and SHA-256-specific
+  state. Deferred until compression and confirmation prove insufficient.
+- **Backup evidence** - A revision-specific signal that a store's off-site
+  backup holds a `(session_id, content_hash)`. Confirmation (5.3.1) does not
+  provide it; a client must not release its own copy on confirmation alone.
 
 ---
 
