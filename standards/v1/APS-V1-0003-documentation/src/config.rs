@@ -58,6 +58,8 @@ pub struct DocsConfig {
     pub north_star: NorthStarConfig,
     #[serde(default)]
     pub retrospectives: RetrospectivesConfig,
+    #[serde(default)]
+    pub requirements: RequirementsConfig,
 }
 
 impl Default for DocsConfig {
@@ -73,6 +75,7 @@ impl Default for DocsConfig {
             backlinking: BacklinkingConfig::default(),
             north_star: NorthStarConfig::default(),
             retrospectives: RetrospectivesConfig::default(),
+            requirements: RequirementsConfig::default(),
         }
     }
 }
@@ -138,6 +141,21 @@ impl Default for RetrospectivesConfig {
             naming_pattern: default_retrospectives_naming_pattern(),
         }
     }
+}
+
+/// The `docs.requirements` section (APS-V1-0003.RQ01, an optional doc type).
+///
+/// The rule is on by default, like every doc type, but the document is
+/// optional. `locations` absent: the default `requirements.md` (docs-root
+/// relative) is validated only if it exists. `locations` set: declaring a
+/// location is the opt-in, and each listed document MUST exist. A list
+/// supports one requirements document per system.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RequirementsConfig {
+    #[serde(default = "default_false")]
+    pub disable: bool,
+    #[serde(default)]
+    pub locations: Option<Vec<String>>,
 }
 
 // ─── ADR pattern constants ────────────────────────────────────────────────

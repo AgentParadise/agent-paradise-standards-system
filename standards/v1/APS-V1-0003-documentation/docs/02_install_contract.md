@@ -157,6 +157,11 @@ The shipped inventory at the time of this contract:
   out of scope for the install-contract surface beyond the rule "copy
   what the substandard ships at `templates/`, skip on conflict".
 
+- **APS-V1-0003.RQ01 (Requirements)** is an optional doc type and
+  MUST NOT ship a template that creates the requirements document
+  (parent spec Section 8.2.1). Its worked example lives in the
+  parent's `examples/requirements.md` for operators to copy by hand.
+
 The repository root `AGENTS.md` and root `CLAUDE.md` are NOT shipped
 as templates and the installer MUST NOT scaffold them. Their content
 is project-specific per Section 1.5 and the operator's Correction 2.
@@ -328,6 +333,7 @@ The validator MUST enforce, for each active doc type:
 
 - **ADR (`APS-V1-0003.AD01`)**: directory exists, every non-`.example` file matches the configured naming regex, every ADR has the required frontmatter and `status` (with the per-doc-type lifecycle vocabulary from Section 8.1 of `01_spec.md`: ADRs use `accepted` for the in-force value), required topic keywords are satisfied, context files exist, every `ADR-NNN-...` token (3 to 5 digit number) found in the file set defined by `docs.backlinking.scan` (defaults documented in Section 3.3 of `01_spec.md`; deprecated `file_types` honoured with a `backlinking-file-types-deprecated` warning) resolves to a real ADR file in `docs.adr.directory` whose name satisfies `docs.adr.naming_pattern` (diagnostic: `ADR01-unknown-reference`, error), and resolved references to ADRs with `status: superseded` are flagged as `ADR01-superseded-reference` (warning, hint naming the `superseded_by` target) and references to `status: deprecated` ADRs are flagged as `ADR01-deprecated-reference` (warning, hint suggesting retarget or annotate as intentional). See Section 7.2 of `01_spec.md` for the reference-accuracy contract.
 - **North Star (`APS-V1-0003.PV01`)**: a single document exists at the configured location with required frontmatter, `## Mission`, `## Vision`, `## Position`, and a current `status`.
+- **Requirements (`APS-V1-0003.RQ01`, optional)**: each requirements document present at the default location, or listed in `docs.requirements.locations` (listed ones MUST exist), has the required frontmatter and sections, uniquely identified requirements with a measure and check status, at least one user story, and a valid change log. A project with neither passes.
 - **Retrospectives (`APS-V1-0003.RT01`)**: directory exists, each file matches the naming regex, files are append only (`Changed` scope: no historical retro file appears in the staged diff with content modifications outside the appended sections), and required sections are present.
 
 For every doc type, the validator MUST also enforce the parent rules: frontmatter present and well formed, README index present and up to date, per directory context files present.
@@ -532,4 +538,4 @@ This document is the contract. The actual installer, hook binary, and CLI sub-co
 - Parent spec: [`01_spec.md`](01_spec.md).
 - Diagnostic code scheme: Section 10 of `01_spec.md`.
 - Doc type registry: Section 8 of `01_spec.md`.
-- Substandards: [`../substandards/AD01-architecture-decision-records`](../substandards/AD01-architecture-decision-records), [`../substandards/PV01-purpose-and-vision`](../substandards/PV01-purpose-and-vision), [`../substandards/RT01-retrospectives`](../substandards/RT01-retrospectives).
+- Substandards: [`../substandards/AD01-architecture-decision-records`](../substandards/AD01-architecture-decision-records), [`../substandards/PV01-purpose-and-vision`](../substandards/PV01-purpose-and-vision), [`../substandards/RQ01-requirements`](../substandards/RQ01-requirements), [`../substandards/RT01-retrospectives`](../substandards/RT01-retrospectives).

@@ -1,6 +1,6 @@
 [package]
 name = "apss-v1-0003-documentation"
-version = "1.0.0"
+version = "1.1.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -20,11 +20,13 @@ name = "documentation"
 #
 # - AD01 -> Architecture Decision Records (the heavy substandard; needs glob)
 # - PV01 -> North Star (Mission, Vision, Position)
+# - RQ01 -> Requirements (optional doc type)
 # - RT01 -> Retrospectives
 [features]
-default = ["AD01", "PV01", "RT01"]
+default = ["AD01", "PV01", "RQ01", "RT01"]
 AD01 = ["dep:glob"]
 PV01 = []
+RQ01 = []
 RT01 = []
 
 [dependencies]
