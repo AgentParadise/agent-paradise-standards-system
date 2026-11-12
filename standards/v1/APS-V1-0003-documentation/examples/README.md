@@ -22,6 +22,10 @@ docs:
 
 The full default `docs:` section (every key) is in [`apss.yaml`](apss.yaml).
 
+## Example Requirements Document (RQ01, optional)
+
+[`requirements.md`](requirements.md) is a complete, valid requirements document for a generic notes service: frontmatter with owner, status, version, last-reviewed date and the North Star it serves; pillars of numbered requirements with a measure and check status; roles and user stories; a later and out-of-scope list; and a dated change log. Copy it to `docs/requirements.md` and replace the content. See the [RQ01 spec](../substandards/RQ01-requirements/docs/01_spec.md).
+
 ## Example Compliant Directory Structure
 
 ```
