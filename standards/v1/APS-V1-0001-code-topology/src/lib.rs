@@ -509,8 +509,8 @@ impl CouplingMatrix {
             directional,
         };
 
-        for i in 0..n {
-            result.matrix[i][i] = 1.0;
+        for (i, row) in result.matrix.iter_mut().enumerate().take(n) {
+            row[i] = 1.0;
         }
 
         result

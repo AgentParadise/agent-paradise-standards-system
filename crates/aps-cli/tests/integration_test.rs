@@ -8,12 +8,7 @@ use std::process::Command;
 
 /// Get the path to the compiled aps binary.
 fn aps_binary() -> std::path::PathBuf {
-    // During tests, the binary is in target/debug/apss-dev
-    let mut path = std::env::current_exe().unwrap();
-    path.pop(); // Remove test binary name
-    path.pop(); // Remove deps
-    path.push("apss-dev");
-    path
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_apss-dev"))
 }
 
 /// Create a temporary test repository with minimal structure.

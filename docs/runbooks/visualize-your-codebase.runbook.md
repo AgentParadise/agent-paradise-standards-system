@@ -111,7 +111,7 @@ Found N source file(s):
 ✓ Wrote artifacts to .topology
 ```
 
-Artifacts produced: `.topology/manifest.toml`, `metrics/modules.json`, `metrics/functions.json`, `metrics/slices.json`, `graphs/dependencies.json`, `graphs/coupling-matrix.json`.
+Artifacts produced: `.topology/manifest.toml`, `metrics/modules.json`, `metrics/functions.json`, `metrics/slices.json`, `graphs/dependency-graph.json`, `graphs/coupling-matrix.json`.
 
 > **Warning: topology JSON can get heavy.** Artifact size grows with codebase size, and `functions.json` dominates: a 14-file demo produces ~176 KB of artifacts, while a medium Rust workspace already produces a 400+ KB `functions.json`. Large monorepos can reach many megabytes. Do not load these files into an agent context wholesale; query specific fields instead. Consider adding `.topology/` to `.gitignore` and regenerating in CI rather than committing artifacts. Artifact slimming/sharding is a known future optimization.
 

@@ -230,7 +230,7 @@ fn depth_reports_stale_exceptions() {
 }
 
 #[test]
-fn graph_shape_rule_skips_without_a_dependency_graph() {
+fn graph_shape_rule_fails_without_a_dependency_graph() {
     let dir = TempDir::new().unwrap();
     fs::write(
         dir.path().join("fitness.toml"),
@@ -242,7 +242,12 @@ fn graph_shape_rule_skips_without_a_dependency_graph() {
         .unwrap()
         .validate()
         .unwrap();
-    assert_eq!(only(&report).status, RuleStatus::Skip);
+    let result = only(&report);
+    assert_eq!(result.status, RuleStatus::Fail);
+    assert_eq!(
+        result.violations[0].entity,
+        "PROMOTION_REQUIREMENT_UNMET:graphs/dependency-graph.json"
+    );
 }
 
 // ─── max_fan_out ────────────────────────────────────────────────────────────

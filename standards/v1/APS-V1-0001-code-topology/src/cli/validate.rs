@@ -12,7 +12,7 @@ pub(super) fn topology_validate(path: &str, _verbose: bool) -> i32 {
         "metrics/functions.json",
         "metrics/modules.json",
         "graphs/coupling-matrix.json",
-        "graphs/dependencies.json",
+        super::analyze::DEPENDENCY_GRAPH_FILE,
     ];
 
     let mut errors = 0;

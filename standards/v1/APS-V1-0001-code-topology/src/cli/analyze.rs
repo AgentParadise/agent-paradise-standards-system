@@ -161,6 +161,7 @@ pub(super) fn topology_analyze(
 
     // Write artifacts
     if let Err(e) = write_topology_artifacts(
+        project_path,
         output_path,
         &all_functions,
         &all_imports,
@@ -178,6 +179,7 @@ pub(super) fn topology_analyze(
 
 /// Write topology artifacts to disk.
 fn write_topology_artifacts(
+    project_path: &std::path::Path,
     output_path: &std::path::Path,
     functions: &[(crate::FunctionInfo, crate::FunctionMetrics)],
     imports: &[crate::ImportInfo],
@@ -417,35 +419,51 @@ total_dependencies = {}
     )?;
 
     // =========================================================================
-    // M1: Write dependencies.json (dependency graph with edges)
+    // M1: Write dependency-graph.json (spec §3.4.2), the input of APS-V1-0002
+    // ST01 dependency rules. Each node carries `path`, its source file
+    // relative to the analysis root, because ST01 rules match path globs
+    // (`**/domain/**`) and a module id (`domain::model`) never matches one.
+    // Nodes and edges are sorted so the artifact is byte-stable run to run.
     // =========================================================================
-    let dependency_nodes: Vec<serde_json::Value> = modules
-        .keys()
-        .map(|id| {
+    let mut dependency_nodes: Vec<serde_json::Value> = modules
+        .iter()
+        .map(|(id, funcs)| {
+            let path = funcs
+                .iter()
+                .map(|f| relative_slash_path(project_path, &f.0.file_path))
+                .min()
+                .unwrap_or_default();
             serde_json::json!({
                 "id": id,
-                "type": "module"
+                "type": "module",
+                "path": path
             })
         })
         .collect();
+    dependency_nodes.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
 
-    let dependency_edges: Vec<serde_json::Value> = import_edges
+    let mut dependency_edges: Vec<serde_json::Value> = import_edges
         .iter()
         .map(|((from, to), imports)| {
             serde_json::json!({
                 "from": from,
                 "to": to,
+                "type": "imports",
                 "imports": imports,
                 "weight": imports.len()
             })
         })
         .collect();
+    dependency_edges.sort_by(|a, b| {
+        (a["from"].as_str(), a["to"].as_str()).cmp(&(b["from"].as_str(), b["to"].as_str()))
+    });
 
     let total_internal_edges = dependency_edges.len();
     let total_external_imports = imports.iter().filter(|i| i.is_external).count();
 
     let dependencies_json = serde_json::json!({
-        "schema_version": "1.0.0",
+        "schema_version": DEPENDENCY_GRAPH_SCHEMA_VERSION,
+        "level": "module",
         "nodes": dependency_nodes,
         "edges": dependency_edges,
         "metadata": {
@@ -455,7 +473,7 @@ total_dependencies = {}
         }
     });
     fs::write(
-        output_path.join("graphs/dependencies.json"),
+        output_path.join(DEPENDENCY_GRAPH_FILE),
         serde_json::to_string_pretty(&dependencies_json).unwrap(),
     )?;
 
@@ -861,4 +879,24 @@ pub(super) fn chrono_lite_now() -> String {
         (secs / 60) % 60,
         secs % 60
     )
+}
+
+/// Spec §3.4.2 path of the module dependency graph under the topology dir.
+pub(crate) const DEPENDENCY_GRAPH_FILE: &str = "graphs/dependency-graph.json";
+
+/// Schema version of `graphs/dependency-graph.json`. 2.0.0: the file moved
+/// from `graphs/dependencies.json` and every node carries `path`.
+pub(crate) const DEPENDENCY_GRAPH_SCHEMA_VERSION: &str = "2.0.0";
+
+/// `file` relative to `root`, with `/` separators on every platform, so a
+/// path glob in an ST01 rule reads the same on Windows and Unix.
+fn relative_slash_path(root: &std::path::Path, file: &std::path::Path) -> String {
+    let rel = file.strip_prefix(root).unwrap_or(file);
+    rel.components()
+        .filter_map(|c| match c {
+            std::path::Component::Normal(part) => Some(part.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }

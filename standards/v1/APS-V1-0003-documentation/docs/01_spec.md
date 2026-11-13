@@ -5,7 +5,7 @@ description: "Normative rules for documentation structure, the doc type registry
 
 # APS-V1-0003 - Documentation and Context Engineering (Canonical Specification)
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Status**: Active (official; promoted from EXP-V1-0004)
 **Category**: Governance
 
@@ -71,9 +71,9 @@ This standard:
 
 1. Registers the canonical slug `documentation` (the `docs` and `doc` spellings are dev-CLI aliases only).
 2. Contributes the schema for the `docs` section of `apss.yaml` (Section 3 below).
-3. Validates its own section: the parent validator validates the `docs` block and its core sub-blocks (`index`, `context_files`, `readme`, `root_context`, `backlinking`); each substandard validates its own nested key (`adr`, `north-star`, `retrospectives`).
+3. Validates its own section: the parent validator validates the `docs` block and its core sub-blocks (`index`, `context_files`, `readme`, `root_context`, `backlinking`); each substandard validates its own nested key (`adr`, `north-star`, `requirements`, `retrospectives`).
 
-Substandards do NOT register their own top-level slugs. They nest under the `docs` key as namespaced sub-sections (`docs.adr`, `docs.north-star`, `docs.retrospectives`); the nesting convention is normative and is owned by the meta-standard.
+Substandards do NOT register their own top-level slugs. They nest under the `docs` key as namespaced sub-sections (`docs.adr`, `docs.north-star`, `docs.requirements`, `docs.retrospectives`); the nesting convention is normative and is owned by the meta-standard.
 
 The `.apss/` dotdir, when it exists, holds GENERATED artifacts (such as cached indexes and validator state) only. It MUST NOT hold configuration. Earlier drafts of this standard placed configuration in the `.apss` tree; that layout is superseded by `apss.yaml` at the repository root. Tooling MUST NOT continue to read legacy `.apss` project configuration.
 
@@ -221,6 +221,12 @@ docs:
   north-star:
     # Disable with docs.north-star.disable: true
     location: north-star.md       # docs-root-relative; resolves to <docs.root>/north-star.md
+
+  requirements:
+    # Optional doc type (Section 8.2.1). Absent `locations`: validates
+    # <docs.root>/requirements.md only if it exists. Listing locations is
+    # the opt-in: each listed document MUST exist.
+    locations: null               # e.g. [requirements.md, systems/billing/requirements.md]
 
   retrospectives:
     directory: retrospectives     # docs-root-relative; resolves to <docs.root>/retrospectives
@@ -816,6 +822,7 @@ The parent standard defines the doc type registry. Each doc type is implemented 
 |----------|-------------|------------------|---------------------------|
 | Architecture Decision Records | `APS-V1-0003.AD01` | `docs/adrs/` (literal config value: `adrs`) | `docs.adr` |
 | North Star (Mission, Vision, Position) | `APS-V1-0003.PV01` | `docs/north-star.md` (literal config value: `north-star.md`) | `docs.north-star` |
+| Requirements (optional) | `APS-V1-0003.RQ01` | `docs/requirements.md` (literal config value: `requirements.md`; a list, one per system) | `docs.requirements` |
 | Retrospectives | `APS-V1-0003.RT01` | `docs/retrospectives/` (literal config value: `retrospectives`) | `docs.retrospectives` |
 
 All location values are docs-root-relative per Section 3.3 normative
@@ -841,6 +848,7 @@ Per-doc-type vocabulary (normative):
 |----------|-----------|-----------|-------------------------------|------------|
 | ADR (`ADR01`)              | `proposed` | `accepted` | `deprecated` | `superseded` |
 | North Star (`PV01`)         | `proposed` | `active`   | `deprecated` | `superseded` |
+| Requirements (`RQ01`)       | `proposed` | `accepted` | `deprecated` | `superseded` |
 | Retrospectives (`RETRO01`)  | `proposed` | `active`   | `deprecated` | `superseded` |
 
 ADRs adopt `accepted` to match the Nygard tradition the substandard
@@ -863,12 +871,31 @@ A new doc type is added by:
 3. Registering the doc type in this section's table.
 4. Defining the substandard's diagnostic codes using the human readable scheme described in Section 10.
 
+#### 8.2.1 Optional doc types
+
+A doc type MAY be declared optional in its substandard spec. An optional
+doc type still follows Section 3.2: its rule is on unless
+`docs.<slug>.disable: true`. What is optional is the document:
+
+- With no location configured, the validator checks the default location
+  only if a document exists there; a project without one passes.
+- Configuring a location is the opt-in. Every configured location MUST
+  then hold a conforming document.
+
+This is not a per-feature `optional` flag (Section 3.4): there is no
+boolean, and writing the location is the declaration. Optional doc types
+MUST NOT ship installer templates that create the document itself,
+because the installer materialises templates for every active doc type
+(install contract Section 1.4). `APS-V1-0003.RQ01` is the first optional
+doc type.
+
 The parent standard MUST NOT hard code the list of doc types in code paths that would break when a new doc type is added. Validators MUST iterate the registry, not enumerate types by name.
 
 ### 8.3 Substandard summaries
 
 - **APS-V1-0003.AD01 (Architecture Decision Records).** Spec: [`substandards/AD01-architecture-decision-records/docs/01_spec.md`](../substandards/AD01-architecture-decision-records/docs/01_spec.md). Validates naming, frontmatter (including `status`), required topic keywords, header conventions, and per directory context files. Backlinking and dead reference detection use the shared rules in Section 7.
 - **APS-V1-0003.PV01 (North Star: Mission, Vision, Position).** Spec: [`substandards/PV01-purpose-and-vision/docs/01_spec.md`](../substandards/PV01-purpose-and-vision/docs/01_spec.md). Validates the presence and structure of the project's single North Star document, used by agents during plan and design to stay aligned with the project's intent.
+- **APS-V1-0003.RQ01 (Requirements, optional).** Spec: [`substandards/RQ01-requirements/docs/01_spec.md`](../substandards/RQ01-requirements/docs/01_spec.md). Validates a system's requirements document when one exists or is declared: frontmatter (owner, status, version, last-reviewed date, the North Star it serves), numbered requirements with unique stable ids, a measure and a check status each, roles and user stories, a later and out-of-scope list, and a versioned change log. Defines the requirements gate agents apply before building.
 - **APS-V1-0003.RT01 (Retrospectives).** Spec: [`substandards/RT01-retrospectives/docs/01_spec.md`](../substandards/RT01-retrospectives/docs/01_spec.md). Validates the retrospective directory, append only history, naming, and required sections.
 
 ---
@@ -966,6 +993,7 @@ hook until an install step runs, and `--no-verify` bypasses it. The
 
 - ADR (`APS-V1-0003.AD01`): the ADR directory exists, every non-`.example` file matches the naming pattern, every ADR has the required frontmatter and `status` (per the per-doc-type table in Section 8.1: ADRs use `accepted` for in-force), required topic keywords are satisfied, context files exist with referencing guidance, every `ADR-NNN-<slug>` token found in the file set defined by `docs.backlinking.scan` (defaults in Section 3.3; deprecated `file_types` honoured with a `backlinking-file-types-deprecated` warning) resolves to a real ADR file matching `docs.adr.naming_pattern` (`ADR01-unknown-reference`, error), and resolved references are split between `ADR01-superseded-reference` (warning) for `status: superseded` targets and `ADR01-deprecated-reference` (warning) for `status: deprecated` targets. See the ADR01 spec for the per rule diagnostic codes.
 - North Star (`APS-V1-0003.PV01`): a single `north-star.md` (or configured location) exists with frontmatter, a `## Mission` section, a `## Vision` section, a `## Position` section, and a current `status`. See PV01 spec.
+- Requirements (`APS-V1-0003.RQ01`, optional): each requirements document that exists at the default location or is listed in `docs.requirements.locations` (listed ones MUST exist) has the required frontmatter, the six required sections, requirement rows with unique ids, a measure and a check status each, at least one role and one user story, and a well-formed change log. See RQ01 spec.
 - Retrospectives (`APS-V1-0003.RT01`): the retrospective directory exists, each file matches the naming pattern, files are append only (no historical retros modified in the staged change set), and required sections are present. See RETRO01 spec.
 
 ### 9.5 Why the install contract matters
