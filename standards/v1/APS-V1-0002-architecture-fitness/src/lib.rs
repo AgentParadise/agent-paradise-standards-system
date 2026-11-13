@@ -1121,7 +1121,7 @@ impl FitnessValidator {
                     readings: vec![],
                 },
                 vec![],
-                HashSet::new(),
+                self.unjudged_exceptions(&rule.id),
             ));
         }
 
@@ -1241,6 +1241,18 @@ impl FitnessValidator {
         ))
     }
 
+    /// Every exception entity of `rule_id`, for a result that stopped before
+    /// examining any entity (missing or unreadable artifact, empty matcher,
+    /// config error): reporting them all as matched keeps `validate()` from
+    /// calling them stale on no evidence. The rule result itself still fails.
+    pub(crate) fn unjudged_exceptions(&self, rule_id: &str) -> HashSet<String> {
+        self.exceptions
+            .rules
+            .get(rule_id)
+            .map(|e| e.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
     /// Path of the dependency graph (APS-V1-0001 §3.4.2) under `topology_dir`.
     pub(crate) fn dependency_graph_path(&self) -> PathBuf {
         self.repo_root
@@ -1263,7 +1275,7 @@ impl FitnessValidator {
             return Ok((
                 missing_graph_result(&rule.id, &rule.name, rule.dimension.clone()),
                 vec![],
-                HashSet::new(),
+                self.unjudged_exceptions(&rule.id),
             ));
         }
 
@@ -1311,7 +1323,7 @@ impl FitnessValidator {
                     rule.allow_empty_reason.as_deref(),
                 ),
                 vec![],
-                HashSet::new(),
+                self.unjudged_exceptions(&rule.id),
             ));
         }
 
@@ -1571,7 +1583,7 @@ impl FitnessValidator {
                         readings: vec![],
                     },
                     vec![],
-                    HashSet::new(),
+                    self.unjudged_exceptions(&rule.id),
                 ));
             }
         };
@@ -1601,7 +1613,7 @@ impl FitnessValidator {
                         readings: vec![],
                     },
                     vec![],
-                    HashSet::new(),
+                    self.unjudged_exceptions(&rule.id),
                 ));
             }
         };
@@ -1651,7 +1663,7 @@ impl FitnessValidator {
                     readings: vec![],
                 },
                 vec![],
-                HashSet::new(),
+                self.unjudged_exceptions(&rule.id),
             )),
         }
     }

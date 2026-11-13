@@ -434,3 +434,60 @@ fn an_empty_targets_list_excuses_nothing() {
     assert_eq!(r.results[0].status, RuleStatus::Fail);
     assert_eq!(r.results[0].exceptions_used, 0);
 }
+
+// ─── Codex pass 2: an unevaluated rule judges no exception stale ───────────
+
+fn with_exception(dir: &TempDir, rule_id: &str, entity: &str) {
+    fs::write(
+        dir.path().join("fitness-exceptions.toml"),
+        format!("[{rule_id}.\"{entity}\"]\nissue = \"#1\"\n"),
+    )
+    .unwrap();
+}
+
+fn assert_fails_without_stale(dir: &TempDir, what: &str) {
+    let r = report(dir);
+    assert_eq!(r.results[0].status, RuleStatus::Fail, "{what}");
+    assert!(
+        r.stale_exceptions.is_empty(),
+        "{what}: no entity was examined, so no exception is stale: {:?}",
+        r.stale_exceptions
+    );
+}
+
+#[test]
+fn missing_graph_keeps_exceptions_unjudged() {
+    let dir = fixture(&forbidden_rule("**/domain/**", "**/infra/**", ""), None);
+    with_exception(&dir, "domain-not-infra", "src/domain/model.rs");
+    assert_fails_without_stale(&dir, "missing graph");
+}
+
+#[test]
+fn malformed_graph_keeps_exceptions_unjudged() {
+    let graph = V2_GRAPH.replace(r#""to": "infra::db""#, r#""to": "infra::gone""#);
+    let dir = fixture(
+        &forbidden_rule("**/domain/**", "**/infra/**", ""),
+        Some(&graph),
+    );
+    with_exception(&dir, "domain-not-infra", "src/domain/model.rs");
+    assert_fails_without_stale(&dir, "malformed graph");
+}
+
+#[test]
+fn unmatched_to_keeps_the_source_exception_unjudged() {
+    let dir = fixture(
+        &forbidden_rule("**/domain/**", "**/nowhere/**", ""),
+        Some(V2_GRAPH),
+    );
+    with_exception(&dir, "domain-not-infra", "src/domain/model.rs");
+    assert_fails_without_stale(&dir, "unmatched to");
+}
+
+#[test]
+fn graph_shape_missing_or_empty_keeps_exceptions_unjudged() {
+    for (graph, from) in [(None, "**/domain/**"), (Some(V2_GRAPH), "**/nowhere/**")] {
+        let dir = fixture(&shape_rule("max_fan_out", from, ""), graph);
+        with_exception(&dir, "shape", "src/domain/model.rs");
+        assert_fails_without_stale(&dir, from);
+    }
+}

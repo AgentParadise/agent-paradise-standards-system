@@ -221,7 +221,7 @@ impl FitnessValidator {
         };
         if !graph_path.exists() {
             let missing = missing_graph_result(&rule.id, &rule.name, result.dimension.clone());
-            return Ok((missing, vec![], HashSet::new()));
+            return Ok((missing, vec![], self.unjudged_exceptions(&rule.id)));
         }
         let graph = read_dependency_graph(&graph_path)?;
 
@@ -268,7 +268,7 @@ impl FitnessValidator {
                 side,
                 rule.allow_empty_reason.as_deref(),
             );
-            return Ok((empty, vec![], HashSet::new()));
+            return Ok((empty, vec![], self.unjudged_exceptions(&rule.id)));
         }
         result.total_entities = Some(from.len());
 
@@ -311,15 +311,8 @@ impl FitnessValidator {
                         excepted: false,
                         message: Some(msg),
                     }];
-                    // Nothing was evaluated, so no exception can be judged stale:
-                    // report every entry of this rule as matched.
-                    let all = self
-                        .exceptions
-                        .rules
-                        .get(&rule.id)
-                        .map(|e| e.keys().cloned().collect())
-                        .unwrap_or_default();
-                    return Ok((result, vec![], all));
+                    // Nothing was evaluated, so no exception can be judged stale.
+                    return Ok((result, vec![], self.unjudged_exceptions(&rule.id)));
                 }
             };
             for n in &from {
