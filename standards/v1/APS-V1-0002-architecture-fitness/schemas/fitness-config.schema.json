@@ -171,6 +171,12 @@
           "type": "boolean",
           "default": false
         },
+        "allow_empty_reason": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Why this rule may match no dependency-graph node (e.g. written ahead of the code it guards). Without it an empty from/to match fails with RULE_MATCHED_NO_NODE; with it the empty match is reported as an excepted violation carrying this reason."
+        },
         "severity": {
           "type": "string",
           "enum": ["error", "warning"]
@@ -195,6 +201,12 @@
         },
         "from": { "$ref": "#/$defs/PathMatcher" },
         "to": { "$ref": "#/$defs/PathMatcher" },
+        "allow_empty_reason": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Why this rule may match no dependency-graph node (e.g. written ahead of the code it guards). Without it an empty from/to match fails with RULE_MATCHED_NO_NODE; with it the empty match is reported as an excepted violation carrying this reason."
+        },
         "severity": {
           "type": "string",
           "enum": ["error", "warning"]

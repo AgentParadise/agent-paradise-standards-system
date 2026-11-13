@@ -117,7 +117,7 @@ Canonical SHA-256 values for this frozen input:
 | Artifact | SHA-256 |
 |---|---|
 | graphs/coupling-matrix.json | `ea418730239ac8c9a240a8cac8ab71ce8045dc6a0202d1993986979dfd787216` |
-| graphs/dependencies.json | `4eb69ac5eb3f7242be8583d9568d0ccb0f24ae50b93077cda28b9e701df6c6f8` |
+| graphs/dependencies.json (pre-0.4.0 name; now graphs/dependency-graph.json) | `4eb69ac5eb3f7242be8583d9568d0ccb0f24ae50b93077cda28b9e701df6c6f8` |
 | metrics/functions.json | `5591cfffd7d1f290ab882f37424b705a983492f070b735a2e417343e1480f330` |
 | metrics/modules.json | `e7a92f4ae6ff5f8c2f00b39a7eed5ff1811cea7991ce897b61d4a299a4585089` |
 | metrics/slices.json | `3e2e4572435c03d47cc980d0d3a4e3497179bc508c4fff5866060382f6655def` |

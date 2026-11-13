@@ -252,7 +252,7 @@ issue = "#300"
 }
 
 #[test]
-fn dependency_rule_skipped_when_graph_missing() {
+fn dependency_rule_fails_when_graph_missing() {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
 
@@ -279,7 +279,13 @@ circular = true
     let validator = FitnessValidator::load(root, None).unwrap();
     let report = validator.validate().unwrap();
 
-    assert_eq!(report.results[0].status, RuleStatus::Skip);
+    // Strict artifact (§3.3 R3): a dependency rule is structural (ST01,
+    // active), so a missing graph fails; it never skips or passes.
+    assert_eq!(report.results[0].status, RuleStatus::Fail);
+    assert_eq!(
+        report.results[0].violations[0].entity,
+        "PROMOTION_REQUIREMENT_UNMET:graphs/dependency-graph.json"
+    );
 }
 
 #[test]

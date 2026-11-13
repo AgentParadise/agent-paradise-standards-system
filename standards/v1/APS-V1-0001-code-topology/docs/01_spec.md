@@ -292,20 +292,31 @@ Includes Martin's coupling metrics:
 
 #### 3.4.2 Dependency Graph (`graphs/dependency-graph.json`)
 
+The input of APS-V1-0002 ST01 dependency rules. Schema 2.0.0: every node
+carries `path`, its source file relative to the analysis root with `/`
+separators, because ST01 rules match path globs (`**/domain/**`) and a module
+id (`domain::model`) never matches one. Nodes are sorted by `id` and edges by
+(`from`, `to`). Before 2.0.0 the writer emitted `graphs/dependencies.json`
+without `path`, which no consumer read.
+
+An edge exists for a resolved import path (`use crate::infra::db::Db;`). A
+bare type use with no import line makes no edge (scanner limitation, issue
+#148).
+
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "2.0.0",
   "level": "module",
   "nodes": [
     {
       "id": "auth",
       "type": "module",
-      "languages": ["rust"]
+      "path": "src/auth.rs"
     },
     {
       "id": "crypto",
       "type": "module",
-      "languages": ["rust"]
+      "path": "src/crypto.rs"
     }
   ],
   "edges": [

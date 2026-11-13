@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use crate::{
     FitnessError, FitnessValidator, PathMatcher, Reading, RuleResult, RuleStatus, Severity,
     StaleException, StaleReason, StructuralRule, ThresholdDirection, Violation, error_codes,
-    glob_matches, load_dependency_graph, tarjan_scc,
+    glob_matches, missing_graph_result, read_dependency_graph, tarjan_scc,
 };
 
 /// Pattern name: longest dependency path ceiling.
@@ -207,10 +207,7 @@ impl FitnessValidator {
         rule: &StructuralRule,
         dimension: Option<String>,
     ) -> Result<(RuleResult, Vec<StaleException>, HashSet<String>), FitnessError> {
-        let graph_path = self
-            .repo_root
-            .join(&self.config.config.topology_dir)
-            .join("graphs/dependency-graph.json");
+        let graph_path = self.dependency_graph_path();
         let mut result = RuleResult {
             rule_id: rule.id.clone(),
             rule_name: rule.name.clone(),
@@ -222,13 +219,10 @@ impl FitnessValidator {
             readings: vec![],
         };
         if !graph_path.exists() {
-            return Ok((result, vec![], HashSet::new()));
+            let missing = missing_graph_result(&rule.id, &rule.name, result.dimension.clone());
+            return Ok((missing, vec![], HashSet::new()));
         }
-        let content = std::fs::read_to_string(&graph_path)
-            .map_err(|e| FitnessError::Io(graph_path.clone(), e))?;
-        let graph: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| FitnessError::ParseArtifact(graph_path.clone(), e.to_string()))?;
-        let (raw_nodes, raw_edges) = load_dependency_graph(&graph);
+        let (raw_nodes, raw_edges) = read_dependency_graph(&graph_path)?;
 
         let mut nodes: BTreeSet<&str> = raw_nodes.iter().map(String::as_str).collect();
         let edges: BTreeSet<(&str, &str)> = raw_edges
