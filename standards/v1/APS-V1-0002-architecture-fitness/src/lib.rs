@@ -88,6 +88,13 @@ pub mod error_codes {
     /// rules) or at evaluation time (active dimension whose required
     /// artifact is missing).
     pub const PROMOTION_REQUIREMENT_UNMET: &str = "PROMOTION_REQUIREMENT_UNMET";
+    /// A dependency or structural rule's `from` (or, for a non-circular
+    /// `forbidden` rule, `to`) matcher selected no node of the dependency
+    /// graph, so the rule tested nothing. Fails unless the rule declares
+    /// `allow_empty_reason`, which turns it into a visible excepted entry.
+    pub const RULE_MATCHED_NO_NODE: &str = "RULE_MATCHED_NO_NODE";
+    /// The dependency graph exists but could not be read or parsed.
+    pub const DEPENDENCY_GRAPH_INVALID: &str = "DEPENDENCY_GRAPH_INVALID";
 }
 
 // ─── Severity ───────────────────────────────────────────────────────────────
@@ -442,6 +449,11 @@ pub struct DependencyRule {
     #[serde(default)]
     pub circular: bool,
     pub severity: Option<Severity>,
+    /// Why this rule may match no node (for example, written ahead of the
+    /// code it guards). Without it, an empty match is a `RULE_MATCHED_NO_NODE`
+    /// failure; with it, the empty match is an excepted, visible entry.
+    #[serde(default)]
+    pub allow_empty_reason: Option<String>,
 }
 
 impl DependencyRule {
@@ -458,6 +470,15 @@ impl DependencyRule {
                 ));
             }
         }
+        validate_allow_empty_reason(&self.id, self.allow_empty_reason.as_deref())?;
+        if self.circular && self.rule_type != "forbidden" {
+            return Err(format!(
+                "Rule '{}': circular = true is only valid with type = \"forbidden\"",
+                self.id
+            ));
+        }
+        self.from.validate(&self.id, "from")?;
+        self.to.validate(&self.id, "to")?;
         match self.rule_type.as_str() {
             "forbidden" | "required" | "allowed" => Ok(()),
             other => Err(format!(
@@ -473,6 +494,28 @@ impl DependencyRule {
 pub struct PathMatcher {
     pub path: String,
     pub path_not: Option<String>,
+}
+
+impl PathMatcher {
+    /// Reject a glob that does not compile: `glob_matches` treats an invalid
+    /// pattern as matching nothing, which would make the rule vacuous.
+    pub fn validate(&self, rule_id: &str, side: &str) -> Result<(), String> {
+        for pattern in std::iter::once(&self.path).chain(self.path_not.as_ref()) {
+            glob::Pattern::new(pattern)
+                .map_err(|e| format!("Rule '{rule_id}': invalid {side} glob '{pattern}': {e}"))?;
+        }
+        Ok(())
+    }
+}
+
+/// `allow_empty_reason`, when present, must say why.
+fn validate_allow_empty_reason(rule_id: &str, reason: Option<&str>) -> Result<(), String> {
+    match reason {
+        Some(r) if r.trim().is_empty() => Err(format!(
+            "Rule '{rule_id}': allow_empty_reason must not be empty"
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// A structural rule: ArchUnit-style constraints on code organization.
@@ -495,6 +538,10 @@ pub struct StructuralRule {
     pub composition_roots: Option<Vec<String>>,
     /// `max_fan_out` only: optional fan-out cap for a composition root.
     pub root_max: Option<u64>,
+    /// Same as [`DependencyRule::allow_empty_reason`], for the
+    /// dependency-graph patterns.
+    #[serde(default)]
+    pub allow_empty_reason: Option<String>,
 }
 
 impl StructuralRule {
@@ -510,6 +557,13 @@ impl StructuralRule {
                     self.id, dim
                 ));
             }
+        }
+        validate_allow_empty_reason(&self.id, self.allow_empty_reason.as_deref())?;
+        if let Some(m) = &self.from {
+            m.validate(&self.id, "from")?;
+        }
+        if let Some(m) = &self.to {
+            m.validate(&self.id, "to")?;
         }
         graph_shape::validate_rule(self)
     }
@@ -1067,7 +1121,7 @@ impl FitnessValidator {
                     readings: vec![],
                 },
                 vec![],
-                HashSet::new(),
+                self.unjudged_exceptions(&rule.id),
             ));
         }
 
@@ -1187,6 +1241,25 @@ impl FitnessValidator {
         ))
     }
 
+    /// Every exception entity of `rule_id`, for a result that stopped before
+    /// examining any entity (missing or unreadable artifact, empty matcher,
+    /// config error): reporting them all as matched keeps `validate()` from
+    /// calling them stale on no evidence. The rule result itself still fails.
+    pub(crate) fn unjudged_exceptions(&self, rule_id: &str) -> HashSet<String> {
+        self.exceptions
+            .rules
+            .get(rule_id)
+            .map(|e| e.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Path of the dependency graph (APS-V1-0001 §3.4.2) under `topology_dir`.
+    pub(crate) fn dependency_graph_path(&self) -> PathBuf {
+        self.repo_root
+            .join(&self.config.config.topology_dir)
+            .join(DEPENDENCY_GRAPH_FILE)
+    }
+
     /// Evaluate a dependency rule against the topology dependency graph.
     ///
     /// Returns `(result, stale_exceptions, matched_exception_entities)`.
@@ -1194,187 +1267,191 @@ impl FitnessValidator {
         &self,
         rule: &DependencyRule,
     ) -> Result<(RuleResult, Vec<StaleException>, HashSet<String>), FitnessError> {
-        let graph_path = self
-            .repo_root
-            .join(&self.config.config.topology_dir)
-            .join("graphs/dependency-graph.json");
+        let graph_path = self.dependency_graph_path();
 
-        // If graph doesn't exist, skip
+        // Strict artifact (§3.3 R3, §12): an `active` dimension's missing
+        // graph is a failure, never a silent pass or skip.
         if !graph_path.exists() {
             return Ok((
-                RuleResult {
-                    rule_id: rule.id.clone(),
-                    rule_name: rule.name.clone(),
-                    dimension: rule.dimension.clone(),
-                    status: RuleStatus::Skip,
-                    violations: vec![],
-                    exceptions_used: 0,
-                    total_entities: None,
-                    readings: vec![],
-                },
+                missing_graph_result(&rule.id, &rule.name, rule.dimension.clone()),
                 vec![],
-                HashSet::new(),
+                self.unjudged_exceptions(&rule.id),
             ));
         }
 
-        let content = std::fs::read_to_string(&graph_path)
-            .map_err(|e| FitnessError::Io(graph_path.clone(), e))?;
-        let graph: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| FitnessError::ParseArtifact(graph_path.clone(), e.to_string()))?;
+        let graph = read_dependency_graph(&graph_path)?;
 
-        let (nodes, edges) = load_dependency_graph(&graph);
-
-        // Filter nodes by from/to path matchers
-        let from_nodes: Vec<&str> = nodes
+        // Matchers select by a node's name (v2: its file path); the graph
+        // algorithms below run on node ids, so two modules in one file stay
+        // two nodes and a cycle between them stays a cycle.
+        let selects = |id: &str, m: &PathMatcher| {
+            let name = graph.name(id);
+            glob_matches(name, &m.path)
+                && m.path_not.as_ref().is_none_or(|pn| !glob_matches(name, pn))
+        };
+        let from_nodes: Vec<&str> = graph
+            .nodes
             .iter()
-            .filter(|n| glob_matches(n, &rule.from.path))
-            .filter(|n| {
-                rule.from
-                    .path_not
-                    .as_ref()
-                    .is_none_or(|pn| !glob_matches(n, pn))
-            })
-            .map(|s| s.as_str())
+            .map(String::as_str)
+            .filter(|n| selects(n, &rule.from))
+            .collect();
+        let to_nodes: Vec<&str> = graph
+            .nodes
+            .iter()
+            .map(String::as_str)
+            .filter(|n| selects(n, &rule.to))
             .collect();
 
-        let to_nodes: Vec<&str> = nodes
-            .iter()
-            .filter(|n| glob_matches(n, &rule.to.path))
-            .filter(|n| {
-                rule.to
-                    .path_not
-                    .as_ref()
-                    .is_none_or(|pn| !glob_matches(n, pn))
-            })
-            .map(|s| s.as_str())
-            .collect();
+        // Vacuity guard: a rule whose matcher selects no node tests nothing.
+        // `circular` is only valid on `forbidden` (DependencyRule::validate).
+        let empty_side = if rule.circular {
+            (from_nodes.is_empty() && to_nodes.is_empty()).then_some("from/to")
+        } else if from_nodes.is_empty() {
+            Some("from")
+        } else if rule.rule_type == "forbidden" && to_nodes.is_empty() {
+            Some("to")
+        } else {
+            None
+        };
+        if let Some(side) = empty_side {
+            return Ok((
+                empty_match_result(
+                    &rule.id,
+                    &rule.name,
+                    rule.dimension.clone(),
+                    side,
+                    rule.allow_empty_reason.as_deref(),
+                ),
+                vec![],
+                self.unjudged_exceptions(&rule.id),
+            ));
+        }
 
         let to_set: HashSet<&str> = to_nodes.iter().copied().collect();
         let from_set: HashSet<&str> = from_nodes.iter().copied().collect();
         let entity_count = from_nodes.len();
 
         let mut violations = Vec::new();
-        let mut exceptions_used = 0;
-        let mut stale = Vec::new();
         let mut matched_exception_entities: HashSet<String> = HashSet::new();
+        let mut stale = Vec::new();
+        // One violation of `field` on node `id` (reported by its name),
+        // excepted per check_dependency_exception for edge target `target`.
+        let mut violate = |id: &str,
+                           target: Option<&str>,
+                           field: &str,
+                           actual: f64,
+                           threshold: f64,
+                           direction: ThresholdDirection,
+                           message: Option<String>| {
+            let entity = graph.name(id).to_string();
+            let excepted = self.check_dependency_exception(
+                &rule.id,
+                &entity,
+                target.map(|t| graph.name(t)),
+                &mut matched_exception_entities,
+            );
+            violations.push(Violation {
+                entity,
+                field: field.to_string(),
+                actual,
+                threshold,
+                direction,
+                excepted,
+                message,
+            });
+        };
 
         match rule.rule_type.as_str() {
-            "forbidden" => {
-                if rule.circular {
-                    // Use Tarjan SCC to detect cycles
-                    let relevant_nodes: HashSet<&str> = from_set.union(&to_set).copied().collect();
-                    let relevant_edges: Vec<(&str, &str)> = edges
-                        .iter()
-                        .filter(|(a, b)| {
-                            relevant_nodes.contains(a.as_str())
-                                && relevant_nodes.contains(b.as_str())
-                        })
-                        .map(|(a, b)| (a.as_str(), b.as_str()))
-                        .collect();
-
-                    let sccs = tarjan_scc(&relevant_nodes, &relevant_edges);
-                    for scc in &sccs {
-                        if scc.len() > 1 {
-                            // Each node in the cycle is a violation
-                            for node in scc {
-                                let excepted = self.check_dependency_exception(
-                                    &rule.id,
-                                    node,
-                                    &mut matched_exception_entities,
-                                );
-                                if excepted {
-                                    exceptions_used += 1;
-                                }
-                                violations.push(Violation {
-                                    entity: node.to_string(),
-                                    field: "circular_dependency".to_string(),
-                                    actual: 1.0,
-                                    threshold: 0.0,
-                                    direction: ThresholdDirection::Max,
-                                    excepted,
-                                    message: None,
-                                });
-                            }
-                        }
+            "forbidden" if rule.circular => {
+                // Tarjan SCC on node ids; a self-edge is a cycle too (ST01
+                // spec: the graph keeps the self-loop so cycle rules see it).
+                let relevant_nodes: HashSet<&str> = from_set.union(&to_set).copied().collect();
+                let relevant_edges: Vec<(&str, &str)> = graph
+                    .edges
+                    .iter()
+                    .filter(|(a, b)| {
+                        relevant_nodes.contains(a.as_str()) && relevant_nodes.contains(b.as_str())
+                    })
+                    .map(|(a, b)| (a.as_str(), b.as_str()))
+                    .collect();
+                let self_looped: HashSet<&str> = relevant_edges
+                    .iter()
+                    .filter(|(a, b)| a == b)
+                    .map(|(a, _)| *a)
+                    .collect();
+                let mut cycles: Vec<Vec<String>> = tarjan_scc(&relevant_nodes, &relevant_edges)
+                    .into_iter()
+                    .filter(|scc| scc.len() > 1 || self_looped.contains(scc[0].as_str()))
+                    .collect();
+                for scc in &mut cycles {
+                    scc.sort();
+                }
+                cycles.sort();
+                for scc in &cycles {
+                    let members = scc.join(" -> ");
+                    for node in scc {
+                        violate(
+                            node,
+                            None,
+                            "circular_dependency",
+                            1.0,
+                            0.0,
+                            ThresholdDirection::Max,
+                            Some(format!("cycle: {members}")),
+                        );
                     }
-                } else {
-                    // Check for any edge from→to
-                    for (from, to) in &edges {
-                        if from_set.contains(from.as_str()) && to_set.contains(to.as_str()) {
-                            let excepted = self.check_dependency_exception(
-                                &rule.id,
-                                from,
-                                &mut matched_exception_entities,
-                            );
-                            if excepted {
-                                exceptions_used += 1;
-                            }
-                            violations.push(Violation {
-                                entity: from.clone(),
-                                field: "depends_on".to_string(),
-                                actual: 1.0,
-                                threshold: 0.0,
-                                direction: ThresholdDirection::Max,
-                                excepted,
-                                message: None,
-                            });
-                        }
+                }
+            }
+            "forbidden" => {
+                for (from, to) in &graph.edges {
+                    if from_set.contains(from.as_str()) && to_set.contains(to.as_str()) {
+                        violate(
+                            from,
+                            Some(to),
+                            "depends_on",
+                            1.0,
+                            0.0,
+                            ThresholdDirection::Max,
+                            Some(format!("{from} -> {to}")),
+                        );
                     }
                 }
             }
             "required" => {
-                // Check that for each from_node, at least one edge to a to_node exists
+                // Each from_node needs at least one edge into to_set.
                 for from in &from_nodes {
-                    let has_edge = edges
+                    let has_edge = graph
+                        .edges
                         .iter()
                         .any(|(a, b)| a == from && to_set.contains(b.as_str()));
                     if !has_edge {
-                        let excepted = self.check_dependency_exception(
-                            &rule.id,
+                        violate(
                             from,
-                            &mut matched_exception_entities,
+                            None,
+                            "depends_on",
+                            0.0,
+                            1.0,
+                            ThresholdDirection::Min,
+                            None,
                         );
-                        if excepted {
-                            exceptions_used += 1;
-                        }
-                        violations.push(Violation {
-                            entity: from.to_string(),
-                            field: "depends_on".to_string(),
-                            actual: 0.0,
-                            threshold: 1.0,
-                            direction: ThresholdDirection::Min,
-                            excepted,
-                            message: None,
-                        });
                     }
                 }
             }
             "allowed" => {
                 // `allowed`: from_nodes MAY depend on to_nodes; ANY edge from
-                // a from_node to a node outside to_set is a violation. This
-                // implements the dependency-cruiser "allowed" semantics.
-                // Unknown rule_types are rejected at config load (see
-                // DependencyRule::validate), so reaching this match arm with
-                // anything other than these three values is impossible.
-                for (from, to) in &edges {
+                // a from_node to a node outside to_set is a violation
+                // (dependency-cruiser "allowed" semantics).
+                for (from, to) in &graph.edges {
                     if from_set.contains(from.as_str()) && !to_set.contains(to.as_str()) {
-                        let excepted = self.check_dependency_exception(
-                            &rule.id,
+                        violate(
                             from,
-                            &mut matched_exception_entities,
+                            Some(to),
+                            "depends_on",
+                            1.0,
+                            0.0,
+                            ThresholdDirection::Max,
+                            Some(format!("{from} -> {to}")),
                         );
-                        if excepted {
-                            exceptions_used += 1;
-                        }
-                        violations.push(Violation {
-                            entity: from.clone(),
-                            field: "depends_on".to_string(),
-                            actual: 1.0,
-                            threshold: 0.0,
-                            direction: ThresholdDirection::Max,
-                            excepted,
-                            message: None,
-                        });
                     }
                 }
             }
@@ -1382,28 +1459,24 @@ impl FitnessValidator {
                 "DependencyRule::validate rejects unknown rule_type before reaching this point"
             ),
         }
+        let exceptions_used = violations.iter().filter(|v| v.excepted).count();
 
         // Detect stale exceptions for dependency rules
         if let Some(rule_exceptions) = self.exceptions.rules.get(&rule.id) {
             for entity in rule_exceptions.keys() {
-                let was_matched = matched_exception_entities.contains(entity.as_str());
-                if !was_matched {
-                    // Check if entity is even in the graph
-                    let entity_exists = nodes.iter().any(|n| n == entity);
-                    if entity_exists {
-                        stale.push(StaleException {
-                            rule_id: rule.id.clone(),
-                            entity: entity.clone(),
-                            reason: StaleReason::NowPassing,
-                        });
-                    } else {
-                        stale.push(StaleException {
-                            rule_id: rule.id.clone(),
-                            entity: entity.clone(),
-                            reason: StaleReason::EntityNotFound,
-                        });
-                    }
+                if matched_exception_entities.contains(entity.as_str()) {
+                    continue;
                 }
+                let entity_exists = graph.nodes.iter().any(|n| graph.name(n) == entity);
+                stale.push(StaleException {
+                    rule_id: rule.id.clone(),
+                    entity: entity.clone(),
+                    reason: if entity_exists {
+                        StaleReason::NowPassing
+                    } else {
+                        StaleReason::EntityNotFound
+                    },
+                });
             }
         }
 
@@ -1434,20 +1507,27 @@ impl FitnessValidator {
         ))
     }
 
-    /// Check if a dependency exception applies for a given entity.
+    /// Whether a dependency exception excuses a violation of `rule_id` by
+    /// `entity`. An entry with `targets` excuses only an edge whose target is
+    /// listed (an empty list excuses nothing, a cycle or a missing required
+    /// edge has no single target, so `targets` never excuses those); an
+    /// entry with neither `value` nor `targets` excuses every violation of
+    /// the entity. Any entry found marks the entity matched, so it is not
+    /// reported stale.
     fn check_dependency_exception(
         &self,
         rule_id: &str,
         entity: &str,
+        target: Option<&str>,
         matched: &mut HashSet<String>,
     ) -> bool {
-        if let Some(exc) = self.exceptions.get(rule_id, entity) {
-            matched.insert(entity.to_string());
-            // For dependency exceptions, targets field can limit which imports are excepted.
-            // For simplicity, presence of exception = excepted (targets checked elsewhere).
-            exc.value.is_none() || exc.targets.is_some()
-        } else {
-            false
+        let Some(exc) = self.exceptions.get(rule_id, entity) else {
+            return false;
+        };
+        matched.insert(entity.to_string());
+        match &exc.targets {
+            Some(targets) => target.is_some_and(|t| targets.iter().any(|x| x == t)),
+            None => exc.value.is_none(),
         }
     }
 
@@ -1503,7 +1583,7 @@ impl FitnessValidator {
                         readings: vec![],
                     },
                     vec![],
-                    HashSet::new(),
+                    self.unjudged_exceptions(&rule.id),
                 ));
             }
         };
@@ -1533,7 +1613,7 @@ impl FitnessValidator {
                         readings: vec![],
                     },
                     vec![],
-                    HashSet::new(),
+                    self.unjudged_exceptions(&rule.id),
                 ));
             }
         };
@@ -1547,30 +1627,43 @@ impl FitnessValidator {
             to,
             circular: false,
             severity: rule.severity,
+            allow_empty_reason: rule.allow_empty_reason.clone(),
         };
 
-        // Delegate to the dependency-graph evaluator; on I/O / parse error
-        // collapse to a Skip so a structural rule cannot bring down the
-        // whole report (the underlying error is surfaced via the dependency
-        // path the next time it runs).
+        // Delegate to the dependency-graph evaluator; an I/O or parse error
+        // FAILS this rule (DEPENDENCY_GRAPH_INVALID, the error in `message`)
+        // without bringing down the whole report. It is never a Skip: an
+        // unreadable graph has tested nothing.
         match self.evaluate_dependency_rule(&transient) {
             Ok((mut result, stale, matched)) => {
                 result.dimension = dimension;
                 Ok((result, stale, matched))
             }
-            Err(_) => Ok((
+            Err(e) => Ok((
                 RuleResult {
                     rule_id: rule.id.clone(),
                     rule_name: rule.name.clone(),
                     dimension,
-                    status: RuleStatus::Skip,
-                    violations: vec![],
+                    status: RuleStatus::Fail,
+                    violations: vec![Violation {
+                        entity: format!(
+                            "{}:{}",
+                            error_codes::DEPENDENCY_GRAPH_INVALID,
+                            DEPENDENCY_GRAPH_FILE
+                        ),
+                        field: "artifact".to_string(),
+                        actual: 0.0,
+                        threshold: 0.0,
+                        direction: ThresholdDirection::Max,
+                        excepted: false,
+                        message: Some(e.to_string()),
+                    }],
                     exceptions_used: 0,
                     total_entities: None,
                     readings: vec![],
                 },
                 vec![],
-                HashSet::new(),
+                self.unjudged_exceptions(&rule.id),
             )),
         }
     }
@@ -1825,7 +1918,11 @@ impl FitnessValidator {
                     .sum();
                 let unexcepted = total_violations - excepted_violations;
                 if total_entities == 0 {
-                    Some(1.0)
+                    // No entities measured: a perfect score only when nothing
+                    // failed. A missing artifact (PROMOTION_REQUIREMENT_UNMET)
+                    // or an empty matcher measures nothing and must not
+                    // score 1.0.
+                    Some(if unexcepted == 0 { 1.0 } else { 0.0 })
                 } else {
                     Some(1.0 - (unexcepted as f64 / total_entities as f64))
                 }
@@ -1993,42 +2090,248 @@ fn glob_matches(path: &str, pattern: &str) -> bool {
 
 // ─── Dependency Graph Helpers ──────────────────────────────────────────────
 
-/// Parse a dependency graph JSON into (nodes, edges).
+/// Spec path (APS-V1-0001 §3.4.2) of the module dependency graph, relative
+/// to `topology_dir`. Every ST01 dependency-graph pattern reads it.
+pub const DEPENDENCY_GRAPH_FILE: &str = "graphs/dependency-graph.json";
+
+/// Major `schema_version` of `graphs/dependency-graph.json` this engine reads.
+pub const DEPENDENCY_GRAPH_SCHEMA_MAJOR: u64 = 2;
+
+/// A parsed dependency graph. Algorithms run on node ids; rules match and
+/// report each node by its name (v2: its file `path`; legacy: the id).
+#[derive(Debug, Default)]
+pub(crate) struct DependencyGraph {
+    /// Node ids, in file order.
+    pub nodes: Vec<String>,
+    /// Directed `(from, to)` edges between node ids ("from depends on to").
+    pub edges: Vec<(String, String)>,
+    /// Node id -> name, when it differs from the id.
+    pub names: HashMap<String, String>,
+}
+
+impl DependencyGraph {
+    /// The name a matcher sees and a violation reports for node `id`.
+    pub fn name<'a>(&'a self, id: &'a str) -> &'a str {
+        self.names.get(id).map_or(id, String::as_str)
+    }
+}
+
+/// Result for a rule whose dependency graph is missing (§3.3 R3, §12).
 ///
-/// Expected format:
+/// A dependency-graph rule with no `dimension` is structural, so it is held
+/// to ST01's promotion status: on an `active` dimension the missing graph is
+/// a `PROMOTION_REQUIREMENT_UNMET` failure; on an `incubating` one a skip.
+pub(crate) fn missing_graph_result(
+    rule_id: &str,
+    rule_name: &str,
+    dimension: Option<String>,
+) -> RuleResult {
+    let promotion = DimensionCode::parse(dimension.as_deref().unwrap_or("ST01"))
+        .map(DimensionCode::promotion_status)
+        .unwrap_or(PromotionStatus::Incubating);
+    let (status, violations) = if promotion == PromotionStatus::Active {
+        (
+            RuleStatus::Fail,
+            vec![Violation {
+                entity: format!(
+                    "{}:{}",
+                    error_codes::PROMOTION_REQUIREMENT_UNMET,
+                    DEPENDENCY_GRAPH_FILE
+                ),
+                field: "artifact".to_string(),
+                actual: 0.0,
+                threshold: 0.0,
+                direction: ThresholdDirection::Max,
+                excepted: false,
+                message: Some(format!(
+                    "{DEPENDENCY_GRAPH_FILE} is missing: run code-topology analyze first"
+                )),
+            }],
+        )
+    } else {
+        (RuleStatus::Skip, vec![])
+    };
+    RuleResult {
+        rule_id: rule_id.to_string(),
+        rule_name: rule_name.to_string(),
+        dimension,
+        status,
+        violations,
+        exceptions_used: 0,
+        total_entities: None,
+        readings: vec![],
+    }
+}
+
+/// Result for a rule whose matcher (`side`) selected no graph node.
+///
+/// Without `allow_empty_reason` it fails with `RULE_MATCHED_NO_NODE`. With a
+/// reason it passes, but the empty match stays in the report as an excepted
+/// violation carrying that reason, so the exemption is visible.
+pub(crate) fn empty_match_result(
+    rule_id: &str,
+    rule_name: &str,
+    dimension: Option<String>,
+    side: &str,
+    allow_empty_reason: Option<&str>,
+) -> RuleResult {
+    let excepted = allow_empty_reason.is_some();
+    RuleResult {
+        rule_id: rule_id.to_string(),
+        rule_name: rule_name.to_string(),
+        dimension,
+        status: if excepted {
+            RuleStatus::Pass
+        } else {
+            RuleStatus::Fail
+        },
+        violations: vec![Violation {
+            entity: format!("{}:{side}", error_codes::RULE_MATCHED_NO_NODE),
+            field: side.to_string(),
+            actual: 0.0,
+            threshold: 1.0,
+            direction: ThresholdDirection::Min,
+            excepted,
+            message: Some(match allow_empty_reason {
+                Some(reason) => format!("allow_empty_reason: {reason}"),
+                None => format!(
+                    "the {side} matcher selected no node of {DEPENDENCY_GRAPH_FILE}; \
+                     fix the glob or declare allow_empty_reason"
+                ),
+            }),
+        }],
+        exceptions_used: usize::from(excepted),
+        total_entities: Some(0),
+        readings: vec![],
+    }
+}
+
+/// Read and parse the dependency graph at `path` (see [`load_dependency_graph`]).
+pub(crate) fn read_dependency_graph(path: &Path) -> Result<DependencyGraph, FitnessError> {
+    let content = std::fs::read_to_string(path).map_err(|e| FitnessError::Io(path.into(), e))?;
+    let graph: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| FitnessError::ParseArtifact(path.into(), e.to_string()))?;
+    load_dependency_graph(&graph).map_err(|e| FitnessError::ParseArtifact(path.into(), e))
+}
+
+/// Parse a dependency graph.
+///
+/// Schema 2.x (APS-V1-0001 §3.4.2, what code-topology writes; JSON Schema
+/// `APS-V1-0001-code-topology/schemas/dependency-graph.schema.json`):
 /// ```json
 /// {
-///   "nodes": ["src/api", "src/domain", "src/infra"],
-///   "edges": [["src/api", "src/domain"], ["src/domain", "src/infra"]]
+///   "schema_version": "2.0.0",
+///   "nodes": [{ "id": "domain::model", "type": "module", "path": "src/domain/model.rs" }],
+///   "edges": [{ "from": "domain::model", "to": "infra::db", "type": "imports" }]
 /// }
 /// ```
-fn load_dependency_graph(graph: &serde_json::Value) -> (Vec<String>, Vec<(String, String)>) {
-    let nodes: Vec<String> = graph
+/// Nodes keep their ids; each node's name for matching and reporting is its
+/// `path`, because ST01 matchers are path globs.
+///
+/// Every malformed entry is an error, never a silent drop: a dropped or
+/// dangling edge would let a forbidden dependency pass.
+pub(crate) fn load_dependency_graph(graph: &serde_json::Value) -> Result<DependencyGraph, String> {
+    let nodes = graph
         .get("nodes")
         .and_then(|n| n.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let edges: Vec<(String, String)> = graph
+        .ok_or("missing `nodes` array")?;
+    let edges = graph
         .get("edges")
         .and_then(|e| e.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|edge| {
-                    let pair = edge.as_array()?;
-                    let from = pair.first()?.as_str()?;
-                    let to = pair.get(1)?.as_str()?;
-                    Some((from.to_string(), to.to_string()))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+        .ok_or("missing `edges` array")?;
+    match graph.get("schema_version") {
+        // WORKAROUND (removal: the legacy-reader issue linked from the
+        // APS-V1-0002 2.0.0 evolution pack): a graph with no schema_version
+        // is read in the pre-2.0.0 shape (string nodes, `[from, to]` edges),
+        // each node named by its own string. Endpoints are still checked.
+        None => load_legacy_dependency_graph(nodes, edges),
+        Some(v) => {
+            let version = v.as_str().ok_or("`schema_version` is not a string")?;
+            let major = version
+                .split('.')
+                .next()
+                .and_then(|m| m.parse::<u64>().ok());
+            if major != Some(DEPENDENCY_GRAPH_SCHEMA_MAJOR) {
+                return Err(format!(
+                    "unsupported schema_version {version} (expected {DEPENDENCY_GRAPH_SCHEMA_MAJOR}.x)"
+                ));
+            }
+            load_v2_dependency_graph(nodes, edges)
+        }
+    }
+}
 
-    (nodes, edges)
+fn load_v2_dependency_graph(
+    nodes: &[serde_json::Value],
+    edges: &[serde_json::Value],
+) -> Result<DependencyGraph, String> {
+    let field =
+        |v: &serde_json::Value, what: &str, i: usize, key: &str| -> Result<String, String> {
+            v.get(key)
+                .and_then(|x| x.as_str())
+                .map(str::to_string)
+                .ok_or_else(|| format!("{what}[{i}] has no string `{key}`"))
+        };
+    let mut graph = DependencyGraph::default();
+    for (i, node) in nodes.iter().enumerate() {
+        let id = field(node, "nodes", i, "id")?;
+        let path = field(node, "nodes", i, "path")?;
+        if path.is_empty() {
+            return Err(format!("nodes[{i}] ({id}) has an empty `path`"));
+        }
+        if graph.names.insert(id.clone(), path).is_some() {
+            return Err(format!("nodes[{i}]: duplicate id {id}"));
+        }
+        graph.nodes.push(id);
+    }
+    for (i, edge) in edges.iter().enumerate() {
+        let end = |key: &str| -> Result<String, String> {
+            let id = field(edge, "edges", i, key)?;
+            if graph.names.contains_key(&id) {
+                Ok(id)
+            } else {
+                Err(format!("edges[{i}].{key} = {id} is not a node id"))
+            }
+        };
+        let pair = (end("from")?, end("to")?);
+        graph.edges.push(pair);
+    }
+    Ok(graph)
+}
+
+fn load_legacy_dependency_graph(
+    nodes: &[serde_json::Value],
+    edges: &[serde_json::Value],
+) -> Result<DependencyGraph, String> {
+    let mut graph = DependencyGraph::default();
+    let mut seen = HashSet::new();
+    for (i, v) in nodes.iter().enumerate() {
+        let id = v.as_str().ok_or_else(|| {
+            format!(
+                "nodes[{i}] is not a string (a graph with object nodes needs schema_version 2.x)"
+            )
+        })?;
+        if !seen.insert(id.to_string()) {
+            return Err(format!("nodes[{i}]: duplicate node {id}"));
+        }
+        graph.nodes.push(id.to_string());
+    }
+    for (i, e) in edges.iter().enumerate() {
+        let (a, b) = match e.as_array().map(Vec::as_slice) {
+            Some([a, b]) => match (a.as_str(), b.as_str()) {
+                (Some(a), Some(b)) => (a, b),
+                _ => return Err(format!("edges[{i}] is not a pair of strings")),
+            },
+            _ => return Err(format!("edges[{i}] is not a [from, to] pair")),
+        };
+        for end in [a, b] {
+            if !seen.contains(end) {
+                return Err(format!("edges[{i}]: {end} is not in `nodes`"));
+            }
+        }
+        graph.edges.push((a.to_string(), b.to_string()));
+    }
+    Ok(graph)
 }
 
 /// Tarjan's strongly connected components algorithm.
