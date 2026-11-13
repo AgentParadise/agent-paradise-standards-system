@@ -262,6 +262,7 @@ Canonical examples (load-bearing for this standard):
 | `.topology/metrics/modules.json` | `APS-V1-0001-code-topology/schemas/modules.schema.json` | APS-V1-0001 |
 | `.topology/metrics/functions.json` | `APS-V1-0001-code-topology/schemas/functions.schema.json` | APS-V1-0001 |
 | `.topology/metrics/coupling.json` | `APS-V1-0001-code-topology/schemas/coupling.schema.json` | APS-V1-0001 |
+| `.topology/graphs/dependency-graph.json` | `APS-V1-0001-code-topology/schemas/dependency-graph.schema.json` | APS-V1-0001 |
 | `fitness.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-config.schema.json` | APS-V1-0002 |
 | `fitness-exceptions.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-exceptions.schema.json` | APS-V1-0002 |
 | `fitness-report.json` | `APS-V1-0002-architecture-fitness/schemas/fitness-report.schema.json` | APS-V1-0002 |
@@ -481,7 +482,7 @@ issue = "#185"
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `value` | float | MAY | Current metric value at time of exception (ratchet budget) |
-| `targets` | array | MAY | For dependency rules: specific import targets excepted |
+| `targets` | array | MAY | For dependency rules: excuses only edges whose target (node path) is listed; `[]` excuses nothing; never excuses a cycle or a missing required edge, which have no single target |
 | `issue` | string | MUST | GitHub issue reference (e.g., `"#138"`, `"org/repo#42"`) |
 
 The `issue` field is **REQUIRED**. Exceptions without issue references MUST cause a validation error (`MISSING_ISSUE_REF`).
@@ -800,7 +801,7 @@ For each `[[rules.dependency]]`:
 1. Load `{config.topology_dir}/graphs/dependency-graph.json` (APS-V1-0001 §3.4.2, schema 2.x). If it does not exist, report `fail` with a `PROMOTION_REQUIREMENT_UNMET` violation (a rule with no `dimension` is held to ST01, `active`); `skip` only on an `incubating` dimension. A graph that cannot be read or parsed (unsupported `schema_version`, a node without `id` or `path`, an edge naming an unknown node id) is an error, never a silent drop of the entry.
 2. Resolve `from` and `to` path matchers (globs, validated at config load) against each node's `path`, the source file relative to the analysis root; edges are mapped from node ids to those paths. If `from` matches no node (or, for a non-circular `forbidden` rule, `to` matches none; for `circular = true`, both), the rule tested nothing: report `fail` with a `RULE_MATCHED_NO_NODE` violation, unless the rule declares `allow_empty_reason`, in which case the empty match is an excepted violation carrying that reason and the rule passes.
 3. Based on `type`:
-   - **`forbidden`**: If any edge exists from `from` to `to`, record a violation. If `circular = true`, detect cycles using Tarjan's SCC algorithm.
+   - **`forbidden`**: If any edge exists from `from` to `to`, record a violation. If `circular = true`, detect cycles among the selected nodes using Tarjan's SCC algorithm on node ids; a node's edge to itself is a cycle. `circular = true` is valid only with `type = "forbidden"` (config error otherwise).
    - **`required`**: If no edge exists from `from` to `to`, record a violation.
    - **`allowed`**: If any edge exists from `from` to `to` that is NOT in the allowed set, record a violation.
 4. Apply exception and severity logic as in threshold evaluation

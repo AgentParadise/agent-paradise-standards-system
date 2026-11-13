@@ -237,3 +237,200 @@ fn missing_graph_skips_only_on_an_incubating_dimension() {
     let r = report(&dir);
     assert_eq!(r.results[0].status, RuleStatus::Skip);
 }
+
+// ─── Codex pass 1 regressions ──────────────────────────────────────────────
+
+fn shape_rule(pattern: &str, from: &str, extra: &str) -> String {
+    format!(
+        r#"
+[[rules.structural]]
+id = "shape"
+name = "Shape"
+pattern = "{pattern}"
+from = {{ path = "{from}" }}
+max = 5
+{extra}
+"#
+    )
+}
+
+#[test]
+fn graph_shape_rules_fail_on_an_unmatched_from() {
+    for pattern in ["max_dependency_depth", "max_fan_out"] {
+        let dir = fixture(&shape_rule(pattern, "**/nowhere/**", ""), Some(V2_GRAPH));
+        let r = report(&dir);
+        assert_eq!(r.results[0].status, RuleStatus::Fail, "{pattern}");
+        assert_eq!(
+            r.results[0].violations[0].entity, "RULE_MATCHED_NO_NODE:from",
+            "{pattern}"
+        );
+    }
+}
+
+#[test]
+fn graph_shape_rules_fail_on_an_unmatched_explicit_to() {
+    for pattern in ["max_dependency_depth", "max_fan_out"] {
+        let rule = shape_rule(
+            pattern,
+            "**/domain/**",
+            r#"to = { path = "**/nowhere/**" }"#,
+        );
+        let dir = fixture(&rule, Some(V2_GRAPH));
+        let r = report(&dir);
+        assert_eq!(r.results[0].status, RuleStatus::Fail, "{pattern}");
+        assert_eq!(
+            r.results[0].violations[0].entity, "RULE_MATCHED_NO_NODE:to",
+            "{pattern}"
+        );
+    }
+}
+
+#[test]
+fn graph_shape_allow_empty_reason_is_a_visible_exception() {
+    for pattern in ["max_dependency_depth", "max_fan_out"] {
+        let rule = shape_rule(
+            pattern,
+            "**/nowhere/**",
+            r#"allow_empty_reason = "crate not written yet""#,
+        );
+        let dir = fixture(&rule, Some(V2_GRAPH));
+        let r = report(&dir);
+        assert_eq!(r.results[0].status, RuleStatus::Pass, "{pattern}");
+        assert!(r.results[0].violations[0].excepted, "{pattern}");
+    }
+}
+
+fn cycle_rule() -> &'static str {
+    r#"
+[[rules.dependency]]
+id = "no-cycles"
+name = "No cycles"
+type = "forbidden"
+from = { path = "src/**" }
+to = { path = "src/**" }
+circular = true
+"#
+}
+
+#[test]
+fn a_cycle_between_two_modules_in_one_file_is_found() {
+    // `a` and its inline module `a::inner` share src/a.rs; a -> a::inner ->
+    // a is a real cycle and must not collapse into one path node.
+    let graph = r#"{
+      "schema_version": "2.0.0",
+      "nodes": [
+        { "id": "a", "type": "module", "path": "src/a.rs" },
+        { "id": "a::inner", "type": "module", "path": "src/a.rs" }
+      ],
+      "edges": [
+        { "from": "a", "to": "a::inner", "type": "imports" },
+        { "from": "a::inner", "to": "a", "type": "imports" }
+      ]
+    }"#;
+    let dir = fixture(cycle_rule(), Some(graph));
+    let r = report(&dir);
+    assert_eq!(r.results[0].status, RuleStatus::Fail);
+    assert_eq!(r.results[0].violations.len(), 2);
+    assert!(
+        r.results[0]
+            .violations
+            .iter()
+            .all(|v| v.entity == "src/a.rs" && v.field == "circular_dependency")
+    );
+}
+
+#[test]
+fn a_self_loop_is_a_cycle() {
+    let graph = r#"{
+      "schema_version": "2.0.0",
+      "nodes": [{ "id": "a", "type": "module", "path": "src/a.rs" }],
+      "edges": [{ "from": "a", "to": "a", "type": "imports" }]
+    }"#;
+    let dir = fixture(cycle_rule(), Some(graph));
+    let r = report(&dir);
+    assert_eq!(r.results[0].status, RuleStatus::Fail);
+    assert_eq!(r.results[0].violations[0].entity, "src/a.rs");
+}
+
+#[test]
+fn circular_is_rejected_on_required_and_allowed() {
+    for ty in ["required", "allowed"] {
+        let rules = cycle_rule().replace(r#"type = "forbidden""#, &format!(r#"type = "{ty}""#));
+        let dir = fixture(&rules, Some(V2_GRAPH));
+        let Err(err) = FitnessValidator::load(dir.path(), None) else {
+            panic!("load must fail for circular {ty}");
+        };
+        assert!(err.to_string().contains("circular = true"), "{err}");
+    }
+}
+
+#[test]
+fn legacy_graph_with_a_dangling_edge_fails() {
+    // Misspelled endpoint: before, both matchers selected nodes but the
+    // dangling edge matched no target, so the forbidden rule passed.
+    let graph = r#"{
+      "nodes": ["src/domain", "src/infra"],
+      "edges": [["src/domain", "src/infar"]]
+    }"#;
+    let rule = forbidden_rule("src/domain", "src/infra", "");
+    let dir = fixture(&rule, Some(graph));
+    let r = report(&dir);
+    assert_eq!(r.results[0].status, RuleStatus::Fail);
+    let v = &r.results[0].violations[0];
+    assert_eq!(
+        v.entity,
+        "DEPENDENCY_GRAPH_INVALID:graphs/dependency-graph.json"
+    );
+    assert!(v.message.as_deref().unwrap().contains("src/infar"));
+}
+
+const TWO_TARGETS: &str = r#"{
+  "schema_version": "2.0.0",
+  "nodes": [
+    { "id": "domain", "type": "module", "path": "src/domain/mod.rs" },
+    { "id": "infra::a", "type": "module", "path": "src/infra/a.rs" },
+    { "id": "infra::b", "type": "module", "path": "src/infra/b.rs" }
+  ],
+  "edges": [
+    { "from": "domain", "to": "infra::a", "type": "imports" },
+    { "from": "domain", "to": "infra::b", "type": "imports" }
+  ]
+}"#;
+
+fn targets_fixture(targets: &str) -> TempDir {
+    let dir = fixture(
+        &forbidden_rule("**/domain/**", "**/infra/**", ""),
+        Some(TWO_TARGETS),
+    );
+    fs::write(
+        dir.path().join("fitness-exceptions.toml"),
+        format!("[domain-not-infra.\"src/domain/mod.rs\"]\nissue = \"#1\"\ntargets = {targets}\n"),
+    )
+    .unwrap();
+    dir
+}
+
+#[test]
+fn a_targets_exception_excuses_only_its_listed_target() {
+    let r = report(&targets_fixture(r#"["src/infra/a.rs"]"#));
+    let result = &r.results[0];
+    assert_eq!(result.status, RuleStatus::Fail, "infra::b is not excepted");
+    assert_eq!(result.violations.len(), 2);
+    assert_eq!(result.exceptions_used, 1);
+    let unexcepted: Vec<_> = result.violations.iter().filter(|v| !v.excepted).collect();
+    assert_eq!(unexcepted.len(), 1);
+    assert!(
+        unexcepted[0]
+            .message
+            .as_deref()
+            .unwrap()
+            .contains("infra::b")
+    );
+}
+
+#[test]
+fn an_empty_targets_list_excuses_nothing() {
+    let r = report(&targets_fixture("[]"));
+    assert_eq!(r.results[0].status, RuleStatus::Fail);
+    assert_eq!(r.results[0].exceptions_used, 0);
+}

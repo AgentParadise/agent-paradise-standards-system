@@ -98,6 +98,7 @@ dependencies = [
  "apss-v1-0004-session-capture",
  "apss-v1-0005-agent-recipe",
  "clap",
+ "jsonschema",
  "regex",
  "serde",
  "serde_json",

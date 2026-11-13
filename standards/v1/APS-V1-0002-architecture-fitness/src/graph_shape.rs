@@ -10,9 +10,10 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::{
-    FitnessError, FitnessValidator, PathMatcher, Reading, RuleResult, RuleStatus, Severity,
-    StaleException, StaleReason, StructuralRule, ThresholdDirection, Violation, error_codes,
-    glob_matches, missing_graph_result, read_dependency_graph, tarjan_scc,
+    DependencyGraph, FitnessError, FitnessValidator, PathMatcher, Reading, RuleResult, RuleStatus,
+    Severity, StaleException, StaleReason, StructuralRule, ThresholdDirection, Violation,
+    empty_match_result, error_codes, glob_matches, missing_graph_result, read_dependency_graph,
+    tarjan_scc,
 };
 
 /// Pattern name: longest dependency path ceiling.
@@ -222,17 +223,17 @@ impl FitnessValidator {
             let missing = missing_graph_result(&rule.id, &rule.name, result.dimension.clone());
             return Ok((missing, vec![], HashSet::new()));
         }
-        let (raw_nodes, raw_edges) = read_dependency_graph(&graph_path)?;
+        let graph = read_dependency_graph(&graph_path)?;
 
-        let mut nodes: BTreeSet<&str> = raw_nodes.iter().map(String::as_str).collect();
-        let edges: BTreeSet<(&str, &str)> = raw_edges
+        // Algorithms run on node ids; matchers and reports use node names
+        // (v2: file paths), so two modules in one file stay two nodes.
+        let nodes: BTreeSet<&str> = graph.nodes.iter().map(String::as_str).collect();
+        let edges: BTreeSet<(&str, &str)> = graph
+            .edges
             .iter()
             .map(|(a, b)| (a.as_str(), b.as_str()))
             .collect();
-        for (a, b) in &edges {
-            nodes.insert(a);
-            nodes.insert(b);
-        }
+        let name = |id: &str| graph.name(id).to_string();
 
         // validate_rule guarantees `from` and `max` for these patterns.
         let from_m = rule.from.as_ref().expect("validated: from");
@@ -240,12 +241,35 @@ impl FitnessValidator {
         let from: BTreeSet<&str> = nodes
             .iter()
             .copied()
-            .filter(|n| selects(n, from_m))
+            .filter(|n| selects(graph.name(n), from_m))
             .collect();
         let to: BTreeSet<&str> = match &rule.to {
-            Some(m) => nodes.iter().copied().filter(|n| selects(n, m)).collect(),
+            Some(m) => nodes
+                .iter()
+                .copied()
+                .filter(|n| selects(graph.name(n), m))
+                .collect(),
             None => nodes.clone(),
         };
+        // Vacuity guard (§8.2): an unmatched `from` measures nothing, and an
+        // unmatched explicit `to` makes every measurement zero.
+        let empty_side = if from.is_empty() {
+            Some("from")
+        } else if rule.to.is_some() && to.is_empty() {
+            Some("to")
+        } else {
+            None
+        };
+        if let Some(side) = empty_side {
+            let empty = empty_match_result(
+                &rule.id,
+                &rule.name,
+                result.dimension.clone(),
+                side,
+                rule.allow_empty_reason.as_deref(),
+            );
+            return Ok((empty, vec![], HashSet::new()));
+        }
         result.total_entities = Some(from.len());
 
         let mut matched: HashSet<String> = HashSet::new();
@@ -258,7 +282,7 @@ impl FitnessValidator {
                 if r.depth as u64 > max {
                     violations.push(self.budget_violation(
                         &rule.id,
-                        n,
+                        &name(n),
                         FIELD_DEPTH,
                         r.depth as f64,
                         max as f64,
@@ -270,6 +294,7 @@ impl FitnessValidator {
         } else {
             let roots = match resolve_roots(
                 rule.composition_roots.as_deref().unwrap_or(&[]),
+                &graph,
                 &nodes,
                 &from,
             ) {
@@ -301,7 +326,7 @@ impl FitnessValidator {
                 let fo = fan_out(n, &edges, &to);
                 let cap = if roots.contains(n) {
                     result.readings.push(Reading {
-                        entity: n.to_string(),
+                        entity: name(n),
                         field: FIELD_FAN_OUT.to_string(),
                         value: fo as f64,
                     });
@@ -312,7 +337,7 @@ impl FitnessValidator {
                 if let Some(cap) = cap.filter(|&c| fo as u64 > c) {
                     violations.push(self.budget_violation(
                         &rule.id,
-                        n,
+                        &name(n),
                         FIELD_FAN_OUT,
                         fo as f64,
                         cap as f64,
@@ -324,17 +349,17 @@ impl FitnessValidator {
                     .iter()
                     .filter(|(a, b)| a == n && b != n && roots.contains(b))
                 {
-                    let excepted = match self.exceptions.get(&rule.id, n) {
+                    let excepted = match self.exceptions.get(&rule.id, &name(n)) {
                         Some(exc) => {
-                            matched.insert(n.to_string());
+                            matched.insert(name(n));
                             exc.targets
                                 .as_ref()
-                                .is_some_and(|t| t.iter().any(|t| t == r))
+                                .is_some_and(|t| t.iter().any(|t| *t == name(r)))
                         }
                         None => false,
                     };
                     violations.push(Violation {
-                        entity: n.to_string(),
+                        entity: name(n),
                         field: FIELD_DEPENDS_ON_ROOT.to_string(),
                         actual: 1.0,
                         threshold: 0.0,
@@ -351,7 +376,7 @@ impl FitnessValidator {
             let mut keys: Vec<&String> = entries.keys().collect();
             keys.sort();
             for entity in keys {
-                if !matched.contains(entity) && nodes.contains(entity.as_str()) {
+                if !matched.contains(entity) && nodes.iter().any(|n| graph.name(n) == entity) {
                     stale.push(StaleException {
                         rule_id: rule.id.clone(),
                         entity: entity.clone(),
@@ -418,6 +443,7 @@ impl FitnessValidator {
 /// root cannot silently lift the cap.
 fn resolve_roots<'a>(
     globs: &[String],
+    graph: &DependencyGraph,
     nodes: &BTreeSet<&'a str>,
     from: &BTreeSet<&'a str>,
 ) -> Result<BTreeSet<&'a str>, String> {
@@ -427,7 +453,7 @@ fn resolve_roots<'a>(
         let hits: Vec<&str> = nodes
             .iter()
             .copied()
-            .filter(|n| glob_matches(n, g))
+            .filter(|n| glob_matches(graph.name(n), g))
             .collect();
         if hits.is_empty() {
             return Err(format!("composition_roots glob '{g}' matches no node"));

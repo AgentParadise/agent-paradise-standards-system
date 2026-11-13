@@ -471,6 +471,12 @@ impl DependencyRule {
             }
         }
         validate_allow_empty_reason(&self.id, self.allow_empty_reason.as_deref())?;
+        if self.circular && self.rule_type != "forbidden" {
+            return Err(format!(
+                "Rule '{}': circular = true is only valid with type = \"forbidden\"",
+                self.id
+            ));
+        }
         self.from.validate(&self.id, "from")?;
         self.to.validate(&self.id, "to")?;
         match self.rule_type.as_str() {
@@ -1261,40 +1267,36 @@ impl FitnessValidator {
             ));
         }
 
-        let (nodes, edges) = read_dependency_graph(&graph_path)?;
+        let graph = read_dependency_graph(&graph_path)?;
 
-        // Filter nodes by from/to path matchers
-        let from_nodes: Vec<&str> = nodes
+        // Matchers select by a node's name (v2: its file path); the graph
+        // algorithms below run on node ids, so two modules in one file stay
+        // two nodes and a cycle between them stays a cycle.
+        let selects = |id: &str, m: &PathMatcher| {
+            let name = graph.name(id);
+            glob_matches(name, &m.path)
+                && m.path_not.as_ref().is_none_or(|pn| !glob_matches(name, pn))
+        };
+        let from_nodes: Vec<&str> = graph
+            .nodes
             .iter()
-            .filter(|n| glob_matches(n, &rule.from.path))
-            .filter(|n| {
-                rule.from
-                    .path_not
-                    .as_ref()
-                    .is_none_or(|pn| !glob_matches(n, pn))
-            })
-            .map(|s| s.as_str())
+            .map(String::as_str)
+            .filter(|n| selects(n, &rule.from))
             .collect();
-
-        let to_nodes: Vec<&str> = nodes
+        let to_nodes: Vec<&str> = graph
+            .nodes
             .iter()
-            .filter(|n| glob_matches(n, &rule.to.path))
-            .filter(|n| {
-                rule.to
-                    .path_not
-                    .as_ref()
-                    .is_none_or(|pn| !glob_matches(n, pn))
-            })
-            .map(|s| s.as_str())
+            .map(String::as_str)
+            .filter(|n| selects(n, &rule.to))
             .collect();
 
         // Vacuity guard: a rule whose matcher selects no node tests nothing.
-        let forbidden_edge = rule.rule_type == "forbidden" && !rule.circular;
+        // `circular` is only valid on `forbidden` (DependencyRule::validate).
         let empty_side = if rule.circular {
             (from_nodes.is_empty() && to_nodes.is_empty()).then_some("from/to")
         } else if from_nodes.is_empty() {
             Some("from")
-        } else if forbidden_edge && to_nodes.is_empty() {
+        } else if rule.rule_type == "forbidden" && to_nodes.is_empty() {
             Some("to")
         } else {
             None
@@ -1318,127 +1320,126 @@ impl FitnessValidator {
         let entity_count = from_nodes.len();
 
         let mut violations = Vec::new();
-        let mut exceptions_used = 0;
-        let mut stale = Vec::new();
         let mut matched_exception_entities: HashSet<String> = HashSet::new();
+        let mut stale = Vec::new();
+        // One violation of `field` on node `id` (reported by its name),
+        // excepted per check_dependency_exception for edge target `target`.
+        let mut violate = |id: &str,
+                           target: Option<&str>,
+                           field: &str,
+                           actual: f64,
+                           threshold: f64,
+                           direction: ThresholdDirection,
+                           message: Option<String>| {
+            let entity = graph.name(id).to_string();
+            let excepted = self.check_dependency_exception(
+                &rule.id,
+                &entity,
+                target.map(|t| graph.name(t)),
+                &mut matched_exception_entities,
+            );
+            violations.push(Violation {
+                entity,
+                field: field.to_string(),
+                actual,
+                threshold,
+                direction,
+                excepted,
+                message,
+            });
+        };
 
         match rule.rule_type.as_str() {
-            "forbidden" => {
-                if rule.circular {
-                    // Use Tarjan SCC to detect cycles
-                    let relevant_nodes: HashSet<&str> = from_set.union(&to_set).copied().collect();
-                    let relevant_edges: Vec<(&str, &str)> = edges
-                        .iter()
-                        .filter(|(a, b)| {
-                            relevant_nodes.contains(a.as_str())
-                                && relevant_nodes.contains(b.as_str())
-                        })
-                        .map(|(a, b)| (a.as_str(), b.as_str()))
-                        .collect();
-
-                    let sccs = tarjan_scc(&relevant_nodes, &relevant_edges);
-                    for scc in &sccs {
-                        if scc.len() > 1 {
-                            // Each node in the cycle is a violation
-                            for node in scc {
-                                let excepted = self.check_dependency_exception(
-                                    &rule.id,
-                                    node,
-                                    &mut matched_exception_entities,
-                                );
-                                if excepted {
-                                    exceptions_used += 1;
-                                }
-                                violations.push(Violation {
-                                    entity: node.to_string(),
-                                    field: "circular_dependency".to_string(),
-                                    actual: 1.0,
-                                    threshold: 0.0,
-                                    direction: ThresholdDirection::Max,
-                                    excepted,
-                                    message: None,
-                                });
-                            }
-                        }
+            "forbidden" if rule.circular => {
+                // Tarjan SCC on node ids; a self-edge is a cycle too (ST01
+                // spec: the graph keeps the self-loop so cycle rules see it).
+                let relevant_nodes: HashSet<&str> = from_set.union(&to_set).copied().collect();
+                let relevant_edges: Vec<(&str, &str)> = graph
+                    .edges
+                    .iter()
+                    .filter(|(a, b)| {
+                        relevant_nodes.contains(a.as_str()) && relevant_nodes.contains(b.as_str())
+                    })
+                    .map(|(a, b)| (a.as_str(), b.as_str()))
+                    .collect();
+                let self_looped: HashSet<&str> = relevant_edges
+                    .iter()
+                    .filter(|(a, b)| a == b)
+                    .map(|(a, _)| *a)
+                    .collect();
+                let mut cycles: Vec<Vec<String>> = tarjan_scc(&relevant_nodes, &relevant_edges)
+                    .into_iter()
+                    .filter(|scc| scc.len() > 1 || self_looped.contains(scc[0].as_str()))
+                    .collect();
+                for scc in &mut cycles {
+                    scc.sort();
+                }
+                cycles.sort();
+                for scc in &cycles {
+                    let members = scc.join(" -> ");
+                    for node in scc {
+                        violate(
+                            node,
+                            None,
+                            "circular_dependency",
+                            1.0,
+                            0.0,
+                            ThresholdDirection::Max,
+                            Some(format!("cycle: {members}")),
+                        );
                     }
-                } else {
-                    // Check for any edge from→to
-                    for (from, to) in &edges {
-                        if from_set.contains(from.as_str()) && to_set.contains(to.as_str()) {
-                            let excepted = self.check_dependency_exception(
-                                &rule.id,
-                                from,
-                                &mut matched_exception_entities,
-                            );
-                            if excepted {
-                                exceptions_used += 1;
-                            }
-                            violations.push(Violation {
-                                entity: from.clone(),
-                                field: "depends_on".to_string(),
-                                actual: 1.0,
-                                threshold: 0.0,
-                                direction: ThresholdDirection::Max,
-                                excepted,
-                                message: None,
-                            });
-                        }
+                }
+            }
+            "forbidden" => {
+                for (from, to) in &graph.edges {
+                    if from_set.contains(from.as_str()) && to_set.contains(to.as_str()) {
+                        violate(
+                            from,
+                            Some(to),
+                            "depends_on",
+                            1.0,
+                            0.0,
+                            ThresholdDirection::Max,
+                            Some(format!("{from} -> {to}")),
+                        );
                     }
                 }
             }
             "required" => {
-                // Check that for each from_node, at least one edge to a to_node exists
+                // Each from_node needs at least one edge into to_set.
                 for from in &from_nodes {
-                    let has_edge = edges
+                    let has_edge = graph
+                        .edges
                         .iter()
                         .any(|(a, b)| a == from && to_set.contains(b.as_str()));
                     if !has_edge {
-                        let excepted = self.check_dependency_exception(
-                            &rule.id,
+                        violate(
                             from,
-                            &mut matched_exception_entities,
+                            None,
+                            "depends_on",
+                            0.0,
+                            1.0,
+                            ThresholdDirection::Min,
+                            None,
                         );
-                        if excepted {
-                            exceptions_used += 1;
-                        }
-                        violations.push(Violation {
-                            entity: from.to_string(),
-                            field: "depends_on".to_string(),
-                            actual: 0.0,
-                            threshold: 1.0,
-                            direction: ThresholdDirection::Min,
-                            excepted,
-                            message: None,
-                        });
                     }
                 }
             }
             "allowed" => {
                 // `allowed`: from_nodes MAY depend on to_nodes; ANY edge from
-                // a from_node to a node outside to_set is a violation. This
-                // implements the dependency-cruiser "allowed" semantics.
-                // Unknown rule_types are rejected at config load (see
-                // DependencyRule::validate), so reaching this match arm with
-                // anything other than these three values is impossible.
-                for (from, to) in &edges {
+                // a from_node to a node outside to_set is a violation
+                // (dependency-cruiser "allowed" semantics).
+                for (from, to) in &graph.edges {
                     if from_set.contains(from.as_str()) && !to_set.contains(to.as_str()) {
-                        let excepted = self.check_dependency_exception(
-                            &rule.id,
+                        violate(
                             from,
-                            &mut matched_exception_entities,
+                            Some(to),
+                            "depends_on",
+                            1.0,
+                            0.0,
+                            ThresholdDirection::Max,
+                            Some(format!("{from} -> {to}")),
                         );
-                        if excepted {
-                            exceptions_used += 1;
-                        }
-                        violations.push(Violation {
-                            entity: from.clone(),
-                            field: "depends_on".to_string(),
-                            actual: 1.0,
-                            threshold: 0.0,
-                            direction: ThresholdDirection::Max,
-                            excepted,
-                            message: None,
-                        });
                     }
                 }
             }
@@ -1446,28 +1447,24 @@ impl FitnessValidator {
                 "DependencyRule::validate rejects unknown rule_type before reaching this point"
             ),
         }
+        let exceptions_used = violations.iter().filter(|v| v.excepted).count();
 
         // Detect stale exceptions for dependency rules
         if let Some(rule_exceptions) = self.exceptions.rules.get(&rule.id) {
             for entity in rule_exceptions.keys() {
-                let was_matched = matched_exception_entities.contains(entity.as_str());
-                if !was_matched {
-                    // Check if entity is even in the graph
-                    let entity_exists = nodes.iter().any(|n| n == entity);
-                    if entity_exists {
-                        stale.push(StaleException {
-                            rule_id: rule.id.clone(),
-                            entity: entity.clone(),
-                            reason: StaleReason::NowPassing,
-                        });
-                    } else {
-                        stale.push(StaleException {
-                            rule_id: rule.id.clone(),
-                            entity: entity.clone(),
-                            reason: StaleReason::EntityNotFound,
-                        });
-                    }
+                if matched_exception_entities.contains(entity.as_str()) {
+                    continue;
                 }
+                let entity_exists = graph.nodes.iter().any(|n| graph.name(n) == entity);
+                stale.push(StaleException {
+                    rule_id: rule.id.clone(),
+                    entity: entity.clone(),
+                    reason: if entity_exists {
+                        StaleReason::NowPassing
+                    } else {
+                        StaleReason::EntityNotFound
+                    },
+                });
             }
         }
 
@@ -1498,20 +1495,27 @@ impl FitnessValidator {
         ))
     }
 
-    /// Check if a dependency exception applies for a given entity.
+    /// Whether a dependency exception excuses a violation of `rule_id` by
+    /// `entity`. An entry with `targets` excuses only an edge whose target is
+    /// listed (an empty list excuses nothing, a cycle or a missing required
+    /// edge has no single target, so `targets` never excuses those); an
+    /// entry with neither `value` nor `targets` excuses every violation of
+    /// the entity. Any entry found marks the entity matched, so it is not
+    /// reported stale.
     fn check_dependency_exception(
         &self,
         rule_id: &str,
         entity: &str,
+        target: Option<&str>,
         matched: &mut HashSet<String>,
     ) -> bool {
-        if let Some(exc) = self.exceptions.get(rule_id, entity) {
-            matched.insert(entity.to_string());
-            // For dependency exceptions, targets field can limit which imports are excepted.
-            // For simplicity, presence of exception = excepted (targets checked elsewhere).
-            exc.value.is_none() || exc.targets.is_some()
-        } else {
-            false
+        let Some(exc) = self.exceptions.get(rule_id, entity) else {
+            return false;
+        };
+        matched.insert(entity.to_string());
+        match &exc.targets {
+            Some(targets) => target.is_some_and(|t| targets.iter().any(|x| x == t)),
+            None => exc.value.is_none(),
         }
     }
 
@@ -2081,8 +2085,24 @@ pub const DEPENDENCY_GRAPH_FILE: &str = "graphs/dependency-graph.json";
 /// Major `schema_version` of `graphs/dependency-graph.json` this engine reads.
 pub const DEPENDENCY_GRAPH_SCHEMA_MAJOR: u64 = 2;
 
-/// A parsed dependency graph: node keys and `(from, to)` edges between them.
-pub(crate) type GraphParts = (Vec<String>, Vec<(String, String)>);
+/// A parsed dependency graph. Algorithms run on node ids; rules match and
+/// report each node by its name (v2: its file `path`; legacy: the id).
+#[derive(Debug, Default)]
+pub(crate) struct DependencyGraph {
+    /// Node ids, in file order.
+    pub nodes: Vec<String>,
+    /// Directed `(from, to)` edges between node ids ("from depends on to").
+    pub edges: Vec<(String, String)>,
+    /// Node id -> name, when it differs from the id.
+    pub names: HashMap<String, String>,
+}
+
+impl DependencyGraph {
+    /// The name a matcher sees and a violation reports for node `id`.
+    pub fn name<'a>(&'a self, id: &'a str) -> &'a str {
+        self.names.get(id).map_or(id, String::as_str)
+    }
+}
 
 /// Result for a rule whose dependency graph is missing (§3.3 R3, §12).
 ///
@@ -2175,16 +2195,17 @@ pub(crate) fn empty_match_result(
 }
 
 /// Read and parse the dependency graph at `path` (see [`load_dependency_graph`]).
-pub(crate) fn read_dependency_graph(path: &Path) -> Result<GraphParts, FitnessError> {
+pub(crate) fn read_dependency_graph(path: &Path) -> Result<DependencyGraph, FitnessError> {
     let content = std::fs::read_to_string(path).map_err(|e| FitnessError::Io(path.into(), e))?;
     let graph: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| FitnessError::ParseArtifact(path.into(), e.to_string()))?;
     load_dependency_graph(&graph).map_err(|e| FitnessError::ParseArtifact(path.into(), e))
 }
 
-/// Parse a dependency graph into `(nodes, edges)` keyed for rule matching.
+/// Parse a dependency graph.
 ///
-/// Schema 2.x (APS-V1-0001 §3.4.2, what code-topology writes):
+/// Schema 2.x (APS-V1-0001 §3.4.2, what code-topology writes; JSON Schema
+/// `APS-V1-0001-code-topology/schemas/dependency-graph.schema.json`):
 /// ```json
 /// {
 ///   "schema_version": "2.0.0",
@@ -2192,12 +2213,12 @@ pub(crate) fn read_dependency_graph(path: &Path) -> Result<GraphParts, FitnessEr
 ///   "edges": [{ "from": "domain::model", "to": "infra::db", "type": "imports" }]
 /// }
 /// ```
-/// A node's key is its `path`, because ST01 matchers are path globs; edges
-/// are mapped from ids to those keys. Two modules in one file share a key.
+/// Nodes keep their ids; each node's name for matching and reporting is its
+/// `path`, because ST01 matchers are path globs.
 ///
-/// Every malformed entry is an error, never a silent drop: a dropped edge
-/// would let a forbidden dependency pass.
-pub(crate) fn load_dependency_graph(graph: &serde_json::Value) -> Result<GraphParts, String> {
+/// Every malformed entry is an error, never a silent drop: a dropped or
+/// dangling edge would let a forbidden dependency pass.
+pub(crate) fn load_dependency_graph(graph: &serde_json::Value) -> Result<DependencyGraph, String> {
     let nodes = graph
         .get("nodes")
         .and_then(|n| n.as_array())
@@ -2207,9 +2228,10 @@ pub(crate) fn load_dependency_graph(graph: &serde_json::Value) -> Result<GraphPa
         .and_then(|e| e.as_array())
         .ok_or("missing `edges` array")?;
     match graph.get("schema_version") {
-        // WORKAROUND (see the legacy-reader removal issue linked from the
-        // APS-V1-0002 changelog): a graph with no schema_version is read in
-        // the pre-2.0.0 shape (string nodes, `[from, to]` edges, keyed by id).
+        // WORKAROUND (removal: the legacy-reader issue linked from the
+        // APS-V1-0002 2.0.0 evolution pack): a graph with no schema_version
+        // is read in the pre-2.0.0 shape (string nodes, `[from, to]` edges),
+        // each node named by its own string. Endpoints are still checked.
         None => load_legacy_dependency_graph(nodes, edges),
         Some(v) => {
             let version = v.as_str().ok_or("`schema_version` is not a string")?;
@@ -2230,7 +2252,7 @@ pub(crate) fn load_dependency_graph(graph: &serde_json::Value) -> Result<GraphPa
 fn load_v2_dependency_graph(
     nodes: &[serde_json::Value],
     edges: &[serde_json::Value],
-) -> Result<GraphParts, String> {
+) -> Result<DependencyGraph, String> {
     let field =
         |v: &serde_json::Value, what: &str, i: usize, key: &str| -> Result<String, String> {
             v.get(key)
@@ -2238,57 +2260,66 @@ fn load_v2_dependency_graph(
                 .map(str::to_string)
                 .ok_or_else(|| format!("{what}[{i}] has no string `{key}`"))
         };
-    let mut key_of: HashMap<String, String> = HashMap::new();
+    let mut graph = DependencyGraph::default();
     for (i, node) in nodes.iter().enumerate() {
         let id = field(node, "nodes", i, "id")?;
         let path = field(node, "nodes", i, "path")?;
         if path.is_empty() {
             return Err(format!("nodes[{i}] ({id}) has an empty `path`"));
         }
-        if key_of.insert(id.clone(), path).is_some() {
+        if graph.names.insert(id.clone(), path).is_some() {
             return Err(format!("nodes[{i}]: duplicate id {id}"));
         }
+        graph.nodes.push(id);
     }
-    let mut out_edges = Vec::with_capacity(edges.len());
     for (i, edge) in edges.iter().enumerate() {
         let end = |key: &str| -> Result<String, String> {
             let id = field(edge, "edges", i, key)?;
-            key_of
-                .get(&id)
-                .cloned()
-                .ok_or_else(|| format!("edges[{i}].{key} = {id} is not a node id"))
+            if graph.names.contains_key(&id) {
+                Ok(id)
+            } else {
+                Err(format!("edges[{i}].{key} = {id} is not a node id"))
+            }
         };
-        out_edges.push((end("from")?, end("to")?));
+        let pair = (end("from")?, end("to")?);
+        graph.edges.push(pair);
     }
-    let keys: std::collections::BTreeSet<String> = key_of.into_values().collect();
-    Ok((keys.into_iter().collect(), out_edges))
+    Ok(graph)
 }
 
 fn load_legacy_dependency_graph(
     nodes: &[serde_json::Value],
     edges: &[serde_json::Value],
-) -> Result<GraphParts, String> {
-    let nodes = nodes
-        .iter()
-        .enumerate()
-        .map(|(i, v)| {
-            v.as_str().map(str::to_string).ok_or_else(|| {
-                format!("nodes[{i}] is not a string (a graph with object nodes needs schema_version 2.x)")
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let edges = edges
-        .iter()
-        .enumerate()
-        .map(|(i, e)| match e.as_array().map(Vec::as_slice) {
+) -> Result<DependencyGraph, String> {
+    let mut graph = DependencyGraph::default();
+    let mut seen = HashSet::new();
+    for (i, v) in nodes.iter().enumerate() {
+        let id = v.as_str().ok_or_else(|| {
+            format!(
+                "nodes[{i}] is not a string (a graph with object nodes needs schema_version 2.x)"
+            )
+        })?;
+        if !seen.insert(id.to_string()) {
+            return Err(format!("nodes[{i}]: duplicate node {id}"));
+        }
+        graph.nodes.push(id.to_string());
+    }
+    for (i, e) in edges.iter().enumerate() {
+        let (a, b) = match e.as_array().map(Vec::as_slice) {
             Some([a, b]) => match (a.as_str(), b.as_str()) {
-                (Some(a), Some(b)) => Ok((a.to_string(), b.to_string())),
-                _ => Err(format!("edges[{i}] is not a pair of strings")),
+                (Some(a), Some(b)) => (a, b),
+                _ => return Err(format!("edges[{i}] is not a pair of strings")),
             },
-            _ => Err(format!("edges[{i}] is not a [from, to] pair")),
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok((nodes, edges))
+            _ => return Err(format!("edges[{i}] is not a [from, to] pair")),
+        };
+        for end in [a, b] {
+            if !seen.contains(end) {
+                return Err(format!("edges[{i}]: {end} is not in `nodes`"));
+            }
+        }
+        graph.edges.push((a.to_string(), b.to_string()));
+    }
+    Ok(graph)
 }
 
 /// Tarjan's strongly connected components algorithm.

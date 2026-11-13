@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:apss:schema:aps-v1-0001:dependency-graph:2.0.0",
+  "title": "Dependency Graph",
+  "description": "Schema for .topology/graphs/dependency-graph.json per APS-V1-0001 §3.4.2: the module dependency graph code-topology writes and APS-V1-0002 ST01 dependency rules read. An edge means `from` depends on (imports) `to`. Every edge endpoint MUST be the `id` of a node in `nodes` (JSON Schema cannot express that; consumers MUST reject a dangling endpoint).",
+  "type": "object",
+  "required": ["schema_version", "nodes", "edges"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^2\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this artifact shape. Consumers accept any 2.x."
+    },
+    "level": {
+      "type": "string",
+      "enum": ["module"],
+      "description": "Granularity of the nodes."
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Edge" }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Informational counts; not part of the contract consumers evaluate."
+    }
+  },
+  "$defs": {
+    "Node": {
+      "type": "object",
+      "required": ["id", "type", "path"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Module identity, unique within the graph (e.g. `domain::model`)."
+        },
+        "type": { "type": "string", "enum": ["module"] },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source file of the module relative to the analysis root, `/` separators (e.g. `src/domain/model.rs`). ST01 path globs match this; two modules in one file share it."
+        },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "Edge": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "minLength": 1, "description": "`id` of the depending node." },
+        "to": { "type": "string", "minLength": 1, "description": "`id` of the node depended on." },
+        "type": { "type": "string", "enum": ["imports"] },
+        "weight": { "type": "integer", "minimum": 1, "description": "Number of imports behind the edge." },
+        "imports": {
+          "type": "array",
+          "description": "The import statements behind the edge, as the language adapter reports them.",
+          "items": { "type": "object" }
+        }
+      }
+    }
+  }
+}

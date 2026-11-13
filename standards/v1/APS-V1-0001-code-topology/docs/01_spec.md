@@ -292,6 +292,8 @@ Includes Martin's coupling metrics:
 
 #### 3.4.2 Dependency Graph (`graphs/dependency-graph.json`)
 
+JSON Schema: [`schemas/dependency-graph.schema.json`](../schemas/dependency-graph.schema.json).
+
 The input of APS-V1-0002 ST01 dependency rules. Schema 2.0.0: every node
 carries `path`, its source file relative to the analysis root with `/`
 separators, because ST01 rules match path globs (`**/domain/**`) and a module

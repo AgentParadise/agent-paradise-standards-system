@@ -23,6 +23,26 @@ fn run(dir: &Path, args: &[&str]) -> Output {
         .expect("run apss-dev")
 }
 
+const GRAPH_SCHEMA: &str = include_str!(
+    "../../../standards/v1/APS-V1-0001-code-topology/schemas/dependency-graph.schema.json"
+);
+
+/// The producer's output validates against the published schema (APS-V1-0002
+/// §3.3 R3), so the contract is machine-checked, not only prose.
+fn assert_matches_published_schema(graph_path: &Path) {
+    let schema: serde_json::Value = serde_json::from_str(GRAPH_SCHEMA).expect("schema parses");
+    let validator = jsonschema::options()
+        .build(&schema)
+        .expect("schema compiles");
+    let graph: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(graph_path).unwrap()).expect("graph parses");
+    let errors: Vec<String> = validator
+        .iter_errors(&graph)
+        .map(|e| format!("at {}: {e}", e.instance_path))
+        .collect();
+    assert!(errors.is_empty(), "graph violates its schema: {errors:#?}");
+}
+
 const FITNESS: &str = r#"
 [config]
 topology_dir = ".topology"
@@ -67,10 +87,12 @@ fn analyze_then_validate(root: &Path) -> (Output, String) {
         "analyze failed: {}",
         String::from_utf8_lossy(&analyze.stderr)
     );
+    let graph_path = root.join(".topology/graphs/dependency-graph.json");
     assert!(
-        root.join(".topology/graphs/dependency-graph.json").exists(),
+        graph_path.exists(),
         "code-topology must write the graph ST01 reads"
     );
+    assert_matches_published_schema(&graph_path);
     let validate = run(root, &["run", "architecture-fitness", "validate", "."]);
     let stdout = String::from_utf8_lossy(&validate.stdout).into_owned();
     (validate, stdout)
