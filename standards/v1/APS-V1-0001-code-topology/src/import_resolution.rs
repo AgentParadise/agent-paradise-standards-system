@@ -18,6 +18,9 @@
 //!   (with or without `#[path]`, inside inline `mod { }` blocks too) is read
 //!   from the syntax tree and followed, so a binary's `mod helper;` and a
 //!   `[lib] path` outside `src` resolve like the compiler loads them.
+//!   `main.rs` and each `src/bin` binary are crates apart from the library;
+//!   a module two of them declare belongs to both. An inline `mod name { }`
+//!   resolves to the file holding it.
 //! - Rust use trees expand to their leaves: `a::{b::{c::X}}` names `a::b::c`.
 //! - TypeScript: a relative specifier (`./x`, `../y/z.js`) resolves against
 //!   the importing file's directory. Bare and aliased specifiers name
@@ -108,8 +111,12 @@ struct RustLocation {
 #[derive(Debug, Default)]
 pub(crate) struct ImportResolver {
     files: HashMap<PathBuf, SourceFile>,
-    rust_location: HashMap<PathBuf, RustLocation>,
+    /// Every location of a Rust file: one per module tree that declares it
+    /// (a module two binaries both declare is compiled into each).
+    rust_locations: HashMap<PathBuf, Vec<RustLocation>>,
     rust_file_at: HashMap<RustLocation, PathBuf>,
+    /// Inline `mod name { }` modules, to the file that holds them.
+    inline_modules: HashMap<RustLocation, PathBuf>,
     /// Modules a `mod name;` declares whose file is not analyzed (the walk
     /// skips `test_*.rs`, or a config excludes it).
     unanalyzed_modules: HashSet<RustLocation>,
@@ -169,26 +176,50 @@ impl ImportResolver {
             .collect();
         let (mounts, unanalyzed) = mount_declarations(&declarations, &on_disk);
 
-        for path in on_disk.keys() {
-            let location = mounted_location(path, &on_disk, &mounts, 0);
-            // `lib.rs` and `main.rs` of one package share the unit root;
-            // keep `lib.rs`, the one other crates and `crate::` reach.
-            let replace = resolver
-                .rust_file_at
-                .get(&location)
-                .is_none_or(|existing| existing.file_stem().is_some_and(|s| s == "main"));
-            if replace {
-                resolver.rust_file_at.insert(location.clone(), path.clone());
+        // In path order, so the first of two files at one location (two
+        // `#[cfg]` alternatives of one module) wins every run.
+        let mut paths: Vec<&PathBuf> = on_disk.keys().collect();
+        paths.sort();
+        for path in paths {
+            let locations = mounted_locations(path, &on_disk, &mounts, 0);
+            for location in &locations {
+                resolver
+                    .rust_file_at
+                    .entry(location.clone())
+                    .or_insert_with(|| path.clone());
             }
-            resolver.rust_location.insert(path.clone(), location);
+            resolver.rust_locations.insert(path.clone(), locations);
         }
-        for (declaring, module_path) in unanalyzed {
-            let mut location = resolver.rust_location[&declaring].clone();
-            location.path.extend(module_path);
-            if !resolver.rust_file_at.contains_key(&location) {
-                resolver.unanalyzed_modules.insert(location);
+        let below = |declaring: &PathBuf, module_path: &[String]| -> Vec<RustLocation> {
+            resolver.rust_locations[declaring]
+                .iter()
+                .map(|location| {
+                    let mut location = location.clone();
+                    location.path.extend(module_path.iter().cloned());
+                    location
+                })
+                .collect()
+        };
+        let mut inline_modules = HashMap::new();
+        for (declaring, declared) in &declarations {
+            for declaration in declared.iter().filter(|d| d.inline_body) {
+                for location in below(declaring, &declaration.module_path()) {
+                    inline_modules
+                        .entry(location)
+                        .or_insert_with(|| declaring.clone());
+                }
             }
         }
+        let mut unanalyzed_modules = HashSet::new();
+        for (declaring, module_path) in &unanalyzed {
+            for location in below(declaring, module_path) {
+                if !resolver.rust_file_at.contains_key(&location) {
+                    unanalyzed_modules.insert(location);
+                }
+            }
+        }
+        resolver.inline_modules = inline_modules;
+        resolver.unanalyzed_modules = unanalyzed_modules;
         resolver
     }
 
@@ -230,21 +261,22 @@ impl ImportResolver {
         import: &ImportInfo,
         scope: &[String],
     ) -> Vec<PathBuf> {
-        let Some(from) = self.rust_location.get(from_file) else {
+        let Some(locations) = self.rust_locations.get(from_file) else {
             return Vec::new();
         };
-        let mut here = from.path.clone();
-        here.extend(scope.iter().cloned());
-
         let mut targets = Vec::new();
-        for full_path in rust_use_paths(import) {
-            let segments: Vec<&str> = full_path.split("::").map(str::trim).collect();
-            let Some((unit, path)) = self.rust_anchor(&from.unit, &here, &segments) else {
-                continue;
-            };
-            if let Some(file) = self.longest_rust_file(unit, &path) {
-                if !targets.contains(file) {
-                    targets.push(file.clone());
+        for from in locations {
+            let mut here = from.path.clone();
+            here.extend(scope.iter().cloned());
+            for full_path in rust_use_paths(import) {
+                let segments: Vec<&str> = full_path.split("::").map(str::trim).collect();
+                let Some((unit, path)) = self.rust_anchor(&from.unit, &here, &segments) else {
+                    continue;
+                };
+                if let Some(file) = self.longest_rust_file(unit, &path) {
+                    if !targets.contains(file) {
+                        targets.push(file.clone());
+                    }
                 }
             }
         }
@@ -290,7 +322,7 @@ impl ImportResolver {
     /// The file behind the longest prefix of `path` that names a module of
     /// `unit`; the unit's root file when no longer prefix does. `None` when
     /// the longest prefix naming a module names one that is declared or on
-    /// disk but not analyzed (the walk skips `test_*.rs`): falling back to
+    /// disk but not analyzed, and not an inline module (the walk skips `test_*.rs`): falling back to
     /// its parent would be an edge to a module the import does not name.
     fn longest_rust_file(&self, unit: &Path, path: &[String]) -> Option<&PathBuf> {
         for len in (0..=path.len()).rev() {
@@ -299,6 +331,11 @@ impl ImportResolver {
                 path: path[..len].to_vec(),
             };
             if let Some(file) = self.rust_file_at.get(&location) {
+                return Some(file);
+            }
+            // An inline `mod name { }` lives in the file that holds it, even
+            // beside an inactive `#[cfg] mod name;` with no file.
+            if let Some(file) = self.inline_modules.get(&location) {
                 return Some(file);
             }
             let unanalyzed = self.unanalyzed_modules.contains(&location)
@@ -338,11 +375,14 @@ const MAX_MOUNT_DEPTH: usize = 32;
 /// [`mount_declarations`]).
 const MAX_MOUNT_ROUNDS: usize = 4;
 
-/// Mounted file to the file that declares it and its module path below the
-/// declaring file's module.
-type Mounts = HashMap<PathBuf, (PathBuf, Vec<String>)>;
+/// Bound on the locations of one file, so a lattice of mounts stays small.
+const MAX_LOCATIONS: usize = 16;
 
-/// One file-backed `mod name;` declaration (a `mod` with no body).
+/// Mounted file to each file that declares it, with its module path below
+/// the declaring file's module.
+type Mounts = HashMap<PathBuf, Vec<(PathBuf, Vec<String>)>>;
+
+/// One `mod` item: a file-backed `mod name;`, or an inline `mod name { }`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ModDeclaration {
     /// Enclosing inline modules, outermost first: their name, and the
@@ -352,6 +392,8 @@ struct ModDeclaration {
     name: String,
     /// The `#[path = "..."]` value, when present.
     path: Option<String>,
+    /// An inline `mod name { }`: it loads no file.
+    inline_body: bool,
 }
 
 impl ModDeclaration {
@@ -397,8 +439,8 @@ impl ModDeclaration {
     }
 }
 
-/// Every file-backed `mod` declaration in `source`, read from the syntax
-/// tree, so a declaration in a comment or string is not one. Declarations
+/// Every `mod` item in `source`, read from the syntax tree, so a
+/// declaration in a comment or string is not one. Declarations
 /// inside inline `mod name { }` blocks carry that scope; `mod` items inside
 /// function bodies are not followed.
 fn mod_declarations(source: &str) -> Vec<ModDeclaration> {
@@ -444,8 +486,15 @@ fn collect_mod_declarations(
                 inline: inline.clone(),
                 name,
                 path,
+                inline_body: false,
             }),
             Some(body) => {
+                out.push(ModDeclaration {
+                    inline: inline.clone(),
+                    name: name.clone(),
+                    path: path.clone(),
+                    inline_body: true,
+                });
                 let dir = path.unwrap_or_else(|| name.clone());
                 inline.push((name, dir));
                 collect_mod_declarations(body, source, inline, out);
@@ -491,7 +540,8 @@ fn path_attribute(item: tree_sitter::Node<'_>, source: &str) -> Option<String> {
 /// Whether a declaring file is mod-rs depends on whether something mounts
 /// it (`src/bin/helper.rs` is a binary root until `tool.rs` declares
 /// `mod helper;`), and its mounts depend on that; a few rounds settle it.
-/// The first declaration of a file wins, in path order.
+/// A file two module trees declare (two binaries' `mod shared;`) is mounted
+/// in both.
 fn mount_declarations(
     declarations: &[(PathBuf, Vec<ModDeclaration>)],
     on_disk: &HashMap<PathBuf, RustLocation>,
@@ -505,11 +555,14 @@ fn mount_declarations(
         for (file, declared) in declarations {
             let mod_rs = file.file_name().is_some_and(|n| n == "mod.rs")
                 || (on_disk[file].path.is_empty() && !mounts.contains_key(file));
-            for declaration in declared {
+            for declaration in declared.iter().filter(|d| !d.inline_body) {
                 match declaration.target(file, mod_rs, analyzed) {
                     Some(target) if target != *file => {
-                        next.entry(target)
-                            .or_insert_with(|| (file.clone(), declaration.module_path()));
+                        let mount = (file.clone(), declaration.module_path());
+                        let declarers = next.entry(target).or_default();
+                        if !declarers.contains(&mount) {
+                            declarers.push(mount);
+                        }
                     }
                     Some(_) => {}
                     None => unanalyzed.push((file.clone(), declaration.module_path())),
@@ -526,22 +579,28 @@ fn mount_declarations(
     (mounts, unanalyzed)
 }
 
-/// The location of `path`, following mounts to the declaring module. A file
-/// nobody mounts keeps its location on disk.
-fn mounted_location(
+/// The locations of `path`, following mounts to each declaring module. A
+/// file nobody mounts keeps its location on disk.
+fn mounted_locations(
     path: &Path,
     on_disk: &HashMap<PathBuf, RustLocation>,
     mounts: &Mounts,
     depth: usize,
-) -> RustLocation {
-    match mounts.get(path) {
-        Some((declaring, module_path)) if depth < MAX_MOUNT_DEPTH => {
-            let mut location = mounted_location(declaring, on_disk, mounts, depth + 1);
+) -> Vec<RustLocation> {
+    let declarers = mounts.get(path).filter(|_| depth < MAX_MOUNT_DEPTH);
+    let Some(declarers) = declarers else {
+        return vec![on_disk[path].clone()];
+    };
+    let mut locations: Vec<RustLocation> = Vec::new();
+    for (declaring, module_path) in declarers {
+        for mut location in mounted_locations(declaring, on_disk, mounts, depth + 1) {
             location.path.extend(module_path.iter().cloned());
-            location
+            if locations.len() < MAX_LOCATIONS && !locations.contains(&location) {
+                locations.push(location);
+            }
         }
-        _ => on_disk[path].clone(),
     }
+    locations
 }
 
 /// The full paths a Rust import names: the use path, or the use path joined
@@ -759,8 +818,21 @@ fn rust_location(
         })
         .collect();
 
-    // `src/bin/<name>.rs` and `src/bin/<name>/main.rs` are binary roots.
+    // `src/main.rs` is the package's default binary: a crate apart from the
+    // library, so its `crate::` never reaches `lib.rs`. Its modules join it
+    // through its `mod` declarations.
     let in_src = unit == src;
+    if in_src && parts == ["main"] && lib_root.as_deref() != Some(file) {
+        return (
+            RustLocation {
+                unit: file.to_path_buf(),
+                path: Vec::new(),
+            },
+            None,
+        );
+    }
+
+    // `src/bin/<name>.rs` and `src/bin/<name>/main.rs` are binary roots.
     if in_src && parts.first().is_some_and(|p| p == "bin") && parts.len() >= 2 {
         let unit = src.join("bin").join(&parts[1]);
         let mut path = parts.split_off(2);
@@ -773,8 +845,7 @@ fn rust_location(
         return (RustLocation { unit, path }, None);
     }
 
-    let is_root =
-        lib_root.as_deref() == Some(file) || (in_src && (parts == ["lib"] || parts == ["main"]));
+    let is_root = lib_root.as_deref() == Some(file) || (in_src && parts == ["lib"]);
     if is_root {
         parts.clear();
     }
@@ -829,6 +900,11 @@ mod tests {
                 .collect(),
             name: name.to_string(),
             path: path.map(str::to_string),
+            inline_body: false,
+        };
+        let outer = ModDeclaration {
+            inline_body: true,
+            ..declared("outer", &[], Some("renamed"))
         };
         assert_eq!(
             mod_declarations(source),
@@ -836,6 +912,7 @@ mod tests {
                 declared("tests", &[], Some("a_tests.rs")),
                 declared("sign_in", &[], Some("web_sign_in.rs")),
                 declared("plain", &[], None),
+                outer,
                 declared("inner", &[("outer", "renamed")], None),
                 declared("up", &[("outer", "renamed")], Some("../up.rs")),
             ]
@@ -1153,6 +1230,81 @@ mod tests {
         assert!(
             r.resolve(&c, &import("crate::generated::X", &[]), &[])
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn main_rs_is_a_crate_apart_from_a_custom_library() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let r = crate_on_disk(
+            dir.path(),
+            &[
+                (
+                    "Cargo.toml",
+                    "[package]\nname = \"demo\"\n[lib]\npath = \"src/custom.rs\"\n",
+                ),
+                ("src/custom.rs", "pub struct Thing;\n"),
+                (
+                    "src/main.rs",
+                    "struct Thing;\nuse crate::Thing as T;\nfn main() {}\n",
+                ),
+            ],
+        );
+        let main = dir.path().join("src/main.rs");
+        assert!(
+            r.resolve(&main, &import("crate::Thing", &[]), &[])
+                .is_empty()
+        );
+        // The binary reaches the library by its crate name.
+        assert_eq!(
+            r.resolve(&main, &import("demo::Thing", &[]), &[]),
+            ["src/custom.rs"]
+        );
+    }
+
+    #[test]
+    fn a_module_two_binaries_declare_belongs_to_both() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let r = crate_on_disk(
+            dir.path(),
+            &[
+                (
+                    "src/bin/a.rs",
+                    "mod shared;\nuse crate::shared::run;\nfn main() {}\n",
+                ),
+                (
+                    "src/bin/b.rs",
+                    "mod shared;\nuse crate::shared::run;\nfn main() {}\n",
+                ),
+                ("src/bin/shared.rs", "pub fn run() {}\n"),
+            ],
+        );
+        for binary in ["src/bin/a.rs", "src/bin/b.rs"] {
+            let binary = dir.path().join(binary);
+            assert_eq!(
+                r.resolve(&binary, &import("crate::shared::run", &[]), &[]),
+                ["src/bin/shared.rs"]
+            );
+        }
+    }
+
+    #[test]
+    fn an_inactive_declaration_does_not_hide_an_inline_module() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let r = crate_on_disk(
+            dir.path(),
+            &[
+                (
+                    "src/lib.rs",
+                    "#[cfg(any())]\nmod api;\n#[cfg(not(any()))]\nmod api { pub struct X; }\nmod consumer;\n",
+                ),
+                ("src/consumer.rs", "use crate::api::X;\n"),
+            ],
+        );
+        let consumer = dir.path().join("src/consumer.rs");
+        assert_eq!(
+            r.resolve(&consumer, &import("crate::api::X", &[]), &[]),
+            ["src/lib.rs"]
         );
     }
 }
