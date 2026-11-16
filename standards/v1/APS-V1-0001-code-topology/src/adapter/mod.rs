@@ -261,6 +261,17 @@ impl TreeSitterAdapter {
             .collect())
     }
 
+    /// Extract imports with the inline module scope of each (see
+    /// [`queries::extract_scoped_imports`]); `analyze` resolves on it.
+    pub(crate) fn extract_scoped_imports(
+        &self,
+        source: &str,
+        file_path: &Path,
+    ) -> Result<Vec<(ImportInfo, Vec<String>)>, AdapterError> {
+        let (tree, grammar) = self.parse(source, file_path)?;
+        queries::extract_scoped_imports(&tree, source, file_path, grammar)
+    }
+
     /// Compute metrics for a function using the shared complexity engine.
     pub fn compute_function_metrics(
         &self,

@@ -63,11 +63,14 @@ nested config key under `docs` without changing the parent spec.
 |----------|-------------|------------------|---------------|
 | Architecture Decision Records | [`APS-V1-0003.AD01`](../substandards/AD01-architecture-decision-records/docs/00_overview.md) | `docs/adrs/` | Append-only record of architectural decisions with lifecycle status. |
 | North Star (Mission, Vision, Position) | [`APS-V1-0003.PV01`](../substandards/PV01-purpose-and-vision/docs/01_spec.md) | `docs/north-star.md` | Single document agents read during plan and design to stay aligned with the project's intent. |
+| Requirements (optional) | [`APS-V1-0003.RQ01`](../substandards/RQ01-requirements/docs/01_spec.md) | `docs/requirements.md` (one per system allowed) | What a system must be and do, with measures and check status; agents read it before building and apply the requirements gate. Optional: absent means pass. |
 | Retrospectives | [`APS-V1-0003.RT01`](../substandards/RT01-retrospectives/docs/01_spec.md) | `docs/retrospectives/` | Append-only record of what was learned, by period or by milestone. |
 
 Doc types are activated by their `docs.<slug>` key in `apss.yaml`
 (kebab-case slugs match each substandard's `substandard.toml`). Every
-doc type is default on, switchable off.
+doc type is default on, switchable off. An optional doc type (RQ01) is
+also default on, but its document is not required unless the project
+declares a location (spec Section 8.2.1).
 
 Each substandard MAY ship starter template files (directory READMEs,
 agent-context blocks, document templates). The installer materialises

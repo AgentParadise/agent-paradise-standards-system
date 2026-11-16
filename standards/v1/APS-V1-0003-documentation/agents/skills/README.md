@@ -36,6 +36,16 @@ Every command emits diagnostics in the format defined in [Section 9.2 of the spe
 
 The per-doc-type definition of valid structure is in [Section 9.4 of the spec](../../docs/01_spec.md#94-git-pre-commit-hook-contract). The configurable surface is in [Section 3](../../docs/01_spec.md#3-configuration); a full example is in [`examples/apss.yaml`](../../examples/apss.yaml). Configuration lives in a single root-level `apss.yaml` owned by the meta-standard (CF01 owns the canonical filename via `apss_core::CONFIG_FILENAME`); the docs standard registers the `docs` slug and contributes the `docs:` block.
 
+## Requirements and the requirements gate (RQ01)
+
+If the system you are about to build or change has a requirements document (default `docs/requirements.md`, or a path listed in `docs.requirements.locations`), read it and the North Star it `serves` first. Then:
+
+- Use the requirements you touch as acceptance criteria: their measure and named check.
+- **Requirements gate:** if the feature is not covered by an `accepted` requirement (items under `## Later and Out of Scope` do not count), do not build it. Raise it with the document's `owner`, propose the amendment (id, requirement, measure, check), and build after the owner amends the document.
+- When you land a check for a requirement, update its check status, name the check, and add a PATCH change log entry.
+
+Bug fixes that restore an existing requirement and behaviour-free changes pass the gate. The contract is [Section 9 of the RQ01 spec](../../substandards/RQ01-requirements/docs/01_spec.md#9-agent-obligations-read-first-then-the-requirements-gate).
+
 ## Backlinking
 
 If you add or modify code that implements an ADR (or any other governed doc), add the backlink near the top of the file (`// Implements ADR-001-security-architecture`). This rule applies to every doc type and is not optional. See [Section 7](../../docs/01_spec.md#7-backlinking-always-part-of-the-standard).

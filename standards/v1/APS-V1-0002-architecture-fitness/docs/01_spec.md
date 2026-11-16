@@ -262,6 +262,7 @@ Canonical examples (load-bearing for this standard):
 | `.topology/metrics/modules.json` | `APS-V1-0001-code-topology/schemas/modules.schema.json` | APS-V1-0001 |
 | `.topology/metrics/functions.json` | `APS-V1-0001-code-topology/schemas/functions.schema.json` | APS-V1-0001 |
 | `.topology/metrics/coupling.json` | `APS-V1-0001-code-topology/schemas/coupling.schema.json` | APS-V1-0001 |
+| `.topology/graphs/dependency-graph.json` | `APS-V1-0001-code-topology/schemas/dependency-graph.schema.json` | APS-V1-0001 |
 | `fitness.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-config.schema.json` | APS-V1-0002 |
 | `fitness-exceptions.toml` | `APS-V1-0002-architecture-fitness/schemas/fitness-exceptions.schema.json` | APS-V1-0002 |
 | `fitness-report.json` | `APS-V1-0002-architecture-fitness/schemas/fitness-report.schema.json` | APS-V1-0002 |
@@ -481,7 +482,7 @@ issue = "#185"
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `value` | float | MAY | Current metric value at time of exception (ratchet budget) |
-| `targets` | array | MAY | For dependency rules: specific import targets excepted |
+| `targets` | array | MAY | For dependency rules: excuses only edges whose target (node path) is listed; `[]` excuses nothing; never excuses a cycle or a missing required edge, which have no single target |
 | `issue` | string | MUST | GitHub issue reference (e.g., `"#138"`, `"org/repo#42"`) |
 
 The `issue` field is **REQUIRED**. Exceptions without issue references MUST cause a validation error (`MISSING_ISSUE_REF`).
@@ -766,7 +767,7 @@ Each entry in `results` follows the same structure as EXP-V1-0003:
 | `pass` | All entities within threshold (with or without exceptions) |
 | `fail` | At least one unexcepted violation, severity = `error` |
 | `warn` | At least one unexcepted violation, severity = `warning` |
-| `skip` | Rule could not be evaluated (missing artifact) |
+| `skip` | Rule could not be evaluated (missing artifact on an `incubating` dimension; on an `active` dimension a missing artifact is a `fail`, §12 `PROMOTION_REQUIREMENT_UNMET`) |
 
 ---
 
@@ -777,7 +778,7 @@ Each entry in `results` follows the same structure as EXP-V1-0003:
 For each `[[rules.threshold]]`:
 
 1. Resolve the topology artifact: `{config.topology_dir}/{rule.source}`
-2. If the artifact does not exist, report status `skip` with diagnostic
+2. If the artifact does not exist: on an `active` dimension report `fail` with a `PROMOTION_REQUIREMENT_UNMET` violation; on an `incubating` dimension report `skip` with diagnostic
 3. Parse the JSON artifact and extract metric entries per entity
 4. For each entity at the specified `scope`:
    a. If entity matches any `exclude` pattern, skip
@@ -797,10 +798,10 @@ For each `[[rules.threshold]]`:
 
 For each `[[rules.dependency]]`:
 
-1. Load the coupling/dependency graph from topology artifacts
-2. Resolve `from` and `to` path matchers against the graph
+1. Load `{config.topology_dir}/graphs/dependency-graph.json` (APS-V1-0001 §3.4.2, schema 2.x). If it does not exist, report `fail` with a `PROMOTION_REQUIREMENT_UNMET` violation (a rule with no `dimension` is held to ST01, `active`); `skip` only on an `incubating` dimension. A graph that cannot be read or parsed (unsupported `schema_version`, a node without `id` or `path`, an edge naming an unknown node id) is an error, never a silent drop of the entry.
+2. Resolve `from` and `to` path matchers (globs, validated at config load) against each node's `path`, the source file relative to the analysis root; edges are mapped from node ids to those paths. If `from` matches no node (or, for a non-circular `forbidden` rule, `to` matches none; for `circular = true`, both), the rule tested nothing: report `fail` with a `RULE_MATCHED_NO_NODE` violation, unless the rule declares `allow_empty_reason`, in which case the empty match is an excepted violation carrying that reason and the rule passes.
 3. Based on `type`:
-   - **`forbidden`**: If any edge exists from `from` to `to`, record a violation. If `circular = true`, detect cycles using Tarjan's SCC algorithm.
+   - **`forbidden`**: If any edge exists from `from` to `to`, record a violation. If `circular = true`, detect cycles among the selected nodes using Tarjan's SCC algorithm on node ids; a node's edge to itself is a cycle. `circular = true` is valid only with `type = "forbidden"` (config error otherwise).
    - **`required`**: If no edge exists from `from` to `to`, record a violation.
    - **`allowed`**: If any edge exists from `from` to `to` that is NOT in the allowed set, record a violation.
 4. Apply exception and severity logic as in threshold evaluation
@@ -820,7 +821,7 @@ Stale exceptions are reported in `stale_exceptions` but do not affect the overal
 
 ### 8.5 Dimension Scoring
 
-After all rules are evaluated, compute per-dimension scores as defined in section 6.2.
+After all rules are evaluated, compute per-dimension scores as defined in section 6.2. A dimension whose evaluated rules measured no entity scores 1.0 only when it has no unexcepted violation; otherwise 0.0 (a missing artifact or an empty matcher measures nothing and never scores as a pass).
 
 ### 8.6 System-Level Scoring
 
@@ -1023,8 +1024,10 @@ apss run architecture-fitness report <path> --format human|json
 | `INVALID_STRUCTURAL_PATTERN` | Structural rule references unknown pattern |
 | `INVALID_WEIGHTS` | System fitness weights do not sum to 1.0 |
 | `DEPENDENCY_CYCLE_DETECTED` | Circular dependency found (forbidden) |
+| `RULE_MATCHED_NO_NODE` | A dependency or structural rule's matcher selected no node of the dependency graph (§8.2 step 2), so the rule tested nothing. Excepted only by the rule's `allow_empty_reason`. |
+| `DEPENDENCY_GRAPH_INVALID` | `graphs/dependency-graph.json` exists but could not be read or parsed; the structural rule that read it fails with the parse error as its message. |
 | `INCUBATING_DIMENSION_ERROR_DOWNGRADED` | A rule on an `incubating` dimension declared `severity = "error"`; it was downgraded to `warning` per §3.4. Diagnostic includes the dimension code and rule ID so users can locate what is and is not being enforced. |
-| `PROMOTION_REQUIREMENT_UNMET` | A dimension is declared `active` in its substandard manifest but does not satisfy one or more of the R1-R5 promotion requirements (§3.3). Reported at config validation time. |
+| `PROMOTION_REQUIREMENT_UNMET` | A dimension is declared `active` in its substandard manifest but does not satisfy one or more of the R1-R5 promotion requirements (§3.3). Reported at config validation time, and at evaluation time when an `active` dimension's required artifact (a threshold rule's `source`, or the dependency graph) is missing. |
 
 ---
 

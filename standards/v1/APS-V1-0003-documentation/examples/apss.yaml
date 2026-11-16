@@ -20,3 +20,8 @@ schema: "apss.project/v1"
 docs:
   adr:
     required_adr_keywords: ["security", "testing"]
+  # RQ01 is optional: omit this block and docs/requirements.md is checked
+  # only if it exists. Listing locations opts in: each one MUST exist.
+  requirements:
+    locations:
+      - requirements.md

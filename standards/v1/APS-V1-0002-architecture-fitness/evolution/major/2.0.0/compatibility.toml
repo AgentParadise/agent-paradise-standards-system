@@ -1,0 +1,82 @@
+schema = "aps.evolution.compatibility/v1"
+
+[compatibility]
+standard_id = "APS-V1-0002"
+from_version = "1.1.0"
+to_version = "2.0.0"
+backwards_compatible = false
+
+[[breaks]]
+area = "input-artifact"
+what = "graphs/dependency-graph.json"
+was = "Read as string nodes and [from, to] edges; object entries silently dropped; APS-V1-0001 never wrote this file."
+now = "Read as schema 2.x (APS-V1-0001 0.4.0, schemas/dependency-graph.schema.json): object nodes with id and path, object edges naming node ids. A malformed entry, a dangling edge endpoint or an unsupported schema_version is an error."
+impact = "Regenerate the graph with code-topology 0.4.0 or later. A hand-written graph without schema_version is still read (legacy WORKAROUND) but its edges must name declared nodes."
+
+[[breaks]]
+area = "matching"
+what = "from/to/path_not globs and composition_roots of every dependency-graph rule"
+was = "Matched against the node string."
+now = "Matched against the node's path (schema 2.x), the source file relative to the analysis root. Graph algorithms still run on node ids."
+impact = "Rules written against module ids (e.g. `domain::*`) now select nothing and fail with RULE_MATCHED_NO_NODE; rewrite them as path globs."
+
+[[breaks]]
+area = "rule-status"
+what = "Missing graph"
+was = "skip, exit 0."
+now = "fail with a PROMOTION_REQUIREMENT_UNMET violation on an active dimension (a rule with no dimension is held to ST01); skip only on an incubating dimension. Graph-shape rules too."
+impact = "A pipeline that ran fitness without code-topology now fails."
+
+[[breaks]]
+area = "rule-status"
+what = "Unreadable graph on a structural rule"
+was = "skip."
+now = "fail with a DEPENDENCY_GRAPH_INVALID violation carrying the parse error."
+impact = "A corrupt graph now fails the build."
+
+[[breaks]]
+area = "rule-status"
+what = "Empty matcher"
+was = "A rule whose from (or to) selected no node passed."
+now = "fail with RULE_MATCHED_NO_NODE (from; to for non-circular forbidden and for an explicit graph-shape to; both for circular), unless the rule sets allow_empty_reason, which reports an excepted violation and passes."
+impact = "Rules written ahead of their code need allow_empty_reason."
+
+[[breaks]]
+area = "config"
+what = "fitness.toml validation"
+was = "Invalid globs accepted (matched nothing); circular = true accepted on required and allowed."
+now = "An invalid glob, a blank allow_empty_reason, or circular = true on a type other than forbidden is a config error."
+impact = "Such configs no longer load."
+
+[[breaks]]
+area = "exceptions"
+what = "targets on a dependency exception"
+was = "Any entry with a targets field (even []) excused every violation of the entity."
+now = "targets excuses only edges to a listed target (matched by node path); [] excuses nothing; a cycle or a missing required edge has no single target, so targets never excuses those."
+impact = "Exceptions that relied on the old over-broad excuse now report unexcepted violations."
+
+[[breaks]]
+area = "cycles"
+what = "circular = true"
+was = "A self-edge was not reported."
+now = "A self-edge is a cycle, as the ST01 spec states."
+impact = "A module importing itself now fails a circular rule."
+
+[[breaks]]
+area = "scoring"
+what = "Dimension score with zero measured entities"
+was = "1.0 whatever the rule results."
+now = "1.0 only when there is no unexcepted violation; otherwise 0.0."
+impact = "A dimension whose only result is a missing artifact or an empty match no longer scores perfect."
+
+[[preserved]]
+area = "config-schema"
+what = "Every 1.1.0 fitness.toml key keeps its meaning; allow_empty_reason is the only new key."
+
+[[preserved]]
+area = "threshold-rules"
+what = "Threshold rule evaluation, including strict-artifact enforcement, is unchanged."
+
+[[preserved]]
+area = "report"
+what = "fitness-report.json shape is unchanged; new error codes appear as violation entities."

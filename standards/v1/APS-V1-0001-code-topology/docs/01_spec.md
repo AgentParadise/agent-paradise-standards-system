@@ -292,20 +292,54 @@ Includes Martin's coupling metrics:
 
 #### 3.4.2 Dependency Graph (`graphs/dependency-graph.json`)
 
+JSON Schema: [`schemas/dependency-graph.schema.json`](../schemas/dependency-graph.schema.json).
+
+The input of APS-V1-0002 ST01 dependency rules. Schema 2.0.0: every node
+carries `path`, its source file relative to the analysis root with `/`
+separators, because ST01 rules match path globs (`**/domain/**`) and a module
+id (`domain::model`) never matches one. Nodes are sorted by `id` and edges by
+(`from`, `to`). Before 2.0.0 the writer emitted `graphs/dependencies.json`
+without `path`, which no consumer read.
+
+An edge exists for a resolved import path (`use crate::infra::db::Db;`). A
+bare type use with no import line makes no edge (scanner limitation, issue
+#148).
+
+An import resolves by path to exactly the modules it names, never by a shared
+substring (issue #148):
+
+- Only to a module of the importing file's language (TypeScript and TSX are
+  one language). A Rust import never lands on a TypeScript module.
+- Rust `crate::`, `self::` and `super::` resolve inside the importing crate,
+  `self`/`super` from the inline `mod` the `use` sits in. A path that starts
+  with a workspace crate's library name (`-` as `_`) resolves inside that
+  crate. Inside the crate the longest `::` prefix of the path that names a
+  source file wins: `crate::a::b::C` is `a/b.rs`, or `a.rs` when there is no
+  `a/b.rs`. When the longest such prefix names a file that is on disk but not
+  analyzed (the walk skips `test_*.rs`), the import makes no edge rather than
+  one to the parent. A use list resolves per entry. A file mounted with
+  `#[path = "foo_tests.rs"] mod tests;` sits at the declaring module's path
+  plus `tests`, so its `super::` is the declaring module.
+- TypeScript relative specifiers (`./x`, `../y.js`) resolve against the
+  importing file's directory, trying the TypeScript extensions and an `index`
+  file. Bare and aliased specifiers name packages and make no edge.
+- An import that names no analyzed file makes no edge and counts in
+  `metadata.external_imports`.
+
 ```json
 {
-  "schema_version": "0.1.0",
+  "schema_version": "2.0.0",
   "level": "module",
   "nodes": [
     {
       "id": "auth",
       "type": "module",
-      "languages": ["rust"]
+      "path": "src/auth.rs"
     },
     {
       "id": "crypto",
       "type": "module",
-      "languages": ["rust"]
+      "path": "src/crypto.rs"
     }
   ],
   "edges": [

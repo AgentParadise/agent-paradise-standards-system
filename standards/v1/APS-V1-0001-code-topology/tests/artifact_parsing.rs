@@ -74,9 +74,9 @@ fn test_parse_coupling_matrix_json() {
     }
 
     // Check diagonal is 1.0
-    for i in 0..5 {
+    for (i, row) in matrix_file.matrix.iter().enumerate() {
         assert!(
-            (matrix_file.matrix[i][i] - 1.0).abs() < f64::EPSILON,
+            (row[i] - 1.0).abs() < f64::EPSILON,
             "Diagonal [{i}][{i}] should be 1.0"
         );
     }

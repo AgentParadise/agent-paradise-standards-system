@@ -172,6 +172,24 @@ pub fn extract_imports(
     file_path: &Path,
     grammar: &dyn Grammar,
 ) -> Result<Vec<ImportInfo>, AdapterError> {
+    Ok(extract_scoped_imports(tree, source, file_path, grammar)?
+        .into_iter()
+        .map(|(import, _)| import)
+        .collect())
+}
+
+/// Extract imports, each with the inline module scope it sits in.
+///
+/// The scope is the names of the inline `mod name { ... }` blocks around the
+/// import, outermost first: `use super::X` inside `mod tests` in `a/b.rs`
+/// names `a::b::X`, not `a::X`, and the resolver needs that to stay exact
+/// (issue #148). It is empty for languages without inline modules.
+pub(crate) fn extract_scoped_imports(
+    tree: &Tree,
+    source: &str,
+    file_path: &Path,
+    grammar: &dyn Grammar,
+) -> Result<Vec<(ImportInfo, Vec<String>)>, AdapterError> {
     let query_str = grammar.import_query();
     if query_str.is_empty() {
         return Ok(vec![]);
@@ -197,6 +215,11 @@ pub fn extract_imports(
         let mut symbols: Vec<String> = Vec::new();
         let mut is_wildcard = false;
         let mut has_list = false;
+        let inline_scope = m
+            .captures
+            .first()
+            .map(|c| inline_module_scope(c.node, source))
+            .unwrap_or_default();
 
         for capture in m.captures {
             let capture_name: &str = capture_names[capture.index as usize];
@@ -242,10 +265,11 @@ pub fn extract_imports(
         }
 
         if !import_path.is_empty() || is_wildcard {
+            // Compare the first path segment whole: `crates_io::x` and a
+            // Python `import superlib` are external, not `crate`/`super`.
+            let first_segment = import_path.split("::").next().unwrap_or("");
             let is_external = !import_path.starts_with('.')
-                && !import_path.starts_with("crate")
-                && !import_path.starts_with("self")
-                && !import_path.starts_with("super");
+                && !matches!(first_segment.trim(), "crate" | "self" | "super");
 
             // Determine import kind
             let kind = if is_wildcard {
@@ -258,19 +282,39 @@ pub fn extract_imports(
                 ImportKind::Module
             };
 
-            imports.push(ImportInfo {
-                from_module: module.clone(),
-                to_module,
-                import_path,
-                is_external,
-                symbols,
-                is_wildcard,
-                kind,
-            });
+            imports.push((
+                ImportInfo {
+                    from_module: module.clone(),
+                    to_module,
+                    import_path,
+                    is_external,
+                    symbols,
+                    is_wildcard,
+                    kind,
+                },
+                inline_scope,
+            ));
         }
     }
 
     Ok(imports)
+}
+
+/// Names of the inline `mod name { ... }` items enclosing `node`, outermost
+/// first. A `mod name;` declaration has no body, so it never encloses a node.
+fn inline_module_scope(node: tree_sitter::Node<'_>, source: &str) -> Vec<String> {
+    let mut scope = Vec::new();
+    let mut current = node.parent();
+    while let Some(parent) = current {
+        if parent.kind() == "mod_item" {
+            if let Some(name) = parent.child_by_field_name("name") {
+                scope.push(name.utf8_text(source.as_bytes()).unwrap_or("").to_string());
+            }
+        }
+        current = parent.parent();
+    }
+    scope.reverse();
+    scope
 }
 
 // ============================================================================

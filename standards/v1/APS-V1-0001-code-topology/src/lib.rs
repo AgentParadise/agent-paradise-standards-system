@@ -41,6 +41,7 @@ use std::path::PathBuf;
 pub mod adapter;
 pub mod cli;
 pub mod config;
+pub(crate) mod import_resolution;
 pub mod substandards;
 
 // ============================================================================
@@ -509,8 +510,8 @@ impl CouplingMatrix {
             directional,
         };
 
-        for i in 0..n {
-            result.matrix[i][i] = 1.0;
+        for (i, row) in result.matrix.iter_mut().enumerate().take(n) {
+            row[i] = 1.0;
         }
 
         result

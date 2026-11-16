@@ -18,11 +18,7 @@ pub fn repo_root() -> PathBuf {
 
 /// Get the path to the apss-dev binary.
 pub fn aps_binary() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap();
-    path.pop(); // Remove test binary name
-    path.pop(); // Remove deps
-    path.push("apss-dev");
-    path
+    PathBuf::from(env!("CARGO_BIN_EXE_apss-dev"))
 }
 
 /// Create a minimal valid workspace in a temp directory.

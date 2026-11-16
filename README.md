@@ -98,7 +98,7 @@ agent-paradise-standards-system/
 │   ├── APS-V1-0000-meta/             # Meta-standard (v1.5.0): defines all V1 rules; not published
 │   ├── APS-V1-0001-code-topology/    # Code topology + substandards (RS01, VZ01, MM01, FD01, CI01)
 │   ├── APS-V1-0002-architecture-fitness/  # Architecture fitness + dimension substandards
-│   └── APS-V1-0003-documentation/    # Documentation + substandards (AD01, PV01, RT01)
+│   └── APS-V1-0003-documentation/    # Documentation + substandards (AD01, PV01, RQ01, RT01)
 └── standards-experimental/v1/
     ├── EXP-V1-0001-code-topology/    # Promoted to APS-V1-0001 (historical, slated for removal)
     └── EXP-V1-0002-todo-tracker/     # TODO/FIXME tracking (incubating)

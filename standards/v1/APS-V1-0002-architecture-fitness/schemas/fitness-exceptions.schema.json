@@ -21,7 +21,7 @@
         },
         "targets": {
           "type": "array",
-          "description": "For dependency rules: specific import targets excepted.",
+          "description": "For dependency rules: excuses only edges whose target (node path) is listed. An empty list excuses nothing; a cycle or a missing required edge has no single target, so targets never excuses those.",
           "items": { "type": "string" }
         },
         "issue": {

@@ -1,0 +1,51 @@
+schema = "aps.evolution.rationale/v1"
+
+[evolution]
+standard_id = "APS-V1-0002"
+from_version = "1.1.0"
+to_version = "2.0.0"
+kind = "major"
+date = "2026-11-13"
+
+[rationale]
+summary = """
+ST01 dependency rules (forbidden_import, required_import,
+layer_enforcement, [[rules.dependency]], max_dependency_depth,
+max_fan_out) never evaluated a real edge. 2.0.0 makes them read the graph
+APS-V1-0001 writes and fail closed on every input that tests nothing.
+"""
+
+detail = """
+Five independent faults each made the rules vacuous:
+
+1. APS-V1-0001 wrote `graphs/dependencies.json`; this engine read
+   `graphs/dependency-graph.json` (the spec name). A real pipeline never
+   produced the file the engine read.
+2. The engine parsed only string nodes and `[from, to]` edges and silently
+   dropped any other entry; APS-V1-0001 wrote object nodes and edges.
+3. A missing graph was a `skip` with exit 0, although §3.3 R3 and §12
+   require an `active` dimension's missing artifact to fail with
+   PROMOTION_REQUIREMENT_UNMET (threshold rules already did).
+4. Rules match path globs (`**/domain/**`); graph nodes were module ids
+   (`domain::model`), which no path glob matches, so from/to selected
+   nothing and every rule passed.
+5. A structural rule turned any graph read or parse error into `skip`, and
+   an invalid glob silently matched nothing.
+
+Each failure mode reported pass or skip, so a project could believe its
+layering was enforced while nothing was checked. Closing them changes
+results that consumers see (a build that passed can now fail), which is a
+breaking change.
+"""
+
+alternatives_rejected = [
+  "Keep missing-graph as skip and document it - contradicts §3.3 R3 strict-artifact enforcement for active dimensions and keeps the silent pass.",
+  "Match globs against module ids - the spec's own rule examples are path globs; ids would make every published example vacuous.",
+  "Key graph algorithms by path - two modules in one file would merge and a cycle between them would vanish; ids stay the identity, paths are the match and report name.",
+  "Skip a rule whose matcher selects no node - an empty match is the vacuous pass this release removes; allow_empty_reason makes an intended empty match explicit and visible.",
+]
+
+follow_up = [
+  "Remove the pre-2.0.0 legacy graph reader (WORKAROUND) once no consumer writes graphs without schema_version.",
+  "APS-V1-0001 scanner: a bare type use with no import line makes no edge, and imports resolve by substring (issue #148).",
+]

@@ -17,7 +17,7 @@
 //!   do not currently branch on verbose, but the transport is preserved for
 //!   parity with the topology handler.
 //! - command functions return `i32` (0 success, 1 error, 3 usage).
-//! - substandard validators (AD01/PV01/RT01) are crate-internal modules gated
+//! - substandard validators (AD01/PV01/RQ01/RT01) are crate-internal modules gated
 //!   behind their cargo features; when a feature is off, that substandard's
 //!   validation is skipped rather than failing, mirroring how code-topology
 //!   gates its optional viz backends.
@@ -170,7 +170,7 @@ fn validate(args: &[String], repo_root: &std::path::Path, _verbose: bool) -> i32
     // mutated: allow that case rather than failing the no-default-features
     // build under `-D warnings`.
     #[cfg_attr(
-        not(any(feature = "AD01", feature = "PV01", feature = "RT01")),
+        not(any(feature = "AD01", feature = "PV01", feature = "RQ01", feature = "RT01")),
         allow(unused_mut)
     )]
     let mut diagnostics = validator.validate();
@@ -193,8 +193,8 @@ fn validate(args: &[String], repo_root: &std::path::Path, _verbose: bool) -> i32
         };
         diagnostics.merge(adr_validator.validate());
     }
-    // Silence the unused-variable warning when AD01 is disabled; the config is
-    // only consumed by the ADR validator.
+    // Silence the unused-variable warning when AD01 and RQ01 are disabled; the
+    // config is only consumed by the ADR and requirements validators.
     let _ = &docs_config;
 
     // PV01: Purpose and Vision (North Star) substandard. Scaffold returns an
@@ -203,6 +203,17 @@ fn validate(args: &[String], repo_root: &std::path::Path, _verbose: bool) -> i32
     #[cfg(feature = "PV01")]
     {
         diagnostics.merge(crate::substandards::purpose_and_vision::validate(&target));
+    }
+
+    // RQ01: Requirements substandard (optional doc type). Validates the
+    // requirements documents that exist; presence is enforced only for
+    // locations declared in docs.requirements.locations.
+    #[cfg(feature = "RQ01")]
+    {
+        diagnostics.merge(crate::substandards::requirements::validate(
+            &target,
+            &docs_config,
+        ));
     }
 
     // RT01: Retrospectives substandard. Same scaffold pattern as PV01.

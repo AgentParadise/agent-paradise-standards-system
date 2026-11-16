@@ -398,7 +398,7 @@ fn dimension_code_properties() {
 // ─── Wave 6: Structural Tests ──────────────────────────────────────────────
 
 #[test]
-fn structural_rules_skip_gracefully() {
+fn structural_rule_fails_when_graph_missing() {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
 
@@ -426,9 +426,14 @@ to = { path = "**/repositories/**" }
     assert_eq!(report.results.len(), 1);
     assert_eq!(
         report.results[0].status,
-        architecture_fitness::RuleStatus::Skip
+        architecture_fitness::RuleStatus::Fail
     );
     assert_eq!(report.results[0].dimension.as_deref(), Some("ST01"));
+    assert_eq!(
+        report.dimensions["ST01"].score,
+        Some(0.0),
+        "a missing graph measures nothing and must not score 1.0"
+    );
 }
 
 #[test]
