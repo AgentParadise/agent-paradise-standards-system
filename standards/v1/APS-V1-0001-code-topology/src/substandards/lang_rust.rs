@@ -1046,9 +1046,17 @@ exclude_paths = ["target", ".git"]
         for (i, module_a) in module_ids.iter().enumerate() {
             if let Some(imports) = self.imports.get(module_a) {
                 for import in imports {
-                    // Find which module this import refers to
-                    for (j, module_b) in module_ids.iter().enumerate() {
-                        if i != j && import.starts_with(module_b) {
+                    // The one module this import names: the longest module id
+                    // it is under on `::` boundaries, so `a::b_c::X` is not in
+                    // `a::b` and `a::b::C` lands on `a::b`, not also on `a`
+                    // (issue #148).
+                    let target = crate::import_resolution::longest_module_prefix(
+                        import,
+                        module_ids.iter().map(String::as_str),
+                        "::",
+                    );
+                    if let Some(j) = target.and_then(|t| module_ids.iter().position(|m| m == t)) {
+                        if i != j {
                             // Coupling strength based on number of imports
                             matrix[i][j] += 0.1_f64;
                             matrix[i][j] = matrix[i][j].min(1.0_f64);

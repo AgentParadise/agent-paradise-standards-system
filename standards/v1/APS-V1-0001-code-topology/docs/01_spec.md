@@ -305,6 +305,27 @@ An edge exists for a resolved import path (`use crate::infra::db::Db;`). A
 bare type use with no import line makes no edge (scanner limitation, issue
 #148).
 
+An import resolves by path to exactly the modules it names, never by a shared
+substring (issue #148):
+
+- Only to a module of the importing file's language (TypeScript and TSX are
+  one language). A Rust import never lands on a TypeScript module.
+- Rust `crate::`, `self::` and `super::` resolve inside the importing crate,
+  `self`/`super` from the inline `mod` the `use` sits in. A path that starts
+  with a workspace crate's library name (`-` as `_`) resolves inside that
+  crate. Inside the crate the longest `::` prefix of the path that names a
+  source file wins: `crate::a::b::C` is `a/b.rs`, or `a.rs` when there is no
+  `a/b.rs`. When the longest such prefix names a file that is on disk but not
+  analyzed (the walk skips `test_*.rs`), the import makes no edge rather than
+  one to the parent. A use list resolves per entry. A file mounted with
+  `#[path = "foo_tests.rs"] mod tests;` sits at the declaring module's path
+  plus `tests`, so its `super::` is the declaring module.
+- TypeScript relative specifiers (`./x`, `../y.js`) resolve against the
+  importing file's directory, trying the TypeScript extensions and an `index`
+  file. Bare and aliased specifiers name packages and make no edge.
+- An import that names no analyzed file makes no edge and counts in
+  `metadata.external_imports`.
+
 ```json
 {
   "schema_version": "2.0.0",
