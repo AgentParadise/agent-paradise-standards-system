@@ -41,6 +41,7 @@ use std::path::PathBuf;
 pub mod adapter;
 pub mod cli;
 pub mod config;
+pub(crate) mod import_resolution;
 pub mod substandards;
 
 // ============================================================================

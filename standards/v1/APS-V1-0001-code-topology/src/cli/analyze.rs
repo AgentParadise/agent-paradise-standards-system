@@ -1,5 +1,7 @@
 //! `analyze` command: walk a codebase and produce `.topology/` artifacts.
 
+use crate::import_resolution::SourceFile;
+
 /// Analyze a codebase and generate .topology/ artifacts.
 pub(super) fn topology_analyze(
     path: &str,
@@ -104,7 +106,12 @@ pub(super) fn topology_analyze(
 
     // Analyze all files - extract functions, imports, types, AND calls
     let mut all_functions = Vec::new();
-    let mut all_imports: Vec<crate::ImportInfo> = Vec::new();
+    // Each import with the file it is written in and its inline module scope:
+    // resolution is by path from that file (issue #148).
+    let mut all_imports: Vec<ScopedImport> = Vec::new();
+    // Every analyzed file with its language and module id, the targets an
+    // import may resolve to.
+    let mut source_files: Vec<(std::path::PathBuf, SourceFile)> = Vec::new();
     let mut all_types: Vec<crate::TypeInfo> = Vec::new();
     let mut all_calls: Vec<crate::CallInfo> = Vec::new();
     let mut errors = 0;
@@ -115,6 +122,16 @@ pub(super) fn topology_analyze(
         }
 
         for file_path in files {
+            if let Some(grammar) = adapter.registry().get_for_path(file_path) {
+                source_files.push((
+                    file_path.clone(),
+                    SourceFile {
+                        language: lang.clone(),
+                        module: grammar.compute_module_path(file_path, Path::new(".")),
+                    },
+                ));
+            }
+
             let source = match fs::read_to_string(file_path) {
                 Ok(s) => s,
                 Err(e) => {
@@ -127,8 +144,12 @@ pub(super) fn topology_analyze(
             };
 
             // Extract imports for coupling analysis
-            if let Ok(imports) = adapter.extract_imports(&source, file_path) {
-                all_imports.extend(imports);
+            if let Ok(imports) = adapter.extract_scoped_imports(&source, file_path) {
+                all_imports.extend(
+                    imports
+                        .into_iter()
+                        .map(|(import, scope)| (file_path.clone(), import, scope)),
+                );
             }
 
             // Extract types for abstractness calculation
@@ -167,7 +188,7 @@ pub(super) fn topology_analyze(
         &all_imports,
         &all_types,
         &all_calls,
-        &files_by_lang,
+        &source_files,
     ) {
         eprintln!("Error writing artifacts: {e}");
         return 1;
@@ -182,11 +203,14 @@ fn write_topology_artifacts(
     project_path: &std::path::Path,
     output_path: &std::path::Path,
     functions: &[(crate::FunctionInfo, crate::FunctionMetrics)],
-    imports: &[crate::ImportInfo],
+    imports: &[ScopedImport],
     types: &[crate::TypeInfo],
     calls: &[crate::CallInfo],
-    files_by_lang: &std::collections::HashMap<String, Vec<std::path::PathBuf>>,
+    source_files: &[(std::path::PathBuf, SourceFile)],
 ) -> std::io::Result<()> {
+    use crate::import_resolution::{
+        ImportResolver, has_module_prefix, language_family, normalize_path,
+    };
     use std::collections::{HashMap, HashSet};
     use std::fs;
 
@@ -242,26 +266,48 @@ fn write_topology_artifacts(
         afferent.entry(module.clone()).or_default();
     }
 
-    // Process imports to build coupling with weighted scoring
-    for import in imports {
-        let from_module = &import.from_module;
+    // Language family of each module, from its functions' qualified names
+    // (`rust:a::b::f`). Call and type coupling only link the same family.
+    let mut module_families: HashMap<&str, HashSet<&str>> = HashMap::new();
+    for func in &functions {
+        if let Some((lang, _)) = func.0.qualified_name.split_once(':') {
+            module_families
+                .entry(func.0.module.as_str())
+                .or_default()
+                .insert(language_family(lang));
+        }
+    }
+    let file_family: HashMap<std::path::PathBuf, &str> = source_files
+        .iter()
+        .map(|(path, file)| (normalize_path(path), language_family(&file.language)))
+        .collect();
+    let same_family = |family: Option<&str>, module: &str| {
+        family.is_some_and(|f| module_families.get(module).is_some_and(|fs| fs.contains(f)))
+    };
 
-        // Skip external imports
-        if import.is_external {
+    // Process imports to build coupling with weighted scoring. Each import
+    // resolves by path to exactly the modules it names (issue #148): no
+    // substring match, no edge across languages, `crate::` inside its crate.
+    let resolver = ImportResolver::new(project_path, source_files.iter().cloned());
+    let mut total_external_imports = 0usize;
+    for (file, import, scope) in imports {
+        let from_module = &import.from_module;
+        let targets = resolver.resolve(file, import, scope);
+
+        // External: names nothing analyzed (std, a package). A path that
+        // starts with a workspace crate's name is flagged external when
+        // extracted and resolves here into that crate.
+        if targets.is_empty() {
+            if import.is_external {
+                total_external_imports += 1;
+            }
             continue;
         }
+        let mut import = import.clone();
+        import.is_external = false;
 
-        // Try to resolve the import path to a known module
-        let import_path = &import.import_path;
-
-        // Find which module this import refers to
-        for to_module in modules.keys() {
-            // Check if the import path matches or is contained in the module
-            let matches = import_path.contains(to_module.split("::").last().unwrap_or(to_module))
-                || to_module.contains(import_path)
-                || import_path.split("::").any(|part| to_module.contains(part));
-
-            if matches && from_module != to_module {
+        for to_module in &targets {
+            if modules.contains_key(to_module) && from_module != to_module {
                 // from_module depends on to_module
                 efferent
                     .entry(from_module.clone())
@@ -282,9 +328,13 @@ fn write_topology_artifacts(
     }
 
     // Write manifest.toml
-    let mut languages: Vec<&str> = files_by_lang.keys().map(|s| s.as_str()).collect();
+    let mut languages: Vec<&str> = source_files
+        .iter()
+        .map(|(_, file)| file.language.as_str())
+        .collect();
     languages.sort();
-    let total_files: usize = files_by_lang.values().map(|v| v.len()).sum();
+    languages.dedup();
+    let total_files: usize = source_files.len();
     let total_deps: usize = efferent.values().map(|s| s.len()).sum();
     let manifest = format!(
         r#"[topology]
@@ -459,7 +509,6 @@ total_dependencies = {}
     });
 
     let total_internal_edges = dependency_edges.len();
-    let total_external_imports = imports.iter().filter(|i| i.is_external).count();
 
     let dependencies_json = serde_json::json!({
         "schema_version": DEPENDENCY_GRAPH_SCHEMA_VERSION,
@@ -578,11 +627,16 @@ total_dependencies = {}
     for call in calls {
         let caller_module = &call.caller;
         let callee = &call.callee;
+        let caller_family = file_family.get(&normalize_path(&call.file_path)).copied();
 
         // Try to resolve callee to a module with stricter matching
         for to_module in modules.keys() {
             if caller_module == to_module {
                 continue; // Skip self-references
+            }
+            // A call never crosses languages.
+            if !same_family(caller_family, to_module) {
+                continue;
             }
 
             let to_name = to_module.split("::").last().unwrap_or(to_module);
@@ -591,8 +645,9 @@ total_dependencies = {}
             // 1. Qualified call: callee starts with module path (e.g., "discovery::find_packages")
             // 2. Direct module call: callee equals module name (e.g., "discovery")
             // 3. Function in module: callee contains "::" and first part matches module
-            let is_qualified_call =
-                callee.starts_with(to_module) || callee.starts_with(&format!("{to_name}::"));
+            // On `::` boundaries: `store_item` is not a call into `store`.
+            let is_qualified_call = has_module_prefix(callee, to_module, "::")
+                || callee.starts_with(&format!("{to_name}::"));
             let is_module_reference = callee == to_name || callee == to_module;
             let is_namespaced_call = callee.contains("::") && {
                 let parts: Vec<&str> = callee.split("::").collect();
@@ -641,9 +696,17 @@ total_dependencies = {}
     // This is a simplified approach - we look for type names in the same module's functions
     for &(func, _) in &functions {
         let func_module = &func.module;
+        let func_family = func
+            .qualified_name
+            .split_once(':')
+            .map(|(lang, _)| language_family(lang));
         // Check for type usages - simplified: count types defined in other modules
+        // of the same language (a Rust function never uses a TypeScript type).
         for (type_name, defining_module) in &type_to_module {
-            if func_module != defining_module && func.qualified_name.contains(type_name) {
+            if func_module != defining_module
+                && same_family(func_family, defining_module)
+                && func.qualified_name.contains(type_name)
+            {
                 *type_edges
                     .entry((func_module.clone(), defining_module.clone()))
                     .or_insert(0) += 1;
@@ -864,6 +927,10 @@ total_dependencies = {}
     Ok(())
 }
 
+/// An import with the file it is written in and the inline module scope
+/// around it (see [`crate::adapter::queries::extract_scoped_imports`]).
+type ScopedImport = (std::path::PathBuf, crate::ImportInfo, Vec<String>);
+
 /// Simple timestamp without chrono dependency.
 pub(super) fn chrono_lite_now() -> String {
     // Use a fixed format - in production would use actual time
@@ -899,4 +966,268 @@ fn relative_slash_path(root: &std::path::Path, file: &std::path::Path) -> String
         })
         .collect::<Vec<_>>()
         .join("/")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeSet, HashMap};
+    use std::fs;
+    use std::path::Path;
+
+    /// A two-crate workspace whose crates share segment names (`domain`,
+    /// `contact`, `ports`), a `*_tests` module, a module whose name contains
+    /// another's (`kit` / `kit_capture`), and TypeScript `config` files beside
+    /// a Rust `config` module: every shape issue #148 saw resolve wrongly.
+    const FIXTURE: &[(&str, &str)] = &[
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"crates/alpha\", \"crates/beta\"]\n",
+        ),
+        (
+            "crates/alpha/Cargo.toml",
+            "[package]\nname = \"alpha\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        ),
+        (
+            "crates/alpha/src/lib.rs",
+            "pub mod app;\npub mod config;\npub mod domain;\npub mod kit;\npub mod ports;\npub fn alpha_root() {}\n",
+        ),
+        (
+            "crates/alpha/src/app.rs",
+            "use crate::domain::contact::store::Store;\n\
+             use crate::ports::x_port::Port;\n\
+             use crate::kit::blueprint;\n\
+             use crate::config::read_secret_file;\n\
+             use beta_core::ports::Remote;\n\
+             use crate::test_support::fixture;\n\
+             use std::fmt::Debug;\n\
+             pub fn run() {}\n",
+        ),
+        // On disk but skipped by the walk (`test_*`): `crate::test_support`
+        // names it, so it is no edge, not one to the crate root.
+        ("crates/alpha/src/test_support.rs", "pub fn fixture() {}\n"),
+        (
+            "crates/alpha/src/config.rs",
+            "pub fn read_secret_file() {}\n",
+        ),
+        (
+            "crates/alpha/src/domain/mod.rs",
+            "pub mod contact;\npub fn alpha_domain() {}\n",
+        ),
+        (
+            "crates/alpha/src/domain/contact/mod.rs",
+            "pub mod store;\npub fn alpha_contact() {}\n",
+        ),
+        (
+            "crates/alpha/src/domain/contact/store.rs",
+            "pub struct Store;\npub fn store() {}\n",
+        ),
+        (
+            "crates/alpha/src/kit/mod.rs",
+            "pub mod blueprint;\npub fn kit() {}\n",
+        ),
+        (
+            "crates/alpha/src/kit/blueprint.rs",
+            "pub fn blueprint() {}\n",
+        ),
+        (
+            "crates/alpha/src/ports/mod.rs",
+            "pub mod x_port;\npub fn alpha_ports() {}\n",
+        ),
+        (
+            "crates/alpha/src/ports/x_port.rs",
+            "pub trait Port {}\npub fn x_port() {}\n",
+        ),
+        (
+            "crates/alpha/src/ports/x_port_tests.rs",
+            "use super::x_port::Port;\npub fn x_port_tests() {}\n",
+        ),
+        (
+            "crates/beta/Cargo.toml",
+            "[package]\nname = \"beta-core\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        ),
+        (
+            "crates/beta/src/lib.rs",
+            "pub mod domain;\npub mod ports;\npub mod render;\npub mod service;\npub fn beta_root() {}\n",
+        ),
+        (
+            "crates/beta/src/domain/mod.rs",
+            "pub mod contact;\npub fn beta_domain() {}\n",
+        ),
+        (
+            "crates/beta/src/domain/contact.rs",
+            "pub struct Contact;\npub fn contact() {}\n",
+        ),
+        (
+            "crates/beta/src/ports/mod.rs",
+            "pub trait Remote {}\npub fn beta_ports() {}\n",
+        ),
+        (
+            "crates/beta/src/ports/event_store_port.rs",
+            "pub trait EventStore {}\npub fn event_store_port() {}\n",
+        ),
+        (
+            "crates/beta/src/render/kit_capture.rs",
+            "pub fn capture() {}\n",
+        ),
+        (
+            "crates/beta/src/service.rs",
+            "use crate::ports::event_store_port::EventStore;\n\
+             use crate::domain::contact::Contact;\n\
+             pub fn helper() {}\n\
+             #[cfg(test)]\n\
+             mod tests {\n    use super::helper;\n    fn t() { helper(); }\n}\n\
+             #[cfg(test)]\n\
+             #[path = \"service_tests.rs\"]\n\
+             mod file_tests;\n",
+        ),
+        // Mounted as `service::file_tests`: its `super` is `service`, not the
+        // crate root its place on disk suggests.
+        (
+            "crates/beta/src/service_tests.rs",
+            "use super::helper;\npub fn service_tests() { helper(); }\n",
+        ),
+        (
+            "vitest.config.ts",
+            "export function vitestConfig() { return 1; }\n",
+        ),
+        (
+            "web/config.ts",
+            "export function readConfig() { return 1; }\n",
+        ),
+        (
+            "web/scope.ts",
+            "import { readConfig } from './config';\nexport function scope() { return readConfig(); }\n",
+        ),
+    ];
+
+    /// Edges of the analyzed fixture as (from file, to file), relative.
+    fn analyzed_edges(root: &Path) -> (BTreeSet<(String, String)>, serde_json::Value) {
+        for (path, body) in FIXTURE {
+            let path = root.join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, body).unwrap();
+        }
+        let out = root.join(".topology");
+        let code = super::topology_analyze(
+            root.to_str().unwrap(),
+            out.to_str().unwrap(),
+            None,
+            root,
+            false,
+        );
+        assert_eq!(code, 0, "analyze failed");
+
+        let graph: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(out.join(super::DEPENDENCY_GRAPH_FILE)).unwrap(),
+        )
+        .unwrap();
+        let path_of: HashMap<&str, &str> = graph["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| (n["id"].as_str().unwrap(), n["path"].as_str().unwrap()))
+            .collect();
+        let edges = graph["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| {
+                let end = |key: &str| {
+                    let id = e[key].as_str().unwrap();
+                    path_of.get(id).copied().unwrap_or(id).to_string()
+                };
+                (end("from"), end("to"))
+            })
+            .collect();
+        let modules: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(out.join("metrics/modules.json")).unwrap())
+                .unwrap();
+        (edges, modules)
+    }
+
+    #[test]
+    fn imports_resolve_to_exactly_the_modules_their_paths_name() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (edges, modules) = analyzed_edges(dir.path());
+
+        let expected: BTreeSet<(String, String)> = [
+            (
+                "crates/alpha/src/app.rs",
+                "crates/alpha/src/domain/contact/store.rs",
+            ),
+            (
+                "crates/alpha/src/app.rs",
+                "crates/alpha/src/ports/x_port.rs",
+            ),
+            (
+                "crates/alpha/src/app.rs",
+                "crates/alpha/src/kit/blueprint.rs",
+            ),
+            ("crates/alpha/src/app.rs", "crates/alpha/src/config.rs"),
+            // A path starting with another crate's name: into that crate only.
+            ("crates/alpha/src/app.rs", "crates/beta/src/ports/mod.rs"),
+            (
+                "crates/alpha/src/ports/x_port_tests.rs",
+                "crates/alpha/src/ports/x_port.rs",
+            ),
+            (
+                "crates/beta/src/service.rs",
+                "crates/beta/src/ports/event_store_port.rs",
+            ),
+            (
+                "crates/beta/src/service.rs",
+                "crates/beta/src/domain/contact.rs",
+            ),
+            (
+                "crates/beta/src/service_tests.rs",
+                "crates/beta/src/service.rs",
+            ),
+            ("web/scope.ts", "web/config.ts"),
+        ]
+        .into_iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect();
+        assert_eq!(edges, expected);
+
+        // Ce follows: `app` depends on exactly its five imports.
+        let app = modules["modules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["id"].as_str().unwrap().ends_with("::alpha::app"))
+            .expect("app module");
+        assert_eq!(app["metrics"]["martin"]["ce"], 5);
+    }
+
+    #[test]
+    fn crate_paths_never_cross_crates_or_languages() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let (edges, _) = analyzed_edges(dir.path());
+        let crate_of = |p: &str| p.split('/').take(2).collect::<Vec<_>>().join("/");
+        for (from, to) in &edges {
+            let cross_crate = from.starts_with("crates/") && crate_of(from) != crate_of(to);
+            // The one cross-crate edge is the import that names `beta_core`.
+            if cross_crate {
+                assert_eq!(
+                    (from.as_str(), to.as_str()),
+                    ("crates/alpha/src/app.rs", "crates/beta/src/ports/mod.rs")
+                );
+            }
+            assert_eq!(
+                from.ends_with(".rs"),
+                to.ends_with(".rs"),
+                "edge across languages: {from} -> {to}"
+            );
+        }
+        // `crate::kit::blueprint` and `crate::ports` stay in alpha.
+        assert!(
+            !edges
+                .iter()
+                .any(|(_, to)| to == "crates/beta/src/render/kit_capture.rs")
+        );
+        assert!(
+            !edges.iter().any(|(_, to)| to == "vitest.config.ts"
+                || to == "crates/alpha/src/ports/x_port_tests.rs")
+        );
+    }
 }
